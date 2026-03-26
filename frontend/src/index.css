@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #010101;
+  --foreground: #ffffff;
+  --card-bg: #0a0a0a;
+  --input-bg: #171717;
+  --border-color: #262626;
+  --brand-purple: #6200ee;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-black text-white antialiased selection:bg-brand-purple selection:text-white;
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}

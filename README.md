@@ -116,7 +116,7 @@ Under active development
 
 ## 🤝 Contribution
 
-Please read CONTRIBUTION.md before contributing.
+Please read [CONTRIBUTION.md](docs/CONTRIBUTION.md) before contributing.
 
 ---
 
