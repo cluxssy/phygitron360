@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 def get_service():
     return OnboardingService()
 
-@router.post("/invite", dependencies=[Depends(require_role(["Admin", "HR"]))])
+@router.post("/invite", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
 def send_invite(invite: InviteRequest, service: OnboardingService = Depends(get_service)):
     try:
         return service.create_invite(invite.dict())
@@ -21,11 +21,11 @@ def send_invite(invite: InviteRequest, service: OnboardingService = Depends(get_
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/invites", dependencies=[Depends(require_role(["Admin", "HR"]))])
+@router.get("/invites", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
 def get_invites(service: OnboardingService = Depends(get_service)):
     return service.get_all_invites()
 
-@router.delete("/invite/{invite_id}", dependencies=[Depends(require_role(["Admin", "HR"]))])
+@router.delete("/invite/{invite_id}", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
 def revoke_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
     return service.revoke_invite(invite_id)
 

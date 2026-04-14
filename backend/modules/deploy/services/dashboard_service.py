@@ -6,8 +6,8 @@ class DashboardService:
     def __init__(self):
         self.repo = DashboardRepository()
 
-    def get_admin_stats(self) -> Dict[str, Any]:
-        data = self.repo.get_all_counts()
+    def get_admin_stats(self, tenant_id: str = 'public') -> Dict[str, Any]:
+        data = self.repo.get_all_counts(tenant_id=tenant_id)
         df_emp = data['employees']
         df_assets = data['assets']
         df_skills = data['skills']
@@ -18,6 +18,8 @@ class DashboardService:
         exited_count = len(df_emp[df_emp['employment_status'] == 'Exited'])
         total_teams = df_emp['team'].nunique()
         total_designations = df_emp['designation'].nunique()
+        total_candidates = len(data.get('candidates', pd.DataFrame()))
+        total_jobs = len(data.get('job_roles', pd.DataFrame()))
 
         # 2. Department Distribution
         dept_counts = df_emp['team'].fillna('Unknown').value_counts().reset_index()
@@ -127,6 +129,8 @@ class DashboardService:
                 "exited": exited_count,
                 "teams": total_teams,
                 "designations": total_designations,
+                "candidates": total_candidates,
+                "jobs": total_jobs,
                 "avg_tenure": avg_tenure
             },
             "charts": {
@@ -143,8 +147,8 @@ class DashboardService:
             "notifications": notifications
         }
 
-    def get_employee_stats(self, employee_code: str) -> Dict[str, Any]:
-        data = self.repo.get_employee_dashboard_data(employee_code)
+    def get_employee_stats(self, employee_code: str, tenant_id: str = 'public') -> Dict[str, Any]:
+        data = self.repo.get_employee_dashboard_data(employee_code, tenant_id=tenant_id)
         
         # Safely extract
         emp = data['employee'] 

@@ -12,25 +12,30 @@ class DashboardRepository:
             data = cur.fetchall()
             return pd.DataFrame(data, columns=columns)
 
-    def get_all_counts(self) -> Dict[str, Any]:
+    def get_all_counts(self, tenant_id: str = 'public') -> Dict[str, Any]:
         """Fetch raw dataframes for analytics."""
         conn = get_db_connection()
         try:
+            with conn.cursor() as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
             return {
                 "employees": self._read_sql_as_df("SELECT * FROM employees", conn),
                 "assets": self._read_sql_as_df("SELECT * FROM assets", conn),
-                "skills": self._read_sql_as_df("SELECT * FROM skill_matrix", conn),
+                "skills": self._read_sql_as_df("SELECT * FROM candidates", conn), 
+                "candidates": self._read_sql_as_df("SELECT id FROM candidates", conn),
+                "job_roles": self._read_sql_as_df("SELECT id FROM job_roles", conn),
                 "notifications": self._read_sql_as_df("SELECT * FROM notifications WHERE employee_code IS NULL OR type = 'AdminAlert' ORDER BY created_at DESC LIMIT 5", conn),
             }
         finally:
             conn.close()
 
 
-    def get_employee_dashboard_data(self, employee_code: str) -> Dict[str, Any]:
+    def get_employee_dashboard_data(self, employee_code: str, tenant_id: str = 'public') -> Dict[str, Any]:
         conn = get_db_connection()
         try:
             result = {}
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
                 # 1. Employee Details
                 cur.execute("SELECT * FROM employees WHERE employee_code = %s", (employee_code,))
                 emp = cur.fetchone()

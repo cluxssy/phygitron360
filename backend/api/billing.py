@@ -18,7 +18,8 @@ async def stripe_webhook(request: Request):
         tenant_id = session.get("client_reference_id")
         
         # In a real app, this metadata would indicate which modules were purchased
-        purchased_modules = session.get("metadata", {}).get("modules", "deploy,source")
+        modules_str = session.get("metadata", {}).get("modules", "deploy,source")
+        purchased_modules = [m.strip() for m in modules_str.split(",")]
         
         if not tenant_id:
             raise HTTPException(status_code=400, detail="Missing tenant identifier in checkout session")
@@ -27,8 +28,9 @@ async def stripe_webhook(request: Request):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                cur.execute("SET search_path TO public")
                 cur.execute(
-                    "UPDATE tenants SET subscription_status = 'active', modules_enabled = %s WHERE tenant_id = %s",
+                    "UPDATE tenants SET subscription_status = 'active', modules_enabled = %s WHERE id = %s",
                     (purchased_modules, tenant_id)
                 )
                 conn.commit()
@@ -39,3 +41,4 @@ async def stripe_webhook(request: Request):
             conn.close()
             
     return {"status": "ignored"}
+
