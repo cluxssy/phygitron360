@@ -99,7 +99,7 @@ class EmployeeService:
             self.user_repo.create_user(
                 username=username,
                 password_hash=password_hash,
-                role='Employee',
+                role='employee',
                 employee_code=data['code']
             )
             user_created = True

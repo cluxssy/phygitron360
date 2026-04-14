@@ -19,8 +19,8 @@ class AuthService:
     def create_session_token(self) -> str:
         return secrets.token_urlsafe(32)
 
-    def login(self, username: str, password: str) -> Optional[dict]:
-        user = self.repo.get_user_by_username(username)
+    def login(self, username: str, password: str, tenant_id: str = 'public') -> Optional[dict]:
+        user = self.repo.get_user_by_username(username, tenant_id=tenant_id)
         if not user:
             return None
         
@@ -31,25 +31,51 @@ class AuthService:
             return None
         
         # Update Last Login
-        self.repo.update_last_login(username)
+        self.repo.update_last_login(username, tenant_id=tenant_id)
         
         # Create Session
         token = self.create_session_token()
         expires = datetime.now() + timedelta(days=1)
         
         # Persistent Session in DB
-        self.repo.create_session(token, user['id'], expires)
+        self.repo.create_session(token, user['id'], expires, tenant_id=tenant_id)
+        
+        # Resolve tenant modules
+        modules_enabled = self._get_tenant_modules(tenant_id)
         
         user_info = {
             "id": user['id'],
             "username": user['username'],
             "name": user.get('employee_name') or user['username'],
             "role": user['role'],
+            "roles": user['roles'],
+            "tenant_id": tenant_id,
             "employee_code": user['employee_code'],
-            "permissions": self.repo.get_user_permissions(user['id'], user['role'])
+            "permissions": self.repo.get_user_permissions(user['id'], user['roles'], tenant_id=tenant_id),
+            "modules_enabled": modules_enabled
         }
         
         return {"token": token, "user": user_info, "expires": expires}
+
+    def _get_tenant_modules(self, tenant_id: str) -> list:
+        """Resolve which modules this tenant has access to from public.tenants."""
+        if tenant_id == 'public':
+            return ['source', 'forge', 'verify', 'deploy']
+        
+        from backend.core.database import get_db_connection
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET search_path TO public")
+                cur.execute("SELECT modules_enabled FROM tenants WHERE id = %s", (tenant_id,))
+                row = cur.fetchone()
+                if row and row[0]:
+                    return row[0]
+                return ['source', 'forge', 'verify', 'deploy']
+        except:
+            return ['source', 'forge', 'verify', 'deploy']
+        finally:
+            conn.close()
 
     def logout(self, token: str):
         if token:
@@ -79,13 +105,19 @@ class AuthService:
         if not session.get('is_active', 1):
             return None
             
+        tenant_id = session.get('tenant_id', 'public')
+        modules_enabled = self._get_tenant_modules(tenant_id)
+        
         return {
             "id": session['user_id'],
+            "tenant_id": tenant_id,
             "username": session['username'],
             "name": session.get('employee_name') or session['username'],
             "role": session['role'],
+            "roles": session.get('roles') or [session['role']],
             "employee_code": session['employee_code'],
-            "permissions": self.repo.get_user_permissions(session['user_id'], session['role'])
+            "permissions": self.repo.get_user_permissions(session['user_id'], session.get('roles') or [session['role']], tenant_id=tenant_id),
+            "modules_enabled": modules_enabled
         }
 
     def create_user(self, username: str, password: str, role: str, employee_code: str = None) -> dict:

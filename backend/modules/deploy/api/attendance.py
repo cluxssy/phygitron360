@@ -82,13 +82,13 @@ def get_my_leaves(user=Depends(get_current_user), service: AttendanceService = D
 
 @router.get("/leave/all-requests")
 def get_all_leave_requests(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
-    if user['role'] not in ['Admin', 'HR', 'Management']:
+    if user['role'] not in ['Admin', 'HR', 'Management', 'org_admin', 'hr_manager', 'team_lead']:
         raise HTTPException(status_code=403, detail="Not authorized")
     return service.get_all_pending_leaves(user['role'], user.get('employee_code'))
 
 @router.get("/admin/today")
 def get_daily_attendance_log(date: Optional[str] = None, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
-    if user['role'] not in ['Admin', 'HR', 'Management']:
+    if user['role'] not in ['Admin', 'HR', 'Management', 'org_admin', 'hr_manager', 'team_lead']:
          raise HTTPException(status_code=403, detail="Not authorized")
     return service.get_daily_log(date)
 
@@ -100,7 +100,7 @@ def approve_reject_leave(
     user=Depends(get_current_user),
     service: AttendanceService = Depends(get_service)
 ):
-    if user['role'] not in ['Admin', 'HR', 'Management']:
+    if user['role'] not in ['Admin', 'HR', 'Management', 'org_admin', 'hr_manager', 'team_lead']:
          raise HTTPException(status_code=403, detail="Not authorized")
     
     if action not in ['Approved', 'Rejected']:
@@ -122,6 +122,6 @@ def approve_reject_leave(
 
 @router.get("/admin/summary")
 def get_monthly_attendance_summary(year: int, month: int, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
-    if user['role'] not in ['Admin', 'HR', 'Management']:
+    if user['role'] not in ['Admin', 'HR', 'Management', 'org_admin', 'hr_manager', 'team_lead']:
          raise HTTPException(status_code=403, detail="Not authorized")
     return service.get_monthly_summary(year, month)

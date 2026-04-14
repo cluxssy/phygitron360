@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, Response, Request, Depends
+from psycopg2.extras import RealDictCursor
+
 from backend.modules.deploy.services.auth_service import AuthService
-from backend.modules.deploy.schemas.auth import LoginRequest
+from backend.modules.deploy.schemas.auth import LoginRequest, RegisterCompanyRequest, DemoRequestModel
+from backend.core.database import create_tables, get_db_connection
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -23,7 +26,18 @@ def get_current_user(request: Request, service: AuthService = Depends(get_servic
 
 def require_role(allowed_roles: list[str]):
     def role_checker(current_user: dict = Depends(get_current_user)):
-        if current_user["role"] not in allowed_roles:
+        user_roles = [r.lower() if r else '' for r in (current_user.get("roles") or [current_user.get("role")])]
+        allowed_lower = [a.lower() for a in allowed_roles]
+        
+        # Superadmin (Strategic Overlord) has God-mode access to everything
+        if 'super_admin' in user_roles or 'superadmin' in user_roles:
+            return current_user
+            
+        # Org Admin has full access to anything an Admin, HR, or Management can do within their tenant
+        if 'org_admin' in user_roles and any(r in allowed_lower for r in ['admin', 'hr', 'management', 'employee']):
+            return current_user
+
+        if not any(role in allowed_lower for role in user_roles):
             raise HTTPException(
                 status_code=403, 
                 detail=f"Access denied. Required roles: {', '.join(allowed_roles)}"
@@ -31,12 +45,89 @@ def require_role(allowed_roles: list[str]):
         return current_user
     return role_checker
 
+def require_module(module_name: str):
+    def module_checker(current_user: dict = Depends(get_current_user)):
+        # Superadmins navigate through the public tenant and have override access
+        if current_user.get('role') == 'super_admin' or 'super_admin' in (current_user.get('roles') or []):
+            return current_user
+            
+        enabled_modules = current_user.get('modules_enabled', [])
+        if module_name not in [m.lower() for m in enabled_modules]:
+            raise HTTPException(
+                status_code=403,
+                detail=f"The '{module_name}' module is not associated with your current neural workspace contract."
+            )
+        return current_user
+    return module_checker
+
 # --- Endpoints ---
+
+@router.post("/register-company")
+def register_company(data: RegisterCompanyRequest, service: AuthService = Depends(get_service)):
+    try:
+        # Generate safe schema name and subdomain
+        safe_name = "".join([c for c in data.company_name.lower().replace(' ', '_') if c.isalnum() or c == '_'])
+        tenant_schema = f"tenant_{safe_name}"
+        subdomain = safe_name.replace('_', '')
+        
+        # 1. Create the physical isolated schema & tables (Atomic with Transaction)
+        create_tables(schema_name=tenant_schema)
+        
+        # 2. Add the company to the central public.tenants registry (Master registry)
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Switch to public to record metadata
+        cur.execute("SET search_path TO public")
+        cur.execute(
+            "INSERT INTO tenants (id, company_name, admin_email, subdomain) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
+            (tenant_schema, data.company_name, data.admin_email, subdomain)
+        )
+        
+        # 3. Create Superadmin in the NEW isolated schema
+        cur.execute(f'SET search_path TO "{tenant_schema}"')
+        
+        hashed_password = service.get_password_hash(data.admin_password)
+        cur.execute(
+            "INSERT INTO users (username, password_hash, role, roles, is_active) VALUES (%s, %s, %s, %s, 1)",
+            (data.admin_email, hashed_password, 'org_admin', ['org_admin'])
+        )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return {
+            "success": True, 
+            "message": "Company Workspace Created", 
+            "workspace_id": tenant_schema,
+            "subdomain": subdomain,
+            "workspace_url": f"http://{subdomain}.localhost:5173/login"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/login")
 def login(credentials: LoginRequest, response: Response, service: AuthService = Depends(get_service)):
     try:
-        result = service.login(credentials.username, credentials.password)
+        tenant_context = credentials.workspace_id or 'public'
+        
+        if tenant_context != 'public' and not tenant_context.startswith('tenant_'):
+            # resolve from subdomain
+            conn = get_db_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SET search_path TO public")
+                    cur.execute("SELECT id FROM tenants WHERE subdomain = %s", (tenant_context,))
+                    row = cur.fetchone()
+                    if row:
+                        tenant_context = row[0]
+                    else:
+                        raise ValueError("Invalid workspace/subdomain")
+            finally:
+                conn.close()
+
+        result = service.login(credentials.username, credentials.password, tenant_id=tenant_context)
         if not result:
             raise HTTPException(status_code=401, detail="Invalid username or password")
         
@@ -57,6 +148,8 @@ def login(credentials: LoginRequest, response: Response, service: AuthService = 
         }
     except ValueError as e: # Account deactivated
         raise HTTPException(status_code=403, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -69,12 +162,67 @@ def logout(request: Request, response: Response, service: AuthService = Depends(
     response.delete_cookie("session_token", path="/", samesite="lax")
     return {"success": True, "message": "Logged out successfully"}
 
+@router.post("/request-demo")
+def request_demo(data: DemoRequestModel):
+    # 1. Work Email Validation (Block Personal Domains)
+    personal_domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com', 'live.com', 'msn.com']
+    email_domain = data.work_email.split('@')[-1].lower() if '@' in data.work_email else ""
+    
+    if email_domain in personal_domains:
+        raise HTTPException(
+            status_code=400, 
+            detail="Please use a work email address. Personal email domains (Gmail, Yahoo, etc.) are not accepted for demo requests."
+        )
+
+    # 2. Save to Database (Public Schema)
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET search_path TO public")
+            cur.execute("""
+                INSERT INTO demo_requests (
+                    company_name, contact_name, work_email, job_title, 
+                    company_size, modules_requested, current_tools, 
+                    discovery_source, message
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                data.company_name, data.contact_name, data.work_email, data.job_title,
+                data.company_size, data.modules_requested, data.current_tools, 
+                data.discovery_source, data.message
+            ))
+            conn.commit()
+            
+            # 3. Trigger Notification (Internal)
+            # In a real app, we'd send an email to the superadmin here.
+            # For now, we log it. If EmailService is configured, we can use it.
+            return {"success": True, "message": "Demo request received! Our team will reach out shortly."}
+    except Exception as e:
+        if "unique_violation" in str(e).lower() or "duplicate key" in str(e).lower():
+            raise HTTPException(status_code=400, detail="A demo request has already been submitted for this email address.")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+@router.get("/demo-requests")
+def get_demo_requests(current_user: dict = Depends(require_role(["super_admin"]))):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SET search_path TO public")
+            cur.execute("SELECT * FROM demo_requests ORDER BY created_at DESC")
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
 @router.get("/me")
+
 def get_me(current_user: dict = Depends(get_current_user)):
     return {
         "success": True,
         "user": current_user
     }
+
 
 @router.get("/check")
 def check_auth(request: Request, service: AuthService = Depends(get_service)):

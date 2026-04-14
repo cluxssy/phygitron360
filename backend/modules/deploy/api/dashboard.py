@@ -8,9 +8,10 @@ def get_service():
     return DashboardService()
 
 @router.get("/stats", dependencies=[Depends(require_role(["Admin", "HR", "Management"]))])
-def get_dashboard_stats(service: DashboardService = Depends(get_service)):
+def get_dashboard_stats(current_user: dict = Depends(get_current_user), service: DashboardService = Depends(get_service)):
     try:
-        return service.get_admin_stats()
+        tenant_id = current_user.get("tenant_id", "public")
+        return service.get_admin_stats(tenant_id=tenant_id)
     except Exception as e:
         import traceback
         print(f"Admin Dashboard Error: {e}")
@@ -24,7 +25,8 @@ def get_employee_dashboard_stats(current_user: dict = Depends(get_current_user),
         return {"error": "No employee code found for user"}
     
     try:
-        return service.get_employee_stats(employee_code)
+        tenant_id = current_user.get("tenant_id", "public")
+        return service.get_employee_stats(employee_code, tenant_id=tenant_id)
     except Exception as e:
         import traceback
         print(f"Employee Dashboard Error: {e}")

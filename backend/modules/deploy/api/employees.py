@@ -13,18 +13,18 @@ router = APIRouter(prefix="/api", tags=["employees"])
 def get_service():
     return EmployeeService()
 
-@router.get("/employees", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee"]))])
+@router.get("/employees", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
 def get_employees(service: EmployeeService = Depends(get_service)):
     return service.get_all_employees()
 
-@router.get("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee"]))])
+@router.get("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
 def get_employee(employee_code: str, service: EmployeeService = Depends(get_service)):
     employee = service.get_employee_full_details(employee_code)
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
     return employee
 
-@router.post("/employee", dependencies=[Depends(require_role(["Admin", "HR"]))])
+@router.post("/employee", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
 async def create_employee(
     code: str = Form(...),
     name: str = Form(...),
@@ -73,14 +73,14 @@ async def create_employee(
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "Employee"]))])
+@router.put("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "Employee", "org_admin", "hr_manager", "employee"]))])
 def update_employee(employee_code: str, data: dict = Body(...), service: EmployeeService = Depends(get_service)):
     try:
         return service.update_employee(employee_code, data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/employee/{employee_code}/documents", dependencies=[Depends(require_role(["Admin", "HR", "Employee"]))])
+@router.post("/employee/{employee_code}/documents", dependencies=[Depends(require_role(["Admin", "HR", "Employee", "org_admin", "hr_manager", "employee"]))])
 async def upload_documents(
     employee_code: str,
     photo_file: UploadFile = File(None),
@@ -105,7 +105,7 @@ async def upload_documents(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR"]))])
+@router.delete("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
 def delete_employee(employee_code: str, service: EmployeeService = Depends(get_service)):
     try:
         return service.delete_employee(employee_code)
@@ -114,11 +114,11 @@ def delete_employee(employee_code: str, service: EmployeeService = Depends(get_s
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/options", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee"]))])
+@router.get("/options", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
 def get_dropdown_options(service: EmployeeService = Depends(get_service)):
      return service.get_options()
 
-@router.post("/employee/{employee_code}/offboard", dependencies=[Depends(require_role(["Admin", "HR"]))])
+@router.post("/employee/{employee_code}/offboard", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
 def offboard_employee(employee_code: str, data: OffboardRequest, service: EmployeeService = Depends(get_service)):
     try:
         return service.offboard_employee(employee_code, data)
