@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { 
   Zap, Shield, Database, Send, 
@@ -8,14 +8,49 @@ import {
   CheckCircle, Rocket, Layers,
   Compass, Activity, User, Globe,
   Cpu, Monitor, Star, Filter, Home, Upload, Users,
-  LayoutDashboard, BarChart3
+  LayoutDashboard, BarChart3, Clock, BookOpen, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../core/auth/AuthContext';
+import OrgAdminSetupModal from '../modules/deploy/components/OrgAdminSetupModal';
 
 export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, hasRole } = useAuth();
+  const { user, logout, hasRole, refreshUser } = useAuth();
+  const [notifications, setNotifications] = useState([]);
+  const [showNotif, setShowNotif] = useState(false);
+  const [deployView, setDeployView] = useState('admin');
+
+  const isL2 = hasRole(['org_admin', 'super_admin']);
+  const isL3 = hasRole(['manager']);
+  const canSwitchView = isL2 || isL3;
+
+  useEffect(() => {
+    const fetchNotifs = async () => {
+      try {
+        const res = await fetch('/api/notifications', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data || []);
+        }
+      } catch (e) {}
+    };
+    if (user) fetchNotifs();
+  }, [user]);
+
+  const markRead = async (id) => {
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: 'POST', credentials: 'include' });
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch {}
+  };
+
+  const markAllRead = async () => {
+    try {
+      await fetch(`/api/notifications/read-all`, { method: 'POST', credentials: 'include' });
+      setNotifications([]);
+    } catch {}
+  };
 
   const allModules = [
     { 
@@ -27,14 +62,15 @@ export default function Layout({ children }) {
       ]
     },
     { 
-      id: 'dashboard', name: 'Dashboard', path: '/admin', icon: LayoutDashboard, color: 'text-primary', roles: ['org_admin', 'hr_manager'],
+      id: 'dashboard', name: 'Dashboard', path: '/admin', icon: LayoutDashboard, color: 'text-primary', roles: ['org_admin', 'manager'],
       options: [
         { label: 'Overview', icon: Home, search: '', default: true },
+        { label: 'Users', icon: Shield, search: '?tab=users', default: false },
         { label: 'Analytics', icon: BarChart3, search: '?tab=stats', default: false },
       ]
     },
     { 
-      id: 'source', name: 'Source', path: '/source', icon: Database, color: 'text-primary', roles: ['org_admin', 'recruiter'],
+      id: 'source', name: 'Source', path: '/source', icon: Database, color: 'text-primary', roles: ['org_admin', 'recruiter', 'manager', 'candidate'],
       options: [
         { label: 'Home', icon: Home, search: '?tab=home', default: true },
         { label: 'Directory', icon: Users, search: '?tab=directory', default: false },
@@ -43,33 +79,57 @@ export default function Layout({ children }) {
       ]
     },
     { 
-      id: 'forge', name: 'Forge', path: '/forge', icon: Zap, color: 'text-secondary', roles: ['org_admin', 'trainer'],
-      options: []
-    },
-    { 
-      id: 'verify', name: 'Verify', path: '/verify', icon: Shield, color: 'text-indigo', roles: ['org_admin', 'assessor'],
-      options: []
-    },
-    { 
-      id: 'deploy', name: 'Deploy', path: '/deploy', icon: Rocket, color: 'text-error', roles: ['org_admin', 'hr_manager', 'employee', 'Admin', 'HR', 'Management', 'Employee'],
+      id: 'forge', name: 'Forge', path: '/forge', icon: Zap, color: 'text-secondary', roles: ['org_admin', 'trainer', 'manager', 'employee'],
       options: [
-        { label: 'Personnel', icon: Users, search: '?tab=team', default: true },
+        { label: 'Academy', icon: Home, search: '?tab=academy', default: true },
+        { label: 'Courses', icon: Layers, search: '?tab=courses', default: false },
+        { label: 'My Learning', icon: Star, search: '?tab=my-learning', default: false },
+        { label: 'Certificates', icon: CheckCircle, search: '?tab=certs', default: false },
+      ]
+    },
+    { 
+      id: 'verify', name: 'Verify', path: '/verify', icon: Shield, color: 'text-indigo', roles: ['org_admin', 'assessor', 'manager', 'employee'],
+      options: [
+        { label: 'Skill Check', icon: Home, search: '?tab=home', default: true },
+        { label: 'Assessments', icon: Shield, search: '?tab=tests', default: false },
+        { label: 'Results', icon: Activity, search: '?tab=results', default: false },
+        { label: 'Builder', icon: Cpu, search: '?tab=builder', default: false },
+      ]
+    },
+    { 
+      id: 'deploy', name: 'Deploy', path: '/deploy', icon: Rocket, color: 'text-error', roles: ['org_admin', 'manager', 'employee'],
+      options: (canSwitchView && deployView === 'admin') ? [
+        { label: 'Analytics', icon: LayoutDashboard, search: '?tab=dashboard', default: true },
+        { label: 'Personnel', icon: Users, search: '?tab=team', default: false },
         { label: 'Attendance', icon: Star, search: '?tab=attendance', default: false },
-        { label: 'Training', icon: Zap, search: '?tab=training', default: false },
-        { label: 'Assets', icon: CheckCircle, search: '?tab=assets', default: false },
+        { label: 'Performance', icon: BarChart3, search: '?tab=performance', default: false },
+        { label: 'Allocations', icon: CheckCircle, search: '?tab=allocations', default: false },
         { label: 'Onboard', icon: User, search: '?tab=onboard', default: false },
+      ] : [
+        { label: 'Dashboard', icon: LayoutDashboard, search: '?tab=my-dashboard', default: true },
+        { label: 'My Profile', icon: User, search: '?tab=my-profile', default: false },
+        { label: 'My Attendance', icon: Clock, search: '?tab=my-attendance', default: false },
+        { label: 'My Performance', icon: Activity, search: '?tab=my-performance', default: false },
       ]
     },
   ];
 
   const modules = allModules.filter(m => {
     const isSuper = user?.role === 'super_admin';
-    if (m.id === 'superadmin') return isSuper;
-    if (isSuper) return true;
-    return hasRole(m.roles) && user?.modules_enabled?.includes(m.id);
+    
+    // If Superadmin, ONLY show the Superadmin (Overlord) dashboard for a focused experience
+    if (isSuper) {
+        return m.id === 'superadmin';
+    }
+    
+    const roleMatch = hasRole(m.roles);
+    if (!roleMatch) return false;
+    
+    // Dashboard is a core module, others require being enabled in tenant settings
+    if (m.id === 'dashboard') return true;
+    
+    return user?.modules_enabled?.includes(m.id);
   });
-
-
 
   const activeModule = modules.find(m => 
     location.pathname.startsWith(m.path) || (m.id === 'source' && location.pathname === '/admin')
@@ -78,7 +138,7 @@ export default function Layout({ children }) {
   return (
     <div className="flex h-screen w-full bg-[#040812] text-white overflow-hidden font-sans selection:bg-primary/30">
       
-      {/* 🚀 PRIMARY SIDEBAR (switcher) - High Perf optimized */}
+      {/* 🚀 PRIMARY SIDEBAR (switcher) */}
       <aside className="w-[88px] flex flex-col items-center py-8 bg-[#060E20] border-r border-white/5 z-50 shrink-0 transform-gpu">
         <div 
           onClick={() => navigate('/')}
@@ -113,11 +173,27 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      {/* 🚀 SECONDARY SIDEBAR (command) - reduced blur radius for perf */}
+      {/* 🚀 SECONDARY SIDEBAR (command) */}
       <aside className="w-[280px] flex flex-col bg-[#060E20]/40 backdrop-blur-lg border-r border-white/5 shrink-0 transform-gpu">
          <div className="p-8 pb-4">
             <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant opacity-40 mb-1">Active World</h3>
             <h2 className="text-2xl font-display font-extrabold text-white tracking-tighter uppercase italic">{activeModule.name}</h2>
+            {activeModule.id === 'deploy' && canSwitchView && (
+                <div className="mt-4 flex bg-white/5 rounded-xl p-1">
+                    <button 
+                        onClick={() => { setDeployView('admin'); navigate('/deploy?tab=' + (isL2 ? 'dashboard' : 'team')); }}
+                        className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${deployView === 'admin' ? 'bg-primary text-black' : 'text-white/40 hover:text-white'}`}
+                    >
+                        Management
+                    </button>
+                    <button 
+                        onClick={() => { setDeployView('employee'); navigate('/deploy?tab=my-dashboard'); }}
+                        className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${deployView === 'employee' ? 'bg-primary text-black' : 'text-white/40 hover:text-white'}`}
+                    >
+                        Personal
+                    </button>
+                </div>
+            )}
          </div>
 
          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-2 custom-scrollbar">
@@ -139,47 +215,79 @@ export default function Layout({ children }) {
             })}
          </div>
 
-         {/* Module Sidebar Footer Placeholder Removed */}
+         <div className="mt-auto p-6 border-t border-white/5 space-y-4">
+            <div className="flex items-center gap-4 px-2">
+                <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/20 flex items-center justify-center font-display font-bold text-primary">
+                    {user?.name?.[0] || 'A'}
+                </div>
+                <div className="flex-1 overflow-hidden">
+                    <p className="text-xs font-bold text-white truncate tracking-tight">{user?.name || 'Admin'}</p>
+                    <p className="text-[9px] font-bold text-on-surface-variant opacity-30 uppercase tracking-widest truncate">
+                        {(user?.role || 'User').toUpperCase()}
+                    </p>
+                </div>
+            </div>
+
+            <div className="flex gap-2">
+                <button 
+                  onClick={() => setShowNotif(!showNotif)} 
+                  className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl transition-all ${showNotif ? 'bg-primary text-black' : 'bg-white/5 hover:bg-white/10 text-white/60'}`}
+                >
+                    <Bell size={16} />
+                    {notifications.length > 0 && <span className="text-[10px] font-black">{notifications.length}</span>}
+                </button>
+                <button className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 transition-all">
+                    <Settings size={16} />
+                </button>
+            </div>
+
+            {showNotif && (
+                <div className="absolute bottom-32 left-8 w-72 bg-[#060E20] border border-white/10 rounded-2xl shadow-2xl p-4 z-50 animate-fade-in-up">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-white/50">Neural Alerts</h3>
+                        {notifications.length > 0 && (
+                            <button onClick={markAllRead} className="text-[10px] text-primary hover:underline font-black">PURGE</button>
+                        )}
+                    </div>
+                    <div className="max-h-64 overflow-y-auto space-y-2 custom-scrollbar">
+                        {notifications.length === 0 ? (
+                            <p className="text-[10px] text-white/30 text-center py-4 font-bold uppercase">All clear</p>
+                        ) : (
+                            notifications.map(n => (
+                                <div key={n.id} onClick={() => markRead(n.id)} className="p-3 bg-white/5 rounded-xl hover:bg-white/10 cursor-pointer border border-transparent hover:border-white/10">
+                                    <p className="text-[10px] font-black text-white uppercase tracking-wider mb-1">{n.title}</p>
+                                    <p className="text-[9px] text-white/40 leading-snug font-bold">{n.message}</p>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+         </div>
       </aside>
 
       {/* 🚀 MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-[72px] flex items-center justify-between px-10 bg-[#060E20]/20 backdrop-blur-md border-b border-white-5 z-10 shrink-0 transform-gpu">
-          <div className="flex items-center gap-6">
-             <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.2em]">
-                <span className="opacity-30">Phygitron 360</span>
-                <span className="opacity-20 text-[16px] font-light">/</span>
-                <span className="text-white">{activeModule.name.toUpperCase()}</span>
-             </div>
-          </div>
-
-          <div className="flex items-center gap-4 group cursor-pointer pl-4 border-l border-white/5">
-            <div className="text-right">
-              <p className="text-xs font-bold text-white tracking-tight">{user?.name || 'Admin'}</p>
-              <p className="text-[9px] font-bold text-on-surface-variant opacity-30 uppercase tracking-widest">
-                {(user?.roles || [user?.role]).join(' • ')}
-              </p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/20 flex items-center justify-center font-display font-bold text-primary">
-              {user?.name?.[0] || 'A'}
-            </div>
-          </div>
-        </header>
-
+      <main className="flex-1 flex flex-col overflow-hidden relative z-10">
         <div className="flex-1 overflow-auto p-12 custom-scrollbar transform-gpu">
           {children}
         </div>
       </main>
 
-      {/* 🚀 Optimized Ambient Lighting Background */}
+      {/* 🚀 Ambient Lighting Background */}
       <div className="fixed inset-0 pointer-events-none z-0 transform-gpu">
           <div className="absolute top-[-10%] left-[-10%] w-[1000px] h-[800px] bg-primary/5 blur-[120px] rounded-full will-change-transform opacity-40" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[1000px] h-[800px] bg-indigo/5 blur-[120px] rounded-full will-change-transform opacity-30" />
       </div>
 
+
+      {user?.role === 'org_admin' && !user?.employee_code && (
+        <OrgAdminSetupModal 
+            user={user} 
+            onComplete={(code) => {
+                refreshUser();
+            }} 
+        />
+      )}
     </div>
   );
 }
-
-
-

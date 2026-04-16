@@ -6,11 +6,17 @@ import { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout';
 import LandingPage from './modules/landing/pages/LandingPage';
 import LoginPage from './modules/landing/pages/LoginPage';
+import ForgotPasswordPage from './modules/landing/pages/ForgotPasswordPage';
+import ResetPasswordPage from './modules/landing/pages/ResetPasswordPage';
+import OnboardPage from './modules/landing/pages/OnboardPage';
 import MasterConsole from './modules/admin/pages/MasterConsole';
 import OrgDashboard from './modules/admin/pages/OrgDashboard';
 import SuperadminDashboard from './modules/admin/pages/SuperadminDashboard';
 import SourceDashboard from './modules/source/pages/SourceDashboard';
 import DeployDashboard from './modules/deploy/pages/DeployDashboard';
+
+import VerifyDashboard from './modules/verify/pages/VerifyDashboard';
+import ForgeDashboard from './modules/forge/pages/ForgeDashboard';
 
 function ProtectedRoute({ children, requiredRoles, requiredModule }) {
   const { user, loading, hasRole } = useAuth();
@@ -54,6 +60,9 @@ export default function App() {
           {/* Landing & Portal Entry */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/onboard" element={<OnboardPage />} />
 
           {/* Unified Platform Worlds (The 4-in-1 Stage) */}
           <Route 
@@ -62,25 +71,24 @@ export default function App() {
           />
           <Route 
             path="/admin" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'hr_manager', 'Admin']}><Layout><AdminGate /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'recruiter']}><Layout><AdminGate /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/source" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'recruiter']} requiredModule="source"><Layout><SourceDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin', 'recruiter', 'manager', 'candidate']} requiredModule="source"><Layout><SourceDashboard /></Layout></ProtectedRoute>} 
           />
           
-          {/* Module Placeholders */}
           <Route 
             path="/verify" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'assessor']} requiredModule="verify"><Layout><div className="glass-panel p-20"><h1 className="text-4xl font-display font-extrabold uppercase text-white">Verify <span className="text-primary">Node</span></h1><p className="mt-4 text-on-surface-variant opacity-60">Calibrating Cognitive Assessment Matrix...</p></div></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin', 'assessor', 'manager', 'employee']} requiredModule="verify"><Layout><VerifyDashboard /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/forge" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'trainer']} requiredModule="forge"><Layout><div className="glass-panel p-20"><h1 className="text-4xl font-display font-extrabold uppercase text-white">Forge <span className="text-primary">Hub</span></h1><p className="mt-4 text-on-surface-variant opacity-60">Synthesizing Neural Learning Paths...</p></div></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin', 'trainer', 'manager', 'employee']} requiredModule="forge"><Layout><ForgeDashboard /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/deploy" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'hr_manager', 'employee', 'Admin', 'HR', 'Management', 'Employee']} requiredModule="deploy"><Layout><DeployDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'employee']} requiredModule="deploy"><Layout><DeployDashboard /></Layout></ProtectedRoute>} 
           />
 
           {/* Fallbacks */}

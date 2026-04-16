@@ -2,64 +2,55 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import EmployeeDirectory from '../components/EmployeeDirectory';
+import EmployeeProfileFull from '../components/EmployeeProfileFull';
 import AttendancePanel from '../components/AttendancePanel';
 import TrainingPanel from '../components/TrainingPanel';
 import AssetsPanel from '../components/AssetsPanel';
 import OnboardingPanel from '../components/OnboardingPanel';
 import MyProfile from '../components/MyProfile';
+import PerformancePanel from '../components/PerformancePanel';
+import AdminPanel from '../../admin/components/AdminPanel';
+import DeployAnalytics from '../components/DeployAnalytics';
+import EmployeeDashboard from '../components/EmployeeDashboard';
 import { 
   Users, Clock, BookOpen, Package, 
   UserPlus, User, Activity, BarChart3,
-  Rocket, TrendingUp, Shield, Zap
+  Rocket, TrendingUp, Shield, Zap, LayoutDashboard
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-const ADMIN_ROLES = ['Admin', 'HR', 'Management', 'org_admin', 'hr_manager', 'team_lead'];
-const EMPLOYEE_ROLES = ['Employee', 'employee'];
-
 export default function DeployDashboard() {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
 
   const params = new URLSearchParams(location.search);
-  const activeTab = params.get('tab') || 'team';
+  
+  const isL2 = hasRole(['org_admin', 'super_admin']);
+  const isL3 = hasRole('manager');
 
-  const isAdmin = ADMIN_ROLES.some(r => 
-    (user?.roles || [user?.role]).map(x => x?.toLowerCase()).includes(r.toLowerCase())
-  );
-  const isEmployee = !isAdmin;
-
-  const adminTabs = [
-    { id: 'team', label: 'Personnel Matrix', icon: Users },
-    { id: 'attendance', label: 'Attendance', icon: Clock },
-    { id: 'training', label: 'Training', icon: BookOpen },
-    { id: 'assets', label: 'Assets', icon: Package },
-    { id: 'onboard', label: 'Neural Onboard', icon: UserPlus },
-  ];
-
-  const employeeTabs = [
-    { id: 'my-profile', label: 'My Profile', icon: User },
-    { id: 'attendance', label: 'My Attendance', icon: Clock },
-  ];
-
-  const tabs = isAdmin ? adminTabs : employeeTabs;
-  const defaultTab = isAdmin ? 'team' : 'my-profile';
+  let defaultTab = 'my-dashboard';
+  if (isL2) defaultTab = 'dashboard';
+  else if (isL3) defaultTab = 'team';
+  
   const currentTab = params.get('tab') || defaultTab;
 
   const setTab = (tab) => navigate(`/deploy?tab=${tab}`);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchGlobalData = async () => {
       try {
-        const res = await fetch('/api/dashboard/stats', { credentials: 'include' });
-        const data = await res.json();
-        setStats(data?.counts);
+        if (isL2) {
+            const res = await fetch('/api/dashboard/stats', { credentials: 'include' });
+            const data = await res.json();
+            setStats(data?.counts);
+        }
       } catch {}
     };
-    if (isAdmin) fetchStats();
-  }, []);
+    fetchGlobalData();
+  }, [isL2, user]);
+
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -70,10 +61,14 @@ export default function DeployDashboard() {
             Deploy // Enterprise Personnel Matrix
           </p>
           <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic">
-            {isAdmin ? 'HRMS Control Node' : `My Workspace`}
+            {currentTab.startsWith('my-') || currentTab === 'leave' && !isL2 && !isL3
+                ? 'Dashboard' 
+                : isL2 ? 'HRMS Control Node' 
+                : isL3 ? 'Manager Command' 
+                : 'Dashboard'}
           </h1>
         </div>
-        {isAdmin && stats && (
+        {isL2 && stats && (
           <div className="flex gap-4">
             {[
               { label: 'Active', value: stats.active, color: '#10B981' },
@@ -89,31 +84,27 @@ export default function DeployDashboard() {
         )}
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-2 mb-8 flex-wrap">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setTab(tab.id)}
-            className={`flex items-center gap-3 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-              currentTab === tab.id
-                ? 'bg-primary text-black shadow-lg shadow-primary/20'
-                : 'glass-panel border-white/5 text-white/40 hover:text-white hover:border-white/10'
-            }`}
-          >
-            <tab.icon size={14} />
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {/* Tab Content */}
       <div className="flex-1 min-h-0">
-        {currentTab === 'team' && isAdmin && <EmployeeDirectory />}
-        {currentTab === 'attendance' && <AttendancePanel isAdmin={isAdmin} />}
-        {currentTab === 'training' && isAdmin && <TrainingPanel />}
-        {currentTab === 'assets' && isAdmin && <AssetsPanel />}
-        {currentTab === 'onboard' && isAdmin && <OnboardingPanel />}
+        {currentTab === 'dashboard' && isL2 && <DeployAnalytics />}
+        {currentTab === 'team' && (isL2 || isL3) && <EmployeeDirectory />}
+        {currentTab === 'profile' && (isL2 || isL3) && (
+          <EmployeeProfileFull 
+            employeeCode={params.get('code')} 
+            onBack={() => setTab('team')} 
+          />
+        )}
+        {currentTab === 'attendance' && <AttendancePanel mode="admin" />}
+        {currentTab === 'my-attendance' && <AttendancePanel mode="employee" />}
+        {currentTab === 'leave' && <AttendancePanel mode="admin" />}
+        {currentTab === 'my-leave' && <AttendancePanel mode="employee" />}
+        {currentTab === 'performance' && <PerformancePanel isAdmin={isL2 || isL3} />}
+        {currentTab === 'my-performance' && <PerformancePanel isAdmin={false} />}
+        {currentTab === 'training' && (isL2 || isL3) && <TrainingPanel />}
+        {currentTab === 'allocations' && isL2 && <AssetsPanel />}
+        {currentTab === 'onboard' && isL2 && <OnboardingPanel />}
+        {currentTab === 'admin' && isL2 && <AdminPanel />}
+        {currentTab === 'my-dashboard' && <EmployeeDashboard />}
         {currentTab === 'my-profile' && <MyProfile />}
       </div>
     </div>

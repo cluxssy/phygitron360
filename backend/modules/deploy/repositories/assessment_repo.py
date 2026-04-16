@@ -3,30 +3,36 @@ from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 class AssessmentRepository:
-    def get_employee_manager_name(self, employee_code: str) -> Optional[str]:
+    def _set_path(self, cur, tenant_id='public'):
+        cur.execute(f'SET search_path TO "{tenant_id}", public')
+
+    def get_employee_manager_name(self, employee_code: str, tenant_id: str = 'public') -> Optional[str]:
         conn = get_db_connection()
         try:
              with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                 self._set_path(cur, tenant_id)
                  cur.execute("SELECT name FROM employees WHERE employee_code = %s", (employee_code,))
                  row = cur.fetchone()
                  return row['name'] if row else None
         finally:
             conn.close()
 
-    def get_employee_reporting_manager(self, employee_code: str) -> Optional[str]:
+    def get_employee_reporting_manager(self, employee_code: str, tenant_id: str = 'public') -> Optional[str]:
         conn = get_db_connection()
         try:
              with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                 self._set_path(cur, tenant_id)
                  cur.execute("SELECT reporting_manager FROM employees WHERE employee_code = %s", (employee_code,))
                  row = cur.fetchone()
                  return row['reporting_manager'] if row else None
         finally:
             conn.close()
 
-    def get_assessments_meta(self, employee_code: str, year: int) -> List[Dict[str, Any]]:
+    def get_assessments_meta(self, employee_code: str, year: int, tenant_id: str = 'public') -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute('''
                     SELECT * FROM quarterly_assessments 
                     WHERE employee_code = %s AND year = %s
@@ -36,10 +42,11 @@ class AssessmentRepository:
         finally:
             conn.close()
 
-    def get_assessment_entries(self, assessment_id: int) -> List[Dict[str, Any]]:
+    def get_assessment_entries(self, assessment_id: int, tenant_id: str = 'public') -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute('''
                     SELECT category, subcategory, self_score, manager_score, score, manager_comment, employee_comment 
                     FROM assessment_entries WHERE assessment_id = %s
@@ -49,10 +56,11 @@ class AssessmentRepository:
         finally:
             conn.close()
 
-    def upsert_assessment_header(self, employee_code: str, year: int, quarter: str, status: str, total_score: int, percentage: float) -> int:
+    def upsert_assessment_header(self, employee_code: str, year: int, quarter: str, status: str, total_score: int, percentage: float, tenant_id: str = 'public') -> int:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
                 # Check exist
                 cur.execute('''
                     SELECT id FROM quarterly_assessments 
@@ -81,10 +89,11 @@ class AssessmentRepository:
         finally:
              conn.close()
 
-    def replace_entries(self, assessment_id: int, entries: List[dict]):
+    def replace_entries(self, assessment_id: int, entries: List[dict], tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute("DELETE FROM assessment_entries WHERE assessment_id = %s", (assessment_id,))
                 for e in entries:
                     cur.execute('''

@@ -11,8 +11,8 @@ from backend.modules.deploy.schemas.attendance import (
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
 
 # Dependency Injection for Service
-def get_service():
-    return AttendanceService()
+def get_service(user=Depends(get_current_user)):
+    return AttendanceService(tenant_id=user.get('tenant_id', 'public'))
 
 # Helper — raises a clear error if the user is not linked to an employee profile
 def _require_employee_code(user: dict) -> str:

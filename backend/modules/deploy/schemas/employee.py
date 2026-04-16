@@ -66,6 +66,12 @@ class UpdateEmployeeRequest(BaseModel):
     location: Optional[str] = None
     primary_skillset: Optional[str] = None
     secondary_skillset: Optional[str] = None
+    experience_years: Optional[Any] = None
+    education_details: Optional[Any] = None
+    pf_included: Optional[str] = None
+    mediclaim_included: Optional[str] = None
+    employee_code: Optional[str] = None
+    doj: Optional[str] = None
     skill_matrix: Optional[dict] = None
 
 class OffboardRequest(BaseModel):

@@ -13,7 +13,7 @@ class OrgRepository:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(f'SET search_path TO "{self.tenant_id}"')
+                cur.execute(f'SET search_path TO "{self.tenant_id}", public')
                 cur.execute(query, params)
                 if fetch_one:
                     return cur.fetchone()

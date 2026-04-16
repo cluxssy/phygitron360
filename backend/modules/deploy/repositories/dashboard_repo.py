@@ -16,14 +16,16 @@ class DashboardRepository:
         """Fetch raw dataframes for analytics."""
         conn = get_db_connection()
         try:
+            # Set search path on the connection itself
             with conn.cursor() as cur:
-                cur.execute(f'SET search_path TO "{tenant_id}"')
+                cur.execute(f'SET search_path TO "{tenant_id}", public')
+            
             return {
                 "employees": self._read_sql_as_df("SELECT * FROM employees", conn),
                 "assets": self._read_sql_as_df("SELECT * FROM assets", conn),
-                "skills": self._read_sql_as_df("SELECT * FROM candidates", conn), 
-                "candidates": self._read_sql_as_df("SELECT id FROM candidates", conn),
-                "job_roles": self._read_sql_as_df("SELECT id FROM job_roles", conn),
+                "skills": self._read_sql_as_df("SELECT * FROM skill_matrix", conn), 
+                "candidates": self._read_sql_as_df("SELECT * FROM candidates", conn),
+                "job_roles": self._read_sql_as_df("SELECT * FROM job_roles", conn),
                 "notifications": self._read_sql_as_df("SELECT * FROM notifications WHERE employee_code IS NULL OR type = 'AdminAlert' ORDER BY created_at DESC LIMIT 5", conn),
             }
         finally:

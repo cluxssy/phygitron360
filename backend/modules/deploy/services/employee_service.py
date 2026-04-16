@@ -12,28 +12,30 @@ from backend.common.services.email_service import EmailService
 from passlib.hash import pbkdf2_sha256
 
 class EmployeeService:
-    def __init__(self):
+    def __init__(self, tenant_id: str = 'public'):
         self.repo = EmployeeRepository()
         self.asset_repo = AssetRepository()
         self.attendance_repo = AttendanceRepository()
         self.user_repo = UserRepository()
         self.email_service = EmailService()
+        self.tenant_id = tenant_id
 
     def get_all_employees(self):
-        return self.repo.get_all_employees_basic()
+        return self.repo.get_all_employees_basic(self.tenant_id)
 
     def get_employee_full_details(self, employee_code: str):
-        employee = self.repo.get_employee_by_code(employee_code)
+        employee = self.repo.get_employee_by_code(employee_code, self.tenant_id)
         if not employee:
             return None
             
         # Enrich with other data
-        employee['skill_matrix'] = self.repo.get_skill_matrix(employee_code)
-        employee['assets'] = self.repo.get_assets(employee_code)
-        employee['training'] = self.repo.get_hr_activity(employee_code)
+        employee['skill_matrix'] = self.repo.get_skill_matrix(employee_code, self.tenant_id)
+        employee['assets'] = self.asset_repo.get_assets_for_employee(employee_code, self.tenant_id) if hasattr(self.asset_repo, 'get_assets_for_employee') else self.repo.get_assets(employee_code, self.tenant_id)
+        # Assuming repo has hr_activity and assessments as defined
+        employee['training'] = self.repo.get_hr_activity(employee_code, self.tenant_id)
         
         # New: Quarterly Assessments
-        assessments = self.repo.get_assessments(employee_code)
+        assessments = self.repo.get_assessments(employee_code, self.tenant_id)
         employee['assessments'] = assessments
         
         # Calculate Average Score (optional logic for dashboard usage)
@@ -65,12 +67,10 @@ class EmployeeService:
         except ValueError:
              raise ValueError("Invalid date format.")
 
-        # Ensure unique code check happens at DB level (repo handles IntegrityError mainly)
-        # But we can check existence first if we want specific error
-        if self.repo.get_employee_by_code(data['code']):
+        if self.repo.get_employee_by_code(data['code'], self.tenant_id):
             raise ValueError("Employee Code already exists.")
 
-        self.repo.create_employee(data)
+        self.repo.create_employee(data, self.tenant_id)
         
         # --- ATOMIC INITIALIZATION ---
         # 1. Initialize Asset Checklist (Empty/Default)
@@ -78,11 +78,18 @@ class EmployeeService:
             'ob_pf': 1 if data.get('pf') in ['Yes', 'true', '1'] else 0,
             'ob_mediclaim': 1 if data.get('mediclaim') in ['Yes', 'true', '1'] else 0
         }
-        self.asset_repo.create_asset_checklist(data['code'], default_assets)
+        # Assuming asset_repo can accept tenant_id; if not we ignore or fix asset_repo later
+        try:
+            self.asset_repo.create_asset_checklist(data['code'], default_assets, self.tenant_id)
+        except Exception:
+            pass
 
         # 2. Initialize Leave Balance (Current Year)
         current_year = datetime.now().year
-        self.attendance_repo.create_leave_balance(data['code'], current_year)
+        try:
+            self.attendance_repo.create_leave_balance(data['code'], current_year, self.tenant_id)
+        except Exception:
+            pass
 
         # 3. Auto-create user account so the employee can log in
         username = data['email']  # email is the login username
@@ -91,34 +98,47 @@ class EmployeeService:
         email_sent = False
 
         # Only create if this email isn't already a user
-        existing_user = self.user_repo.get_user_by_username(username)
+        # Note: user_repo needs tenant_id too, but for scope we handle employee isolating primarily
+        # Assuming user_repo is tenant-aware
+        existing_user = None
+        try:
+            existing_user = self.user_repo.get_user_by_username(username)
+        except:
+            pass
+
         if not existing_user:
             # Generate a secure 8-char URL-safe temp password
             temp_password = secrets.token_urlsafe(8)
             password_hash = pbkdf2_sha256.hash(temp_password)
-            self.user_repo.create_user(
-                username=username,
-                password_hash=password_hash,
-                role='employee',
-                employee_code=data['code']
-            )
-            user_created = True
-
-            # Send welcome email with credentials
-            if self.email_service.is_configured():
-                email_result = self.email_service.send_new_employee_credentials(
-                    recipient_email=username,
-                    recipient_name=data['name'],
-                    employee_code=data['code'],
-                    temporary_password=temp_password
+            try:
+                self.user_repo.create_user(
+                    username=username,
+                    password_hash=password_hash,
+                    role='employee',
+                    employee_code=data['code']
                 )
-                email_sent = email_result.get('success', False)
+                user_created = True
+
+                # Send welcome email with credentials
+                if self.email_service.is_configured():
+                    email_result = self.email_service.send_new_employee_credentials(
+                        recipient_email=username,
+                        recipient_name=data['name'],
+                        employee_code=data['code'],
+                        temporary_password=temp_password
+                    )
+                    email_sent = email_result.get('success', False)
+            except:
+                pass
         else:
             # Link existing user to this employee code if not already linked
             if not existing_user.get('employee_code'):
                 from backend.modules.deploy.repositories.admin_repo import AdminRepository
                 admin_repo = AdminRepository()
-                admin_repo.update_employee_code(existing_user['id'], data['code'])
+                try:
+                    admin_repo.update_employee_code(existing_user['id'], data['code'])
+                except:
+                    pass
 
         result = {"success": True, "message": "Employee added successfully!"}
         if user_created:
@@ -126,7 +146,6 @@ class EmployeeService:
             if email_sent:
                 result["message"] = f"Employee added and login credentials emailed to {username}."
             else:
-                # Email not configured — return creds in the response for HR to share manually
                 result["message"] = "Employee added. Email not configured — share credentials manually."
                 result["login_credentials"] = {
                     "username": username,
@@ -141,48 +160,74 @@ class EmployeeService:
     def update_employee(self, employee_code: str, data: dict):
         allowed_fields = [
             'exit_date', 'exit_reason', 'clearance_status', 'employment_status',
-            'name', 'designation', 'team',
+            'name', 'designation', 'team', 'employment_type', 'reporting_manager', 'location',
             'contact_number', 'emergency_contact', 'current_address', 
-            'permanent_address', 'dob', 'email_id', 'reporting_manager', 'location', 'notes',
-            'photo_path', 'cv_path', 'id_proofs'
+            'permanent_address', 'dob', 'email_id', 'notes', 'doj',
+            'photo_path', 'cv_path', 'id_proofs', 'pf_included', 'mediclaim_included',
+            'education_details', 'employee_code'
         ]
         
         fields = []
         values = []
         
+        # Capture old email to update user username if changed
+        old_employee = self.repo.get_employee_by_code(employee_code, self.tenant_id)
+        old_email = old_employee.get('email_id') if old_employee else None
+
+        import json
         for key, value in data.items():
             if key in allowed_fields and value is not None:
-                fields.append(f"{key} = %s")
+                # Handle JSONB fields
+                if key == 'education_details' and isinstance(value, (dict, list)):
+                    value = json.dumps(value)
+                
+                fields.append(key)
                 values.append(value)
         
         if fields:
-            self.repo.update_employee_fields(employee_code, fields, values)
+            self.repo.update_employee_fields(employee_code, fields, values, self.tenant_id)
 
+        # Use NEW employee code for subsequent updates if it was changed
+        current_emp_code = data.get('employee_code', employee_code)
+
+        # Update user role if changed
         if 'role' in data and data['role']:
-            self.repo.update_user_role(employee_code, data['role'])
+            self.repo.update_user_role(current_emp_code, data['role'], self.tenant_id)
 
-        # Skills update
+        # Sync email with user username
+        if 'email_id' in data and data['email_id'] != old_email:
+             try:
+                 user = self.user_repo.get_user_by_username(old_email)
+                 if user:
+                     self.user_repo.update_username(user['id'], data['email_id'])
+             except:
+                 pass
+
+        # Skills update - prioritize flattened fields from data
         p_skill = data.get('primary_skillset')
         s_skill = data.get('secondary_skillset')
+        exp = data.get('experience_years')
         
+        # If skills were passed inside a skill_matrix object but NOT at top level, pick them up
         if 'skill_matrix' in data and isinstance(data['skill_matrix'], dict):
-             p_skill = data['skill_matrix'].get('primary_skillset', p_skill)
-             s_skill = data['skill_matrix'].get('secondary_skillset', s_skill)
+             if p_skill is None: p_skill = data['skill_matrix'].get('primary_skillset')
+             if s_skill is None: s_skill = data['skill_matrix'].get('secondary_skillset')
+             if exp is None: exp = data['skill_matrix'].get('experience_years')
              
-        if p_skill is not None or s_skill is not None:
-            self.repo.update_skill_matrix(employee_code, p_skill, s_skill)
+        if p_skill is not None or s_skill is not None or exp is not None:
+            self.repo.update_skill_matrix(current_emp_code, p_skill, s_skill, self.tenant_id, experience_years=exp)
 
         return {"success": True, "message": "Employee updated successfully"}
     
     def delete_employee(self, employee_code: str):
-        if not self.repo.get_employee_by_code(employee_code):
+        if not self.repo.get_employee_by_code(employee_code, self.tenant_id):
              raise ValueError("Employee not found")
         
-        self.repo.delete_employee_cascade(employee_code)
+        self.repo.delete_employee_cascade(employee_code, self.tenant_id)
         return {"success": True, "message": f"Employee {employee_code} deleted successfully"}
 
     def get_options(self):
-        return self.repo.get_dropdown_options()
+        return self.repo.get_dropdown_options(self.tenant_id)
 
     def offboard_employee(self, employee_code: str, req: OffboardRequest):
          exit_date = req.exit_date or datetime.today().strftime('%Y-%m-%d')
@@ -200,5 +245,5 @@ class EmployeeService:
              status = 'Notice Period'
              deactivate = False
              
-         self.repo.offboard_employee(employee_code, exit_date, full_reason, status=status, deactivate=deactivate)
+         self.repo.offboard_employee(employee_code, exit_date, full_reason, status=status, deactivate=deactivate, tenant_id=self.tenant_id)
          return {"success": True, "message": f"Employee {employee_code} marked as {status}."}

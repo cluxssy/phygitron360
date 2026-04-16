@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import AdminPanel from '../components/AdminPanel';
 
 export default function OrgDashboard() {
   const { user } = useAuth();
@@ -20,6 +21,10 @@ export default function OrgDashboard() {
   const [journeys, setJourneys] = useState([]);
   const [team, setTeam] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const currentTab = params.get('tab') || 'overview';
+  
   const [billing, setBilling] = useState(null);
 
   useEffect(() => {
@@ -27,14 +32,14 @@ export default function OrgDashboard() {
       try {
         setLoading(true);
         const [s, f, h, a, j, t, al, b] = await Promise.all([
-          fetch('/api/org/dashboard-stats').then(r => r.json()),
-          fetch('/api/org/pipeline-funnel').then(r => r.json()),
-          fetch('/api/org/module-health').then(r => r.json()),
-          fetch('/api/org/recent-activity').then(r => r.json()),
-          fetch('/api/org/journey-overview').then(r => r.json()),
-          fetch('/api/org/team-overview').then(r => r.json()),
-          fetch('/api/org/alerts').then(r => r.json()),
-          fetch('/api/org/billing-status').then(r => r.json()),
+          fetch('/api/org/dashboard-stats', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/org/pipeline-funnel', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/org/module-health', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/org/recent-activity', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/org/journey-overview', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/org/team-overview', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/org/alerts', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/org/billing-status', { credentials: 'include' }).then(r => r.json()),
         ]);
         
         setStats(s);
@@ -64,11 +69,15 @@ export default function OrgDashboard() {
   }
 
   const quickActions = [
-    { label: 'Add User', icon: <Plus size={14}/>, action: () => navigate('/superadmin') }, // Superadmin for now? Or modal
+    { label: 'Add User', icon: <Plus size={14}/>, action: () => navigate('/admin?tab=users') }, 
     { label: 'Create Journey', icon: <TrendingUp size={14}/>, action: () => toast.error('Journey Engine calibrating...') },
     { label: 'Bulk Upload', icon: <Upload size={14}/>, action: () => navigate('/source?tab=upload') },
-    { label: 'View Reports', icon: <BarChart3 size={14}/>, action: () => toast.error('Analytics module offline.') },
+    { label: 'View Reports', icon: <BarChart3 size={14}/>, action: () => navigate('/deploy?tab=dashboard') },
   ];
+
+  if (currentTab === 'users') {
+     return <div className="p-8 animate-fade-in-up"><AdminPanel /></div>;
+  }
 
   return (
     <div className="space-y-10 animate-fade-in-up pb-20 px-8">

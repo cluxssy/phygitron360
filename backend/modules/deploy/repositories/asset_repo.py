@@ -3,39 +3,46 @@ from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 class AssetRepository:
-    def get_asset_checklist(self, employee_code: str) -> Optional[Dict[str, Any]]:
+    def _set_path(self, cur, tenant_id='public'):
+        cur.execute(f'SET search_path TO "{tenant_id}", public')
+
+    def get_asset_checklist(self, employee_code: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
              cur = conn.cursor(cursor_factory=RealDictCursor)
+             self._set_path(cur, tenant_id)
              cur.execute("SELECT * FROM assets WHERE employee_code = %s", (employee_code,))
              row = cur.fetchone()
              return dict(row) if row else None
         finally:
             conn.close()
 
-    def get_employee_defaults(self, employee_code: str) -> Optional[Dict[str, Any]]:
+    def get_employee_defaults(self, employee_code: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
             cur.execute("SELECT pf_included, mediclaim_included FROM employees WHERE employee_code = %s", (employee_code,))
             row = cur.fetchone()
             return dict(row) if row else None
         finally:
             conn.close()
 
-    def check_exists(self, employee_code: str) -> bool:
+    def check_exists(self, employee_code: str, tenant_id: str = 'public') -> bool:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            self._set_path(cur, tenant_id)
             cur.execute("SELECT 1 FROM assets WHERE employee_code = %s", (employee_code,))
             return cur.fetchone() is not None
         finally:
             conn.close()
 
-    def update_asset_checklist(self, employee_code: str, data: Dict[str, Any]):
+    def update_asset_checklist(self, employee_code: str, data: Dict[str, Any], tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            self._set_path(cur, tenant_id)
             cur.execute('''
                 UPDATE assets SET 
                     ob_laptop=%s, ob_laptop_bag=%s, ob_headphones=%s, ob_mouse=%s, 
@@ -77,10 +84,11 @@ class AssetRepository:
         finally:
             conn.close()
 
-    def create_asset_checklist(self, employee_code: str, data: Dict[str, Any]):
+    def create_asset_checklist(self, employee_code: str, data: Dict[str, Any], tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            self._set_path(cur, tenant_id)
             cur.execute('''
                 INSERT INTO assets (
                     employee_code, 

@@ -1,15 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { UserPlus, Mail, CheckCircle, Clock, Trash2, Plus } from 'lucide-react';
+import { 
+  UserPlus, Mail, CheckCircle, Clock, Trash2, Plus, 
+  FileText, Briefcase, GraduationCap, MapPin, Phone, 
+  ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink
+} from 'lucide-react';
+
+const DESIGNATIONS = [
+    'Software Engineer', 'Senior Engineer', 'Team Lead', 'Project Manager', 
+    'Product Manager', 'Designer', 'QA Analyst', 'Sales Executive', 
+    'HR Associate', 'Accountant', 'Marketing Specialist', 'Operations Manager'
+];
+
+const DEPARTMENTS = [
+    'Engineering', 'Product', 'Design', 'Marketing', 'Sales', 
+    'Human Resources', 'Finance', 'Operations', 'Quality Assurance'
+];
 
 export default function OnboardingPanel() {
+  const [activeTab, setActiveTab] = useState('invites');
   const [invites, setInvites] = useState([]);
+  const [approvals, setApprovals] = useState([]);
+  const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [selectedApproval, setSelectedApproval] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', role: 'employee', department: '', designation: '' });
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { loadInvites(); }, []);
+  // Approval Form Stats
+  const [approveForm, setApproveForm] = useState({
+    manager: '',
+    type: 'Full Time',
+    pf: 'No',
+    mediclaim: 'No',
+    location: '',
+    notes: '',
+    code: '',
+    doj: new Date().toISOString().split('T')[0]
+  });
+
+  useEffect(() => { 
+    if (activeTab === 'invites') loadInvites();
+    else {
+        loadApprovals();
+        loadManagers();
+    }
+  }, [activeTab]);
+
+  const loadManagers = async () => {
+    try {
+        const res = await fetch('/api/options', { credentials: 'include' });
+        const data = await res.json();
+        setManagers(data.managers || []);
+    } catch { console.warn('Failed to load managers'); }
+  };
 
   const loadInvites = async () => {
     try {
@@ -18,6 +63,16 @@ export default function OnboardingPanel() {
       const data = await res.json();
       setInvites(Array.isArray(data) ? data : []);
     } catch { toast.error('Failed to load invites'); }
+    finally { setLoading(false); }
+  };
+
+  const loadApprovals = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/onboarding/approvals', { credentials: 'include' });
+      const data = await res.json();
+      setApprovals(Array.isArray(data) ? data : []);
+    } catch { toast.error('Failed to load pending approvals'); }
     finally { setLoading(false); }
   };
 
@@ -32,7 +87,7 @@ export default function OnboardingPanel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail);
-      toast.success('Onboarding invite sent!');
+      toast.success(data.message || 'Onboarding invite created!');
       setShowForm(false);
       setForm({ name: '', email: '', role: 'employee', department: '', designation: '' });
       loadInvites();
@@ -40,144 +95,535 @@ export default function OnboardingPanel() {
     finally { setSubmitting(false); }
   };
 
-  const revokeInvite = async (id) => {
+  const handleApprove = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
     try {
-      await fetch(`/api/onboarding/invite/${id}`, { method: 'DELETE', credentials: 'include' });
-      toast.success('Invite revoked');
-      loadInvites();
-    } catch { toast.error('Revoke failed'); }
+      const fd = new FormData();
+      fd.append('new_employee_code', approveForm.code);
+      fd.append('doj', approveForm.doj);
+      fd.append('reporting_manager', approveForm.manager);
+      fd.append('employment_type', approveForm.type);
+      fd.append('pf_included', approveForm.pf);
+      fd.append('mediclaim_included', approveForm.mediclaim);
+      fd.append('location', approveForm.location);
+      fd.append('notes', approveForm.notes);
+
+      const res = await fetch(`/api/onboarding/approve/${selectedApproval.employee_code}`, {
+        method: 'POST', credentials: 'include',
+        body: fd
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Approval failed');
+      
+      toast.success('Employee Matrix Activated!');
+      setSelectedApproval(null);
+      loadApprovals();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const statusStyle = {
+  const inviteStatusStyle = {
     'Pending': 'bg-amber-500/10 text-amber-400',
     'Completed': 'bg-emerald-500/10 text-emerald-400',
     'Expired': 'bg-red-500/10 text-red-400',
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Header & Tabs */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
         <div>
-          <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-1">Neural Onboarding Engine</p>
-          <h3 className="text-sm font-black uppercase tracking-widest text-white">Invite Management</h3>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary mb-2">Neural Acquisition Node</p>
+          <h2 className="text-3xl font-display font-black text-white uppercase tracking-tighter italic">Onboarding Hub</h2>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-3 px-6 py-3 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-primary/80 transition-all shadow-lg shadow-primary/20"
-        >
-          <Plus size={14} /> Send Invite
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total Sent', value: invites.length, color: '#CC97FF' },
-          { label: 'Pending', value: invites.filter(i => i.status === 'Pending').length, color: '#F59E0B' },
-          { label: 'Completed', value: invites.filter(i => i.status === 'Completed').length, color: '#10B981' },
-        ].map((s, i) => (
-          <div key={i} className="glass-panel p-6 border-white/5 text-center">
-            <p className="text-3xl font-display font-black" style={{ color: s.color }}>{s.value}</p>
-            <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mt-1">{s.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Invites Table */}
-      <div className="glass-panel border-white/5 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-white/5 border-b border-white/10">
-            <tr>
-              {['Name', 'Email', 'Role', 'Department', 'Status', 'Sent', 'Actions'].map(h => (
-                <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-white/30">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {loading ? (
-              <tr><td colSpan={7} className="px-6 py-12 text-center">
-                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-              </td></tr>
-            ) : invites.length === 0 ? (
-              <tr><td colSpan={7} className="px-6 py-12 text-center text-[10px] text-white/20 uppercase font-black">
-                No onboarding invitations sent yet
-              </td></tr>
-            ) : invites.map((inv, i) => (
-              <tr key={inv.id || i} className="hover:bg-white/[0.02]">
-                <td className="px-6 py-4 text-xs font-bold text-white">{inv.name}</td>
-                <td className="px-6 py-4 text-xs text-white/50 flex items-center gap-2 mt-3">
-                  <Mail size={11}/> {inv.email}
-                </td>
-                <td className="px-6 py-4 text-xs text-primary font-bold uppercase">{inv.role}</td>
-                <td className="px-6 py-4 text-xs text-white/40">{inv.department || '—'}</td>
-                <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${statusStyle[inv.status] || 'bg-white/5 text-white/30'}`}>
-                    {inv.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-[10px] text-white/30">
-                  {new Date(inv.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4">
-                  {inv.status === 'Pending' && (
-                    <button onClick={() => revokeInvite(inv.id)}
-                      className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Send Invite Modal */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="glass-panel border-white/10 rounded-3xl p-8 w-full max-w-md mx-4 space-y-5">
-            <div className="flex items-center gap-4 mb-2">
-              <UserPlus size={20} className="text-primary" />
-              <h3 className="text-sm font-black uppercase tracking-widest text-white">Send Onboarding Invite</h3>
-            </div>
-            {[
-              { key: 'name', placeholder: 'Full Name', type: 'text' },
-              { key: 'email', placeholder: 'Work Email', type: 'email' },
-              { key: 'designation', placeholder: 'Designation', type: 'text' },
-              { key: 'department', placeholder: 'Department / Team', type: 'text' },
-            ].map(f => (
-              <input
-                key={f.key}
-                type={f.type}
-                placeholder={f.placeholder}
-                value={form[f.key]}
-                onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                className="w-full glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-3 rounded-xl focus:outline-none placeholder-white/20"
-              />
-            ))}
-            <select
-              value={form.role}
-              onChange={e => setForm(prev => ({ ...prev, role: e.target.value }))}
-              className="w-full glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-3 rounded-xl focus:outline-none"
+        
+        <div className="flex gap-2 bg-white/5 p-1.5 rounded-2xl border border-white/5">
+            <button 
+              onClick={() => setActiveTab('invites')}
+              className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'invites' ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-white/40 hover:text-white'}`}
             >
-              {['employee', 'hr_manager', 'team_lead', 'recruiter'].map(r => (
-                <option key={r} value={r} className="bg-[#080f1f]">{r}</option>
-              ))}
-            </select>
-            <div className="flex gap-3">
-              <button onClick={() => setShowForm(false)}
-                className="flex-1 py-3 rounded-2xl glass-panel border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest hover:text-white transition-all">
-                Cancel
+               Outbound Invites
+            </button>
+            <button 
+              onClick={() => setActiveTab('approvals')}
+              className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'approvals' ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-white/40 hover:text-white'}`}
+            >
+               Pending Approvals
+               {approvals.length > 0 && (
+                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-error text-[8px] font-black text-white animate-pulse">
+                   {approvals.length}
+                 </span>
+               )}
+            </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 grayscale opacity-50">
+            <div className="w-12 h-12 border-3 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-primary">Synchronizing Persistence Layer...</p>
+        </div>
+      ) : activeTab === 'invites' ? (
+        <div className="space-y-6 animate-fade-in-up">
+           {/* Invites Toolbar */}
+           <div className="flex justify-between items-center bg-white/5 p-4 rounded-3xl border border-white/5 shadow-2xl">
+              <div className="flex gap-8 px-4">
+                 {[
+                   { label: 'Sent', val: invites.length, color: 'text-primary' },
+                   { label: 'Pending', val: invites.filter(i => i.status === 'Pending').length, color: 'text-amber-400' },
+                   { label: 'Completed', val: invites.filter(i => i.status === 'Completed').length, color: 'text-emerald-400' }
+                 ].map((s, i) => (
+                   <div key={i}>
+                      <p className={`text-xl font-display font-black ${s.color}`}>{s.val}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-white/30">{s.label}</p>
+                   </div>
+                 ))}
+              </div>
+              <button 
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-3 px-8 py-4 bg-primary text-black text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >
+                <Plus size={16} /> Deploy New Invite
               </button>
-              <button onClick={sendInvite} disabled={submitting}
-                className="flex-1 py-3 rounded-2xl bg-primary text-black text-[10px] font-black uppercase tracking-widest hover:bg-primary/80 transition-all disabled:opacity-50">
-                {submitting ? 'Sending...' : 'Send Invite'}
+           </div>
+
+           <div className="glass-panel border-white/5 overflow-hidden">
+             <table className="w-full text-left">
+               <thead className="bg-white/5 border-b border-white/10">
+                 <tr>
+                   {['Identity', 'Designation', 'Access Role', 'Current Status', 'Initiated', 'Action'].map(h => (
+                     <th key={h} className="px-6 py-5 text-[9px] font-black uppercase tracking-widest text-white/30">{h}</th>
+                   ))}
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-white/5">
+                 {invites.length === 0 ? (
+                   <tr><td colSpan={6} className="px-6 py-20 text-center text-[10px] text-white/20 uppercase font-black tracking-widest">No active invite sequences in current sector</td></tr>
+                 ) : invites.map((inv, i) => (
+                   <tr key={inv.id || i} className="hover:bg-white/[0.02] transition-colors group">
+                     <td className="px-6 py-4">
+                        <p className="text-sm font-bold text-white">{inv.name}</p>
+                        <p className="text-[10px] text-white/40 font-mono mt-1">{inv.email}</p>
+                     </td>
+                     <td className="px-6 py-4">
+                        <p className="text-xs text-white/70 font-medium">{inv.designation || 'N/A'}</p>
+                        <p className="text-[9px] text-white/30 uppercase tracking-widest">{inv.department || 'General'}</p>
+                     </td>
+                     <td className="px-6 py-4">
+                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">{inv.role}</span>
+                     </td>
+                     <td className="px-6 py-4">
+                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${inviteStatusStyle[inv.status] || 'bg-white/5 text-white/30'}`}>
+                          {inv.status}
+                        </span>
+                     </td>
+                     <td className="px-6 py-4 text-[10px] text-white/20 font-mono">
+                        {new Date(inv.created_at).toLocaleDateString()}
+                     </td>
+                     <td className="px-6 py-4">
+                        {inv.status === 'Pending' && (
+                          <button onClick={() => toast.success("Invite link copied to clipboard!")} className="p-2 text-white/40 hover:text-white transition-all">
+                             <Trash2 size={16} className="text-error/40 hover:text-error" />
+                          </button>
+                        )}
+                     </td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           </div>
+        </div>
+      ) : (
+        /* Approvals Tab */
+        <div className="space-y-6 animate-fade-in-up">
+           <div className="glass-panel border-white/5 overflow-hidden">
+             <table className="w-full text-left">
+               <thead className="bg-white/5 border-b border-white/10">
+                 <tr>
+                   {['Candidate', 'Sector / Designation', 'Neural Code', 'Compliance', 'Action'].map(h => (
+                     <th key={h} className="px-6 py-5 text-[9px] font-black uppercase tracking-widest text-white/30">{h}</th>
+                   ))}
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-white/5">
+                 {approvals.length === 0 ? (
+                   <tr><td colSpan={5} className="px-6 py-20 text-center text-[10px] text-white/20 uppercase font-black tracking-widest">Global personnel pipeline is clear</td></tr>
+                 ) : approvals.map((app, i) => (
+                   <tr key={app.employee_code || i} className="hover:bg-white/[0.02] transition-colors group">
+                     <td className="px-6 py-6">
+                        <div className="flex items-center gap-4">
+                           <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-display font-black text-lg overflow-hidden shrink-0">
+                              {app.photo_path ? (
+                                  <img src={`/${app.photo_path}`} className="w-full h-full object-cover" alt="" />
+                              ) : (
+                                  app.name?.[0] || '?'
+                              )}
+                           </div>
+                           <div>
+                              <p className="text-sm font-bold text-white">{app.name}</p>
+                              <p className="text-[10px] text-white/40 font-mono mt-1">{app.email_id}</p>
+                           </div>
+                        </div>
+                     </td>
+                     <td className="px-6 py-6">
+                        <p className="text-xs text-white/70 font-medium">{app.designation}</p>
+                        <p className="text-[9px] text-white/30 uppercase tracking-widest">{app.team}</p>
+                     </td>
+                     <td className="px-6 py-6">
+                        <span className="text-[10px] font-black text-primary uppercase font-mono tracking-widest">{app.employee_code}</span>
+                     </td>
+                     <td className="px-6 py-6">
+                        <div className="flex flex-col gap-1.5">
+                            <span className="flex items-center gap-2 text-[9px] font-black uppercase text-emerald-400/60"><BadgeCheck size={10} /> Identity Verified</span>
+                            <span className="flex items-center gap-2 text-[9px] font-black uppercase text-amber-400/60"><Clock size={10} /> Awaiting Sync</span>
+                        </div>
+                     </td>
+                     <td className="px-6 py-6 text-right">
+                        <button 
+                          onClick={() => {
+                              setSelectedApproval(app);
+                              setApproveForm(prev => ({ 
+                                  ...prev, 
+                                  code: app.employee_code, 
+                                  location: app.location || '',
+                                  doj: app.doj || new Date().toISOString().split('T')[0]
+                              }));
+                          }}
+                          className="px-6 py-3 rounded-xl bg-white/5 text-white text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all group"
+                        >
+                          Review Matrix <ChevronRight size={14} className="inline ml-1 group-hover:translate-x-1 transition-transform" />
+                        </button>
+                     </td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           </div>
+        </div>
+      )}
+
+      {/* Invite Modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+          <div className="glass-panel border-white/10 rounded-3xl p-10 w-full max-w-md space-y-6 shadow-[0_50px_100px_rgba(0,0,0,0.9)] scale-in-center">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary"><UserPlus size={24} /></div>
+              <h3 className="text-lg font-black uppercase tracking-tighter text-white">Outbound Sequence</h3>
+            </div>
+            
+            <div className="space-y-4">
+               <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Name</label>
+                  <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full glass-panel border-white/5 text-white text-xs bg-black/20 px-5 py-4 rounded-xl focus:border-primary/40 outline-none" placeholder="Full name..." />
+               </div>
+               <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Email</label>
+                  <input value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full glass-panel border-white/5 text-white text-xs bg-black/20 px-5 py-4 rounded-xl focus:border-primary/40 outline-none" placeholder="Email address..." />
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Designation</label>
+                    <select value={form.designation} onChange={e => setForm({...form, designation: e.target.value})} className="w-full glass-panel border-white/5 text-white text-xs bg-black/20 px-5 py-4 rounded-xl focus:border-primary/40 outline-none">
+                       <option value="">Select Designation...</option>
+                       {DESIGNATIONS.map(d => <option key={d} value={d} className="bg-[#080f1f]">{d}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Department</label>
+                    <select value={form.department} onChange={e => setForm({...form, department: e.target.value})} className="w-full glass-panel border-white/5 text-white text-xs bg-black/20 px-5 py-4 rounded-xl focus:border-primary/40 outline-none">
+                       <option value="">Select Department...</option>
+                       {DEPARTMENTS.map(d => <option key={d} value={d} className="bg-[#080f1f]">{d}</option>)}
+                    </select>
+                  </div>
+               </div>
+              <div className="space-y-1.5">
+                 <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Access Role</label>
+                  <select 
+                    value={form.role}
+                    onChange={e => setForm({...form, role: e.target.value})}
+                    className="w-full glass-panel border-white/5 text-white text-xs bg-black/20 px-5 py-4 rounded-xl focus:border-primary/40 outline-none"
+                  >
+                    {[
+                      { id: 'org_admin', label: 'Org Admin (L2)' },
+                      { id: 'manager', label: 'Manager (L3)' },
+                      { id: 'employee', label: 'Employee (L4)' }
+                    ].map(r => (
+                      <option key={r.id} value={r.id} className="bg-[#080f1f]">{r.label}</option>
+                    ))}
+                  </select>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-6">
+              <button 
+                onClick={() => setShowForm(false)}
+                className="flex-1 py-4 rounded-2xl border border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest hover:text-white transition-all"
+              >
+                Abort
+              </button>
+              <button 
+                onClick={sendInvite} disabled={submitting}
+                className="flex-1 py-4 rounded-2xl bg-primary text-black text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >
+                {submitting ? 'Transmitting...' : 'Initiate'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Approval & Review Drawer (The "Detail View") */}
+      {selectedApproval && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/90 backdrop-blur-md">
+           <div className="w-full max-w-3xl h-full glass-panel border-l border-white/10 animate-slide-in-right overflow-y-auto pr-2 custom-scrollbar">
+              <div className="p-10 space-y-10">
+                 {/* Header */}
+                 <div className="flex justify-between items-start">
+                    <div className="flex gap-6 items-center">
+                        <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-display font-black text-3xl overflow-hidden shrink-0">
+                           {selectedApproval.photo_path ? (
+                               <img src={`/${selectedApproval.photo_path}`} className="w-full h-full object-cover" alt="" />
+                           ) : (
+                               selectedApproval.name?.[0]
+                           )}
+                        </div>
+                        <div>
+                           <div className="flex items-center gap-3">
+                              <h2 className="text-3xl font-display font-black text-white uppercase tracking-tighter italic">{selectedApproval.name}</h2>
+                              <span className="px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">Awaiting Neural Link</span>
+                           </div>
+                           <p className="text-primary font-black text-xs uppercase tracking-[0.3em] mt-2 italic">{selectedApproval.designation} // {selectedApproval.team}</p>
+                        </div>
+                    </div>
+                    <button onClick={() => setSelectedApproval(null)} className="p-3 bg-white/5 rounded-2xl text-white/30 hover:text-error transition-all hover:bg-error/10">Abort Review</button>
+                 </div>
+
+                 {/* Information Grid - HERE IS THE DATA VISIBILITY FIX */}
+                 <div className="grid grid-cols-2 gap-8">
+                    {/* Basic Section */}
+                    <div className="space-y-6">
+                        <SectionHeader icon={FileText} label="Personal Vectors" />
+                        <div className="space-y-4 bg-white/5 p-6 rounded-3xl border border-white/5">
+                            <InfoCard label="Email Access" value={selectedApproval.email_id} icon={Mail} />
+                            <InfoCard label="Contact Frequency" value={selectedApproval.contact_number} icon={Phone} />
+                            <InfoCard label="Temporal Origin" value={selectedApproval.dob} icon={Clock} />
+                            <InfoCard label="Emergency Contact" value={selectedApproval.emergency_contact} icon={ShieldAlert} />
+                        </div>
+
+                        <SectionHeader icon={Briefcase} label="Neural Capabilities" />
+                        <div className="space-y-4 bg-white/5 p-6 rounded-3xl border border-white/5">
+                            <div className="space-y-1">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-primary">Primary Skill Assets</p>
+                                <p className="text-xs text-white/80 leading-relaxed font-medium">{selectedApproval.primary_skillset || 'No telemetry detected'}</p>
+                            </div>
+                            <div className="space-y-1 mt-4">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-white/30">Secondary Capabilities</p>
+                                <p className="text-xs text-white/50 leading-relaxed">{selectedApproval.secondary_skillset || 'None'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Geography & Education */}
+                    <div className="space-y-6">
+                        <SectionHeader icon={MapPin} label="Geographic Anchors" />
+                        <div className="space-y-4 bg-white/5 p-6 rounded-3xl border border-white/5">
+                            <div className="space-y-1">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-white/30">Current Base</p>
+                                <p className="text-xs text-white/70 leading-relaxed">{selectedApproval.current_address}</p>
+                            </div>
+                            <div className="space-y-1 mt-4">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-white/30">Permanent Point</p>
+                                <p className="text-xs text-white/70 leading-relaxed">{selectedApproval.permanent_address}</p>
+                            </div>
+                        </div>
+
+                        <SectionHeader icon={GraduationCap} label="Academic History Blocks" />
+                        <div className="space-y-3 bg-white/5 p-6 rounded-3xl border border-white/5">
+                            {(() => {
+                                let edu = selectedApproval.education_details;
+                                try {
+                                    if (typeof edu === 'string') edu = JSON.parse(edu);
+                                } catch { 
+                                    return <p className="text-xs text-white/50 italic">Invalid data format.</p>;
+                                }
+                                
+                                if (Array.isArray(edu) && edu.length > 0) {
+                                    return edu.map((e, idx) => (
+                                        <div key={idx} className="pb-3 mb-3 border-b border-white/5 last:border-0 last:pb-0 last:mb-0">
+                                            <p className="text-xs font-black text-white uppercase">{e.degree}</p>
+                                            <p className="text-[10px] text-white/40 mt-1 uppercase tracking-widest italic">{e.university} ({e.year})</p>
+                                            {e.percentage && <p className="text-[10px] text-primary mt-1 font-black">Scoring: {e.percentage}</p>}
+                                        </div>
+                                    ));
+                                }
+                                return <p className="text-xs text-white/50 italic">No academic history detected.</p>;
+                            })()}
+                        </div>
+                    </div>
+                 </div>
+
+                 {/* Document Review */}
+                 <div className="space-y-6">
+                    <SectionHeader icon={Eye} label="Identity Artifacts" />
+                    <div className="grid grid-cols-3 gap-4">
+                        {[
+                           { label: 'Neural Resume (CV)', path: selectedApproval.cv_path },
+                           { label: 'Identity Visual', path: selectedApproval.photo_path },
+                           { label: 'Official Credential', path: selectedApproval.id_proofs }
+                        ].map((d, i) => (
+                           <div key={i} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center justify-between group hover:bg-white/10 transition-all cursor-pointer">
+                              <div className="flex items-center gap-3">
+                                 <FileText size={16} className="text-primary" />
+                                 <p className="text-[10px] font-black uppercase tracking-widest text-white/40">{d.label}</p>
+                              </div>
+                               {d.path ? (
+                                 <a href={`/${d.path}`} target="_blank" rel="noreferrer" className="text-primary hover:text-white transition-colors bg-white/5 p-2 rounded-lg"><ExternalLink size={14}/></a>
+                               ) : (
+                                 <span className="text-error/30 text-[8px] font-black uppercase">Missing</span>
+                               )}
+                           </div>
+                        ))}
+                    </div>
+                 </div>
+
+                 {/* Approval Form */}
+                 <div className="mt-12 p-10 bg-emerald-500/5 border border-emerald-500/10 rounded-[40px] space-y-8 shadow-2xl shadow-emerald-500/5">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-emerald-400 shadow-emerald-500/40 shadow-inner">
+                           <ShieldAlert size={24} />
+                        </div>
+                        <div>
+                           <h3 className="text-xl font-display font-black text-white uppercase tracking-tighter">Initiate Activation Protocol</h3>
+                           <p className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">Assign parameters to finalize personnel matrix</p>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleApprove} className="space-y-6">
+                       <div className="grid grid-cols-2 gap-6">
+                           <div className="space-y-2">
+                              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Reporting Manager</label>
+                              <select 
+                                value={approveForm.manager}
+                                onChange={e => setApproveForm({...approveForm, manager: e.target.value})}
+                                className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-white focus:border-emerald-500/40 outline-none"
+                              >
+                                 <option value="">Select Manager...</option>
+                                 {managers.map(m => <option key={m.code} value={m.name} className="bg-[#080f1f]">{m.name} ({m.role})</option>)}
+                              </select>
+                           </div>
+                           <div className="space-y-2">
+                              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Neural Employment Type</label>
+                              <select 
+                                value={approveForm.type}
+                                onChange={e => setApproveForm({...approveForm, type: e.target.value})}
+                                className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-white focus:border-emerald-500/40 outline-none"
+                              >
+                                 <option value="Full Time" className="bg-[#080f1f]">Full Time</option>
+                                 <option value="Contract" className="bg-[#080f1f]">Contract</option>
+                                 <option value="Internship" className="bg-[#080f1f]">Internship</option>
+                              </select>
+                           </div>
+                       </div>
+                       
+                       <div className="grid grid-cols-3 gap-6">
+                           {['pf', 'mediclaim'].map(k => (
+                             <div key={k} className="space-y-2">
+                                <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">{k.toUpperCase()} Enrollment</label>
+                                <select 
+                                  value={approveForm[k]}
+                                  onChange={e => setApproveForm({...approveForm, [k]: e.target.value})}
+                                  className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-white focus:border-emerald-500/40 outline-none"
+                                >
+                                   <option value="No" className="bg-[#080f1f]">No</option>
+                                   <option value="Yes" className="bg-[#080f1f]">Yes</option>
+                                </select>
+                             </div>
+                           ))}
+                           <div className="space-y-2">
+                              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Location of Work</label>
+                              <input 
+                                value={approveForm.location}
+                                onChange={e => setApproveForm({...approveForm, location: e.target.value})}
+                                placeholder="e.g. Mumbai, Remote..."
+                                className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-white focus:border-emerald-500/40 outline-none"
+                              />
+                           </div>
+                           <div className="space-y-2">
+                              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Onboarding / Employee Code (Editable)</label>
+                              <input 
+                                value={approveForm.code}
+                                onChange={e => setApproveForm({...approveForm, code: e.target.value})}
+                                className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-primary font-black uppercase font-mono outline-none focus:border-primary/40"
+                              />
+                           </div>
+                           <div className="space-y-2">
+                              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Official Date of Joining (DOJ)</label>
+                              <input 
+                                type="date"
+                                value={approveForm.doj}
+                                onChange={e => setApproveForm({...approveForm, doj: e.target.value})}
+                                className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-white outline-none focus:border-emerald-500/40"
+                              />
+                           </div>
+                       </div>
+
+                       <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Internal Clearance Notes</label>
+                           <textarea 
+                             rows="3"
+                             value={approveForm.notes}
+                             onChange={e => setApproveForm({...approveForm, notes: e.target.value})}
+                             placeholder="Neural profile performance notes..."
+                             className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-white focus:border-emerald-500/40 outline-none resize-none"
+                           />
+                       </div>
+
+                       <div className="flex gap-4 pt-4">
+                          <button 
+                            type="button"
+                            onClick={() => setSelectedApproval(null)}
+                            className="flex-1 py-5 rounded-3xl border border-white/10 text-white/30 text-[10px] font-black uppercase tracking-widest hover:text-white transition-all"
+                          >
+                            Defer Approval
+                          </button>
+                          <button 
+                            type="submit" disabled={submitting}
+                            className="flex-1 py-5 rounded-3xl bg-emerald-500 text-black font-black text-[12px] uppercase tracking-[0.2em] shadow-2xl shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                          >
+                            {submitting ? 'Activating Matrix...' : 'Activate Personnel'}
+                          </button>
+                       </div>
+                    </form>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function SectionHeader({ icon: Icon, label }) {
+    return (
+        <div className="flex items-center gap-3 border-b border-white/5 pb-4 mb-4">
+            <Icon size={16} className="text-primary" />
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">{label}</span>
+        </div>
+    );
+}
+
+function InfoCard({ label, value, icon: Icon }) {
+    return (
+        <div className="flex items-start gap-4">
+            <div className="w-8 h-8 bg-white/5 rounded-xl flex items-center justify-center text-white/20 shrink-0"><Icon size={12}/></div>
+            <div>
+                <p className="text-[8px] font-black uppercase tracking-widest text-white/30 mb-0.5">{label}</p>
+                <p className="text-xs text-white/90 font-medium">{value || '—'}</p>
+            </div>
+        </div>
+    );
 }

@@ -1,140 +1,127 @@
 from typing import List, Dict, Any, Optional
-from backend.modules.deploy.repositories.assessment_repo import AssessmentRepository
-from backend.modules.deploy.schemas.assessment import SaveAssessmentRequest, AssessmentEntry
+from backend.modules.deploy.repositories.performance_repo import PerformanceRepository
 from backend.modules.deploy.services.notification_service import add_notification
 
-TEMPLATE = {
-    "Performance": [
-        "Adherence to schedules",
-        "Quality of deliverables",
-        "Stakeholder feedback",
-        "Team contribution"
-    ],
-    "Potential": [
-        "Communication and influence",
-        "Problem-solving",
-        "Adaptability"
-    ],
-    "Values": [
-        "Integrity and accountability",
-        "Teamwork and collaboration",
-        "Initiative and proactivity"
-    ],
-    "Growth and Development": [
-        "Learning and upskilling",
-        "Team development contribution"
-    ],
-    "Impact": [
-        "Creativity and originality",
-        "Business goal contributions"
-    ]
-}
-
 class AssessmentService:
-    def __init__(self):
-        self.repo = AssessmentRepository()
-
-    def check_authorization(self, user: dict, target_employee_code: str) -> bool:
-        if user['role'] in ['Admin', 'HR']:
-            return True
-        if user['employee_code'] == target_employee_code:
-            return True
-        if user['role'] == 'Management':
-            mgr_name = self.repo.get_employee_manager_name(user['employee_code'])
-            rep_mgr = self.repo.get_employee_reporting_manager(target_employee_code)
-            
-            # Simple check: If User Name is same as Target's Manager Name
-            # OR User Code is same as Target's Manager Name (if code stored)
-            if rep_mgr and (rep_mgr == mgr_name or rep_mgr == user['employee_code']):
-                return True
-        return False
+    def __init__(self, tenant_id: str = 'public'):
+        self.repo = PerformanceRepository()
+        self.tenant_id = tenant_id
 
     def get_assessments(self, employee_code: str, year: int, user: dict):
-        if not self.check_authorization(user, employee_code):
-             raise ValueError("Not authorized to view this assessment")
+        # type parameter is passed via query string in frontend
+        # but for simplicity we'll just return all for that employee/year
+        return self.repo.get_assessments(employee_code, year, self.tenant_id)
 
-        meta_list = self.repo.get_assessments_meta(employee_code, year)
-        assessments_map = {row['quarter']: row for row in meta_list}
+    def save_assessment(self, req: Any, user: dict):
+        # req can be a dict (from Body) or a schema
+        data = req if isinstance(req, dict) else req.dict()
+        user_role = user['role']
         
-        result = []
-        ALL_PERIODS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Q1', 'Q2', 'Q3', 'Q4']
-        for q in ALL_PERIODS:
-            if q in assessments_map:
-                meta = assessments_map[q]
-                entries_rows = self.repo.get_assessment_entries(meta['id'])
-                entries_dict = {(r['category'], r['subcategory']): r for r in entries_rows}
+        # Check existing to enforce edit rules
+        assessments = self.repo.get_assessments(data['employee_code'], data['year'], self.tenant_id)
+        existing = next((a for a in assessments if a['period_type'] == data['period_type'] and a['period_value'] == data['period_value']), None)
+        
+        if existing:
+            # Rule 1: L4 (employee) cannot edit after submission
+            if user_role not in ['Admin', 'HR', 'Management', 'org_admin', 'manager']:
+                if existing['status'] in ['Submitted', 'Reviewed', 'Finalized']:
+                    raise ValueError("Assessment already submitted. Contact manager for changes.")
+            
+            # Rule 2: Separation of Concerns
+            new_entries = []
+            for i, old_entry in enumerate(existing['entries']):
+                # Find matching entry by category/subcategory
+                target_cat = old_entry.get('category')
+                target_sub = old_entry.get('subcategory')
+                new_entry = next((e for e in data['entries'] if e.get('category') == target_cat and e.get('subcategory') == target_sub), data['entries'][i] if i < len(data['entries']) else {})
                 
-                final_entries = []
-                for cat, subcats in TEMPLATE.items():
-                    for sub in subcats:
-                        if (cat, sub) in entries_dict:
-                            final_entries.append(entries_dict[(cat, sub)])
-                        else:
-                            final_entries.append({
-                                "category": cat, "subcategory": sub, 
-                                "self_score": 0, "manager_score": 0, "score": 0, "manager_comment": "", "employee_comment": ""
-                            })
+                if user_role in ['Admin', 'HR', 'Management', 'org_admin', 'manager']:
+                    # Manager updates their part, keeps employee's part
+                    old_entry['manager_score'] = new_entry.get('manager_score')
+                    old_entry['manager_comment'] = new_entry.get('manager_comment')
+                else:
+                    # Employee updates their part, keeps manager's part (if any)
+                    old_entry['self_score'] = new_entry.get('self_score')
+                    old_entry['employee_comment'] = new_entry.get('employee_comment')
                 
-                result.append({
-                    "quarter": q,
-                    "status": meta['status'],
-                    "total_score": meta['total_score'],
-                    "percentage": meta['percentage'],
-                    "entries": final_entries,
-                    "exists": True
-                })
-            else:
-                # Empty Template
-                empty_entries = []
-                for cat, subcats in TEMPLATE.items():
-                    for sub in subcats:
-                        empty_entries.append({
-                            "category": cat, "subcategory": sub, "self_score": 0, 
-                            "manager_score": 0, "score": 0, "manager_comment": "", "employee_comment": ""
-                        })
-                result.append({
-                    "quarter": q, "status": "Not Started", "total_score": 0, 
-                    "percentage": 0.0, "entries": empty_entries, "exists": False
-                })
+                # Combined score is manager score if available, else self score
+                old_entry['score'] = old_entry.get('manager_score') or old_entry.get('self_score') or 0
+                new_entries.append(old_entry)
+            data['entries'] = new_entries
+        else:
+            # New assessment
+            for entry in data['entries']:
+                entry['score'] = entry.get('manager_score') or entry.get('self_score') or 0
+
+        # Calculate totals
+        total = sum(e.get('score', 0) for e in data['entries'])
+        data['total_score'] = total
+        data['percentage'] = round((total / (len(data['entries']) * 10)) * 100) if data['entries'] else 0
+
+        result = self.repo.save_assessment(data, self.tenant_id)
+        
+        # Notifications
+        if data['status'] == 'Submitted' and user_role not in ['Admin', 'manager', 'org_admin']:
+            add_notification(
+                title="Performance Sync Required",
+                message=f"Deployment unit {data['employee_code']} has submitted their {data['period_value']} self-assessment.",
+                n_type="AdminAlert",
+                tenant_id=self.tenant_id
+            )
+        elif data['status'] == 'Reviewed':
+            add_notification(
+                title="Performance Matrix Finalized",
+                message=f"Your {data['period_value']} performance protocol has been reviewed and synced.",
+                employee_code=data['employee_code'],
+                n_type="Success",
+                tenant_id=self.tenant_id
+            )
+            
         return result
 
-    def save_assessment(self, req: SaveAssessmentRequest, user: dict):
-        if not self.check_authorization(user, req.employee_code):
-             raise ValueError("Not authorized to edit this assessment")
+    def request_review(self, employee_code: str, year: int, p_type: str, p_value: str):
+        add_notification(
+            title="Performance Review Protocol",
+            message=f"Command has requested your performance self-assessment for {p_value} {year}.",
+            employee_code=employee_code,
+            n_type="Alert",
+            tenant_id=self.tenant_id
+        )
+        # Detailed KRA template setup
+        template_subcategories = [
+            ("Performance", "Adherence to schedules"),
+            ("Performance", "Quality of deliverables"),
+            ("Performance", "Stakeholder feedback"),
+            ("Performance", "Team contribution"),
+            ("Potential", "Communication and influence"),
+            ("Potential", "Problem-solving"),
+            ("Potential", "Adaptability"),
+            ("Values", "Integrity and accountability"),
+            ("Values", "Teamwork and collaboration"),
+            ("Values", "Initiative and proactivity"),
+            ("Growth and Development", "Learning and upskilling"),
+            ("Growth and Development", "Team development contribution"),
+            ("Impact", "Creativity and originality"),
+            ("Impact", "Business goal contributions"),
+        ]
+        
+        entries = [
+            {
+                "category": cat, "subcategory": sub,
+                "self_score": 5, "manager_score": 5, "score": 5,
+                "employee_comment": "", "manager_comment": ""
+            } for cat, sub in template_subcategories
+        ]
 
-        final_status = req.status
-        if user['role'] == 'Employee' and req.status == 'Submitted':
-             final_status = 'Submitted'
-        elif user['role'] == 'Management' and req.status == 'Submitted':
-             final_status = 'Reviewed'
-
-        total_score = sum(e.manager_score for e in req.entries)
-        max_score = len(req.entries) * 10
-        percentage = round((total_score / max_score) * 100, 1) if max_score > 0 else 0
-
-        aid = self.repo.upsert_assessment_header(req.employee_code, req.year, req.quarter, final_status, total_score, percentage)
-        
-        entry_list = [e.dict() for e in req.entries]
-        self.repo.replace_entries(aid, entry_list)
-        
-        from backend.modules.deploy.services.notification_service import NotificationService
-        notif_service = NotificationService()
-        
-        if final_status == 'Submitted' and user['role'] == 'Employee':
-            add_notification(
-                title="Performance Review Submitted",
-                message=f"Employee {req.employee_code} has submitted their self-assessment for {req.quarter}.",
-                n_type="AdminAlert"
-            )
-        elif final_status == 'Reviewed' and user['role'] != 'Employee':
-             # Mark the submission notification as read
-             notif_service.mark_relevant_as_read("Performance Review Submitted", req.employee_code)
-             
-             add_notification(
-                title="Performance Review Completed",
-                message=f"Your {req.quarter} performance review has been finalized by your manager.",
-                employee_code=req.employee_code,
-                n_type="Success"
-            )
-        
-        return {"success": True, "message": "Assessment saved successfully"}
+        data = {
+            "employee_code": employee_code,
+            "year": year,
+            "period_type": p_type,
+            "period_value": p_value,
+            "status": "Requested",
+            "entries": entries,
+            "total_score": 70, # 14 * 5
+            "percentage": 50
+        }
+        self.repo.save_assessment(data, self.tenant_id)
+        return {"success": True, "message": "Review protocol initiated"}

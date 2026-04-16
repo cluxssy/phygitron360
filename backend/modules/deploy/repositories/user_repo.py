@@ -176,3 +176,13 @@ class UserRepository:
         finally:
             conn.close()
 
+
+    def update_username(self, user_id: int, new_username: str, tenant_id: str = 'public'):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
+                cur.execute("UPDATE users SET username = %s WHERE id = %s", (new_username, user_id))
+                conn.commit()
+        finally:
+            conn.close()

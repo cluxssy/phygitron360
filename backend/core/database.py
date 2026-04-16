@@ -1,7 +1,11 @@
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, register_default_jsonb
+import json
 import os
 from dotenv import load_dotenv
+
+# Register JSONB adapter globally
+register_default_jsonb()
 
 # Load environment variables
 load_dotenv()
@@ -102,7 +106,7 @@ def create_tables(schema_name='public'):
                 location TEXT,
                 current_address TEXT,
                 permanent_address TEXT,
-                education_details TEXT,
+                education_details JSONB,
                 employment_status TEXT DEFAULT 'Active',
                 photo_path TEXT,
                 cv_path TEXT,
@@ -119,7 +123,7 @@ def create_tables(schema_name='public'):
         cur.execute('''
             CREATE TABLE IF NOT EXISTS skill_matrix (
                 id SERIAL PRIMARY KEY,
-                employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON DELETE CASCADE,
+                employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE ON DELETE CASCADE,
                 candidate_name TEXT,
                 primary_skillset TEXT,
                 secondary_skillset TEXT,
@@ -162,7 +166,7 @@ def create_tables(schema_name='public'):
                     'super_admin', 'org_admin', 'hr_manager', 'team_lead', 'employee', 'recruiter'
                 )) NOT NULL,
                 roles TEXT[],
-                employee_code TEXT,
+                employee_code TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 is_active INTEGER DEFAULT 1,
                 last_login TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -192,6 +196,7 @@ def create_tables(schema_name='public'):
             CREATE TABLE IF NOT EXISTS onboarding_invites (
                 id SERIAL PRIMARY KEY,
                 token TEXT UNIQUE NOT NULL,
+                tenant_id TEXT NOT NULL DEFAULT 'public',
                 email TEXT NOT NULL,
                 name TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'Employee',
@@ -463,7 +468,7 @@ def create_tables(schema_name='public'):
         cur.execute('''
             CREATE TABLE IF NOT EXISTS assets (
                 id SERIAL PRIMARY KEY,
-                employee_code TEXT UNIQUE REFERENCES employees(employee_code),
+                employee_code TEXT UNIQUE REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 ob_laptop INTEGER DEFAULT 0,
                 ob_laptop_bag INTEGER DEFAULT 0,
                 ob_headphones INTEGER DEFAULT 0,
@@ -646,7 +651,7 @@ def create_tables(schema_name='public'):
         cur.execute('''
             CREATE TABLE IF NOT EXISTS attendance (
                 id SERIAL PRIMARY KEY,
-                employee_code TEXT NOT NULL REFERENCES employees(employee_code),
+                employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 date TEXT NOT NULL,
                 clock_in TEXT,
                 clock_out TEXT,
@@ -661,7 +666,7 @@ def create_tables(schema_name='public'):
         cur.execute('''
             CREATE TABLE IF NOT EXISTS leaves (
                 id SERIAL PRIMARY KEY,
-                employee_code TEXT NOT NULL REFERENCES employees(employee_code),
+                employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
                 leave_type TEXT NOT NULL,
@@ -676,7 +681,7 @@ def create_tables(schema_name='public'):
         cur.execute('''
             CREATE TABLE IF NOT EXISTS leave_balances (
                 id SERIAL PRIMARY KEY,
-                employee_code TEXT NOT NULL UNIQUE REFERENCES employees(employee_code),
+                employee_code TEXT NOT NULL UNIQUE REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 year INTEGER NOT NULL,
                 sick_total INTEGER DEFAULT 10,
                 sick_used INTEGER DEFAULT 0,

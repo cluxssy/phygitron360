@@ -6,6 +6,26 @@ from passlib.hash import pbkdf2_sha256
 
 # Removed in-memory ACTIVE_SESSIONS, now using DB sessions table via UserRepository
 
+ROLE_ALIASES = {
+    'admin': 'org_admin',
+    'hr': 'manager',
+    'hr_manager': 'manager',
+    'management': 'manager',
+    'team_lead': 'manager',
+    'employee': 'employee',
+}
+
+def _resolve_role(role: str) -> str:
+    if not role:
+        return role
+    return ROLE_ALIASES.get(role.lower(), role)
+
+def _resolve_roles(roles: list) -> list:
+    if not roles:
+        return roles
+    return list(set([_resolve_role(r) for r in roles if r]))
+
+
 class AuthService:
     def __init__(self):
         self.repo = UserRepository()
@@ -43,12 +63,15 @@ class AuthService:
         # Resolve tenant modules
         modules_enabled = self._get_tenant_modules(tenant_id)
         
+        resolved_role = _resolve_role(user['role'])
+        resolved_roles = _resolve_roles(user['roles'])
+
         user_info = {
             "id": user['id'],
             "username": user['username'],
             "name": user.get('employee_name') or user['username'],
-            "role": user['role'],
-            "roles": user['roles'],
+            "role": resolved_role,
+            "roles": resolved_roles,
             "tenant_id": tenant_id,
             "employee_code": user['employee_code'],
             "permissions": self.repo.get_user_permissions(user['id'], user['roles'], tenant_id=tenant_id),
@@ -108,13 +131,16 @@ class AuthService:
         tenant_id = session.get('tenant_id', 'public')
         modules_enabled = self._get_tenant_modules(tenant_id)
         
+        resolved_role = _resolve_role(session['role'])
+        resolved_roles = _resolve_roles(session.get('roles') or [session['role']])
+        
         return {
             "id": session['user_id'],
             "tenant_id": tenant_id,
             "username": session['username'],
             "name": session.get('employee_name') or session['username'],
-            "role": session['role'],
-            "roles": session.get('roles') or [session['role']],
+            "role": resolved_role,
+            "roles": resolved_roles,
             "employee_code": session['employee_code'],
             "permissions": self.repo.get_user_permissions(session['user_id'], session.get('roles') or [session['role']], tenant_id=tenant_id),
             "modules_enabled": modules_enabled

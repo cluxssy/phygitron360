@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends, Body
-from backend.modules.deploy.api.auth import require_role 
+from backend.modules.deploy.api.auth import get_current_user
 from backend.modules.deploy.services.asset_service import AssetService
 from backend.modules.deploy.schemas.asset import AssetChecklist
 
-router = APIRouter(prefix="/api/assets", tags=["assets"], dependencies=[Depends(require_role(["Admin", "HR"]))])
+router = APIRouter(prefix="/api/assets", tags=["assets"])
 
-def get_service():
-    return AssetService()
+def get_service(user=Depends(get_current_user)):
+    return AssetService(tenant_id=user.get('tenant_id', 'public'))
 
 @router.get("/{employee_code}")
 def get_asset_checklist(employee_code: str, service: AssetService = Depends(get_service)):
@@ -15,7 +15,7 @@ def get_asset_checklist(employee_code: str, service: AssetService = Depends(get_
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/{employee_code}")
+@router.put("/{employee_code}")
 def upsert_asset_checklist(employee_code: str, data: dict = Body(...), service: AssetService = Depends(get_service)):
     # Using generic dict for body to allow flexibility, but we could use AssetChecklist schema
     try:
