@@ -3,10 +3,14 @@ from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 class NotificationRepository:
-    def create_notification(self, employee_code: Optional[str], title: str, message: str, n_type: str = 'Info'):
+    def _set_path(self, cur, tenant_id='public'):
+        cur.execute(f'SET search_path TO "{tenant_id}", public')
+
+    def create_notification(self, employee_code: Optional[str], title: str, message: str, n_type: str = 'Info', tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute('''
                     INSERT INTO notifications (employee_code, title, message, type)
                     VALUES (%s, %s, %s, %s)
@@ -15,10 +19,11 @@ class NotificationRepository:
         finally:
             conn.close()
 
-    def get_notifications_for_user(self, employee_code: str, limit: int = 10, unread_only: bool = False) -> List[Dict[str, Any]]:
+    def get_notifications_for_user(self, employee_code: str, tenant_id: str = 'public', limit: int = 10, unread_only: bool = False) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
                 query = 'SELECT * FROM notifications WHERE (employee_code = %s OR employee_code IS NULL)'
                 if unread_only:
                     query += ' AND is_read = 0'
@@ -29,10 +34,11 @@ class NotificationRepository:
         finally:
             conn.close()
 
-    def get_admin_notifications(self, limit: int = 15, unread_only: bool = False) -> List[Dict[str, Any]]:
+    def get_admin_notifications(self, tenant_id: str = 'public', limit: int = 15, unread_only: bool = False) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
                 query = "SELECT * FROM notifications WHERE (employee_code IS NULL OR type = 'AdminAlert')"
                 if unread_only:
                     query += ' AND is_read = 0'
@@ -43,21 +49,22 @@ class NotificationRepository:
         finally:
             conn.close()
 
-    def mark_as_read(self, notification_id: int):
+    def mark_as_read(self, notification_id: int, tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute('UPDATE notifications SET is_read = 1 WHERE id = %s', (notification_id,))
                 conn.commit()
         finally:
             conn.close()
 
-    def mark_all_as_read(self, employee_code: str, is_admin: bool = False):
+    def mark_all_as_read(self, employee_code: str, is_admin: bool = False, tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 if is_admin:
-                    # Admins mark their own + global/admin alerts as read
                     cur.execute('''
                         UPDATE notifications 
                         SET is_read = 1 
@@ -69,10 +76,11 @@ class NotificationRepository:
         finally:
             conn.close()
 
-    def mark_notifications_by_query(self, title: str, message_part: str):
+    def mark_notifications_by_query(self, title: str, message_part: str, tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute('''
                     UPDATE notifications 
                     SET is_read = 1 
@@ -82,10 +90,11 @@ class NotificationRepository:
         finally:
             conn.close()
 
-    def get_unread_count(self, employee_code: Optional[str], is_admin: bool = False) -> int:
+    def get_unread_count(self, employee_code: Optional[str], is_admin: bool = False, tenant_id: str = 'public') -> int:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 if is_admin:
                     cur.execute('''
                         SELECT count(*) FROM notifications 

@@ -1,10 +1,24 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mustChange, setMustChange] = useState(false);
+
+  const refreshUser = async () => {
+    try {
+      const res = await fetch('/api/auth/check', { credentials: 'include' });
+      const data = await res.json();
+      if (data.authenticated) {
+        setUser(data.user);
+      }
+    } catch (e) {
+      console.error('Failed to refresh user matrix', e);
+    }
+  };
 
   const login = (userData) => {
     setUser(userData);
@@ -32,6 +46,13 @@ export function AuthProvider({ children }) {
         const data = await res.json();
         if (data.authenticated) {
           setUser(data.user);
+          try {
+            const mcRes = await fetch('/api/auth/check-must-change-password', { credentials: 'include' });
+            if (mcRes.ok) {
+              const mcData = await mcRes.json();
+              if (mcData.must_change) setMustChange(true);
+            }
+          } catch (e) {}
         } else {
           setUser(null);
         }
@@ -47,18 +68,32 @@ export function AuthProvider({ children }) {
 
   const hasRole = (roles) => {
     if (!user) return false;
-    const userRoles = (user.roles || [user.role]).map(r => r ? r.toLowerCase() : '');
+    
+    // Normalize user roles including legacy aliases
+    const rawRoles = (user.roles || [user.role]).map(r => r ? r.toLowerCase() : '');
+    const userRoles = rawRoles.map(r => {
+      if (['admin', 'administrator'].includes(r)) return 'org_admin';
+      if (['hr', 'management', 'hr_manager', 'team_lead'].includes(r)) return 'manager';
+      return r;
+    });
+
+    // Superadmin has God-mode access to everything
+    if (userRoles.includes('super_admin') || userRoles.includes('superadmin')) {
+        return true;
+    }
     
     if (Array.isArray(roles)) {
       const allowedRoles = roles.map(r => r.toLowerCase());
       return allowedRoles.some(role => userRoles.includes(role));
     }
-    return userRoles.includes(roles.toLowerCase());
+    const roleToCheck = roles.toLowerCase();
+    return userRoles.includes(roleToCheck);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, hasRole, refreshUser }}>
       {children}
+      {mustChange && <ChangePasswordModal forceUpdate={true} />}
     </AuthContext.Provider>
   );
 }

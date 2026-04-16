@@ -10,15 +10,19 @@ import shutil
 
 router = APIRouter(prefix="/api", tags=["employees"])
 
-def get_service():
-    return EmployeeService()
+def get_service(tenant_id: str = 'public'):
+    return EmployeeService(tenant_id=tenant_id)
 
 @router.get("/employees", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
-def get_employees(service: EmployeeService = Depends(get_service)):
+def get_employees(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
     return service.get_all_employees()
 
 @router.get("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
-def get_employee(employee_code: str, service: EmployeeService = Depends(get_service)):
+def get_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
     employee = service.get_employee_full_details(employee_code)
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -34,6 +38,7 @@ async def create_employee(
     email: str = Form(...),
     doj: str = Form(...),
     team: str = Form(...),
+    designation: str = Form(...),
     role: str = Form(...),
     type: str = Form(...),
     manager: str = Form(...),
@@ -49,18 +54,22 @@ async def create_employee(
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
-    service: EmployeeService = Depends(get_service)
+    education_details: str = Form(None),
+    current_user: dict = Depends(get_current_user)
 ):
-    # File handling logic moved to utils/storage.py
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
+    
     photo_path = save_uploaded_file(photo_file, 'pfps', code, 'pfp')
     cv_path = save_uploaded_file(cv_file, 'cvs', code, 'cv')
     id_proofs_path = save_uploaded_file(id_proof_file, 'id', code, 'id_proof')
 
     data = {
         "code": code, "name": name, "dob": dob, "phone": phone, "emergency": emergency,
-        "email": email, "doj": doj, "team": team, "role": role, "type": type,
+        "email": email, "doj": doj, "team": team, "designation": designation, "role": role, "type": type,
         "manager": manager, "location": location, "current_address": current_address,
         "permanent_address": permanent_address, "pf": pf, "mediclaim": mediclaim, "notes": notes,
+        "education_details": education_details,
         "primary_skillset": primary_skillset, "secondary_skillset": secondary_skillset,
         "experience_years": experience_years, "photo_path": photo_path, "cv_path": cv_path,
         "id_proofs": id_proofs_path
@@ -74,7 +83,9 @@ async def create_employee(
          raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "Employee", "org_admin", "hr_manager", "employee"]))])
-def update_employee(employee_code: str, data: dict = Body(...), service: EmployeeService = Depends(get_service)):
+def update_employee(employee_code: str, data: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
     try:
         return service.update_employee(employee_code, data)
     except Exception as e:
@@ -86,8 +97,10 @@ async def upload_documents(
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
-    service: EmployeeService = Depends(get_service)
+    current_user: dict = Depends(get_current_user)
 ):
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
     updates = {}
     
     if photo_file:
@@ -106,7 +119,9 @@ async def upload_documents(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
-def delete_employee(employee_code: str, service: EmployeeService = Depends(get_service)):
+def delete_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
     try:
         return service.delete_employee(employee_code)
     except ValueError as e:
@@ -115,11 +130,15 @@ def delete_employee(employee_code: str, service: EmployeeService = Depends(get_s
          raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/options", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
-def get_dropdown_options(service: EmployeeService = Depends(get_service)):
-     return service.get_options()
+def get_dropdown_options(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
+    return service.get_options()
 
 @router.post("/employee/{employee_code}/offboard", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
-def offboard_employee(employee_code: str, data: OffboardRequest, service: EmployeeService = Depends(get_service)):
+def offboard_employee(employee_code: str, data: OffboardRequest, current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
     try:
         return service.offboard_employee(employee_code, data)
     except Exception as e:

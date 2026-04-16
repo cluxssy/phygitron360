@@ -47,8 +47,14 @@ export default function LoginPage() {
         const uRoles = (data.user.roles || [data.user.role]).map(r => r ? r.toLowerCase() : '');
         if (uRoles.includes('super_admin')) {
           navigate('/superadmin');
-        } else {
+        } else if (uRoles.includes('org_admin')) {
           navigate('/admin');
+        } else if (uRoles.includes('manager')) {
+          navigate('/deploy?tab=team');
+        } else if (uRoles.includes('candidate')) {
+          navigate('/source?tab=my-application');
+        } else {
+          navigate('/deploy');
         }
       } else {
         setError(data.detail || 'Access Denied: Invalid Credentials.');
@@ -108,7 +114,12 @@ export default function LoginPage() {
                </div>
 
                <div>
-                 <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 ml-1">Key Matrix</label>
+                 <div className="flex justify-between items-center mb-3 ml-1">
+                   <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Key Matrix</label>
+                   <button type="button" onClick={() => navigate('/forgot-password')} className="text-[9px] font-bold uppercase tracking-widest text-primary hover:text-white transition-colors">
+                     Reset Protocol?
+                   </button>
+                 </div>
                  <div className="relative">
                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant opacity-40" size={18} />
                    <input

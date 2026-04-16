@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Body, Depends
 from backend.modules.deploy.services.training_service import TrainingService
-from backend.modules.deploy.api.auth import require_role 
+from backend.modules.deploy.api.auth import require_role, get_current_user 
 from backend.modules.deploy.schemas.training import CreateProgramRequest, AssignTrainingRequest, UpdateAssignmentStatusRequest
 
 router = APIRouter(prefix="/api/training", tags=["training"], dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
 
-def get_service():
-    return TrainingService()
+def get_service(user=Depends(get_current_user)):
+    return TrainingService(tenant_id=user.get('tenant_id', 'public'))
 
 @router.get("/programs")
 def get_training_programs(service: TrainingService = Depends(get_service)):

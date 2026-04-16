@@ -46,9 +46,12 @@ class AdminRepository:
         try:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{schema_name}"')
+                
+                # We no longer auto-create EMP-0001. 
+                # Org Admin will fill their own onboarding form to become an employee.
                 cur.execute("""
-                    INSERT INTO users (username, password_hash, role, roles, is_active)
-                    VALUES (%s, %s, 'org_admin', ARRAY['org_admin'], 1)
+                    INSERT INTO users (username, password_hash, role, roles, employee_code, is_active)
+                    VALUES (%s, %s, 'org_admin', ARRAY['org_admin'], NULL, 1)
                     ON CONFLICT DO NOTHING
                 """, (email, password_hash))
                 conn.commit()
@@ -160,6 +163,24 @@ class AdminRepository:
             cur = conn.cursor()
             cur.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
             conn.commit()
+        finally:
+            conn.close()
+
+    def delete_tenant(self, tenant_id: str):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                # 1. Drop the isolated schema and all its tables
+                cur.execute(f'DROP SCHEMA IF EXISTS "{tenant_id}" CASCADE')
+                
+                # 2. Remove from master registry
+                cur.execute("SET search_path TO public")
+                cur.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
+                
+                # 3. Cleanup global sessions related to this tenant
+                cur.execute("DELETE FROM sessions WHERE tenant_id = %s", (tenant_id,))
+                
+                conn.commit()
         finally:
             conn.close()
 

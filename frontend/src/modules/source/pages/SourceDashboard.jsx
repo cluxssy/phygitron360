@@ -35,13 +35,86 @@ export default function SourceDashboard() {
   const query = new URLSearchParams(location.search);
   const currentTab = query.get('tab') || 'home';
 
-  if (!hasRole(['super_admin', 'org_admin', 'recruiter'])) {
+  const isCandidate = hasRole('candidate');
+
+  if (!hasRole(['super_admin', 'org_admin', 'recruiter']) && !isCandidate) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
         <Shield size={48} className="text-secondary/20" />
         <div>
           <h2 className="text-xl font-display font-black text-white uppercase italic">Security Clearance Required</h2>
           <p className="text-xs text-white/30 uppercase tracking-widest mt-1">You do not have 'Recruiter' clearance for this node.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isCandidate) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-8 animate-fade-in-up">
+        <div className="glass-panel p-10 border-white/5 relative overflow-hidden bg-[#060E20]/50">
+          <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-primary/10 rounded-full blur-[80px]"></div>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary mb-4">Candidate Portal // Phygitron Source</p>
+          <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic">Application <span className="text-primary">Status</span></h1>
+          
+          <div className="mt-10 flex items-center gap-6">
+            <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary/20 flex items-center justify-center text-primary font-display font-black text-2xl">
+              {user?.name?.[0] || 'C'}
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white uppercase tracking-tight">{user?.name}</p>
+              <p className="text-xs text-white/40 uppercase tracking-widest mt-1">Identity Verified • Application Processing</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="glass-panel p-8 border-white/5">
+            <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40 mb-6 flex items-center gap-3">
+               <Activity size={16} className="text-primary" /> Active Pipeline
+            </h3>
+            <div className="space-y-4">
+               <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex justify-between items-center">
+                  <div>
+                    <p className="text-xs font-bold text-white mb-1">Resume Screening</p>
+                    <p className="text-[10px] uppercase text-white/30">Stage 1</p>
+                  </div>
+                  <CheckCircle className="text-emerald-400" size={20} />
+               </div>
+               <div className="p-5 rounded-2xl bg-primary/5 border border-primary/20 flex justify-between items-center">
+                  <div>
+                    <p className="text-xs font-bold text-white mb-1 text-primary">Pre-Employment Assessment</p>
+                    <p className="text-[10px] uppercase text-primary/60">Stage 2 • Action Required</p>
+                  </div>
+                  <button onClick={() => navigate('/verify')} className="px-4 py-2 bg-primary text-black text-[9px] font-black uppercase tracking-widest rounded-lg">Start</button>
+               </div>
+               <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex justify-between items-center opacity-40">
+                  <div>
+                    <p className="text-xs font-bold text-white mb-1">Technical Interview</p>
+                    <p className="text-[10px] uppercase text-white/30">Stage 3</p>
+                  </div>
+                  <div className="w-5 h-5 rounded-full border border-white/20" />
+               </div>
+            </div>
+          </div>
+
+          <div className="glass-panel p-8 border-white/5">
+            <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40 mb-6 flex items-center gap-3">
+               <Database size={16} className="text-primary" /> My Profile
+            </h3>
+            <p className="text-xs text-white/40 leading-relaxed mb-6">
+              Your profile is currently being reviewed by our neural matching engine. Ensure your skills are up to date for maximum compatibility.
+            </p>
+            <div className="space-y-3">
+               <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-white/60">
+                  <span>Compatibility Score</span>
+                  <span className="text-primary">Scanning...</span>
+               </div>
+               <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary/30 w-1/3 animate-shimmer"></div>
+               </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -80,7 +153,7 @@ export default function SourceDashboard() {
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchJobRoles = useCallback(async () => {
     try {
-      const r = await fetch('/api/source/job-roles');
+      const r = await fetch('/api/source/job-roles', { credentials: 'include' });
       const d = await r.json();
       setJobRoles(d.data || []);
     } catch { /* silent */ }
@@ -97,7 +170,7 @@ export default function SourceDashboard() {
       params.set('limit', filters.limit);
       if (filters.role_id) params.set('role_id', filters.role_id);
 
-      const r = await fetch(`/api/source/candidates/search?${params}`);
+      const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
       const d = await r.json();
       setCandidates(d.data || []);
     } catch {

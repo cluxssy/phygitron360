@@ -42,8 +42,8 @@ export default function SuperadminDashboard() {
     try {
       setLoading(true);
       const [tRes, dRes] = await Promise.all([
-        fetch('/api/admin/tenants'),
-        fetch('/api/auth/demo-requests')
+        fetch('/api/admin/tenants', { credentials: 'include' }),
+        fetch('/api/auth/demo-requests', { credentials: 'include' })
       ]);
       
       const tData = await tRes.json();
@@ -64,6 +64,7 @@ export default function SuperadminDashboard() {
     try {
       const res = await fetch('/api/admin/tenants', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(provisionForm)
       });
@@ -94,7 +95,7 @@ export default function SuperadminDashboard() {
     });
     
     try {
-      const res = await fetch(`/api/admin/tenants/${tenant.id}/ops`);
+      const res = await fetch(`/api/admin/tenants/${tenant.id}/ops`, { credentials: 'include' });
       const data = await res.json();
       setTenantOps(prev => ({ ...prev, stats: data.stats || {} }));
     } catch {
@@ -110,6 +111,7 @@ export default function SuperadminDashboard() {
     try {
       const res = await fetch(`/api/admin/tenants/${selectedTenant.id}/ops`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             company_name: tenantOps.company_name,
@@ -141,8 +143,33 @@ export default function SuperadminDashboard() {
     });
   };
 
+   const handleDeleteTenant = async () => {
+    if (!window.confirm(`PERMANENT DESTRUCTION IMMINENT: Are you absolutely certain you want to annihilate the '${selectedTenant.company_name}' workspace and all its data? This cannot be undone.`)) return;
+    
+    setSavingOps(true);
+    try {
+      const res = await fetch(`/api/admin/tenants/${selectedTenant.id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        toast.success("Enterprise Workspace Decommissioned.");
+        setShowOpsModal(false);
+        fetchGlobalData();
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || "Destruction sequence aborted.");
+      }
+    } catch {
+       toast.error("Signal loss during decommissioning.");
+    } finally {
+      setSavingOps(false);
+    }
+  };
+
   return (
     <div className="space-y-10 animate-fade-in-up">
+
       {/* ── Overlord Header ── */}
       <section className="flex justify-between items-end">
         <div>
@@ -439,6 +466,14 @@ export default function SuperadminDashboard() {
                        className="flex-1 py-4 bg-white/5 border border-white/10 text-white/60 font-black text-xs uppercase tracking-widest rounded-2xl hover:text-white transition-all"
                     >
                        Abort
+                    </button>
+                    <button 
+                       type="button"
+                       onClick={handleDeleteTenant}
+                       disabled={savingOps}
+                       className="flex-1 py-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-rose-500 hover:text-black transition-all"
+                    >
+                       Decommission
                     </button>
                     <button 
                        disabled={savingOps}

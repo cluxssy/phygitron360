@@ -5,11 +5,14 @@ from backend.core.database import get_db_connection
 
 
 class TrainingRepository:
+    def _set_path(self, cur, tenant_id='public'):
+        cur.execute(f'SET search_path TO "{tenant_id}", public')
 
-    def get_all_programs(self) -> List[Dict[str, Any]]:
+    def get_all_programs(self, tenant_id: str = 'public') -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute(
                     "SELECT * FROM training_library ORDER BY created_at DESC"
                 )
@@ -19,10 +22,11 @@ class TrainingRepository:
             conn.close()
 
 
-    def create_program(self, name: str, desc: str, duration: str):
+    def create_program(self, name: str, desc: str, duration: str, tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute("""
                     INSERT INTO training_library 
                     (program_name, description, default_duration)
@@ -33,10 +37,11 @@ class TrainingRepository:
             conn.close()
 
 
-    def get_program_by_id(self, prog_id: int) -> Optional[Dict[str, Any]]:
+    def get_program_by_id(self, prog_id: int, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute(
                     "SELECT * FROM training_library WHERE id = %s",
                     (prog_id,)
@@ -47,10 +52,11 @@ class TrainingRepository:
             conn.close()
 
 
-    def create_assignment(self, code: str, prog_id: int, prog_name: str, date: str, duration: str):
+    def create_assignment(self, code: str, prog_id: int, prog_name: str, date: str, duration: str, tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute("""
                     INSERT INTO hr_activity (
                         employee_code, program_id, training_assigned,
@@ -63,10 +69,11 @@ class TrainingRepository:
             conn.close()
 
 
-    def get_all_assignments(self) -> List[Dict[str, Any]]:
+    def get_all_assignments(self, tenant_id: str = 'public') -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute("""
                     SELECT 
                         h.id,
@@ -90,10 +97,11 @@ class TrainingRepository:
             conn.close()
 
 
-    def update_assignment_status(self, id: int, status: str):
+    def update_assignment_status(self, id: int, status: str, tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
                 cur.execute("""
                     UPDATE hr_activity
                     SET training_status = %s

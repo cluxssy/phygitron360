@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 # Set up central deploy module router
@@ -53,6 +54,13 @@ app.add_middleware(
 def health_check():
     return JSONResponse(content={"status": "online", "message": "PHYGITRON 360 Platform is operational"})
 
+# Static Files
+from backend.core.database import DATA_DIR
+uploads_dir = os.path.join(DATA_DIR, 'uploads')
+if not os.path.exists(uploads_dir):
+    os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 # Include Modules
 app.include_router(auth_router)
 app.include_router(dashboard_router)
@@ -61,7 +69,7 @@ app.include_router(assets_router, dependencies=[Depends(require_module("deploy")
 app.include_router(attendance_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(assessments_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(training_router, dependencies=[Depends(require_module("deploy"))])
-app.include_router(onboarding_router, dependencies=[Depends(require_module("deploy"))])
+app.include_router(onboarding_router)
 app.include_router(notifications_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(password_router)
 app.include_router(admin_router)

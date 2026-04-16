@@ -62,47 +62,26 @@ def require_module(module_name: str):
 
 # --- Endpoints ---
 
+from backend.modules.admin.services.admin_service import AdminService
+
 @router.post("/register-company")
 def register_company(data: RegisterCompanyRequest, service: AuthService = Depends(get_service)):
     try:
-        # Generate safe schema name and subdomain
-        safe_name = "".join([c for c in data.company_name.lower().replace(' ', '_') if c.isalnum() or c == '_'])
-        tenant_schema = f"tenant_{safe_name}"
-        subdomain = safe_name.replace('_', '')
-        
-        # 1. Create the physical isolated schema & tables (Atomic with Transaction)
-        create_tables(schema_name=tenant_schema)
-        
-        # 2. Add the company to the central public.tenants registry (Master registry)
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Switch to public to record metadata
-        cur.execute("SET search_path TO public")
-        cur.execute(
-            "INSERT INTO tenants (id, company_name, admin_email, subdomain) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
-            (tenant_schema, data.company_name, data.admin_email, subdomain)
+        # Use AdminService to handle the heavy lifting including email dispatch
+        admin_service = AdminService(tenant_id='public')
+        result = admin_service.provision_tenant(
+            data.company_name, 
+            data.admin_email, 
+            data.admin_password, 
+            actor="Self Registration"
         )
-        
-        # 3. Create Superadmin in the NEW isolated schema
-        cur.execute(f'SET search_path TO "{tenant_schema}"')
-        
-        hashed_password = service.get_password_hash(data.admin_password)
-        cur.execute(
-            "INSERT INTO users (username, password_hash, role, roles, is_active) VALUES (%s, %s, %s, %s, 1)",
-            (data.admin_email, hashed_password, 'org_admin', ['org_admin'])
-        )
-        
-        conn.commit()
-        cur.close()
-        conn.close()
         
         return {
             "success": True, 
-            "message": "Company Workspace Created", 
-            "workspace_id": tenant_schema,
-            "subdomain": subdomain,
-            "workspace_url": f"http://{subdomain}.localhost:5173/login"
+            "message": "Company Workspace Created and Welcome Email Dispatched", 
+            "workspace_id": result['workspace_id'],
+            "subdomain": result['subdomain'],
+            "workspace_url": f"http://{result['subdomain']}.localhost:5173/login"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
