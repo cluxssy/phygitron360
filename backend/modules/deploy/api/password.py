@@ -85,7 +85,7 @@ def reset_password(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/admin-reset-password", dependencies=[Depends(require_role(["Admin", "HR"]))])
+@router.post("/admin-reset-password", dependencies=[Depends(require_role(["org_admin", "manager"]))])
 def admin_reset_password(
     request: AdminResetRequest,
     current_user: dict = Depends(get_current_user),

@@ -198,11 +198,7 @@ class OnboardingRepository:
             with conn.cursor() as cur:
                 self._set_path(cur, tenant_id)
                 
-                # 1. User
-                cur.execute("INSERT INTO users (username, password_hash, role, employee_code, is_active) VALUES (%s, %s, %s, %s, 0)", 
-                        (user_data['email'], user_data['password_hash'], user_data['role'], user_data['employee_code']))
-                
-                # 2. Employee
+                # 1. Employee
                 cur.execute('''
                     INSERT INTO employees (
                         employee_code, name, email_id, contact_number, emergency_contact, dob, 
@@ -219,6 +215,10 @@ class OnboardingRepository:
                     employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path']
                 ))
 
+                # 2. User
+                cur.execute("INSERT INTO users (username, password_hash, role, employee_code, is_active) VALUES (%s, %s, %s, %s, 0)", 
+                        (user_data['email'], user_data['password_hash'], user_data['role'], user_data['employee_code']))
+                
                 # 3. Skills
                 cur.execute('''
                     INSERT INTO skill_matrix (

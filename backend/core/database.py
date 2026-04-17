@@ -162,8 +162,7 @@ def create_tables(schema_name='public'):
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT CHECK(role IN (
-                    'HR', 'Admin', 'Management', 'Employee', 'Superadmin',
-                    'super_admin', 'org_admin', 'hr_manager', 'team_lead', 'employee', 'recruiter'
+                    'super_admin', 'org_admin', 'manager', 'employee', 'candidate'
                 )) NOT NULL,
                 roles TEXT[],
                 employee_code TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE,
@@ -600,12 +599,30 @@ def create_tables(schema_name='public'):
         cur.execute('''
             CREATE TABLE IF NOT EXISTS training_assignments (
                 id SERIAL PRIMARY KEY,
-                employee_code TEXT NOT NULL,
+                employee_code TEXT NOT NULL REFERENCES employees(employee_code),
                 program_id INTEGER NOT NULL REFERENCES training_programs(id),
-                training_date TEXT,
-                duration TEXT,
-                status TEXT DEFAULT 'Pending',
-                assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'Assigned',
+                completed_at TIMESTAMP
+            )
+        ''')
+
+        # 13) Performance Assessments Table (Universal)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS performance_assessments (
+                id SERIAL PRIMARY KEY,
+                employee_code VARCHAR(255) NOT NULL,
+                year INTEGER NOT NULL,
+                period_type VARCHAR(50) NOT NULL,
+                period_value VARCHAR(50) NOT NULL,
+                status VARCHAR(50) DEFAULT 'Draft',
+                entries JSONB DEFAULT '[]'::jsonb,
+                total_score DOUBLE PRECISION DEFAULT 0,
+                percentage DOUBLE PRECISION DEFAULT 0,
+                tenant_id VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(employee_code, year, period_type, period_value)
             )
         ''')
 

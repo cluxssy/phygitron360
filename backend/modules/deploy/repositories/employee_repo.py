@@ -94,14 +94,15 @@ class EmployeeRepository:
                 SELECT 
                     id,
                     year,
-                    quarter,
+                    period_type,
+                    period_value,
                     status,
                     total_score,
                     percentage,
                     updated_at
-                FROM quarterly_assessments
+                FROM performance_assessments
                 WHERE employee_code = %s
-                ORDER BY year DESC, quarter DESC
+                ORDER BY year DESC, created_at DESC
             """, (employee_code,))
             rows = cur.fetchall()
             return [dict(r) for r in rows]

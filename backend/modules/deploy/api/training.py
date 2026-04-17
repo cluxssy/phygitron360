@@ -3,7 +3,7 @@ from backend.modules.deploy.services.training_service import TrainingService
 from backend.modules.deploy.api.auth import require_role, get_current_user 
 from backend.modules.deploy.schemas.training import CreateProgramRequest, AssignTrainingRequest, UpdateAssignmentStatusRequest
 
-router = APIRouter(prefix="/api/training", tags=["training"], dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
+router = APIRouter(prefix="/api/training", tags=["training"], dependencies=[Depends(require_role(["org_admin", "manager"]))])
 
 def get_service(user=Depends(get_current_user)):
     return TrainingService(tenant_id=user.get('tenant_id', 'public'))

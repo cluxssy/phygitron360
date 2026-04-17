@@ -3,7 +3,8 @@ import { toast } from 'react-hot-toast';
 import { 
   UserPlus, Mail, CheckCircle, Clock, Trash2, Plus, 
   FileText, Briefcase, GraduationCap, MapPin, Phone, 
-  ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink
+  ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink,
+  Copy, Link
 } from 'lucide-react';
 
 const DESIGNATIONS = [
@@ -93,6 +94,31 @@ export default function OnboardingPanel() {
       loadInvites();
     } catch (e) { toast.error(e.message || 'Failed to send invite'); }
     finally { setSubmitting(false); }
+  };
+
+  const deleteInvite = async (id) => {
+    if (!window.confirm('Command: Confirm Revocation of Personnel Invitation?')) return;
+    try {
+      const res = await fetch(`/api/onboarding/invite/${id}`, { 
+        method: 'DELETE', 
+        credentials: 'include' 
+      });
+      if (res.ok) {
+        toast.success('Invite sequence revoked');
+        loadInvites();
+      } else {
+        throw new Error('Failed to revoke invite');
+      }
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const copyInviteLink = (token) => {
+    const base = window.location.origin;
+    const url = `${base}/onboard?token=${token}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Neural link copied to clipboard!');
   };
 
   const handleApprove = async (e) => {
@@ -224,13 +250,26 @@ export default function OnboardingPanel() {
                      <td className="px-6 py-4 text-[10px] text-white/20 font-mono">
                         {new Date(inv.created_at).toLocaleDateString()}
                      </td>
-                     <td className="px-6 py-4">
+                      <td className="px-6 py-4 flex gap-2">
                         {inv.status === 'Pending' && (
-                          <button onClick={() => toast.success("Invite link copied to clipboard!")} className="p-2 text-white/40 hover:text-white transition-all">
-                             <Trash2 size={16} className="text-error/40 hover:text-error" />
-                          </button>
+                          <>
+                            <button 
+                              onClick={() => copyInviteLink(inv.token)} 
+                              title="Copy Neural Link"
+                              className="p-2 text-white/40 hover:text-primary transition-all bg-white/5 rounded-lg border border-white/5"
+                            >
+                               <Link size={14} />
+                            </button>
+                            <button 
+                              onClick={() => deleteInvite(inv.id)} 
+                              title="Revoke Invite"
+                              className="p-2 text-white/40 hover:text-error transition-all bg-white/5 rounded-lg border border-white/5"
+                            >
+                               <Trash2 size={14} />
+                            </button>
+                          </>
                         )}
-                     </td>
+                      </td>
                    </tr>
                  ))}
                </tbody>

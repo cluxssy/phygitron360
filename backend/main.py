@@ -35,6 +35,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Automated Schema Sync
+from backend.core.database import create_tables
+try:
+    create_tables()
+except Exception as e:
+    print(f"Schema sync warning: {e}")
+
 # CORS configuration
 origins = [
     "http://localhost:5173", # Vite Dev Server

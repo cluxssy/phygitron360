@@ -44,7 +44,7 @@ class OnboardingService:
         
         if self.email_service.is_configured():
             # Get the base URL from environment or use a default
-            base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
+            base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
             full_link = f"{base_url}{relative_link}"
             
             email_result = self.email_service.send_onboarding_invitation(
@@ -188,6 +188,13 @@ class OnboardingService:
         
 
         return {"success": True, "message": "Onboarding completed successfully. Please login."}
+
+    def get_pending_approvals(self, tenant_id: str = 'public'):
+        return self.repo.get_pending_approvals(tenant_id=tenant_id)
+
+    def approve_onboarding(self, employee_code: str, approval_data: dict, tenant_id: str = 'public'):
+        self.repo.approve_employee(employee_code, approval_data, tenant_id=tenant_id)
+        return {"success": True, "message": f"Personnel {employee_code} identity activated."}
 
     def unify_admin_identity(self, user_id: int, username: str, emp_data: dict, file_metadata: dict, tenant_id: str = 'public'):
         """

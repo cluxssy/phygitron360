@@ -13,13 +13,13 @@ router = APIRouter(prefix="/api", tags=["employees"])
 def get_service(tenant_id: str = 'public'):
     return EmployeeService(tenant_id=tenant_id)
 
-@router.get("/employees", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
+@router.get("/employees", dependencies=[Depends(require_role(["org_admin", "manager", "employee"]))])
 def get_employees(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     return service.get_all_employees()
 
-@router.get("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
+@router.get("/employee/{employee_code}", dependencies=[Depends(require_role(["org_admin", "manager", "employee"]))])
 def get_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
@@ -28,7 +28,7 @@ def get_employee(employee_code: str, current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=404, detail="Employee not found")
     return employee
 
-@router.post("/employee", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
+@router.post("/employee", dependencies=[Depends(require_role(["org_admin", "manager"]))])
 async def create_employee(
     code: str = Form(...),
     name: str = Form(...),
@@ -82,7 +82,7 @@ async def create_employee(
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "Employee", "org_admin", "hr_manager", "employee"]))])
+@router.put("/employee/{employee_code}", dependencies=[Depends(require_role(["org_admin", "manager", "employee"]))])
 def update_employee(employee_code: str, data: dict = Body(...), current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
@@ -91,7 +91,7 @@ def update_employee(employee_code: str, data: dict = Body(...), current_user: di
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/employee/{employee_code}/documents", dependencies=[Depends(require_role(["Admin", "HR", "Employee", "org_admin", "hr_manager", "employee"]))])
+@router.post("/employee/{employee_code}/documents", dependencies=[Depends(require_role(["org_admin", "manager", "employee"]))])
 async def upload_documents(
     employee_code: str,
     photo_file: UploadFile = File(None),
@@ -118,7 +118,7 @@ async def upload_documents(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/employee/{employee_code}", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
+@router.delete("/employee/{employee_code}", dependencies=[Depends(require_role(["org_admin"]))])
 def delete_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
@@ -129,13 +129,13 @@ def delete_employee(employee_code: str, current_user: dict = Depends(get_current
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/options", dependencies=[Depends(require_role(["Admin", "HR", "Management", "Employee", "org_admin", "hr_manager", "team_lead", "employee"]))])
+@router.get("/options", dependencies=[Depends(require_role(["org_admin", "manager", "employee"]))])
 def get_dropdown_options(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     return service.get_options()
 
-@router.post("/employee/{employee_code}/offboard", dependencies=[Depends(require_role(["Admin", "HR", "org_admin", "hr_manager"]))])
+@router.post("/employee/{employee_code}/offboard", dependencies=[Depends(require_role(["org_admin"]))])
 def offboard_employee(employee_code: str, data: OffboardRequest, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)

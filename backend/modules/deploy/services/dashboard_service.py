@@ -39,8 +39,8 @@ class DashboardService:
             # 4. Hiring Trend (Yearly)
             hiring_trend = []
             if not df_emp.empty and 'doj' in df_emp.columns:
-                df_emp['doj_dt'] = pd.to_datetime(df_emp['doj'], errors='coerce')
-                df_emp['Year'] = df_emp['doj_dt'].dt.year.fillna(0).astype(int)
+                df_emp.loc[:, 'doj_dt'] = pd.to_datetime(df_emp['doj'], errors='coerce')
+                df_emp.loc[:, 'Year'] = df_emp['doj_dt'].dt.year.fillna(0).astype(int)
                 hiring_trend_df = df_emp[df_emp['Year'] > 1900].groupby('Year').size().reset_index(name='Hires')
                 hiring_trend_df = hiring_trend_df.sort_values('Year')
                 hiring_trend = hiring_trend_df.to_dict('records')
@@ -73,33 +73,33 @@ class DashboardService:
             # 7. Experience Distribution
             experience_distribution = []
             if not df_skills.empty and 'experience_years' in df_skills.columns:
-                df_skills['experience_years_num'] = pd.to_numeric(df_skills['experience_years'], errors='coerce')
+                df_skills.loc[:, 'experience_years_num'] = pd.to_numeric(df_skills['experience_years'], errors='coerce')
                 bins = [-1, 2, 5, 10, 15, 100]
                 labels = ['0-2', '3-5', '6-10', '11-15', '16+']
-                df_skills['exp_range'] = pd.cut(df_skills['experience_years_num'], bins=bins, labels=labels, right=True)
+                df_skills.loc[:, 'exp_range'] = pd.cut(df_skills['experience_years_num'], bins=bins, labels=labels, right=True)
                 exp_counts = df_skills['exp_range'].value_counts().sort_index().reset_index()
                 exp_counts.columns = ['range', 'count']
-                exp_counts['count'] = exp_counts['count'].fillna(0)
+                exp_counts.loc[:, 'count'] = exp_counts['count'].fillna(0)
                 experience_distribution = exp_counts.to_dict('records')
 
             # 8. Avg Tenure
             avg_tenure = 0
             tenure_distribution = []
             if not df_emp.empty and 'doj' in df_emp.columns:
-                df_emp['doj_dt'] = pd.to_datetime(df_emp['doj'], errors='coerce')
+                df_emp.loc[:, 'doj_dt'] = pd.to_datetime(df_emp['doj'], errors='coerce')
                 now = pd.Timestamp.now()
-                df_emp['tenure_days'] = (now - df_emp['doj_dt']).dt.days
+                df_emp.loc[:, 'tenure_days'] = (now - df_emp['doj_dt']).dt.days
                 active_df = df_emp[df_emp['employment_status'] == 'Active'].copy() if 'employment_status' in df_emp.columns else df_emp.copy()
                 if not active_df.empty:
                     mean_tenure = active_df['tenure_days'].mean()
                     avg_tenure = round(mean_tenure / 365, 1) if pd.notna(mean_tenure) else 0.0
-                    active_df['tenure_years'] = active_df['tenure_days'] / 365
+                    active_df.loc[:, 'tenure_years'] = active_df['tenure_days'] / 365
                     bins = [-100, 1, 2, 5, 100]
                     labels = ['0-1y', '1-2y', '2-5y', '5y+']
-                    active_df['tenure_range'] = pd.cut(active_df['tenure_years'], bins=bins, labels=labels, right=True)
+                    active_df.loc[:, 'tenure_range'] = pd.cut(active_df['tenure_years'], bins=bins, labels=labels, right=True)
                     tenure_counts = active_df['tenure_range'].value_counts().sort_index().reset_index()
                     tenure_counts.columns = ['range', 'count']
-                    tenure_counts['count'] = tenure_counts['count'].fillna(0)
+                    tenure_counts.loc[:, 'count'] = tenure_counts['count'].fillna(0)
                     tenure_distribution = tenure_counts.to_dict('records')
 
             # 9. Location
@@ -112,11 +112,11 @@ class DashboardService:
             # 10. Recent Hires
             recent_hires = []
             if not df_emp.empty and 'doj' in df_emp.columns:
-                recent_df = df_emp.sort_values(by='doj', ascending=False).head(5)
+                recent_df = df_emp.sort_values(by='doj', ascending=False).head(5).copy()
                 def safe_strftime(x):
                     try: return pd.to_datetime(x).strftime('%Y-%m-%d')
                     except: return str(x)
-                recent_df['doj_str'] = recent_df['doj'].apply(safe_strftime)
+                recent_df.loc[:, 'doj_str'] = recent_df['doj'].apply(safe_strftime)
                 # Ensure all expected keys exist
                 for col in ['name', 'team', 'designation', 'doj_str', 'location', 'employee_code', 'employment_status']:
                     if col not in recent_df.columns: recent_df[col] = None

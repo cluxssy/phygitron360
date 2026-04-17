@@ -21,11 +21,15 @@ class AssessmentService:
         assessments = self.repo.get_assessments(data['employee_code'], data['year'], self.tenant_id)
         existing = next((a for a in assessments if a['period_type'] == data['period_type'] and a['period_value'] == data['period_value']), None)
         
+        # Rule: If the user is editing their OWN assessment, they are act as an employee (L4)
+        is_self = (user.get('employee_code') == data['employee_code'] and user.get('employee_code') is not None)
+        
         if existing:
             # Rule 1: L4 (employee) cannot edit after submission
-            if user_role not in ['Admin', 'HR', 'Management', 'org_admin', 'manager']:
-                if existing['status'] in ['Submitted', 'Reviewed', 'Finalized']:
-                    raise ValueError("Assessment already submitted. Contact manager for changes.")
+            if not is_self or user_role not in ['Admin', 'HR', 'Management', 'org_admin', 'manager', 'super_admin']:
+                if not (user_role in ['Admin', 'HR', 'Management', 'org_admin', 'manager', 'super_admin'] and not is_self):
+                    if existing['status'] in ['Submitted', 'Reviewed', 'Finalized']:
+                        raise ValueError("Assessment already submitted. Contact manager for changes.")
             
             # Rule 2: Separation of Concerns
             new_entries = []
@@ -35,16 +39,19 @@ class AssessmentService:
                 target_sub = old_entry.get('subcategory')
                 new_entry = next((e for e in data['entries'] if e.get('category') == target_cat and e.get('subcategory') == target_sub), data['entries'][i] if i < len(data['entries']) else {})
                 
-                if user_role in ['Admin', 'HR', 'Management', 'org_admin', 'manager']:
-                    # Manager updates their part, keeps employee's part
-                    old_entry['manager_score'] = new_entry.get('manager_score')
-                    old_entry['manager_comment'] = new_entry.get('manager_comment')
-                else:
-                    # Employee updates their part, keeps manager's part (if any)
+                # 1. Update Employee perspective if editing own record
+                if is_self:
                     old_entry['self_score'] = new_entry.get('self_score')
                     old_entry['employee_comment'] = new_entry.get('employee_comment')
                 
-                # Combined score is manager score if available, else self score
+                # 2. Update Manager perspective if user has manager privileges
+                if user_role in ['Admin', 'HR', 'Management', 'org_admin', 'manager', 'super_admin']:
+                    # Note: If it's a manager's own assessment, they can still update 
+                    # their manager review part from the management panel.
+                    old_entry['manager_score'] = new_entry.get('manager_score')
+                    old_entry['manager_comment'] = new_entry.get('manager_comment')
+                
+                # Combined score prioritization
                 old_entry['score'] = old_entry.get('manager_score') or old_entry.get('self_score') or 0
                 new_entries.append(old_entry)
             data['entries'] = new_entries
@@ -61,7 +68,7 @@ class AssessmentService:
         result = self.repo.save_assessment(data, self.tenant_id)
         
         # Notifications
-        if data['status'] == 'Submitted' and user_role not in ['Admin', 'manager', 'org_admin']:
+        if data['status'] == 'Submitted' and user_role not in ['Admin', 'manager', 'org_admin', 'super_admin']:
             add_notification(
                 title="Performance Sync Required",
                 message=f"Deployment unit {data['employee_code']} has submitted their {data['period_value']} self-assessment.",
@@ -108,7 +115,7 @@ class AssessmentService:
         entries = [
             {
                 "category": cat, "subcategory": sub,
-                "self_score": 5, "manager_score": 5, "score": 5,
+                "self_score": 0, "manager_score": 0, "score": 0,
                 "employee_comment": "", "manager_comment": ""
             } for cat, sub in template_subcategories
         ]
@@ -120,8 +127,8 @@ class AssessmentService:
             "period_value": p_value,
             "status": "Requested",
             "entries": entries,
-            "total_score": 70, # 14 * 5
-            "percentage": 50
+            "total_score": 0,
+            "percentage": 0
         }
         self.repo.save_assessment(data, self.tenant_id)
         return {"success": True, "message": "Review protocol initiated"}

@@ -24,11 +24,16 @@ class EmailService:
     """
     
     def __init__(self):
-        # Email configuration from environment variables
-        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+        # Email configuration from environment variables with robust fallbacks
+        self.smtp_server = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER") or "smtp.gmail.com"
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.sender_email = os.getenv("SENDER_EMAIL", "")
-        self.sender_password = os.getenv("SENDER_PASSWORD", "")
+        
+        # User fallbacks: SMTP_USER -> SENDER_EMAIL
+        self.smtp_user = os.getenv("SMTP_USER") or os.getenv("SENDER_EMAIL") or ""
+        
+        # Password fallbacks: SMTP_PASS -> SMTP_PASSWORD -> SENDER_PASSWORD
+        self.smtp_password = os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD") or os.getenv("SENDER_PASSWORD") or ""
+        
         self.sender_name = os.getenv("SENDER_NAME", "EWANDZ Digital HR")
         self.company_name = os.getenv("COMPANY_NAME", "EWANDZ Digital")
         
@@ -196,17 +201,17 @@ class EmailService:
         """
         
         # Check if email is configured
-        if not self.sender_email or not self.sender_password:
+        if not self.smtp_user or not self.smtp_password:
             return {
                 "success": False,
-                "message": "Email not configured. Please set SENDER_EMAIL and SENDER_PASSWORD environment variables."
+                "message": "Email not configured. Please set SMTP_USER and SMTP_PASS environment variables."
             }
         
         try:
             # Create message
             message = MIMEMultipart("alternative")
             message["Subject"] = f"Welcome to {self.company_name} - Complete Your Onboarding"
-            message["From"] = f"{self.sender_name} <{self.sender_email}>"
+            message["From"] = f"{self.sender_name} <{self.smtp_user}>"
             message["To"] = recipient_email
             
             # Create HTML content
@@ -254,7 +259,7 @@ This is an automated email. Please do not reply to this message.
             # Send email
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()  # Secure the connection
-                server.login(self.sender_email, self.sender_password)
+                server.login(self.smtp_user, self.smtp_password)
                 server.send_message(message)
             
             return {
@@ -287,7 +292,7 @@ This is an automated email. Please do not reply to this message.
     ) -> dict:
         """Send password reset link email"""
         
-        if not self.sender_email or not self.sender_password:
+        if not self.smtp_user or not self.smtp_password:
             return {
                 "success": False,
                 "message": "Email not configured."
@@ -296,7 +301,7 @@ This is an automated email. Please do not reply to this message.
         try:
             message = MIMEMultipart("alternative")
             message["Subject"] = f"Password Reset Request - {self.company_name}"
-            message["From"] = f"{self.sender_name} <{self.sender_email}>"
+            message["From"] = f"{self.sender_name} <{self.smtp_user}>"
             message["To"] = recipient_email
             
             html_content = f"""
@@ -377,7 +382,7 @@ Best regards,
             
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
-                server.login(self.sender_email, self.sender_password)
+                server.login(self.smtp_user, self.smtp_password)
                 server.send_message(message)
             
             return {
@@ -400,7 +405,7 @@ Best regards,
     ) -> dict:
         """Send temporary password email (admin reset)"""
         
-        if not self.sender_email or not self.sender_password:
+        if not self.smtp_user or not self.smtp_password:
             return {
                 "success": False,
                 "message": "Email not configured."
@@ -409,7 +414,7 @@ Best regards,
         try:
             message = MIMEMultipart("alternative")
             message["Subject"] = f"Your Password Has Been Reset - {self.company_name}"
-            message["From"] = f"{self.sender_name} <{self.sender_email}>"
+            message["From"] = f"{self.sender_name} <{self.smtp_user}>"
             message["To"] = recipient_email
             
             html_content = f"""
@@ -504,7 +509,7 @@ Best regards,
             
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
-                server.login(self.sender_email, self.sender_password)
+                server.login(self.smtp_user, self.smtp_password)
                 server.send_message(message)
             
             return {
@@ -526,13 +531,13 @@ Best regards,
     ) -> dict:
         """Send notification when password is changed"""
         
-        if not self.sender_email or not self.sender_password:
+        if not self.smtp_user or not self.smtp_password:
             return {"success": False, "message": "Email not configured."}
         
         try:
             message = MIMEMultipart("alternative")
             message["Subject"] = f"Password Changed - {self.company_name}"
-            message["From"] = f"{self.sender_name} <{self.sender_email}>"
+            message["From"] = f"{self.sender_name} <{self.smtp_user}>"
             message["To"] = recipient_email
             
             html_content = f"""
@@ -604,7 +609,7 @@ Best regards,
             
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
-                server.login(self.sender_email, self.sender_password)
+                server.login(self.smtp_user, self.smtp_password)
                 server.send_message(message)
             
             return {"success": True, "message": "Notification sent"}
@@ -622,7 +627,7 @@ Best regards,
     ) -> dict:
         """Send welcome email to newly added employee with their login credentials."""
 
-        if not self.sender_email or not self.sender_password:
+        if not self.smtp_user or not self.smtp_password:
             return {"success": False, "message": "Email not configured."}
 
         if not login_url:
@@ -631,7 +636,7 @@ Best regards,
         try:
             message = MIMEMultipart("alternative")
             message["Subject"] = f"Welcome to {self.company_name} — Your Login Credentials"
-            message["From"] = f"{self.sender_name} <{self.sender_email}>"
+            message["From"] = f"{self.sender_name} <{self.smtp_user}>"
             message["To"] = recipient_email
 
             html_content = f"""
@@ -731,16 +736,16 @@ Best regards,
 
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
-                server.login(self.sender_email, self.sender_password)
+                server.login(self.smtp_user, self.smtp_password)
                 server.send_message(message)
 
             return {"success": True, "message": f"Welcome email with credentials sent to {recipient_email}"}
 
         except smtplib.SMTPAuthenticationError:
-            return {"success": False, "message": "Email authentication failed. Check SENDER_EMAIL / SENDER_PASSWORD."}
+            return {"success": False, "message": "Email authentication failed. Check SMTP_USER / SMTP_PASSWORD."}
         except Exception as e:
             return {"success": False, "message": f"Failed to send welcome email: {str(e)}"}
 
     def is_configured(self) -> bool:
         """Check if email service is properly configured"""
-        return bool(self.sender_email and self.sender_password)
+        return bool(self.smtp_user and self.smtp_password)
