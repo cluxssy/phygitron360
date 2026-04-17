@@ -10,19 +10,19 @@ def get_service():
 @router.get("")
 def get_my_notifications(user=Depends(get_current_user), service: NotificationService = Depends(get_service)):
     # If admin, show admin notifications + their personal ones
-    if user['role'] in ['Admin', 'HR']:
+    if user['role'] in ['org_admin', 'manager', 'super_admin']:
         return service.get_admin_notifications()
     return service.get_user_notifications(user['employee_code'])
 
 @router.get("/unread-count")
 def get_unread_count(user=Depends(get_current_user), service: NotificationService = Depends(get_service)):
-    is_admin = user['role'] in ['Admin', 'HR']
+    is_admin = user['role'] in ['org_admin', 'manager', 'super_admin']
     emp_code = user.get('employee_code')
     return {"count": service.get_unread_count(emp_code, is_admin)}
 
 @router.get("/unread-details")
 def get_unread_details(user=Depends(get_current_user), service: NotificationService = Depends(get_service)):
-    is_admin = user['role'] in ['Admin', 'HR']
+    is_admin = user['role'] in ['org_admin', 'manager', 'super_admin']
     emp_code = user.get('employee_code')
     
     # We want ALL relevant unread notifications
@@ -40,6 +40,6 @@ def mark_read(notif_id: int, user=Depends(get_current_user), service: Notificati
 
 @router.post("/read-all")
 def mark_all_read(user=Depends(get_current_user), service: NotificationService = Depends(get_service)):
-    is_admin = user['role'] in ['Admin', 'HR']
+    is_admin = user['role'] in ['org_admin', 'manager', 'super_admin']
     service.mark_all_read(user['employee_code'], is_admin)
     return {"success": True}

@@ -29,11 +29,11 @@ def send_welcome_email(to_email: str, company_name: str, temp_password: str, sub
     # Check if SMTP is configured
     smtp_host = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER") or "smtp.gmail.com"
     smtp_port = os.getenv("SMTP_PORT", 587)
-    smtp_user = os.getenv("SMTP_USER") or os.getenv("SENDER_EMAIL")
-    smtp_pass = os.getenv("SMTP_PASS") or os.getenv("SENDER_PASSWORD")
+    smtp_user = os.getenv("SMTP_USER") or os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD")
     
     if not all([smtp_host, smtp_user, smtp_pass]):
-        logger.warning(f"[EMAIL MOCK] Missing credentials (SMTP_USER/SENDER_EMAIL). Dispatching to logs only.")
+        logger.warning(f"[EMAIL MOCK] Missing credentials (SMTP_USER/SMTP_USER). Dispatching to logs only.")
         print(f"\n--- 📧 MOCK EMAIL DISPATCH ---")
         print(f"To:      {to_email}")
         print(f"Subject: {subject}")

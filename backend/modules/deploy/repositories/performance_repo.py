@@ -13,11 +13,12 @@ class PerformanceRepository:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             self._set_path(cur, tenant_id)
             
-            # Check if exists
+            # Check if exists - strictly filter by tenant_id to avoid schema cross-talk
             cur.execute('''
                 SELECT id FROM performance_assessments 
                 WHERE employee_code = %s AND year = %s AND period_type = %s AND period_value = %s
-            ''', (data['employee_code'], data['year'], data['period_type'], data['period_value']))
+                AND (tenant_id = %s OR tenant_id IS NULL)
+            ''', (data['employee_code'], data['year'], data['period_type'], data['period_value'], tenant_id))
             existing = cur.fetchone()
             
             if existing:
@@ -40,7 +41,9 @@ class PerformanceRepository:
             
             row = cur.fetchone()
             conn.commit()
-            return dict(row)
+            return dict(row) if row else {}
+        except Exception as e:
+            raise e
         finally:
             conn.close()
 
@@ -51,9 +54,9 @@ class PerformanceRepository:
             self._set_path(cur, tenant_id)
             cur.execute('''
                 SELECT * FROM performance_assessments 
-                WHERE employee_code = %s AND year = %s
+                WHERE employee_code = %s AND year = %s AND (tenant_id = %s OR tenant_id IS NULL)
                 ORDER BY created_at DESC
-            ''', (employee_code, year))
+            ''', (employee_code, year, tenant_id))
             rows = cur.fetchall()
             return [dict(r) for r in rows]
         finally:

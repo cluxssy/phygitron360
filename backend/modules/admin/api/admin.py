@@ -10,7 +10,7 @@ class ProvisionTenantRequest(BaseModel):
     admin_email: str
     admin_password: str
 
-router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_role(["org_admin", "super_admin", "manager", "admin", "hr", "management"]))])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_role(["org_admin", "super_admin", "manager"]))])
 
 def get_service(current_user: dict = Depends(get_current_user)):
     return AdminService(tenant_id=current_user.get('tenant_id', 'public'))

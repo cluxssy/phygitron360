@@ -51,7 +51,10 @@ export default function PerformancePanel({ isAdmin }) {
 
   // Load employee list for admin
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      setSelectedEmp(user?.employee_code || '');
+      return;
+    }
     fetch('/api/employees', { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
@@ -59,7 +62,7 @@ export default function PerformancePanel({ isAdmin }) {
         setEmployees(arr);
         if (!selectedEmp && arr.length > 0) setSelectedEmp(arr[0].employee_code);
       }).catch(() => {});
-  }, [isAdmin]);
+  }, [isAdmin, user?.employee_code]);
 
   const loadAssessments = useCallback(async () => {
     if (!selectedEmp) return;
@@ -125,10 +128,13 @@ export default function PerformancePanel({ isAdmin }) {
     } catch (e) { toast.error("Request failed"); }
   };
 
+  // True when the admin is viewing their own employee record (personal view via switch)
+  const isSelf = !!user?.employee_code && user.employee_code === selectedEmp;
+
   const handleEntryChange = (idx, field, value) => {
     if (!localData) return;
     
-    // Enforcement: L4 cannot edit manager fields, Manager cannot edit employee fields
+    // Enforcement: Manager view edits manager fields, Employee view edits self fields
     if (isAdmin && (field === 'self_score' || field === 'employee_comment')) return;
     if (!isAdmin && (field === 'manager_score' || field === 'manager_comment')) return;
 
@@ -200,7 +206,10 @@ export default function PerformancePanel({ isAdmin }) {
 
   const empName = isAdmin ? (employees.find(e => e.employee_code === selectedEmp)?.name || selectedEmp) : user?.name;
   const periodStatus = (p) => assessments.find(a => a.period_value === p);
+
+  // Permissions
   const canEmployeeEdit = !isAdmin && (localData?.status === 'Draft' || localData?.status === 'Requested');
+  const canManagerEdit = isAdmin && localData?.status !== 'Finalized';
   const statusCfg = STATUS_CONFIG[localData?.status] || STATUS_CONFIG['Draft'];
 
   return (
@@ -416,7 +425,7 @@ export default function PerformancePanel({ isAdmin }) {
                           <button
                             key={s}
                             onClick={() => handleEntryChange(idx, 'manager_score', s)}
-                            disabled={!isAdmin}
+                            disabled={!canManagerEdit}
                             className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${entry.manager_score === s ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'glass-panel border-white/5 text-white/20 hover:text-white/40'}`}
                           >
                             {s}
@@ -436,8 +445,8 @@ export default function PerformancePanel({ isAdmin }) {
                         type="text"
                         value={entry.employee_comment || ''}
                         onChange={e => handleEntryChange(idx, 'employee_comment', e.target.value)}
-                        disabled={!canEmployeeEdit || isAdmin}
-                        placeholder={isAdmin ? "Emp note..." : "Add observation..."}
+                        disabled={!canEmployeeEdit}
+                        placeholder={isAdmin ? "Employee notes locked" : "Add self-observation..."}
                         className="w-full glass-panel border-white/10 text-white text-[10px] bg-transparent px-3 py-2 rounded-lg focus:outline-none disabled:opacity-30 placeholder-white/10"
                       />
                       {isAdmin && (
@@ -461,11 +470,11 @@ export default function PerformancePanel({ isAdmin }) {
             {saving && (
               <div className="flex items-center gap-2 text-[10px] text-white/40 font-black uppercase tracking-widest">
                 <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                Syncing to Matrix...
+                Syncing Matrix...
               </div>
             )}
 
-            {/* Employee Actions */}
+            {/* Employee Actions (Personal View) */}
             {!isAdmin && !saving && (
               <>
                 {canEmployeeEdit && (
@@ -480,24 +489,24 @@ export default function PerformancePanel({ isAdmin }) {
                       onClick={() => saveAssessment('Submitted')}
                       className="flex items-center gap-2 px-8 py-2.5 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all"
                     >
-                      <Send size={14} /> Submit for Review
+                      <Send size={14} /> Commit Submission
                     </button>
                   </>
                 )}
                 {localData.status === 'Submitted' && (
                   <div className="flex items-center gap-2 px-6 py-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                    <AlertCircle size={14} /> Under Manager Review
+                    <AlertCircle size={14} /> Awaiting Managerial Review
                   </div>
                 )}
                 {(localData.status === 'Reviewed' || localData.status === 'Finalized') && (
                   <div className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                    <CheckCircle size={14} /> Assessment Finalized
+                    <CheckCircle size={14} /> Protocol Finalized
                   </div>
                 )}
               </>
             )}
 
-            {/* Admin Actions */}
+            {/* Admin Actions (Manager View) */}
             {isAdmin && !saving && (
               <>
                 <button
@@ -510,10 +519,17 @@ export default function PerformancePanel({ isAdmin }) {
                   onClick={() => saveAssessment('Reviewed')}
                   className="flex items-center gap-2 px-8 py-2.5 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/20"
                 >
-                  <CheckCircle size={14} /> Finalize Assessment
+                  <CheckCircle size={14} /> Finalize Protocol
                 </button>
               </>
             )}
+            
+            <button
+               onClick={exportXLSX}
+               className="flex items-center gap-2 px-4 py-2.5 glass-panel border-white/10 hover:border-white/20 text-white/40 hover:text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+            >
+              <Download size={14} /> Export Node
+            </button>
           </div>
         </div>
       )}
