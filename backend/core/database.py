@@ -36,8 +36,6 @@ def create_tables(schema_name='public'):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        
-        print(f"Creating tables in PostgreSQL database: {DB_NAME}, Schema: {schema_name}...")
 
         # Set Search Path for Isolation
         cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"')
@@ -813,7 +811,6 @@ def create_tables(schema_name='public'):
         ''')
 
         conn.commit()
-        print(f"PostgreSQL tables created successfully in {schema_name}!")
     except Exception as e:
         conn.rollback()
         print(f"Failed to create tables in {schema_name}: {e}")
