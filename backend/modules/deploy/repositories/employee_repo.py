@@ -240,17 +240,25 @@ class EmployeeRepository:
             
             cur.execute("SELECT DISTINCT designation FROM employees WHERE designation IS NOT NULL AND designation != '' ORDER BY designation")
             designations = [r[0] for r in cur.fetchall()]
+
+            cur.execute("SELECT DISTINCT location FROM employees WHERE location IS NOT NULL AND location != '' ORDER BY location")
+            locations = [r[0] for r in cur.fetchall()]
             
             cur.execute("""
                 SELECT e.name, u.employee_code, u.role
                 FROM employees e
                 JOIN users u ON e.employee_code = u.employee_code
-                WHERE u.role IN ('Management', 'Admin', 'HR')
+                WHERE u.role IN ('org_admin', 'manager', 'super_admin')
                 ORDER BY e.name
             """)
             managers = [{"name": r[0], "code": r[1], "role": r[2]} for r in cur.fetchall()]
             
-            return {"teams": teams, "designations": designations, "managers": managers}
+            return {
+                "teams": teams, 
+                "designations": designations, 
+                "managers": managers,
+                "locations": locations
+            }
         finally:
              conn.close()
 
