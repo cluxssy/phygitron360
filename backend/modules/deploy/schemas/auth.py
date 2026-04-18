@@ -20,7 +20,7 @@ class ChangePasswordRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     username: str
     password: str
-    role: Literal['Admin', 'HR', 'Management', 'Employee']
+    role: Literal['super_admin', 'org_admin', 'manager', 'employee', 'candidate']
     employee_code: Optional[str] = None
 
 class RegisterCompanyRequest(BaseModel):

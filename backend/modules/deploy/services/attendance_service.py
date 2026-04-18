@@ -103,7 +103,7 @@ class AttendanceService:
             raise ValueError("End date cannot be earlier than the start date.")
             
         # Optional: Prevent applying for past leaves (Admins bypass)
-        if d1.date() < datetime.now().date() and user_role != 'Admin':
+        if d1.date() < datetime.now().date() and user_role not in ['org_admin', 'super_admin']:
              raise ValueError("You cannot apply for leaves in the past.")
 
         days = (d2 - d1).days + 1
@@ -119,7 +119,7 @@ class AttendanceService:
              if (balance['privilege_used'] + days) > balance['privilege_total']:
                 raise ValueError("Insufficient Privilege Leave balance")
         
-        status = 'Approved' if user_role == 'Admin' else 'Pending'
+        status = 'Approved' if user_role in ['org_admin', 'super_admin'] else 'Pending'
         msg = "Leave auto-approved (Admin override)" if status == 'Approved' else "Leave application submitted successfully"
         
         self.repo.create_leave_request(employee_code, req.start_date, req.end_date, req.leave_type, req.reason, status, self.tenant_id)
@@ -161,8 +161,8 @@ class AttendanceService:
 
         # 2. Hierarchy Check
         applicant_role = self.repo.get_user_role(leave['employee_code'], self.tenant_id)
-        if applicant_role == 'HR' and admin_role != 'Admin':
-             raise ValueError("HR leave requests can only be approved by an Administrator.")
+        if applicant_role in ['org_admin', 'manager'] and admin_role not in ['org_admin', 'super_admin']:
+             raise ValueError("Administrative leave requests can only be approved by an Organization Admin.")
 
         self.repo.update_leave_status(leave_id, action, reason, self.tenant_id)
         
