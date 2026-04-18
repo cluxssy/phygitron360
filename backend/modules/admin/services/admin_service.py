@@ -52,7 +52,7 @@ class AdminService:
         return {"success": True}
 
     def create_user(self, username: str, password: str, role: str, actor: str, actor_role: str, employee_code: str = None):
-        valid_roles = ['org_admin', 'recruiter', 'trainer', 'assessor', 'manager', 'employee', 'candidate', 'client_viewer']
+        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'candidate']
         if role not in valid_roles:
              raise ValueError(f"Invalid role. Must be one of {valid_roles}")
              
@@ -153,7 +153,7 @@ class AdminService:
         return {"success": True}
 
     def update_role(self, user_id: int, role: str, actor: str, actor_role: str):
-        valid_roles = ['org_admin', 'recruiter', 'trainer', 'assessor', 'manager', 'employee', 'candidate', 'client_viewer']
+        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'candidate']
         if role not in valid_roles:
             raise ValueError(f"Invalid role. Must be one of {valid_roles}")
             

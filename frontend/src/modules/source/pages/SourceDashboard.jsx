@@ -37,13 +37,13 @@ export default function SourceDashboard() {
 
   const isCandidate = hasRole('candidate');
 
-  if (!hasRole(['super_admin', 'org_admin', 'recruiter']) && !isCandidate) {
+  if (!hasRole(['super_admin', 'org_admin', 'manager']) && !isCandidate) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
         <Shield size={48} className="text-secondary/20" />
         <div>
           <h2 className="text-xl font-display font-black text-white uppercase italic">Security Clearance Required</h2>
-          <p className="text-xs text-white/30 uppercase tracking-widest mt-1">You do not have 'Recruiter' clearance for this node.</p>
+          <p className="text-xs text-white/30 uppercase tracking-widest mt-1">You do not have 'Elevated' clearance for this node.</p>
         </div>
       </div>
     );

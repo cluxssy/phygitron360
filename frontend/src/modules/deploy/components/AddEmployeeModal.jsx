@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { X, User, Mail, Phone, Calendar, MapPin, Briefcase } from 'lucide-react';
 
-const ROLES = ['employee', 'hr_manager', 'team_lead', 'recruiter', 'org_admin'];
+const ROLES = ['org_admin', 'manager', 'employee', 'candidate'];
 
 export default function AddEmployeeModal({ onClose, onSuccess }) {
   const [step, setStep] = useState(1);
