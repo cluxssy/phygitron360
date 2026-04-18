@@ -71,7 +71,7 @@ export default function App() {
           />
           <Route 
             path="/admin" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'manager']}><Layout><AdminGate /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin']}><Layout><AdminGate /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/source" 

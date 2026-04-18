@@ -62,7 +62,7 @@ export default function Layout({ children }) {
       ]
     },
     { 
-      id: 'dashboard', name: 'Dashboard', path: '/admin', icon: LayoutDashboard, color: 'text-primary', roles: ['org_admin', 'manager'],
+      id: 'dashboard', name: 'Dashboard', path: '/admin', icon: LayoutDashboard, color: 'text-primary', roles: ['org_admin'],
       options: [
         { label: 'Overview', icon: Home, search: '', default: true },
         { label: 'Users', icon: Shield, search: '?tab=users', default: false },
