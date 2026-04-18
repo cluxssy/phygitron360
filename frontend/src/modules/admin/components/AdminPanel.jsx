@@ -188,7 +188,7 @@ export default function AdminPanel() {
                          onChange={e => updateRole(u.id, e.target.value)}
                          className="glass-panel border-white/10 text-white text-xs bg-transparent px-3 py-1.5 rounded-lg focus:outline-none"
                        >
-                         {['employee', 'manager', 'org_admin', 'recruiter', 'trainer', 'assessor', 'candidate', 'client_viewer'].map(r => (
+                         {['super_admin', 'org_admin', 'manager', 'employee', 'candidate'].map(r => (
                              <option key={r} value={r} className="bg-[#080f1f]">{r}</option>
                          ))}
                        </select>
@@ -296,7 +296,7 @@ export default function AdminPanel() {
               className="w-full glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-3 rounded-xl focus:outline-none" />
             <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}
               className="w-full glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-3 rounded-xl focus:outline-none">
-               {['employee', 'manager', 'org_admin', 'recruiter', 'candidate'].map(r => <option key={r} value={r} className="bg-[#080f1f]">{r}</option>)}
+               {['super_admin', 'org_admin', 'manager', 'employee', 'candidate'].map(r => <option key={r} value={r} className="bg-[#080f1f]">{r}</option>)}
             </select>
             <input placeholder="Employee Code (Optional)" value={form.employee_code} onChange={e => setForm({...form, employee_code: e.target.value})}
               className="w-full glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-3 rounded-xl focus:outline-none" />

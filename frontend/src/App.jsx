@@ -71,20 +71,20 @@ export default function App() {
           />
           <Route 
             path="/admin" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'recruiter']}><Layout><AdminGate /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin']}><Layout><AdminGate /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/source" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'recruiter', 'manager', 'candidate']} requiredModule="source"><Layout><SourceDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'candidate']} requiredModule="source"><Layout><SourceDashboard /></Layout></ProtectedRoute>} 
           />
           
           <Route 
             path="/verify" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'assessor', 'manager', 'employee']} requiredModule="verify"><Layout><VerifyDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'employee']} requiredModule="verify"><Layout><VerifyDashboard /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/forge" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'trainer', 'manager', 'employee']} requiredModule="forge"><Layout><ForgeDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'employee']} requiredModule="forge"><Layout><ForgeDashboard /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/deploy" 

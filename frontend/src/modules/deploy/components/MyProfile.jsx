@@ -7,6 +7,18 @@ import {
   CheckCircle, Edit3, Briefcase, TrendingUp, GraduationCap, 
   Landmark, FileText, Upload, ExternalLink, Image, Package
 } from 'lucide-react';
+import ComboBox from '../../../core/components/ComboBox';
+
+const DESIGNATIONS = [
+    'Software Engineer', 'Senior Engineer', 'Team Lead', 'Project Manager', 
+    'Product Manager', 'Designer', 'QA Analyst', 'Sales Executive', 
+    'HR Associate', 'Accountant', 'Marketing Specialist', 'Operations Manager'
+];
+
+const DEPARTMENTS = [
+    'Engineering', 'Product', 'Design', 'Marketing', 'Sales', 
+    'Human Resources', 'Finance', 'Operations', 'Quality Assurance'
+];
 
 export default function MyProfile() {
   const { user } = useAuth();
@@ -17,6 +29,9 @@ export default function MyProfile() {
   const [formData, setFormData] = useState({});
   const [assets, setAssets] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [dynDesignations, setDynDesignations] = useState([]);
+  const [dynDepartments, setDynDepartments] = useState([]);
+  const [locations, setLocations] = useState([]);
   
   const fileInputPfp = useRef();
   const fileInputCv = useRef();
@@ -27,6 +42,14 @@ export default function MyProfile() {
           fetchDetails(user.employee_code);
           fetch(`/api/assets/${user.employee_code}`, { credentials: 'include' })
               .then(r => r.json()).then(d => setAssets(d)).catch(() => {});
+          
+          fetch('/api/options', { credentials: 'include' })
+              .then(r => r.json())
+              .then(data => {
+                  setLocations(data.locations || []);
+                  if (data.designations?.length > 0) setDynDesignations(data.designations);
+                  if (data.teams?.length > 0) setDynDepartments(data.teams);
+              }).catch(() => {});
       } else {
           setLoading(false);
       }
@@ -202,12 +225,23 @@ export default function MyProfile() {
                 </h1>
             )}
             
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-4 mt-2">
                 {editMode ? (
                    <>
-                     <input type="text" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-xs text-white" />
-                     <span className="text-white/20">·</span>
-                     <input type="text" value={formData.team} onChange={e => setFormData({...formData, team: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-xs text-white" />
+                     <ComboBox 
+                        options={dynDesignations.length > 0 ? dynDesignations : DESIGNATIONS}
+                        value={formData.designation}
+                        onChange={v => setFormData({...formData, designation: v})}
+                        placeholder="Designation..."
+                        className="w-full md:w-64"
+                     />
+                     <ComboBox 
+                        options={dynDepartments.length > 0 ? dynDepartments : DEPARTMENTS}
+                        value={formData.team}
+                        onChange={v => setFormData({...formData, team: v})}
+                        placeholder="Team/Department..."
+                         className="w-full md:w-64"
+                     />
                    </>
                 ) : (
                     <p className="text-sm text-white/50 font-bold uppercase tracking-widest">{details.designation} · {details.team}</p>
@@ -218,7 +252,22 @@ export default function MyProfile() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
             <EditMetaItem editMode={editMode} icon={Mail} label="Email" value={formData.email_id} onChange={v => setFormData({...formData, email_id: v})} />
             <EditMetaItem editMode={editMode} icon={Phone} label="Contact" value={formData.contact_number} onChange={v => setFormData({...formData, contact_number: v})} />
-            <EditMetaItem editMode={editMode} icon={MapPin} label="Location" value={formData.location} onChange={v => setFormData({...formData, location: v})} />
+            <div className="space-y-1">
+                <p className="text-[9px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
+                    <MapPin size={10} /> Location
+                </p>
+                {editMode ? (
+                    <ComboBox 
+                        options={locations.length > 0 ? locations : ['Remote', 'On-Site', 'Hybrid']}
+                        value={formData.location}
+                        onChange={v => setFormData({...formData, location: v})}
+                        placeholder="Location..."
+                        className="w-full"
+                    />
+                ) : (
+                    <p className="text-xs text-white/70 font-bold truncate">{formData.location || '—'}</p>
+                )}
+            </div>
             <EditMetaItem editMode={editMode} icon={Calendar} label="DOJ" value={formData.doj} type="date" onChange={v => setFormData({...formData, doj: v})} />
           </div>
         </div>
@@ -365,35 +414,9 @@ export default function MyProfile() {
                     </div>
                 </div>
               </div>
-
-              <div className="space-y-6">
-                  {/* Address Details */}
-                  <div className="glass-panel p-8 border-white/5">
-                    <SectionHeader icon={Landmark} title="Geography" />
-                    <div className="mt-6 space-y-4">
-                        <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-1">Current Base</p>
-                            {editMode ? (
-                                <textarea value={formData.current_address} onChange={e => setFormData({...formData, current_address: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white" rows={2}/>
-                            ) : (
-                                <p className="text-xs text-white/70">{details.current_address || 'Unregistered'}</p>
-                            )}
-                        </div>
-                        <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-1">Permanent Anchor</p>
-                            {editMode ? (
-                                <textarea value={formData.permanent_address} onChange={e => setFormData({...formData, permanent_address: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white" rows={2}/>
-                            ) : (
-                                <p className="text-xs text-white/70">{details.permanent_address || 'Unregistered'}</p>
-                            )}
-                        </div>
-                    </div>
-                  </div>
-              </div>
           </div>
+          {showPwdModal && <ChangePasswordModal onClose={() => setShowPwdModal(false)} />}
       </div>
-
-      {showPwdModal && <ChangePasswordModal onClose={() => setShowPwdModal(false)} />}
     </div>
   );
 }

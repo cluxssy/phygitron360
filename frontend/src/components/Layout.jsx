@@ -62,7 +62,7 @@ export default function Layout({ children }) {
       ]
     },
     { 
-      id: 'dashboard', name: 'Dashboard', path: '/admin', icon: LayoutDashboard, color: 'text-primary', roles: ['org_admin', 'manager'],
+      id: 'dashboard', name: 'Dashboard', path: '/admin', icon: LayoutDashboard, color: 'text-primary', roles: ['org_admin'],
       options: [
         { label: 'Overview', icon: Home, search: '', default: true },
         { label: 'Users', icon: Shield, search: '?tab=users', default: false },
@@ -70,7 +70,7 @@ export default function Layout({ children }) {
       ]
     },
     { 
-      id: 'source', name: 'Source', path: '/source', icon: Database, color: 'text-primary', roles: ['org_admin', 'recruiter', 'manager', 'candidate'],
+      id: 'source', name: 'Source', path: '/source', icon: Database, color: 'text-primary', roles: ['org_admin', 'manager', 'candidate'],
       options: [
         { label: 'Home', icon: Home, search: '?tab=home', default: true },
         { label: 'Directory', icon: Users, search: '?tab=directory', default: false },
@@ -79,7 +79,7 @@ export default function Layout({ children }) {
       ]
     },
     { 
-      id: 'forge', name: 'Forge', path: '/forge', icon: Zap, color: 'text-secondary', roles: ['org_admin', 'trainer', 'manager', 'employee'],
+      id: 'forge', name: 'Forge', path: '/forge', icon: Zap, color: 'text-secondary', roles: ['org_admin', 'manager', 'employee'],
       options: [
         { label: 'Academy', icon: Home, search: '?tab=academy', default: true },
         { label: 'Courses', icon: Layers, search: '?tab=courses', default: false },
@@ -88,7 +88,7 @@ export default function Layout({ children }) {
       ]
     },
     { 
-      id: 'verify', name: 'Verify', path: '/verify', icon: Shield, color: 'text-indigo', roles: ['org_admin', 'assessor', 'manager', 'employee'],
+      id: 'verify', name: 'Verify', path: '/verify', icon: Shield, color: 'text-indigo', roles: ['org_admin', 'manager', 'employee'],
       options: [
         { label: 'Skill Check', icon: Home, search: '?tab=home', default: true },
         { label: 'Assessments', icon: Shield, search: '?tab=tests', default: false },

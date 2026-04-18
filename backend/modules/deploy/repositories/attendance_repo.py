@@ -142,9 +142,9 @@ class AttendanceRepository:
             '''
             params = []
             
-            # HR should not approve Admin or other HR's leaves
-            if admin_role == 'HR':
-                query += " AND COALESCE(u.role, 'Employee') NOT IN ('Admin', 'HR')"
+            # HR equivalent (manager) should not approve Admin or other manager's leaves
+            if admin_role == 'manager':
+                query += " AND COALESCE(u.role, 'employee') NOT IN ('org_admin', 'manager', 'super_admin')"
             
             # Approvers should not see their own leave in the approval queue
             if admin_code:

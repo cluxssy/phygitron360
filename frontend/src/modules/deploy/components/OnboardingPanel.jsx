@@ -6,6 +6,7 @@ import {
   ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink,
   Copy, Link
 } from 'lucide-react';
+import ComboBox from '../../../core/components/ComboBox';
 
 const DESIGNATIONS = [
     'Software Engineer', 'Senior Engineer', 'Team Lead', 'Project Manager', 
@@ -23,6 +24,9 @@ export default function OnboardingPanel() {
   const [invites, setInvites] = useState([]);
   const [approvals, setApprovals] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [dynDesignations, setDynDesignations] = useState([]);
+  const [dynDepartments, setDynDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState(null);
@@ -45,16 +49,19 @@ export default function OnboardingPanel() {
     if (activeTab === 'invites') loadInvites();
     else {
         loadApprovals();
-        loadManagers();
+        loadOptions();
     }
   }, [activeTab]);
 
-  const loadManagers = async () => {
+  const loadOptions = async () => {
     try {
         const res = await fetch('/api/options', { credentials: 'include' });
         const data = await res.json();
         setManagers(data.managers || []);
-    } catch { console.warn('Failed to load managers'); }
+        setLocations(data.locations || []);
+        if (data.designations?.length > 0) setDynDesignations(data.designations);
+        if (data.teams?.length > 0) setDynDepartments(data.teams);
+    } catch { console.warn('Failed to load portal options'); }
   };
 
   const loadInvites = async () => {
@@ -364,19 +371,23 @@ export default function OnboardingPanel() {
                   <input value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full glass-panel border-white/5 text-white text-xs bg-black/20 px-5 py-4 rounded-xl focus:border-primary/40 outline-none" placeholder="Email address..." />
                </div>
                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Designation</label>
-                    <select value={form.designation} onChange={e => setForm({...form, designation: e.target.value})} className="w-full glass-panel border-white/5 text-white text-xs bg-black/20 px-5 py-4 rounded-xl focus:border-primary/40 outline-none">
-                       <option value="">Select Designation...</option>
-                       {DESIGNATIONS.map(d => <option key={d} value={d} className="bg-[#080f1f]">{d}</option>)}
-                    </select>
+                  <div className="space-y-1.5 flex-1">
+                    <ComboBox 
+                      label="Designation"
+                      options={dynDesignations.length > 0 ? dynDesignations : DESIGNATIONS}
+                      value={form.designation}
+                      onChange={val => setForm({...form, designation: val})}
+                      placeholder="Select Designation..."
+                    />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Department</label>
-                    <select value={form.department} onChange={e => setForm({...form, department: e.target.value})} className="w-full glass-panel border-white/5 text-white text-xs bg-black/20 px-5 py-4 rounded-xl focus:border-primary/40 outline-none">
-                       <option value="">Select Department...</option>
-                       {DEPARTMENTS.map(d => <option key={d} value={d} className="bg-[#080f1f]">{d}</option>)}
-                    </select>
+                  <div className="space-y-1.5 flex-1">
+                    <ComboBox 
+                      label="Department"
+                      options={dynDepartments.length > 0 ? dynDepartments : DEPARTMENTS}
+                      value={form.department}
+                      onChange={val => setForm({...form, department: val})}
+                      placeholder="Select Department..."
+                    />
                   </div>
                </div>
               <div className="space-y-1.5">
@@ -544,15 +555,13 @@ export default function OnboardingPanel() {
                     <form onSubmit={handleApprove} className="space-y-6">
                        <div className="grid grid-cols-2 gap-6">
                            <div className="space-y-2">
-                              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Reporting Manager</label>
-                              <select 
+                              <ComboBox 
+                                label="Reporting Manager"
+                                options={managers.map(m => ({ id: m.code, name: `${m.name} (${m.role})` }))}
                                 value={approveForm.manager}
-                                onChange={e => setApproveForm({...approveForm, manager: e.target.value})}
-                                className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-white focus:border-emerald-500/40 outline-none"
-                              >
-                                 <option value="">Select Manager...</option>
-                                 {managers.map(m => <option key={m.code} value={m.name} className="bg-[#080f1f]">{m.name} ({m.role})</option>)}
-                              </select>
+                                onChange={val => setApproveForm({...approveForm, manager: val})}
+                                placeholder="Select or type manager name..."
+                              />
                            </div>
                            <div className="space-y-2">
                               <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Neural Employment Type</label>
@@ -583,12 +592,12 @@ export default function OnboardingPanel() {
                              </div>
                            ))}
                            <div className="space-y-2">
-                              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">Location of Work</label>
-                              <input 
+                              <ComboBox 
+                                label="Location of Work"
+                                options={locations.length > 0 ? locations : ['Remote', 'On-Site', 'Hybrid']}
                                 value={approveForm.location}
-                                onChange={e => setApproveForm({...approveForm, location: e.target.value})}
-                                placeholder="e.g. Mumbai, Remote..."
-                                className="w-full glass-panel border-white/10 bg-black/40 px-5 py-4 rounded-2xl text-xs text-white focus:border-emerald-500/40 outline-none"
+                                onChange={val => setApproveForm({...approveForm, location: val})}
+                                placeholder="Choose location..."
                               />
                            </div>
                            <div className="space-y-2">

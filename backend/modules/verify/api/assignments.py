@@ -19,7 +19,7 @@ def get_service(current_user: dict = Depends(get_current_user)):
 def assign_assessment(
     asm_id: int,
     body: AssignRequest,
-    current_user: dict = Depends(require_role(["HR", "Admin"])),
+    current_user: dict = Depends(require_role(["org_admin", "manager"])),
     service: AssignmentService = Depends(get_service)
 ):
     """Broadcasts a specific assessment to multiple users."""
@@ -34,7 +34,7 @@ def assign_assessment(
 @router.get("/user/{user_id}")
 def get_user_assignments(
     user_id: int,
-    current_user: dict = Depends(require_role(["HR", "Admin"])),
+    current_user: dict = Depends(require_role(["org_admin", "manager"])),
     service: AssignmentService = Depends(get_service)
 ):
     """Fetches all tests assigned to a specific person for HR review."""

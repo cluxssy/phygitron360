@@ -41,7 +41,7 @@ export default function DeployDashboard() {
   useEffect(() => {
     const fetchGlobalData = async () => {
       try {
-        if (isL2) {
+        if (isL2 || isL3) {
             const res = await fetch('/api/dashboard/stats', { credentials: 'include' });
             const data = await res.json();
             setStats(data?.counts);
@@ -68,7 +68,7 @@ export default function DeployDashboard() {
                 : 'Dashboard'}
           </h1>
         </div>
-        {isL2 && stats && (
+        {(isL2 || isL3) && stats && (
           <div className="flex gap-4">
             {[
               { label: 'Active', value: stats.active, color: '#10B981' },
@@ -86,7 +86,7 @@ export default function DeployDashboard() {
 
       {/* Tab Content */}
       <div className="flex-1 min-h-0">
-        {currentTab === 'dashboard' && isL2 && <DeployAnalytics />}
+        {currentTab === 'dashboard' && (isL2 || isL3) && <DeployAnalytics />}
         {currentTab === 'team' && (isL2 || isL3) && <EmployeeDirectory />}
         {currentTab === 'profile' && (isL2 || isL3) && (
           <EmployeeProfileFull 
@@ -101,8 +101,8 @@ export default function DeployDashboard() {
         {currentTab === 'performance' && <PerformancePanel isAdmin={isL2 || isL3} />}
         {currentTab === 'my-performance' && <PerformancePanel isAdmin={false} />}
         {currentTab === 'training' && (isL2 || isL3) && <TrainingPanel />}
-        {currentTab === 'allocations' && isL2 && <AssetsPanel />}
-        {currentTab === 'onboard' && isL2 && <OnboardingPanel />}
+        {currentTab === 'allocations' && (isL2 || isL3) && <AssetsPanel />}
+        {currentTab === 'onboard' && (isL2 || isL3) && <OnboardingPanel />}
         {currentTab === 'admin' && isL2 && <AdminPanel />}
         {currentTab === 'my-dashboard' && <EmployeeDashboard />}
         {currentTab === 'my-profile' && <MyProfile />}

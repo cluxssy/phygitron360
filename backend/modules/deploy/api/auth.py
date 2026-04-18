@@ -33,8 +33,8 @@ def require_role(allowed_roles: list[str]):
         if 'super_admin' in user_roles or 'superadmin' in user_roles:
             return current_user
             
-        # Org Admin has full access to anything an Admin, HR, or Management can do within their tenant
-        if 'org_admin' in user_roles and any(r in allowed_lower for r in ['admin', 'hr', 'management', 'employee']):
+        # Org Admin has full access to anything a Manager, Employee, or Candidate can do within their tenant
+        if 'org_admin' in user_roles and any(r in allowed_lower for r in ['org_admin', 'manager', 'employee', 'candidate']):
             return current_user
 
         if not any(role in allowed_lower for role in user_roles):

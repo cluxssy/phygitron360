@@ -67,7 +67,7 @@ def get_result_details(
 @router.get("/review/{asm_id}")
 def get_assessment_submissions(
     asm_id: int,
-    current_user: dict = Depends(require_role(["HR", "Admin"])),
+    current_user: dict = Depends(require_role(["org_admin", "manager"])),
     service: GradingService = Depends(get_grading_service)
 ):
     """Lists all submissions for a template for internal HR review."""
