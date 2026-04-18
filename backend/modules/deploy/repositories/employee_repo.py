@@ -1,4 +1,5 @@
 from typing import List, Dict, Any, Optional
+import json
 from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
