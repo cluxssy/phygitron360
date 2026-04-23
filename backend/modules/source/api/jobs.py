@@ -2,7 +2,7 @@ import logging
 import os
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query, Body
-from backend.modules.deploy.api.auth import get_current_user, require_role
+from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.source.services.recruitment_service import RecruitmentService
 from pydantic import BaseModel
 
@@ -42,7 +42,7 @@ def list_job_roles(service: RecruitmentService = Depends(get_service)):
 @router.post("/job-roles")
 def create_job_role(
     body: JobRoleCreate,
-    current_user: dict = Depends(require_role(["HR", "Admin", "org_admin", "super_admin"])),
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
     service: RecruitmentService = Depends(get_service)
 ):
     """Creates a new job role template."""
@@ -72,7 +72,7 @@ async def auto_rank_candidates(
 @router.post("/score-candidates")
 async def score_candidates(
     body: ScoreRequest,
-    current_user: dict = Depends(require_role(["HR", "Admin", "org_admin", "super_admin"])),
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
     service: RecruitmentService = Depends(get_service)
 ):
     """Triggers AI fitment scoring for multiple candidates."""
@@ -89,10 +89,10 @@ async def score_candidates(
 
 # --- Actions & Conversion ---
 
-@router.post("/send-invite")
+@router.post("/send-invite", dependencies=[Depends(require_permission("source.jobs.manage"))])
 def send_invite(
     body: InviteRequest,
-    current_user: dict = Depends(require_role(["HR", "Admin", "org_admin", "super_admin"])),
+    current_user: dict = Depends(get_current_user),
     service: RecruitmentService = Depends(get_service)
 ):
     """Sends a talent-portal invitation to a candidate."""
@@ -103,20 +103,18 @@ def send_invite(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/invite-status")
+@router.get("/invite-status", dependencies=[Depends(require_permission("source.jobs.manage"))])
 def get_invite_status(
     role_id: int = Query(...),
-    current_user: dict = Depends(require_role(["HR", "Admin", "org_admin", "super_admin"])),
     service: RecruitmentService = Depends(get_service)
 ):
     """Fetches invitation and login status for a specific job role."""
     invites = service.role_repo.get_invites_by_role(role_id)
     return {"success": True, "data": invites}
 
-@router.post("/convert-to-employee")
+@router.post("/convert-to-employee", dependencies=[Depends(require_permission("source.jobs.manage"))])
 def convert_to_employee(
     body: ConvertRequest,
-    current_user: dict = Depends(require_role(["HR", "Admin", "org_admin", "super_admin"])),
     service: RecruitmentService = Depends(get_service)
 ):
     """Converts a hired candidate into an HRMS employee record."""

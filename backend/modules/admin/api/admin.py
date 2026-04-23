@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
-from backend.modules.deploy.api.auth import require_role, get_current_user
+from backend.core.dependencies import require_permission, get_current_user
 from backend.modules.admin.services.admin_service import AdminService
 from backend.modules.admin.schemas.admin import UserCreate, UserResponse, LogResponse, RolePermissionsUpdate, UserOverrideUpdate, RoleUpdate
 
@@ -10,7 +10,7 @@ class ProvisionTenantRequest(BaseModel):
     admin_email: str
     admin_password: str
 
-router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_role(["org_admin", "super_admin", "manager"]))])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_permission("admin.users.manage"))])
 
 def get_service(current_user: dict = Depends(get_current_user)):
     return AdminService(tenant_id=current_user.get('tenant_id', 'public'))
@@ -23,24 +23,15 @@ def list_users(service: AdminService = Depends(get_service)):
 def list_tenants(service: AdminService = Depends(get_service)):
     return service.list_tenants()
 
-@router.post("/tenants")
+@router.post("/tenants", dependencies=[Depends(require_permission("admin.tenants.provision"))])
 def provision_tenant(data: ProvisionTenantRequest, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
-    # Explicit double check for super_admin
-    user_roles = [r.lower() for r in (current_user.get('roles') or [current_user.get('role')])]
-    if 'super_admin' not in user_roles:
-        raise HTTPException(status_code=403, detail="Strategic Overlord clearance required for tenant provisioning.")
-    
     try:
         return service.provision_tenant(data.company_name, data.admin_email, data.admin_password, current_user['username'])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/tenants/{tenant_id}")
+@router.delete("/tenants/{tenant_id}", dependencies=[Depends(require_permission("admin.tenants.provision"))])
 def delete_tenant(tenant_id: str, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
-    user_roles = [r.lower() for r in (current_user.get('roles') or [current_user.get('role')])]
-    if 'super_admin' not in user_roles:
-        raise HTTPException(status_code=403, detail="Strategic Overlord clearance required for tenant decommissioning.")
-    
     try:
         return service.delete_tenant(tenant_id, current_user['username'])
     except Exception as e:
@@ -148,8 +139,11 @@ class TenantOpsUpdate(BaseModel):
 
 @router.get("/tenants/{tenant_id}/ops")
 def get_tenant_ops(tenant_id: str, service: AdminService = Depends(get_service)):
+    if tenant_id == 'current':
+        return service.get_tenant_ops(service.tenant_id)
     return service.get_tenant_ops(tenant_id)
 
 @router.patch("/tenants/{tenant_id}/ops")
 def update_tenant_ops(tenant_id: str, data: TenantOpsUpdate, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
-    return service.update_tenant_ops(tenant_id, data.dict(exclude_none=True), current_user['username'])
+    target_id = service.tenant_id if tenant_id == 'current' else tenant_id
+    return service.update_tenant_ops(target_id, data.dict(exclude_none=True), current_user['username'])

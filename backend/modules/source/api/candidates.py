@@ -5,7 +5,7 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Body
 from fastapi.responses import FileResponse
-from backend.modules.deploy.api.auth import get_current_user, require_role
+from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.source.services.candidate_service import CandidateService
 from backend.modules.source.schemas.candidates import CandidateStatusUpdate, CandidateNoteCreate, CandidateCreate, CandidateSearchFilters
 from pydantic import BaseModel
@@ -204,7 +204,7 @@ async def add_note(
 @router.delete("/{candidate_id}")
 def delete_candidate(
     candidate_id: int, 
-    current_user: dict = Depends(require_role(["HR", "Admin", "Superadmin", "org_admin", "super_admin"])),
+    current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_service)
 ):
     """Permanently removes a candidate record."""

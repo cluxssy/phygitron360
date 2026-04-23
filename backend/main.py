@@ -5,7 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 # Set up central deploy module router
-from backend.modules.deploy.api.auth import router as auth_router, require_module
+from backend.modules.deploy.api.auth import router as auth_router
+from backend.core.dependencies import require_module
 from backend.modules.deploy.api.dashboard import router as dashboard_router
 from backend.modules.deploy.api.employees import router as employees_router
 from backend.modules.deploy.api.assets import router as assets_router
@@ -43,10 +44,7 @@ except Exception as e:
     print(f"Schema sync warning: {e}")
 
 # CORS configuration
-origins = [
-    "http://localhost:5173", # Vite Dev Server
-    "http://localhost:3000",
-]
+origins = ["*"] # Allow all for network dev
 
 app.add_middleware(
     CORSMiddleware,
@@ -93,4 +91,4 @@ app.include_router(verify_sandbox_router, dependencies=[Depends(require_module("
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)

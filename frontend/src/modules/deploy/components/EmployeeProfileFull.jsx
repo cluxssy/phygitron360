@@ -7,6 +7,7 @@ import {
   Save, Edit3, Image, Upload, Trash2, Package, CheckCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import HasPermission from '../../../components/common/HasPermission';
 
 export default function EmployeeProfileFull({ employeeCode: initialCode, onBack }) {
     const [employeeCode, setEmployeeCode] = useState(initialCode);
@@ -150,12 +151,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </button>
                         </>
                     ) : (
-                        <button 
-                            onClick={() => setEditMode(true)}
-                            className="flex items-center gap-2 px-8 py-2 glass-panel border-white/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary hover:text-black transition-all"
-                        >
-                            <Edit3 size={14} /> Modify Dossier
-                        </button>
+                        <HasPermission permission="deploy.employees.edit">
+                            <button 
+                                onClick={() => setEditMode(true)}
+                                className="flex items-center gap-2 px-8 py-2 glass-panel border-white/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary hover:text-black transition-all"
+                            >
+                                <Edit3 size={14} /> Modify Dossier
+                            </button>
+                        </HasPermission>
                     )}
                 </div>
             </div>
@@ -493,28 +496,30 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Management Access (Dangerous Area) */}
                     {!editMode && (
-                        <div className="glass-panel p-8 border-red-500/10 bg-red-500/5">
-                            <SectionHeader icon={ShieldCheck} title="Dossier Termination" />
-                            <div className="mt-6">
-                                {details.employment_status === 'Active' ? (
-                                    <button 
-                                        onClick={() => {
-                                            if (window.confirm("ARE YOU SURE? This initiates the neural decoupling sequence for this personnel.")) {
-                                                handleOffboard();
-                                            }
-                                        }}
-                                        className="w-full py-4 rounded-2xl bg-red-500/20 text-red-500 font-black text-[10px] uppercase tracking-[0.2em] border border-red-500/30 hover:bg-red-500 hover:text-white transition-all shadow-xl shadow-red-500/10"
-                                    >
-                                        Initiate Offboarding
-                                    </button>
-                                ) : (
-                                    <div className="text-center p-4 border border-red-500/30 rounded-2xl">
-                                        <p className="text-[10px] text-red-400 font-black uppercase tracking-widest">Personnel Status: Decoupled</p>
-                                        <p className="text-[8px] text-red-400/40 uppercase tracking-widest mt-1">Exit Date: {details.exit_date || 'N/A'}</p>
-                                    </div>
-                                )}
+                        <HasPermission permission="deploy.employees.offboard">
+                            <div className="glass-panel p-8 border-red-500/10 bg-red-500/5">
+                                <SectionHeader icon={ShieldCheck} title="Dossier Termination" />
+                                <div className="mt-6">
+                                    {details.employment_status === 'Active' ? (
+                                        <button 
+                                            onClick={() => {
+                                                if (window.confirm("ARE YOU SURE? This initiates the neural decoupling sequence for this personnel.")) {
+                                                    handleOffboard();
+                                                }
+                                            }}
+                                            className="w-full py-4 rounded-2xl bg-red-500/20 text-red-500 font-black text-[10px] uppercase tracking-[0.2em] border border-red-500/30 hover:bg-red-500 hover:text-white transition-all shadow-xl shadow-red-500/10"
+                                        >
+                                            Initiate Offboarding
+                                        </button>
+                                    ) : (
+                                        <div className="text-center p-4 border border-red-500/30 rounded-2xl">
+                                            <p className="text-[10px] text-red-400 font-black uppercase tracking-widest">Personnel Status: Decoupled</p>
+                                            <p className="text-[8px] text-red-400/40 uppercase tracking-widest mt-1">Exit Date: {details.exit_date || 'N/A'}</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        </HasPermission>
                     )}
                 </div>
             </div>

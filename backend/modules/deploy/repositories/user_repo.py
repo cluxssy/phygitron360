@@ -95,7 +95,7 @@ class UserRepository:
         finally:
             conn.close()
             
-    def get_user_permissions(self, user_id: int, roles: List[str], tenant_id: str = 'public') -> List[str]:
+    def get_user_permissions(self, user_id: int, roles: List[str], tenant_id: str = 'public') -> Dict[str, bool]:
         conn = get_db_connection()
         try:
             # Aggregate permissions across ALL roles
@@ -117,7 +117,7 @@ class UserRepository:
                     else:
                         all_perms.discard(r['permission'])
                         
-                return list(all_perms)
+                return {p: True for p in all_perms}
         finally:
             conn.close()
 

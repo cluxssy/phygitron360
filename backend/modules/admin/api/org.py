@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from backend.modules.deploy.api.auth import get_current_user, require_role
+from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.admin.services.org_service import OrgService
 
 router = APIRouter(prefix="/api/org", tags=["Org Admin"])
@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/org", tags=["Org Admin"])
 def get_service(current_user: dict = Depends(get_current_user)):
     return OrgService(tenant_id=current_user.get("tenant_id", "public"))
 
-@router.get("/dashboard-stats")
+@router.get("/dashboard-stats", dependencies=[Depends(require_permission("deploy.dashboard.view_admin"))])
 def get_stats(service: OrgService = Depends(get_service)):
     return service.get_dashboard_stats()
 
@@ -35,6 +35,6 @@ def get_team(service: OrgService = Depends(get_service)):
 def get_alerts(service: OrgService = Depends(get_service)):
     return service.get_alerts()
 
-@router.get("/billing-status")
+@router.get("/billing-status", dependencies=[Depends(require_permission("module.deploy.access"))])
 def get_billing(service: OrgService = Depends(get_service)):
     return service.get_billing_status()

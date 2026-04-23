@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Body, Form, File, UploadFile
 from backend.modules.deploy.services.onboarding_service import OnboardingService
-from backend.modules.deploy.api.auth import require_role, require_module 
+from backend.core.dependencies import require_role, require_module, require_permission
 from backend.modules.deploy.schemas.onboarding import InviteRequest
 from backend.core.database import DATA_DIR
 import os
@@ -13,7 +13,7 @@ def get_service():
     return OnboardingService()
 
 @router.post("/invite", dependencies=[Depends(require_module("deploy"))])
-def send_invite(invite: InviteRequest, current_user: dict = Depends(require_role(["org_admin", "manager"])), service: OnboardingService = Depends(get_service)):
+def send_invite(invite: InviteRequest, current_user: dict = Depends(require_permission("deploy.onboarding.manage")), service: OnboardingService = Depends(get_service)):
     try:
         tenant_id = current_user.get("tenant_id", "public")
         return service.create_invite(invite.dict(), tenant_id=tenant_id)
@@ -23,11 +23,11 @@ def send_invite(invite: InviteRequest, current_user: dict = Depends(require_role
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/invites", dependencies=[Depends(require_module("deploy"))])
-def get_invites(current_user: dict = Depends(require_role(["org_admin", "manager"])), service: OnboardingService = Depends(get_service)):
+def get_invites(current_user: dict = Depends(require_permission("deploy.onboarding.view")), service: OnboardingService = Depends(get_service)):
     tenant_id = current_user.get("tenant_id", "public")
     return service.get_all_invites(tenant_id=tenant_id)
 
-@router.delete("/invite/{invite_id}", dependencies=[Depends(require_role(["org_admin", "manager"])), Depends(require_module("deploy"))])
+@router.delete("/invite/{invite_id}", dependencies=[Depends(require_permission("deploy.onboarding.manage")), Depends(require_module("deploy"))])
 def revoke_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
     return service.revoke_invite(invite_id)
 
@@ -102,7 +102,7 @@ def complete_onboarding(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-from backend.modules.deploy.api.auth import get_current_user
+from backend.core.dependencies import get_current_user
 
 @router.post("/admin-unification")
 def onboard_admin(
@@ -118,7 +118,7 @@ def onboard_admin(
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
-    current_user: dict = Depends(require_role(["org_admin"])),
+    current_user: dict = Depends(require_permission("deploy.onboarding.manage")),
     service: OnboardingService = Depends(get_service)
 ):
     user_id = current_user['id']
@@ -159,7 +159,7 @@ def onboard_admin(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/approvals", dependencies=[Depends(require_module("deploy"))])
-def get_pending_approvals(current_user: dict = Depends(require_role(["org_admin", "manager"])), service: OnboardingService = Depends(get_service)):
+def get_pending_approvals(current_user: dict = Depends(require_permission("deploy.onboarding.view")), service: OnboardingService = Depends(get_service)):
     tenant_id = current_user.get("tenant_id", "public")
     return service.get_pending_approvals(tenant_id=tenant_id)
 
@@ -174,7 +174,7 @@ def approve_onboarding(
     mediclaim_included: str = Form("No"),
     location: str = Form(None),
     notes: str = Form(None),
-    current_user: dict = Depends(require_role(["org_admin", "manager"])),
+    current_user: dict = Depends(require_permission("deploy.onboarding.manage")),
     service: OnboardingService = Depends(get_service)
 ):
     approval_data = {

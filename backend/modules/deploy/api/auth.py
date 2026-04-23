@@ -5,60 +5,19 @@ from backend.modules.deploy.services.auth_service import AuthService
 from backend.modules.deploy.schemas.auth import LoginRequest, RegisterCompanyRequest, DemoRequestModel
 from backend.core.database import create_tables, get_db_connection
 
+# Guards are now canonically defined in backend.core — re-exported here for
+# backward compatibility with any remaining imports from this module.
+from backend.core.dependencies import (  # noqa: F401
+    get_current_user,
+    require_permission,
+    require_module,
+    require_role,
+)
+
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 def get_service():
     return AuthService()
-
-# --- Dependencies ---
-# Refactoring: define dependencies here so they can be imported by other routers
-# BUT, other routers currently import 'backend.routers.auth.get_current_user' and 'backend.routers.auth.require_role'
-# So we must expose them here with the exact same names to avoid breaking changes in other files during this phase.
-
-def get_current_user(request: Request, service: AuthService = Depends(get_service)):
-    session_token = request.cookies.get("session_token")
-    user = service.get_session_user(session_token)
-    
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated or session expired")
-    
-    return user
-
-def require_role(allowed_roles: list[str]):
-    def role_checker(current_user: dict = Depends(get_current_user)):
-        user_roles = [r.lower() if r else '' for r in (current_user.get("roles") or [current_user.get("role")])]
-        allowed_lower = [a.lower() for a in allowed_roles]
-        
-        # Superadmin (Strategic Overlord) has God-mode access to everything
-        if 'super_admin' in user_roles or 'superadmin' in user_roles:
-            return current_user
-            
-        # Org Admin has full access to anything a Manager, Employee, or Candidate can do within their tenant
-        if 'org_admin' in user_roles and any(r in allowed_lower for r in ['org_admin', 'manager', 'employee', 'candidate']):
-            return current_user
-
-        if not any(role in allowed_lower for role in user_roles):
-            raise HTTPException(
-                status_code=403, 
-                detail=f"Access denied. Required roles: {', '.join(allowed_roles)}"
-            )
-        return current_user
-    return role_checker
-
-def require_module(module_name: str):
-    def module_checker(current_user: dict = Depends(get_current_user)):
-        # Superadmins navigate through the public tenant and have override access
-        if current_user.get('role') == 'super_admin' or 'super_admin' in (current_user.get('roles') or []):
-            return current_user
-            
-        enabled_modules = current_user.get('modules_enabled', [])
-        if module_name not in [m.lower() for m in enabled_modules]:
-            raise HTTPException(
-                status_code=403,
-                detail=f"The '{module_name}' module is not associated with your current neural workspace contract."
-            )
-        return current_user
-    return module_checker
 
 # --- Endpoints ---
 
@@ -182,8 +141,8 @@ def request_demo(data: DemoRequestModel):
     finally:
         conn.close()
 
-@router.get("/demo-requests")
-def get_demo_requests(current_user: dict = Depends(require_role(["super_admin"]))):
+@router.get("/demo-requests", dependencies=[Depends(require_permission("manage_system"))])
+def get_demo_requests():
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:

@@ -45,31 +45,38 @@ class OrgRepository:
 
     def get_module_health(self):
         """Key metric per module."""
-        # This will be a combination of queries
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # 1. Check which modules are actually enabled for this tenant
+                cur.execute("SET search_path TO public")
+                cur.execute("SELECT modules_enabled FROM tenants WHERE id = %s", (self.tenant_id,))
+                row = cur.fetchone()
+                enabled = [m.lower() for m in (row['modules_enabled'] if row and row['modules_enabled'] else [])]
+                
                 cur.execute(f'SET search_path TO "{self.tenant_id}"')
                 
-                # Source: New candidates this week
-                cur.execute("SELECT COUNT(*) FROM candidates WHERE created_at >= NOW() - INTERVAL '7 days'")
-                source_metric = cur.fetchone()['count']
+                results = []
                 
-                # Forge: Courses active (Placeholder)
-                forge_metric = "3 courses active" # Mocked
+                # Source
+                if 'source' in enabled:
+                    cur.execute("SELECT COUNT(*) FROM candidates WHERE created_at >= NOW() - INTERVAL '7 days'")
+                    source_metric = cur.fetchone()['count']
+                    results.append({"module": "Source", "metric": f"{source_metric} new candidates", "trend": "up"})
                 
-                # Verify: Assessments scheduled (Placeholder)
-                verify_metric = "4 scheduled" # Mocked
+                # Forge
+                if 'forge' in enabled:
+                    results.append({"module": "Forge", "metric": "3 courses active", "trend": "stable"})
                 
-                # Deploy: Skill decay (Placeholder)
-                deploy_metric = "2 alerts" # Mocked
+                # Verify
+                if 'verify' in enabled:
+                    results.append({"module": "Verify", "metric": "4 scheduled", "trend": "up"})
                 
-                return [
-                    {"module": "Source", "metric": f"{source_metric} new candidates", "trend": "up"},
-                    {"module": "Forge", "metric": forge_metric, "trend": "stable"},
-                    {"module": "Verify", "metric": verify_metric, "trend": "up"},
-                    {"module": "Deploy", "metric": deploy_metric, "trend": "attention"}
-                ]
+                # Deploy
+                if 'deploy' in enabled:
+                    results.append({"module": "Deploy", "metric": "2 alerts", "trend": "attention"})
+                
+                return results
         finally:
             conn.close()
 

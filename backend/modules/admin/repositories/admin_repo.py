@@ -3,6 +3,9 @@ from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 class AdminRepository:
+    def __init__(self, tenant_id: str = 'public'):
+        self.tenant_id = tenant_id
+
     def get_all_users(self) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
@@ -120,10 +123,28 @@ class AdminRepository:
         finally:
             conn.close()
 
+    def seed_default_permissions(self, schema_name: str):
+        """Seeds default role permissions from the canonical registry in core.permissions."""
+        from backend.core.permissions import DEFAULT_PERMISSIONS
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{schema_name}"')
+            for role, perms in DEFAULT_PERMISSIONS.items():
+                for perm in perms:
+                    cur.execute(
+                        "INSERT INTO role_permissions (role, permission, is_allowed) VALUES (%s, %s, 1) ON CONFLICT DO NOTHING",
+                        (role, perm)
+                    )
+            conn.commit()
+        finally:
+            conn.close()
+
     def get_user_overrides(self, user_id: int) -> Dict[str, bool]:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("SELECT permission, is_allowed FROM user_permissions WHERE user_id = %s", (user_id,))
             rows = cur.fetchall()
             return {r['permission']: bool(r['is_allowed']) for r in rows}
@@ -134,6 +155,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             for p, allowed in permissions.items():
                 if allowed is None:
                     cur.execute("DELETE FROM user_permissions WHERE user_id = %s AND permission = %s", (user_id, p))
