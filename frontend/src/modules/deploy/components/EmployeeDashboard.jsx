@@ -184,7 +184,7 @@ export default function EmployeeDashboard() {
                   <div className="relative p-6 rounded-3xl bg-primary/5 border border-primary/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
                     <div>
                       <h4 className="text-base font-black text-white uppercase tracking-tighter mb-1">Self-Assessment Sync</h4>
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-primary/60 font-black">Timeline: {a.quarter} // {year}</p>
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-primary/60 font-black">Timeline: {a.quarter} // {new Date().getFullYear()}</p>
                     </div>
                     <button 
                       onClick={() => navigate('/verify')}

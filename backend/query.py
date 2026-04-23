@@ -1,9 +1,5 @@
-import sys
-import psycopg2
 from psycopg2.extras import RealDictCursor
-
-def get_db_connection():
-    return psycopg2.connect("dbname=phygitron user=cluxssy host=localhost port=5432")
+from backend.core.database import get_db_connection
 
 conn = get_db_connection()
 cur = conn.cursor(cursor_factory=RealDictCursor)
