@@ -7,10 +7,12 @@ from dotenv import load_dotenv
 # Register JSONB adapter globally
 register_default_jsonb()
 
-# Load environment variables
-load_dotenv()
+# Define BASE_DIR at the very top for cross-platform absolute path resolution
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+# Load environment variables from absolute path
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
 DATA_DIR = os.path.join(BASE_DIR, 'data') # Still used for static files/uploads
 
 # Database configuration from .env

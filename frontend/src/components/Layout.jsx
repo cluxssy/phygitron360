@@ -19,24 +19,28 @@ export default function Layout({ children }) {
   const { user, logout, hasRole, hasPermission, refreshUser } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
-  const [deployView, setDeployView] = useState('admin');
+  const [deployView, setDeployView] = useState('employee');
 
   // Logic for switching view in Deploy module
   const canSwitchView = hasRole(['org_admin', 'manager', 'super_admin']);
-  const isL2 = hasPermission('deploy.dashboard.view_admin');
+  const hasAdminClearance = hasPermission('deploy.dashboard.view_admin');
 
   useEffect(() => {
-    const fetchNotifs = async () => {
-      try {
-        const res = await fetch('/api/notifications', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          setNotifications(data || []);
-        }
-      } catch (e) {}
-    };
-    if (user) fetchNotifs();
-  }, [user]);
+    if (user) {
+        setDeployView(hasAdminClearance ? 'admin' : 'employee');
+        
+        const fetchNotifs = async () => {
+          try {
+            const res = await fetch('/api/notifications', { credentials: 'include' });
+            if (res.ok) {
+              const data = await res.json();
+              setNotifications(data || []);
+            }
+          } catch (e) {}
+        };
+        fetchNotifs();
+    }
+  }, [user, hasAdminClearance]);
 
   const markRead = async (id) => {
     try {
