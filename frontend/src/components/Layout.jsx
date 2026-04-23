@@ -8,7 +8,7 @@ import {
   CheckCircle, Rocket, Layers,
   Compass, Activity, User, Globe,
   Cpu, Monitor, Star, Filter, Home, Upload, Users,
-  LayoutDashboard, BarChart3, Clock, BookOpen, ShieldCheck
+  LayoutDashboard, BarChart3, Clock, BookOpen, ShieldCheck, Package
 } from 'lucide-react';
 import { useAuth } from '../core/auth/AuthContext';
 import OrgAdminSetupModal from '../modules/deploy/components/OrgAdminSetupModal';
@@ -16,14 +16,14 @@ import OrgAdminSetupModal from '../modules/deploy/components/OrgAdminSetupModal'
 export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, hasRole, refreshUser } = useAuth();
+  const { user, logout, hasRole, hasPermission, refreshUser } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [deployView, setDeployView] = useState('admin');
 
-  const isL2 = hasRole(['org_admin', 'super_admin']);
-  const isL3 = hasRole(['manager']);
-  const canSwitchView = isL2 || isL3;
+  // Logic for switching view in Deploy module
+  const canSwitchView = hasRole(['org_admin', 'manager', 'super_admin']);
+  const isL2 = hasPermission('deploy.dashboard.view_admin');
 
   useEffect(() => {
     const fetchNotifs = async () => {
@@ -54,86 +54,75 @@ export default function Layout({ children }) {
 
   const allModules = [
     { 
-      id: 'superadmin', name: 'Overlord', path: '/superadmin', icon: Globe, color: 'text-secondary', roles: ['super_admin'],
+      id: 'superadmin', name: 'Overlord', path: '/superadmin', icon: Globe, color: 'text-secondary', 
+      perm: 'manage_system',
       options: [
-        { label: 'Tenants', icon: Globe, search: '', default: true },
-        { label: 'Analytics', icon: Activity, search: '', default: false },
-        { label: 'License Lab', icon: Zap, search: '', default: false },
+        { label: 'Tenants', icon: Globe, search: '', default: true, perm: 'manage_system' },
       ]
     },
     { 
-      id: 'dashboard', name: 'Dashboard', path: '/admin', icon: LayoutDashboard, color: 'text-primary', roles: ['org_admin'],
+      id: 'dashboard', name: 'Dashboard', path: '/admin', icon: LayoutDashboard, color: 'text-primary', 
+      perm: 'admin.users.manage',
       options: [
-        { label: 'Overview', icon: Home, search: '', default: true },
-        { label: 'Users', icon: Shield, search: '?tab=users', default: false },
-        { label: 'Analytics', icon: BarChart3, search: '?tab=stats', default: false },
+        { label: 'Overview', icon: Home, search: '', default: true, perm: 'admin.users.manage' },
+        { label: 'Users', icon: Shield, search: '?tab=users', default: false, perm: 'admin.users.manage' },
+        { label: 'Analytics', icon: BarChart3, search: '?tab=stats', default: false, perm: 'admin.users.manage' },
       ]
     },
     { 
-      id: 'source', name: 'Source', path: '/source', icon: Database, color: 'text-primary', roles: ['org_admin', 'manager', 'candidate'],
+      id: 'source', name: 'Source', path: '/source', icon: Database, color: 'text-primary', 
+      perm: 'module.source.access',
       options: [
-        { label: 'Home', icon: Home, search: '?tab=home', default: true },
-        { label: 'Directory', icon: Users, search: '?tab=directory', default: false },
-        { label: 'Jobs', icon: Briefcase, search: '?tab=jobs', default: false },
-        { label: 'Upload Resume', icon: Upload, search: '?tab=upload', default: false },
+        { label: 'Home', icon: Home, search: '?tab=home', default: true, perm: 'module.source.access' },
+        { label: 'Jobs', icon: Briefcase, search: '?tab=jobs', default: false, perm: 'source.jobs.manage' },
+        { label: 'Directory', icon: Users, search: '?tab=directory', default: false, perm: 'source.candidates.view' },
+        { label: 'Upload Resume', icon: Upload, search: '?tab=upload', default: false, perm: 'source.candidates.manage' },
       ]
     },
     { 
-      id: 'forge', name: 'Forge', path: '/forge', icon: Zap, color: 'text-secondary', roles: ['org_admin', 'manager', 'employee'],
+      id: 'forge', name: 'Forge', path: '/forge', icon: Zap, color: 'text-secondary', 
+      perm: 'module.forge.access',
       options: [
-        { label: 'Academy', icon: Home, search: '?tab=academy', default: true },
-        { label: 'Courses', icon: Layers, search: '?tab=courses', default: false },
-        { label: 'My Learning', icon: Star, search: '?tab=my-learning', default: false },
-        { label: 'Certificates', icon: CheckCircle, search: '?tab=certs', default: false },
+        { label: 'Academy', icon: Home, search: '?tab=academy', default: true, perm: 'module.forge.access' },
+        { label: 'Courses', icon: Layers, search: '?tab=courses', default: false, perm: 'deploy.training.manage' },
+        { label: 'My Learning', icon: Star, search: '?tab=my-learning', default: false, perm: 'module.forge.access' },
       ]
     },
     { 
-      id: 'verify', name: 'Verify', path: '/verify', icon: Shield, color: 'text-indigo', roles: ['org_admin', 'manager', 'employee'],
+      id: 'verify', name: 'Verify', path: '/verify', icon: Shield, color: 'text-indigo', 
+      perm: 'module.verify.access',
       options: [
-        { label: 'Skill Check', icon: Home, search: '?tab=home', default: true },
-        { label: 'Assessments', icon: Shield, search: '?tab=tests', default: false },
-        { label: 'Results', icon: Activity, search: '?tab=results', default: false },
-        { label: 'Builder', icon: Cpu, search: '?tab=builder', default: false },
+        { label: 'Skill Check', icon: Home, search: '?tab=home', default: true, perm: 'module.verify.access' },
+        { label: 'Builder', icon: Cpu, search: '?tab=builder', default: false, perm: 'verify.assessments.manage' },
+        { label: 'Assignments', icon: Shield, search: '?tab=tests', default: false, perm: 'verify.assessments.assign' },
+        { label: 'Results', icon: Activity, search: '?tab=results', default: false, perm: 'verify.assessments.view_results' },
       ]
     },
     { 
-      id: 'deploy', name: 'Deploy', path: '/deploy', icon: Rocket, color: 'text-error', roles: ['org_admin', 'manager', 'employee'],
-      options: (canSwitchView && deployView === 'admin') ? [
-        { label: 'Analytics', icon: LayoutDashboard, search: '?tab=dashboard', default: true },
-        { label: 'Personnel', icon: Users, search: '?tab=team', default: false },
-        { label: 'Attendance', icon: Star, search: '?tab=attendance', default: false },
-        { label: 'Performance', icon: BarChart3, search: '?tab=performance', default: false },
-        { label: 'Allocations', icon: CheckCircle, search: '?tab=allocations', default: false },
-        { label: 'Onboard', icon: User, search: '?tab=onboard', default: false },
+      id: 'deploy', name: 'Deploy', path: '/deploy', icon: Rocket, color: 'text-error', 
+      perm: 'module.deploy.access',
+      options: (deployView === 'admin') ? [
+        { label: 'Analytics', icon: LayoutDashboard, search: '?tab=dashboard', default: true, perm: 'deploy.dashboard.view_admin' },
+        { label: 'Personnel', icon: Users, search: '?tab=team', default: false, perm: 'deploy.employees.view' },
+        { label: 'Attendance', icon: Star, search: '?tab=attendance', default: false, perm: 'deploy.attendance.view_team' },
+        { label: 'Performance', icon: BarChart3, search: '?tab=performance', default: false, perm: 'deploy.assessments.manage' },
+        { label: 'Assets', icon: Package, search: '?tab=allocations', default: false, perm: 'deploy.assets.view' },
+        { label: 'Onboard', icon: User, search: '?tab=onboard', default: false, perm: 'deploy.onboarding.manage' },
       ] : [
-        { label: 'Dashboard', icon: LayoutDashboard, search: '?tab=my-dashboard', default: true },
-        { label: 'My Profile', icon: User, search: '?tab=my-profile', default: false },
-        { label: 'My Attendance', icon: Clock, search: '?tab=my-attendance', default: false },
-        { label: 'My Performance', icon: Activity, search: '?tab=my-performance', default: false },
+        { label: 'Dashboard', icon: LayoutDashboard, search: '?tab=my-dashboard', default: true, perm: 'module.deploy.access' },
+        { label: 'My Profile', icon: User, search: '?tab=my-profile', default: false, perm: 'module.deploy.access' },
+        { label: 'My Attendance', icon: Clock, search: '?tab=my-attendance', default: false, perm: 'deploy.attendance.view_personal' },
       ]
     },
   ];
 
-  const modules = allModules.filter(m => {
-    const isSuper = user?.role === 'super_admin';
-    
-    // If Superadmin, ONLY show the Superadmin (Overlord) dashboard for a focused experience
-    if (isSuper) {
-        return m.id === 'superadmin';
-    }
-    
-    const roleMatch = hasRole(m.roles);
-    if (!roleMatch) return false;
-    
-    // Dashboard is a core module, others require being enabled in tenant settings
-    if (m.id === 'dashboard') return true;
-    
-    return user?.modules_enabled?.includes(m.id);
-  });
+  const modules = allModules.filter(m => hasPermission(m.perm));
 
   const activeModule = modules.find(m => 
-    location.pathname.startsWith(m.path) || (m.id === 'source' && location.pathname === '/admin')
+    location.pathname.startsWith(m.path)
   ) || modules[0];
+
+  const filteredOptions = activeModule?.options.filter(opt => !opt.perm || hasPermission(opt.perm)) || [];
 
   return (
     <div className="flex h-screen w-full bg-[#040812] text-white overflow-hidden font-sans selection:bg-primary/30">
@@ -197,7 +186,7 @@ export default function Layout({ children }) {
          </div>
 
          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-2 custom-scrollbar">
-            {activeModule.options.map((opt, idx) => {
+            {filteredOptions.map((opt, idx) => {
                const isActive = location.search.includes(opt.search) || (!location.search && opt.default);
                return (
                <div 

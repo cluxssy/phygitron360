@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query, Body
-from backend.modules.deploy.api.auth import get_current_user, require_role
+from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.verify.services.grading_service import GradingService
 from backend.modules.verify.services.assignment_service import AssignmentService
 from pydantic import BaseModel
@@ -64,10 +64,9 @@ def get_result_details(
         raise HTTPException(status_code=404, detail="Result report not found")
     return {"success": True, "data": result}
 
-@router.get("/review/{asm_id}")
+@router.get("/review/{asm_id}", dependencies=[Depends(require_permission("verify.assessments.view_results"))])
 def get_assessment_submissions(
     asm_id: int,
-    current_user: dict = Depends(require_role(["org_admin", "manager"])),
     service: GradingService = Depends(get_grading_service)
 ):
     """Lists all submissions for a template for internal HR review."""

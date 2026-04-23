@@ -253,6 +253,13 @@ PYEOF
 print_ok "L1 Superadmin seeded"
 
 # =============================================================================
+# STEP 6.5 — Synchronise Permission Matrix
+# =============================================================================
+print_step "6.5/7 — Synchronising PBAC Matrix"
+"$VENV_DIR/bin/python" "$ROOT/scripts/seed_permissions.py"
+print_ok "Permission matrix synchronized across all schemas"
+
+# =============================================================================
 # STEP 7 — Done! Print startup instructions
 # =============================================================================
 print_step "7/7 — Setup Complete"

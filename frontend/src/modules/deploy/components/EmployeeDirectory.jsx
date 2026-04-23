@@ -5,6 +5,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import AddEmployeeModal from './AddEmployeeModal';
+import HasPermission from '../../../components/common/HasPermission';
 
 const STATUS_COLORS = {
   'Active': '#10B981',
@@ -81,12 +82,14 @@ export default function EmployeeDirectory() {
             ))}
           </select>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-3 px-6 py-3 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-primary/80 transition-all shadow-lg shadow-primary/20"
-        >
-          <Plus size={14} /> Add Personnel
-        </button>
+        <HasPermission permission="deploy.employees.create">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-3 px-6 py-3 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-primary/80 transition-all shadow-lg shadow-primary/20"
+          >
+            <Plus size={14} /> Add Personnel
+          </button>
+        </HasPermission>
       </div>
 
       {/* Stats Row */}

@@ -18,8 +18,8 @@ import DeployDashboard from './modules/deploy/pages/DeployDashboard';
 import VerifyDashboard from './modules/verify/pages/VerifyDashboard';
 import ForgeDashboard from './modules/forge/pages/ForgeDashboard';
 
-function ProtectedRoute({ children, requiredRoles, requiredModule }) {
-  const { user, loading, hasRole } = useAuth();
+function ProtectedRoute({ children, requiredPermission, requiredModule }) {
+  const { user, loading, hasPermission } = useAuth();
   
   if (loading) {
     return (
@@ -34,11 +34,12 @@ function ProtectedRoute({ children, requiredRoles, requiredModule }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRoles && !hasRole(requiredRoles)) {
+  // Use granular permission if provided, otherwise fallback to module access check
+  if (requiredPermission && !hasPermission(requiredPermission)) {
     return <Navigate to="/" replace />;
   }
 
-  if (requiredModule && user.role !== 'super_admin' && !user.modules_enabled?.includes(requiredModule)) {
+  if (requiredModule && !hasPermission(`module.${requiredModule}.access`)) {
     return <Navigate to="/admin" replace />;
   }
   
@@ -67,28 +68,28 @@ export default function App() {
           {/* Unified Platform Worlds (The 4-in-1 Stage) */}
           <Route 
             path="/superadmin" 
-            element={<ProtectedRoute requiredRoles={['super_admin']}><Layout><SuperadminDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredPermission="manage_system"><Layout><SuperadminDashboard /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/admin" 
-            element={<ProtectedRoute requiredRoles={['org_admin']}><Layout><AdminGate /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredPermission="admin.users.manage"><Layout><AdminGate /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/source" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'candidate']} requiredModule="source"><Layout><SourceDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredModule="source"><Layout><SourceDashboard /></Layout></ProtectedRoute>} 
           />
           
           <Route 
             path="/verify" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'employee']} requiredModule="verify"><Layout><VerifyDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredModule="verify"><Layout><VerifyDashboard /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/forge" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'employee']} requiredModule="forge"><Layout><ForgeDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredModule="forge"><Layout><ForgeDashboard /></Layout></ProtectedRoute>} 
           />
           <Route 
             path="/deploy" 
-            element={<ProtectedRoute requiredRoles={['org_admin', 'manager', 'employee']} requiredModule="deploy"><Layout><DeployDashboard /></Layout></ProtectedRoute>} 
+            element={<ProtectedRoute requiredModule="deploy"><Layout><DeployDashboard /></Layout></ProtectedRoute>} 
           />
 
           {/* Fallbacks */}

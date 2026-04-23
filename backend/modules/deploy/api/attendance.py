@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, Form
 from typing import List, Optional
 from backend.core.database import get_db_connection
-from backend.modules.deploy.api.auth import get_current_user, require_role
+from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.deploy.services.attendance_service import AttendanceService
 from backend.modules.deploy.schemas.attendance import (
     ClockOutRequest, LeaveRequest, AttendanceStatus, 
@@ -81,11 +81,11 @@ def get_my_leaves(user=Depends(get_current_user), service: AttendanceService = D
 # --- Admin/HR Endpoints ---
 
 @router.get("/leave/all-requests")
-def get_all_leave_requests(user=Depends(require_role(["org_admin", "manager", "super_admin"])), service: AttendanceService = Depends(get_service)):
+def get_all_leave_requests(user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
     return service.get_all_pending_leaves(user['role'], user.get('employee_code'))
 
 @router.get("/admin/today")
-def get_daily_attendance_log(date: Optional[str] = None, user=Depends(require_role(["org_admin", "manager", "super_admin"])), service: AttendanceService = Depends(get_service)):
+def get_daily_attendance_log(date: Optional[str] = None, user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
     return service.get_daily_log(date)
 
 @router.post("/leave/action/{leave_id}")
@@ -93,7 +93,7 @@ def approve_reject_leave(
     leave_id: int, 
     action: str = Form(...), 
     reason: str = Form(None), 
-    user=Depends(require_role(["org_admin", "manager", "super_admin"])),
+    user=Depends(require_permission("deploy.attendance.manage")),
     service: AttendanceService = Depends(get_service)
 ):
     if action not in ['Approved', 'Rejected']:
@@ -114,5 +114,5 @@ def approve_reject_leave(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/admin/summary")
-def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_role(["org_admin", "manager", "super_admin"])), service: AttendanceService = Depends(get_service)):
+def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
     return service.get_monthly_summary(year, month)

@@ -5,7 +5,7 @@ from backend.core.email_service import send_welcome_email
 
 class AdminService:
     def __init__(self, tenant_id: str = 'public'):
-        self.repo = AdminRepository()
+        self.repo = AdminRepository(tenant_id=tenant_id)
         self.auth_service = AuthService()
         self.tenant_id = tenant_id
 
@@ -29,6 +29,9 @@ class AdminService:
         # 3. Initialize tenant schema & tables
         from backend.core.database import create_tables
         create_tables(schema_name=tenant_schema)
+
+        # 3.5 Seed Default Permissions for the new schema
+        self.repo.seed_default_permissions(tenant_schema)
 
         # 4. Create Tenant Admin in new schema
         hashed_password = self.auth_service.get_password_hash(admin_password)
@@ -183,7 +186,26 @@ class AdminService:
 
     def get_tenant_ops(self, tenant_id: str):
         stats = self.repo.get_tenant_stats(tenant_id)
-        return {"stats": stats}
+        
+        # Fetch tenant info from public
+        from backend.core.database import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        conn = get_db_connection()
+        tenant_info = {}
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SET search_path TO public")
+                cur.execute("SELECT * FROM tenants WHERE id = %s", (tenant_id,))
+                row = cur.fetchone()
+                if row:
+                    tenant_info = dict(row)
+        finally:
+            conn.close()
+            
+        return {
+            "stats": stats,
+            "config": tenant_info
+        }
 
     def update_tenant_ops(self, tenant_id: str, data: Dict[str, Any], actor: str):
         self.repo.update_tenant_ops(

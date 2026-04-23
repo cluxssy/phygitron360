@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
-from backend.modules.deploy.api.auth import get_current_user
+from backend.core.dependencies import get_current_user
 from backend.modules.verify.services.sandbox_service import SandboxService
 from pydantic import BaseModel
 

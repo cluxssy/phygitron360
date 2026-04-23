@@ -68,8 +68,6 @@ export function AuthProvider({ children }) {
 
   const hasRole = (roles) => {
     if (!user) return false;
-    
-    // Normalize user roles including legacy aliases
     const rawRoles = (user.roles || [user.role]).map(r => r ? r.toLowerCase() : '');
     const userRoles = rawRoles.map(r => {
       if (['admin', 'administrator'].includes(r)) return 'org_admin';
@@ -77,21 +75,42 @@ export function AuthProvider({ children }) {
       return r;
     });
 
-    // Superadmin has God-mode access to everything
-    if (userRoles.includes('super_admin') || userRoles.includes('superadmin')) {
-        return true;
-    }
+    if (userRoles.includes('super_admin') || userRoles.includes('superadmin')) return true;
     
     if (Array.isArray(roles)) {
       const allowedRoles = roles.map(r => r.toLowerCase());
       return allowedRoles.some(role => userRoles.includes(role));
     }
-    const roleToCheck = roles.toLowerCase();
-    return userRoles.includes(roleToCheck);
+    return userRoles.includes(roles.toLowerCase());
+  };
+
+  const hasPermission = (permissionKey) => {
+    if (!user) return false;
+    
+    // STRICT MODULE CHECK: If checking module access (e.g. module.forge.access), 
+    // it MUST be in the tenant's modules_enabled contractual list.
+    // This applies to everyone, including super_admin, to hide uncontracted UI.
+    if (permissionKey?.startsWith('module.') && permissionKey?.endsWith('.access')) {
+      const mn = permissionKey.split('.')[1];
+      const enabled = (user.modules_enabled || []).map(m => m.toLowerCase());
+      if (!enabled.includes(mn.toLowerCase())) return false;
+    }
+
+    const roles = (user.roles || [user.role]).map(r => r?.toLowerCase() ?? '');
+
+    // ONLY super_admin gets a platform-level bypass for logical actions.
+    if (roles.includes('super_admin') || roles.includes('superadmin')) {
+      return true;
+    }
+
+    const perms = user.permissions ?? {};
+    // Normalize: support both dict {key: true} and legacy array formats
+    if (Array.isArray(perms)) return perms.includes(permissionKey);
+    return Boolean(perms[permissionKey]);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, hasRole, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, hasRole, hasPermission, refreshUser }}>
       {children}
       {mustChange && <ChangePasswordModal forceUpdate={true} />}
     </AuthContext.Provider>

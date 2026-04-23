@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, Body
 from typing import List, Optional, Dict, Any
-from backend.modules.deploy.api.auth import get_current_user
+from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.deploy.services.performance_service import PerformanceService
 
 router = APIRouter(prefix="/api/assessments", tags=["Performance"])
@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/assessments", tags=["Performance"])
 def get_service(user=Depends(get_current_user)):
     return PerformanceService(tenant_id=user.get('tenant_id', 'public'))
 
-@router.get("/{employee_code}/{year}")
+@router.get("/{employee_code}/{year}", dependencies=[Depends(require_permission("deploy.assessments.view"))])
 def get_assessments(employee_code: str, year: int, service: PerformanceService = Depends(get_service)):
     return service.get_assessments(employee_code, year)
 
@@ -18,6 +18,9 @@ def save_assessment(
     user=Depends(get_current_user), 
     service: PerformanceService = Depends(get_service)
 ):
+    # This might need a more granular check, but for now we follow the service logic
+    # which historically checked roles internally or passed the role.
+    # We'll pass the permission-based capability soon, but for now just guard the endpoint.
     try:
         return service.save_assessment(data, user['role'], user.get('employee_code'))
     except ValueError as e:
@@ -25,12 +28,10 @@ def save_assessment(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/request")
+@router.post("/request", dependencies=[Depends(require_permission("deploy.assessments.manage"))])
 def request_review(
     data: Dict[str, Any] = Body(...),
     user=Depends(get_current_user),
     service: PerformanceService = Depends(get_service)
 ):
-    if user['role'] not in ['Admin', 'HR', 'Management', 'org_admin', 'manager']:
-        raise HTTPException(status_code=403, detail="Not authorized")
     return service.request_review(data['employee_code'], data['year'], data['period_type'], data['period_value'])

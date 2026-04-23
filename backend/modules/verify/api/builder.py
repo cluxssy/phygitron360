@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Body
-from backend.modules.deploy.api.auth import get_current_user, require_role
+from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.verify.services.assessment_service import AssessmentService
 from pydantic import BaseModel
 
@@ -24,7 +24,7 @@ def get_service(current_user: dict = Depends(get_current_user)):
 @router.post("/assessments")
 def create_assessment(
     body: AssessmentCreate,
-    current_user: dict = Depends(require_role(["org_admin", "manager"])),
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_service)
 ):
     """Saves a new assessment template to the system."""
@@ -39,7 +39,7 @@ def create_assessment(
 
 @router.get("/templates")
 def list_templates(
-    current_user: dict = Depends(require_role(["org_admin", "manager"])),
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_service)
 ):
     """Returns all available assessment templates."""
@@ -59,7 +59,7 @@ def get_template(
 @router.post("/templates/{asm_id}/publish")
 def publish_assessment(
     asm_id: int,
-    current_user: dict = Depends(require_role(["org_admin", "manager"])),
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_service)
 ):
     """Publishes a template, making it available for assignment."""
@@ -72,7 +72,7 @@ def publish_assessment(
 async def generate_coding_meta(
     topic: str = Body(..., embed=True),
     difficulty: str = Body("medium", embed=True),
-    current_user: dict = Depends(require_role(["org_admin", "manager"])),
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_service)
 ):
     """Uses AI to generate coding problem boilerplate."""
