@@ -4,9 +4,9 @@ from typing import List, Optional
 class AssessmentEntry(BaseModel):
     category: str
     subcategory: str
-    self_score: int = 0
-    manager_score: int = 0
-    score: int = 0
+    self_score: Optional[int] = None
+    manager_score: Optional[int] = None
+    score: Optional[int] = None
     manager_comment: Optional[str] = ""
     employee_comment: Optional[str] = ""
 

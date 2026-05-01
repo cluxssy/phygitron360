@@ -5,7 +5,7 @@ from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.deploy.services.attendance_service import AttendanceService
 from backend.modules.deploy.schemas.attendance import (
     ClockOutRequest, LeaveRequest, AttendanceStatus, 
-    LeaveBalance, LeaveRecord, AttendanceRecord
+    LeaveBalance, LeaveRecord, AttendanceRecord, EditAttendanceRequest
 )
 
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
@@ -116,3 +116,14 @@ def approve_reject_leave(
 @router.get("/admin/summary")
 def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
     return service.get_monthly_summary(year, month)
+
+@router.post("/admin/edit")
+def edit_attendance(req: EditAttendanceRequest, user=Depends(require_permission("deploy.attendance.manage")), service: AttendanceService = Depends(get_service)):
+    try:
+        return service.edit_attendance(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/admin/employees")
+def get_active_employees(user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
+    return service.get_active_employees()

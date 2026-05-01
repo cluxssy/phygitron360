@@ -12,6 +12,13 @@ class LeaveRequest(BaseModel):
     leave_type: str
     reason: str
 
+class EditAttendanceRequest(BaseModel):
+    employee_code: str
+    date: str
+    clock_in: Optional[str] = None
+    clock_out: Optional[str] = None
+    work_log: Optional[str] = None
+
 class LeaveActionRequest(BaseModel):
     action: str
     reason: Optional[str] = None
@@ -45,9 +52,6 @@ class AttendanceStatus(BaseModel):
     data: Optional[AttendanceRecord] = None
 
 class LeaveBalance(BaseModel):
-    sick_total: int
-    sick_used: int
-    casual_total: int
-    casual_used: int
-    privilege_total: int
-    privilege_used: int
+    total_leaves: int
+    used_leaves: int
+    extended_leaves: int

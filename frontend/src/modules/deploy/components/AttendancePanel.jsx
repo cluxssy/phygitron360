@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
-import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus } from 'lucide-react';
 
 export default function AttendancePanel({ mode }) {
   const { user } = useAuth();
@@ -18,11 +18,14 @@ export default function AttendancePanel({ mode }) {
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [adminTab, setAdminTab] = useState('today');
   
-  const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '', leave_type: 'Sick', reason: '' });
+  const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '', leave_type: 'Leave', reason: '' });
   const [attendanceSummary, setAttendanceSummary] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showClockOutModal, setShowClockOutModal] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [editForm, setEditForm] = useState({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
 
   useEffect(() => { loadData(); }, []);
 
@@ -61,12 +64,14 @@ export default function AttendancePanel({ mode }) {
       }
 
       if (isAdmin) {
-        const [al, dl] = await Promise.all([
+        const [al, dl, el] = await Promise.all([
           fetch('/api/attendance/leave/all-requests', { credentials: 'include' }).then(r => r.json()),
           fetch('/api/attendance/admin/today', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/attendance/admin/employees', { credentials: 'include' }).then(r => r.json()),
         ]);
         setAllLeaves(Array.isArray(al) ? al : []);
         setDailyLog(Array.isArray(dl) ? dl : []);
+        setEmployees(Array.isArray(el) ? el : []);
       }
     } catch (e) { 
         toast.error(e.message || 'Failed to load attendance data'); 
@@ -126,9 +131,28 @@ export default function AttendancePanel({ mode }) {
         const data = await res.json();
         throw new Error(data.detail || 'Action failed');
       }
-      toast.success(`Leave ${action}`);
+      toast.success(action === 'Approved' ? "Clearance Granted" : "Application Rejected");
       loadData();
     } catch (e) { toast.error(e.message); }
+  };
+
+  const saveAttendanceEdit = async () => {
+    try {
+        const res = await fetch('/api/attendance/admin/edit', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editForm)
+        });
+        if (!res.ok) throw new Error();
+        toast.success("Matrix Synchronized");
+        setEditingRecord(null);
+        setEditingRecord(null); // Close modal
+        setEditForm({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
+        loadData();
+    } catch {
+        toast.error("Synchronization Failed");
+    }
   };
 
   if (loading) return (
@@ -192,11 +216,10 @@ export default function AttendancePanel({ mode }) {
       {/* Leave Balance & Action */}
       {isEmployee && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                  { label: 'Sick Matrix', used: leaveBalance?.sick_used || 0, total: leaveBalance?.sick_total || 10, color: '#F43F5E', icon: Activity },
-                  { label: 'Casual Matrix', used: leaveBalance?.casual_used || 0, total: leaveBalance?.casual_total || 12, color: '#F59E0B', icon: Zap },
-                  { label: 'Privilege Matrix', used: leaveBalance?.privilege_used || 0, total: leaveBalance?.privilege_total || 15, color: '#6366F1', icon: Shield },
+                  { label: 'Available Protocol', value: (leaveBalance?.total_leaves || 15) - (leaveBalance?.used_leaves || 0), total: leaveBalance?.total_leaves || 15, color: '#10B981', icon: Shield, suffix: 'Days' },
+                  { label: 'Extended Matrix', value: leaveBalance?.extended_leaves || 0, total: 100, color: '#F43F5E', icon: Activity, suffix: 'Days' },
               ].map((lb, i) => (
                   <div key={i} className="glass-panel p-6 border-white/5 relative overflow-hidden group">
                       <div className="absolute top-0 right-0 p-4 text-white/5 group-hover:text-white/10 transition-colors">
@@ -204,10 +227,10 @@ export default function AttendancePanel({ mode }) {
                       </div>
                       <div className="flex justify-between items-start mb-4 relative z-10">
                           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{lb.label}</span>
-                          <span className="text-[10px] font-black font-display italic" style={{ color: lb.color }}>{lb.total - lb.used} Available</span>
+                          <span className="text-xl font-black font-display italic text-white">{lb.value} {lb.suffix}</span>
                       </div>
                       <div className="w-full bg-white/5 rounded-full h-1.5 mb-2 relative z-10">
-                          <div className="h-1.5 rounded-full transition-all duration-700" style={{ width: `${(lb.used / lb.total) * 100}%`, background: lb.color }} />
+                          <div className="h-1.5 rounded-full transition-all duration-700" style={{ width: lb.total > 0 ? `${(lb.value / lb.total) * 100}%` : '0%', background: lb.color }} />
                       </div>
                   </div>
               ))}
@@ -263,6 +286,18 @@ export default function AttendancePanel({ mode }) {
                     />
                 </div>
             )}
+
+            {adminTab === 'today' && (
+                <button 
+                    onClick={() => {
+                        setEditingRecord({ isNew: true });
+                        setEditForm({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 bg-primary text-black rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-primary/20"
+                >
+                    <Plus size={14} /> Manual Sync
+                </button>
+            )}
           </div>
 
           {adminTab === 'today' && (
@@ -270,7 +305,7 @@ export default function AttendancePanel({ mode }) {
               <table className="w-full text-left">
                 <thead className="bg-white/5 border-b border-white/10">
                   <tr>
-                    {['Personnel', 'Clock In', 'Clock Out', 'Status', 'Mission Log'].map(h => (
+                    {['Personnel', 'Clock In', 'Clock Out', 'Status', 'Mission Log', 'Control'].map(h => (
                       <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-white/30">{h}</th>
                     ))}
                   </tr>
@@ -292,6 +327,23 @@ export default function AttendancePanel({ mode }) {
                         }`}>{r.status}</span>
                       </td>
                       <td className="px-6 py-4 text-[10px] text-white/40 italic truncate max-w-[200px]">{r.work_log || 'No notes found'}</td>
+                      <td className="px-6 py-4">
+                        <button 
+                            onClick={() => {
+                                setEditingRecord(r);
+                                setEditForm({ 
+                                    employee_code: r.employee_code, 
+                                    date: r.date, 
+                                    clock_in: r.clock_in || '', 
+                                    clock_out: r.clock_out || '', 
+                                    work_log: r.work_log || '' 
+                                });
+                            }}
+                            className="p-2 rounded-xl bg-white/5 text-white/40 hover:bg-primary hover:text-black transition-all"
+                        >
+                            <Edit size={14} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -464,15 +516,11 @@ export default function AttendancePanel({ mode }) {
                 <div className="space-y-4">
                     <div>
                         <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Protocol Type</label>
-                        <select 
-                            value={leaveForm.leave_type}
-                            onChange={e => setLeaveForm({...leaveForm, leave_type: e.target.value})}
-                            className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all uppercase font-bold"
-                        >
-                            <option value="Sick" className="bg-[#0b1426]">Sick Matrix</option>
-                            <option value="Casual" className="bg-[#0b1426]">Casual Matrix</option>
-                            <option value="Privilege" className="bg-[#0b1426]">Privilege Matrix</option>
-                        </select>
+                        <input 
+                            disabled
+                            value="Standard Leave"
+                            className="w-full glass-panel border-white/10 text-white/40 text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none uppercase font-bold"
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -571,6 +619,98 @@ export default function AttendancePanel({ mode }) {
              </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Attendance Modal */}
+      {editingRecord && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-[#060b19]/80 backdrop-blur-sm" onClick={() => setEditingRecord(null)} />
+              <div className="glass-panel border-white/10 w-full max-w-lg relative z-10 animate-fade-in-up overflow-hidden">
+                  <div className="p-6 border-b border-white/5 bg-white/5 flex justify-between items-center">
+                      <div>
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white italic">Matrix Synchronization</h3>
+                          <p className="text-[9px] text-white/30 uppercase font-bold mt-1">Personnel Record Adjustment Protocol</p>
+                      </div>
+                      <button onClick={() => setEditingRecord(null)} className="p-2 text-white/20 hover:text-white transition-colors">
+                          <XCircle size={20} />
+                      </button>
+                  </div>
+                  <div className="p-8 space-y-6">
+                      <div className="grid grid-cols-2 gap-6">
+                          <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Personnel Node</label>
+                            {editingRecord.isNew ? (
+                                <select 
+                                    value={editForm.employee_code}
+                                    onChange={e => setEditForm({...editForm, employee_code: e.target.value})}
+                                    className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                                >
+                                    <option value="" className="bg-[#0b1426]">Select Node...</option>
+                                    {employees.map(e => (
+                                        <option key={e.employee_code} value={e.employee_code} className="bg-[#0b1426]">{e.name} ({e.employee_code})</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div className="w-full glass-panel border-white/5 text-white/40 text-xs bg-white/5 px-4 py-4 rounded-xl font-bold uppercase italic">
+                                    {editingRecord.employee_name || editingRecord.employee_code}
+                                </div>
+                            )}
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Time Vector (Date)</label>
+                            <input 
+                                type="date"
+                                disabled={!editingRecord.isNew}
+                                value={editForm.date}
+                                onChange={e => setEditForm({...editForm, date: e.target.value})}
+                                className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none disabled:opacity-50"
+                            />
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                          <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Signal Start (Clock In)</label>
+                            <input 
+                                type="time"
+                                step="1"
+                                value={editForm.clock_in}
+                                onChange={e => setEditForm({...editForm, clock_in: e.target.value})}
+                                className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Signal End (Clock Out)</label>
+                            <input 
+                                type="time"
+                                step="1"
+                                value={editForm.clock_out}
+                                onChange={e => setEditForm({...editForm, clock_out: e.target.value})}
+                                className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                            />
+                          </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Mission Rationale (Work Log)</label>
+                        <textarea 
+                            value={editForm.work_log}
+                            onChange={e => setEditForm({...editForm, work_log: e.target.value})}
+                            className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none h-24 resize-none"
+                            placeholder="Detail the activities conducted during this shift..."
+                        />
+                      </div>
+
+                      <button 
+                        onClick={saveAttendanceEdit}
+                        disabled={!editForm.employee_code || !editForm.date}
+                        className="w-full py-4 bg-primary text-black rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
+                      >
+                        Synchronize Matrix Record
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
     </div>
   );
