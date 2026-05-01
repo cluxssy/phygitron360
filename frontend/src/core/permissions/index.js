@@ -23,6 +23,7 @@ export const P = {
   VIEW_REPORTS:          'view_reports',
   MANAGE_OPS:            'manage_ops',
   ADMIN_USERS_MANAGE:    'admin.users.manage',
+  ADMIN_ROLES_MANAGE:    'admin.roles.manage',   // Manage role-level permission overrides
 
   // ── Deploy: Employees ────────────────────────────────────────────────────
   DEPLOY_EMP_VIEW:       'deploy.employees.view',

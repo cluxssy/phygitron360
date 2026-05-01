@@ -53,9 +53,16 @@ export default function AssetsPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(assets)
       });
-      if (!res.ok) throw new Error();
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Sync failed');
+      }
+      
       toast.success('Allocation protocols updated!');
-    } catch { toast.error('Sync failed'); }
+    } catch (e) { 
+      toast.error(e.message || 'Sync failed'); 
+    }
     finally { setSaving(false); }
   };
 
