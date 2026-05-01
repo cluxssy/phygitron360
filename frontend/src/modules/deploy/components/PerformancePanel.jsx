@@ -69,7 +69,10 @@ export default function PerformancePanel({ isAdmin }) {
     setLoading(true);
     try {
       const res = await fetch(`/api/assessments/${selectedEmp}/${year}?type=${periodType}`, { credentials: 'include' });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || 'Failed to load assessments');
+      }
       const data = await res.json();
       const list = (Array.isArray(data) ? data : []).map(a => ({
         ...a,
@@ -81,7 +84,8 @@ export default function PerformancePanel({ isAdmin }) {
       setAssessments(list);
       const active = list.find(d => d.period_value === activePeriod);
       setLocalData(active || null);
-    } catch {
+    } catch (e) {
+      toast.error(e.message || 'Failed to load assessments');
       setAssessments([]);
       setLocalData(null);
     } finally {
@@ -121,11 +125,13 @@ export default function PerformancePanel({ isAdmin }) {
                 period_value: activePeriod
             })
         });
-        if (res.ok) {
-            toast.success(`Review requested for ${selectedEmp}`);
-            loadAssessments();
+        if (!res.ok) {
+            const d = await res.json();
+            throw new Error(d.detail || "Request failed");
         }
-    } catch (e) { toast.error("Request failed"); }
+        toast.success(`Review requested for ${selectedEmp}`);
+        loadAssessments();
+    } catch (e) { toast.error(e.message || "Request failed"); }
   };
 
   // True when the admin is viewing their own employee record (personal view via switch)

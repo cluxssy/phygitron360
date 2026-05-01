@@ -20,37 +20,46 @@ import {
 import { toast } from 'react-hot-toast';
 
 export default function DeployDashboard() {
-  const { user, hasRole } = useAuth();
+  const { user, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
 
   const params = new URLSearchParams(location.search);
-  
-  const isL2 = hasRole(['org_admin', 'super_admin']);
-  const isL3 = hasRole('manager');
 
+  // ── PBAC gates (replaces hasRole() checks) ──────────────────────────────
+  const canViewAdminDash  = hasPermission('deploy.dashboard.view_admin');
+  const canViewTeam       = hasPermission('deploy.employees.view');
+  const canViewAttTeam    = hasPermission('deploy.attendance.view_team');
+  const canManagePerf     = hasPermission('deploy.performance.manage');
+  const canViewPerf       = hasPermission('deploy.performance.view');
+  const canViewAssets     = hasPermission('deploy.assets.view');
+  const canManageOnboard  = hasPermission('deploy.onboarding.manage');
+  const canViewOnboard    = hasPermission('deploy.onboarding.view');
+  const canManageTraining = hasPermission('deploy.training.manage');
+  const canViewTraining   = hasPermission('deploy.training.view');
+  const canManageUsers    = hasPermission('admin.users.manage');
+
+  // Default tab based on highest permission level
   let defaultTab = 'my-dashboard';
-  if (isL2) defaultTab = 'dashboard';
-  else if (isL3) defaultTab = 'team';
-  
-  const currentTab = params.get('tab') || defaultTab;
+  if (canViewAdminDash) defaultTab = 'dashboard';
+  else if (canViewTeam)  defaultTab = 'team';
 
+  const currentTab = params.get('tab') || defaultTab;
   const setTab = (tab) => navigate(`/deploy?tab=${tab}`);
 
   useEffect(() => {
     const fetchGlobalData = async () => {
       try {
-        if (isL2 || isL3) {
-            const res = await fetch('/api/dashboard/stats', { credentials: 'include' });
-            const data = await res.json();
-            setStats(data?.counts);
+        if (canViewAdminDash) {
+          const res = await fetch('/api/dashboard/stats', { credentials: 'include' });
+          const data = await res.json();
+          setStats(data?.counts);
         }
       } catch {}
     };
     fetchGlobalData();
-  }, [isL2, user]);
-
+  }, [canViewAdminDash, user]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -61,18 +70,16 @@ export default function DeployDashboard() {
             Deploy // Enterprise Personnel Matrix
           </p>
           <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic">
-            {currentTab.startsWith('my-') || currentTab === 'leave' && !isL2 && !isL3
-                ? 'Dashboard' 
-                : isL2 ? 'HRMS Control Node' 
-                : isL3 ? 'Manager Command' 
-                : 'Dashboard'}
+            {canViewAdminDash ? 'HRMS Control Node'
+              : canViewTeam   ? 'Manager Command'
+              : 'Dashboard'}
           </h1>
         </div>
-        {(isL2 || isL3) && stats && (
+        {canViewAdminDash && stats && (
           <div className="flex gap-4">
             {[
               { label: 'Active', value: stats.active, color: '#10B981' },
-              { label: 'Total', value: stats.total, color: '#CC97FF' },
+              { label: 'Total', value: stats.total,  color: '#CC97FF' },
               { label: 'Exited', value: stats.exited, color: '#F43F5E' },
             ].map((s, i) => (
               <div key={i} className="glass-panel px-6 py-4 text-center border-white/5">
@@ -84,29 +91,30 @@ export default function DeployDashboard() {
         )}
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content — every render is gated by hasPermission() */}
       <div className="flex-1 min-h-0">
-        {currentTab === 'dashboard' && (isL2 || isL3) && <DeployAnalytics />}
-        {currentTab === 'team' && (isL2 || isL3) && <EmployeeDirectory />}
-        {currentTab === 'profile' && (isL2 || isL3) && (
-          <EmployeeProfileFull 
-            employeeCode={params.get('code')} 
-            onBack={() => setTab('team')} 
+        {currentTab === 'dashboard'      && canViewAdminDash  && <DeployAnalytics />}
+        {currentTab === 'team'           && canViewTeam        && <EmployeeDirectory />}
+        {currentTab === 'profile'        && canViewTeam        && (
+          <EmployeeProfileFull
+            employeeCode={params.get('code')}
+            onBack={() => setTab('team')}
           />
         )}
-        {currentTab === 'attendance' && <AttendancePanel mode="admin" />}
-        {currentTab === 'my-attendance' && <AttendancePanel mode="employee" />}
-        {currentTab === 'leave' && <AttendancePanel mode="admin" />}
-        {currentTab === 'my-leave' && <AttendancePanel mode="employee" />}
-        {currentTab === 'performance' && <PerformancePanel isAdmin={isL2 || isL3} />}
-        {currentTab === 'my-performance' && <PerformancePanel isAdmin={false} />}
-        {currentTab === 'training' && (isL2 || isL3) && <TrainingPanel />}
-        {currentTab === 'allocations' && (isL2 || isL3) && <AssetsPanel />}
-        {currentTab === 'onboard' && (isL2 || isL3) && <OnboardingPanel />}
-        {currentTab === 'admin' && isL2 && <AdminPanel />}
-        {currentTab === 'my-dashboard' && <EmployeeDashboard />}
-        {currentTab === 'my-profile' && <MyProfile />}
+        {currentTab === 'attendance'     && canViewAttTeam     && <AttendancePanel mode="admin" />}
+        {currentTab === 'my-attendance'  && <AttendancePanel mode="employee" />}
+        {currentTab === 'leave'          && canViewAttTeam     && <AttendancePanel mode="admin" />}
+        {currentTab === 'my-leave'       && <AttendancePanel mode="employee" />}
+        {currentTab === 'performance'    && canManagePerf      && <PerformancePanel isAdmin={true} />}
+        {currentTab === 'my-performance' && canViewPerf        && <PerformancePanel isAdmin={false} />}
+        {currentTab === 'training'       && canViewTraining    && <TrainingPanel isAdmin={canManageTraining} />}
+        {currentTab === 'allocations'    && canViewAssets      && <AssetsPanel />}
+        {currentTab === 'onboard'        && canViewOnboard     && <OnboardingPanel isAdmin={canManageOnboard} />}
+        {currentTab === 'admin'          && canManageUsers     && <AdminPanel />}
+        {currentTab === 'my-dashboard'   && <EmployeeDashboard />}
+        {currentTab === 'my-profile'     && <MyProfile />}
       </div>
     </div>
   );
 }
+

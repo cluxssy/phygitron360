@@ -36,6 +36,7 @@ class P:
     VIEW_REPORTS          = "view_reports"
     MANAGE_OPS            = "manage_ops"
     ADMIN_USERS_MANAGE    = "admin.users.manage"
+    ADMIN_ROLES_MANAGE    = "admin.roles.manage"  # Manage role-level permission overrides
 
     # ── Deploy: Employees ────────────────────────────────────────────────────
     DEPLOY_EMP_VIEW       = "deploy.employees.view"
@@ -106,7 +107,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.MODULE_SOURCE_ACCESS, P.MODULE_FORGE_ACCESS,
         P.MODULE_VERIFY_ACCESS, P.MODULE_DEPLOY_ACCESS,
         # Admin
-        P.VIEW_REPORTS, P.MANAGE_OPS, P.ADMIN_USERS_MANAGE,
+        P.VIEW_REPORTS, P.MANAGE_OPS, P.ADMIN_USERS_MANAGE, P.ADMIN_ROLES_MANAGE,
         # Deploy: Employees
         P.DEPLOY_EMP_VIEW, P.DEPLOY_EMP_CREATE, P.DEPLOY_EMP_EDIT,
         P.DEPLOY_EMP_DELETE, P.DEPLOY_EMP_OFFBOARD,
@@ -162,12 +163,12 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
     "employee": [
         P.MODULE_FORGE_ACCESS, P.MODULE_DEPLOY_ACCESS,
         # Deploy: personal access only
-        P.DEPLOY_EMP_VIEW,
-        P.DEPLOY_ATT_PERSONAL,
-        P.DEPLOY_ASSESS_VIEW,
-        P.DEPLOY_TRAIN_VIEW,
-        P.DEPLOY_PERF_VIEW,
-        # Verify: take tests
+        P.DEPLOY_EMP_VIEW,           # view own profile in directory lookup
+        P.DEPLOY_ATT_PERSONAL,       # clock in/out, view own history
+        P.DEPLOY_PERF_VIEW,          # view own KRA scorecard
+        P.DEPLOY_ASSESS_VIEW,        # view / submit assigned assessments
+        P.DEPLOY_TRAIN_VIEW,         # view own training assignments
+        # Verify: take tests assigned to them
         P.VERIFY_ASSESS_VIEW,
         # Forge: learn
         P.FORGE_COURSES_VIEW, P.FORGE_ENROLL,

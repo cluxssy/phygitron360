@@ -116,6 +116,7 @@ export default function Layout({ children }) {
         { label: 'Dashboard', icon: LayoutDashboard, search: '?tab=my-dashboard', default: true, perm: 'module.deploy.access' },
         { label: 'My Profile', icon: User, search: '?tab=my-profile', default: false, perm: 'module.deploy.access' },
         { label: 'My Attendance', icon: Clock, search: '?tab=my-attendance', default: false, perm: 'deploy.attendance.view_personal' },
+        { label: 'My Performance', icon: BarChart3, search: '?tab=my-performance', default: false, perm: 'deploy.performance.view' },
       ]
     },
   ];

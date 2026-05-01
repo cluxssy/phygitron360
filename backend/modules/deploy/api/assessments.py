@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/assessments", tags=["Performance Metrics"])
 def get_service(user=Depends(get_current_user)):
     return AssessmentService(tenant_id=user.get('tenant_id', 'public'))
 
-@router.get("/{employee_code}/{year}", dependencies=[Depends(require_permission("deploy.assessments.view"))])
+@router.get("/{employee_code}/{year}", dependencies=[Depends(require_permission("deploy.performance.view"))])
 def get_assessments(employee_code: str, year: int, user=Depends(get_current_user), service: AssessmentService = Depends(get_service)):
     try:
         # service handles authorization (will be updated soon to use perms object)
@@ -18,7 +18,7 @@ def get_assessments(employee_code: str, year: int, user=Depends(get_current_user
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/save")
+@router.post("/save", dependencies=[Depends(require_permission("deploy.performance.view"))])
 def save_assessment(req: SaveAssessmentRequest, user=Depends(get_current_user), service: AssessmentService = Depends(get_service)):
     try:
         return service.save_assessment(req, user)

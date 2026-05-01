@@ -35,9 +35,13 @@ export default function AttendancePanel({ mode }) {
   const fetchSummary = async () => {
       try {
           const res = await fetch(`/api/attendance/admin/summary?year=${selectedYear}&month=${selectedMonth}`, { credentials: 'include' });
+          if (!res.ok) {
+              const d = await res.json();
+              throw new Error(d.detail || 'Failed to load summary');
+          }
           const data = await res.json();
           setAttendanceSummary(Array.isArray(data) ? data : []);
-      } catch { toast.error('Failed to load summary'); }
+      } catch (e) { toast.error(e.message || 'Failed to load summary'); }
   };
 
   const loadData = async () => {
@@ -64,8 +68,8 @@ export default function AttendancePanel({ mode }) {
         setAllLeaves(Array.isArray(al) ? al : []);
         setDailyLog(Array.isArray(dl) ? dl : []);
       }
-    } catch { 
-        toast.error('Failed to load attendance data'); 
+    } catch (e) { 
+        toast.error(e.message || 'Failed to load attendance data'); 
     } finally { 
         setLoading(false); 
     }
