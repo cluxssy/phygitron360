@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 from backend.modules.deploy.repositories.attendance_repo import AttendanceRepository
 from backend.modules.deploy.services.notification_service import add_notification
 from backend.modules.deploy.schemas.attendance import (
-    ClockOutRequest, AttendanceStatus, LeaveBalance, LeaveRequest
+    ClockOutRequest, AttendanceStatus, LeaveBalance, LeaveRequest, EditAttendanceRequest
 )
 
 class AttendanceService:
@@ -52,6 +52,7 @@ class AttendanceService:
         return {"success": True, "message": "Clocked out successfully"}
 
     def get_history(self, employee_code: str):
+        # 1. Fetch Attendance History
         history = self.repo.get_history(employee_code, tenant_id=self.tenant_id)
         for log in history:
             clock_in = log.get('clock_in')
@@ -71,13 +72,33 @@ class AttendanceService:
                     else:
                         log['status'] = 'Absent'
                 except:
-                    pass # Keep the default
+                    log['status'] = 'Present'
             elif clock_in:
                  today_str = datetime.now().strftime('%Y-%m-%d')
                  if log['date'] != today_str:
                      log['status'] = 'Absent'
+                 else:
+                     log['status'] = 'Active'
+            else:
+                 log['status'] = 'Absent'
 
-        return history
+        # 2. Fetch and Merge Approved Leaves
+        leaves = self.repo.get_employee_leaves(employee_code, self.tenant_id)
+        for l in leaves:
+            if l['status'] == 'Approved':
+                # Note: This simple merge adds leave records to the list. 
+                # In a more advanced view, we might merge them by date.
+                history.append({
+                    "date": l['start_date'],
+                    "clock_in": "00:00:00",
+                    "clock_out": "00:00:00",
+                    "status": "Leave",
+                    "work_log": f"Approved Leave: {l['reason']}"
+                })
+        
+        # Re-sort by date
+        history.sort(key=lambda x: x['date'], reverse=True)
+        return history[:30]
 
     def get_leave_balance(self, employee_code: str) -> Dict[str, Any]:
         year = datetime.now().year
@@ -90,9 +111,7 @@ class AttendanceService:
         return balance
 
     def apply_leave(self, employee_code: str, req: LeaveRequest, user_role: str = 'Employee'):
-        balance = self.get_leave_balance(employee_code) # Ensures balance record exists
-        
-        # Calculate days safely
+        # 1. Date Validation
         try:
             d1 = datetime.strptime(req.start_date, '%Y-%m-%d')
             d2 = datetime.strptime(req.end_date, '%Y-%m-%d')
@@ -102,38 +121,29 @@ class AttendanceService:
         if d2 < d1:
             raise ValueError("End date cannot be earlier than the start date.")
             
-        # Optional: Prevent applying for past leaves (Admins bypass)
         if d1.date() < datetime.now().date() and user_role not in ['org_admin', 'super_admin']:
              raise ValueError("You cannot apply for leaves in the past.")
 
         days = (d2 - d1).days + 1
-            
-        # Validate Balance
-        if req.leave_type.lower() == 'sick':
-            if (balance['sick_used'] + days) > balance['sick_total']:
-                raise ValueError("Insufficient Sick Leave balance")
-        elif req.leave_type.lower() == 'casual':
-             if (balance['casual_used'] + days) > balance['casual_total']:
-                raise ValueError("Insufficient Casual Leave balance")
-        elif req.leave_type.lower() == 'privilege':
-             if (balance['privilege_used'] + days) > balance['privilege_total']:
-                raise ValueError("Insufficient Privilege Leave balance")
         
+        # 2. Status Determination
         status = 'Approved' if user_role in ['org_admin', 'super_admin'] else 'Pending'
         msg = "Leave auto-approved (Admin override)" if status == 'Approved' else "Leave application submitted successfully"
         
-        self.repo.create_leave_request(employee_code, req.start_date, req.end_date, req.leave_type, req.reason, status, self.tenant_id)
+        # 3. Create Request
+        self.repo.create_leave_request(employee_code, req.start_date, req.end_date, "Leave", req.reason, status, self.tenant_id)
         
+        # 4. Immediate Balance Update for Admin
         if status == 'Approved':
-            col_map = {'Sick': 'sick_used', 'Casual': 'casual_used', 'Privilege': 'privilege_used'}
-            col = col_map.get(req.leave_type)
-            if col:
-                self.repo.update_leave_balance(employee_code, col, days, self.tenant_id)
+            balance = self.get_leave_balance(employee_code)
+            available = max(0, balance['total_leaves'] - balance['used_leaves'])
+            used_delta = min(days, available)
+            extended_delta = max(0, days - available)
+            self.repo.update_leave_balance(employee_code, used_delta, extended_delta, self.tenant_id)
         else:
-            # Notify Admin/HR about pending leave
             add_notification(
                 title="New Leave Request",
-                message=f"Employee {employee_code} has applied for {days} days of {req.leave_type} leave.",
+                message=f"Employee {employee_code} has applied for {days} days of leave.",
                 n_type="AdminAlert",
                 tenant_id=self.tenant_id
             )
@@ -167,19 +177,21 @@ class AttendanceService:
         self.repo.update_leave_status(leave_id, action, reason, self.tenant_id)
         
         if action == 'Approved':
-            # Calculate days safely
+            # Calculate days
             try:
                 d1 = datetime.strptime(leave['start_date'], '%Y-%m-%d')
                 d2 = datetime.strptime(leave['end_date'], '%Y-%m-%d')
                 days = (d2 - d1).days + 1
-            except ValueError:
-                days = 0 # Failsafe
+            except:
+                days = 0
 
-            col_map = {'Sick': 'sick_used', 'Casual': 'casual_used', 'Privilege': 'privilege_used'}
-            col = col_map.get(leave['leave_type'])
+            # Calculate and Apply Balance Logic
+            balance = self.get_leave_balance(leave['employee_code'])
+            available = max(0, balance['total_leaves'] - balance['used_leaves'])
+            used_delta = min(days, available)
+            extended_delta = max(0, days - available)
             
-            if col:
-                self.repo.update_leave_balance(leave['employee_code'], col, days, self.tenant_id)
+            self.repo.update_leave_balance(leave['employee_code'], used_delta, extended_delta, self.tenant_id)
         
         # Mark the original request notification as read
         from backend.modules.deploy.services.notification_service import NotificationService
@@ -229,9 +241,9 @@ class AttendanceService:
                     
                     duration_hours = (t_out - t_in).total_seconds() / 3600.0
                     
-                    if duration_hours >= 8.0:
+                    if duration_hours >= 9.0:
                         att_map[e_code][d_str] = 'Present'
-                    elif duration_hours >= 0.01: # at least 36 seconds
+                    elif duration_hours >= 4.5:
                         att_map[e_code][d_str] = 'Half Day'
                     else:
                         att_map[e_code][d_str] = 'Absent'
@@ -282,7 +294,10 @@ class AttendanceService:
                 date_str = f"{year}-{month:02d}-{day:02d}"
                 status = 'Absent'
                 
-                if code in att_map and date_str in att_map[code]:
+                if code in leave_map and date_str in leave_map[code]:
+                    status = 'Leave'
+                    leave_count += 1
+                elif code in att_map and date_str in att_map[code]:
                     status = att_map[code][date_str]
                     if status == 'Present' or status == 'Active':
                         present_count += 1
@@ -290,9 +305,6 @@ class AttendanceService:
                         half_day_count += 1
                     elif status == 'Absent':
                         absent_count += 1
-                elif code in leave_map and date_str in leave_map[code]:
-                    status = 'Leave'
-                    leave_count += 1
                 else:
                     try:
                         dt = datetime(year, month, day)
@@ -321,3 +333,39 @@ class AttendanceService:
             })
             
         return summary
+
+    def get_active_employees(self):
+        return self.repo.get_all_active_employees_basic(self.tenant_id)
+
+    def edit_attendance(self, req: EditAttendanceRequest):
+        # 1. Determine Status based on duration
+        status = 'Absent'
+        if req.clock_in and req.clock_out:
+            try:
+                fmt = '%H:%M:%S'
+                t_in = datetime.strptime(req.clock_in, fmt)
+                t_out = datetime.strptime(req.clock_out, fmt)
+                duration_hours = (t_out - t_in).total_seconds() / 3600.0
+                
+                if duration_hours >= 9.0:
+                    status = 'Present'
+                elif duration_hours >= 4.5:
+                    status = 'Half Day'
+                else:
+                    status = 'Absent'
+            except:
+                status = 'Present' # Fallback
+        elif req.clock_in:
+            status = 'Present' # Currently active or single entry
+        
+        # 2. Update via Repo
+        self.repo.upsert_attendance(
+            req.employee_code, 
+            req.date, 
+            req.clock_in, 
+            req.clock_out, 
+            req.work_log, 
+            status, 
+            self.tenant_id
+        )
+        return {"success": True, "message": "Attendance record synchronized", "status": status}

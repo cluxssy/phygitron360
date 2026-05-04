@@ -4,6 +4,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import { Activity, Download, Save, Send, CheckCircle, Plus, AlertCircle, BarChart3, TrendingUp } from 'lucide-react';
 
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+const HALFYEARLY = ['H1', 'H2'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const KRA_TEMPLATE = [
@@ -24,7 +25,7 @@ const KRA_TEMPLATE = [
 ];
 
 const DEFAULT_ENTRIES = KRA_TEMPLATE.map(k => ({
-  ...k, self_score: 5, manager_score: 5, score: 5, employee_comment: '', manager_comment: ''
+  ...k, self_score: null, manager_score: null, score: 0, employee_comment: '', manager_comment: ''
 }));
 
 const STATUS_CONFIG = {
@@ -41,13 +42,13 @@ export default function PerformancePanel({ isAdmin }) {
   const [selectedEmp, setSelectedEmp] = useState(user?.employee_code || '');
   const [year, setYear] = useState(new Date().getFullYear());
   const [assessments, setAssessments] = useState([]);
-  const [periodType, setPeriodType] = useState('Quarterly'); // 'Quarterly' or 'Monthly'
-  const [activePeriod, setActivePeriod] = useState(periodType === 'Quarterly' ? 'Q1' : 'Jan');
+  const [periodType, setPeriodType] = useState('Quarterly'); // 'Quarterly', 'Half-Yearly' or 'Monthly'
+  const [activePeriod, setActivePeriod] = useState(periodType === 'Quarterly' ? 'Q1' : periodType === 'Half-Yearly' ? 'H1' : 'Jan');
   const [localData, setLocalData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const PERIODS = periodType === 'Quarterly' ? QUARTERS : MONTHS;
+  const PERIODS = periodType === 'Quarterly' ? QUARTERS : periodType === 'Half-Yearly' ? HALFYEARLY : MONTHS;
 
   // Load employee list for admin
   useEffect(() => {
@@ -154,9 +155,17 @@ export default function PerformancePanel({ isAdmin }) {
       return updated_entry;
     })};
 
-    const total = updated.entries.reduce((s, e) => s + (e.manager_score || e.self_score || 0), 0);
-    updated.total_score = total;
-    updated.percentage = updated.entries.length ? Math.round((total / (updated.entries.length * 10)) * 100) : 0;
+    // 1. Calculate Self Metrics
+    const selfEntries = updated.entries.filter(e => e.self_score !== null && e.self_score > 0);
+    const selfTotal = updated.entries.reduce((s, e) => s + (e.self_score || 0), 0);
+    updated.self_percentage = selfEntries.length ? Math.round((selfTotal / (selfEntries.length * 10)) * 100) : 0;
+    
+    // 2. Calculate Manager Metrics
+    const managerEntries = updated.entries.filter(e => e.manager_score !== null && e.manager_score > 0);
+    const managerTotal = updated.entries.reduce((s, e) => s + (e.manager_score || e.self_score || 0), 0);
+    updated.total_score = managerTotal;
+    updated.percentage = managerEntries.length ? Math.round((managerTotal / (managerEntries.length * 10)) * 100) : 0;
+
     setLocalData(updated);
   };
 
@@ -243,10 +252,10 @@ export default function PerformancePanel({ isAdmin }) {
                 </button>
             )}
             <div className="flex bg-white/5 rounded-xl p-1">
-                {['Quarterly', 'Monthly'].map(t => (
+                {['Quarterly', 'Half-Yearly', 'Monthly'].map(t => (
                     <button 
                         key={t}
-                        onClick={() => { setPeriodType(t); setActivePeriod(t === 'Quarterly' ? 'Q1' : 'Jan'); }}
+                        onClick={() => { setPeriodType(t); setActivePeriod(t === 'Quarterly' ? 'Q1' : t === 'Half-Yearly' ? 'H1' : 'Jan'); }}
                         className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${periodType === t ? 'bg-primary text-black' : 'text-white/40 hover:text-white'}`}
                     >
                         {t}
@@ -284,7 +293,7 @@ export default function PerformancePanel({ isAdmin }) {
       </div>
 
       {/* Period Overview Stats */}
-      <div className={`grid gap-4 ${periodType === 'Quarterly' ? 'grid-cols-4' : 'grid-cols-6 md:grid-cols-12'}`}>
+      <div className={`grid gap-4 ${periodType === 'Quarterly' ? 'grid-cols-4' : periodType === 'Half-Yearly' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-6 md:grid-cols-12'}`}>
         {PERIODS.map(p => {
           const ast = periodStatus(p);
           return (
@@ -375,16 +384,22 @@ export default function PerformancePanel({ isAdmin }) {
                 {localData.status || 'Draft'}
               </span>
             </div>
-            <div className="text-right">
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-1">Composite Score</p>
-              <p className="text-5xl font-display font-black" style={{
-                color: localData.percentage >= 80 ? '#10B981' : localData.percentage >= 60 ? '#F59E0B' : '#F43F5E'
-              }}>
-                {localData.percentage ?? 0}%
-              </p>
-              <p className="text-[10px] text-white/20 uppercase tracking-widest font-black">
-                {localData.total_score ?? 0} / {(localData.entries?.length || 0) * 10} pts
-              </p>
+            <div className="flex gap-8 text-right">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-primary/40 mb-1">Self Assessment</p>
+                <p className="text-3xl font-display font-black text-primary/60">{localData.self_percentage ?? 0}%</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500/40 mb-1">Manager Review</p>
+                <p className="text-5xl font-display font-black" style={{
+                  color: localData.percentage >= 80 ? '#10B981' : localData.percentage >= 60 ? '#F59E0B' : '#F43F5E'
+                }}>
+                  {localData.percentage ?? 0}%
+                </p>
+                <p className="text-[10px] text-white/20 uppercase tracking-widest font-black">
+                  {localData.total_score ?? 0} / {(localData.entries?.filter(e => e.manager_score !== null && e.manager_score > 0).length || 0) * 10} pts
+                </p>
+              </div>
             </div>
           </div>
 
@@ -413,28 +428,28 @@ export default function PerformancePanel({ isAdmin }) {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex gap-1">
-                        {[1, 5, 10].map(s => (
+                        {[0, 1, 5, 10].map(s => (
                           <button
                             key={s}
                             onClick={() => handleEntryChange(idx, 'self_score', s)}
                             disabled={isAdmin || !canEmployeeEdit}
-                            className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${entry.self_score === s ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'glass-panel border-white/5 text-white/20 hover:text-white/40'}`}
+                            className={`w-8 h-8 rounded-lg text-[9px] font-black transition-all ${entry.self_score === s ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'glass-panel border-white/5 text-white/20 hover:text-white/40'}`}
                           >
-                            {s}
+                            {s === 0 ? 'N/A' : s}
                           </button>
                         ))}
                       </div>
                     </td>
                     <td className="px-4 py-4">
                        <div className="flex gap-1">
-                        {[1, 5, 10].map(s => (
+                        {[0, 1, 5, 10].map(s => (
                           <button
                             key={s}
                             onClick={() => handleEntryChange(idx, 'manager_score', s)}
                             disabled={!canManagerEdit}
-                            className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${entry.manager_score === s ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'glass-panel border-white/5 text-white/20 hover:text-white/40'}`}
+                            className={`w-8 h-8 rounded-lg text-[9px] font-black transition-all ${entry.manager_score === s ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'glass-panel border-white/5 text-white/20 hover:text-white/40'}`}
                           >
-                            {s}
+                            {s === 0 ? 'N/A' : s}
                           </button>
                         ))}
                       </div>

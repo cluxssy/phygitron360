@@ -700,12 +700,9 @@ def create_tables(schema_name='public'):
                 id SERIAL PRIMARY KEY,
                 employee_code TEXT NOT NULL UNIQUE REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 year INTEGER NOT NULL,
-                sick_total INTEGER DEFAULT 10,
-                sick_used INTEGER DEFAULT 0,
-                casual_total INTEGER DEFAULT 12,
-                casual_used INTEGER DEFAULT 0,
-                privilege_total INTEGER DEFAULT 15,
-                privilege_used INTEGER DEFAULT 0
+                total_leaves INTEGER DEFAULT 15,
+                used_leaves INTEGER DEFAULT 0,
+                extended_leaves INTEGER DEFAULT 0
             )
         ''')
 

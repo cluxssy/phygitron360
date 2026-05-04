@@ -61,9 +61,14 @@ class AssessmentService:
                 entry['score'] = entry.get('manager_score') or entry.get('self_score') or 0
 
         # Calculate totals
-        total = sum(e.get('score', 0) for e in data['entries'])
-        data['total_score'] = total
-        data['percentage'] = round((total / (len(data['entries']) * 10)) * 100) if data['entries'] else 0
+        self_total = sum(e.get('self_score', 0) if e.get('self_score') is not None else 0 for e in data['entries'])
+        self_applicable = len([e for e in data['entries'] if e.get('self_score') is not None and e.get('self_score') > 0])
+        data['self_percentage'] = round((self_total / (self_applicable * 10)) * 100) if self_applicable > 0 else 0
+
+        manager_total = sum(e.get('score', 0) for e in data['entries'])
+        manager_applicable = len([e for e in data['entries'] if e.get('manager_score') is not None and e.get('manager_score') > 0])
+        data['total_score'] = manager_total
+        data['percentage'] = round((manager_total / (manager_applicable * 10)) * 100) if manager_applicable > 0 else 0
 
         result = self.repo.save_assessment(data, self.tenant_id)
         
@@ -115,7 +120,7 @@ class AssessmentService:
         entries = [
             {
                 "category": cat, "subcategory": sub,
-                "self_score": 0, "manager_score": 0, "score": 0,
+                "self_score": None, "manager_score": None, "score": 0,
                 "employee_comment": "", "manager_comment": ""
             } for cat, sub in template_subcategories
         ]
@@ -128,7 +133,8 @@ class AssessmentService:
             "status": "Requested",
             "entries": entries,
             "total_score": 0,
-            "percentage": 0
+            "percentage": 0,
+            "self_percentage": 0
         }
         self.repo.save_assessment(data, self.tenant_id)
         return {"success": True, "message": "Review protocol initiated"}
