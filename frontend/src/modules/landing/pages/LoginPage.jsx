@@ -21,6 +21,10 @@ export default function LoginPage() {
       }
       return 'public';
     }
+    
+    if (hostname.includes('amazonaws.com')) {
+      return 'public';
+    }
 
     if (parts.length > 2 && parts[0] !== 'www') return parts[0];
     return 'public';
