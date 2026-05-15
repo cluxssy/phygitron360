@@ -53,7 +53,5 @@ frontend/dist/
 frontend/out/
 frontend/.next/
 
-# Project Specific
 temp/
-backend/data/
 CONFIDENTIAL/
