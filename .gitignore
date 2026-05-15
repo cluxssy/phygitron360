@@ -11,7 +11,14 @@ __pycache__/
 venv/
 .venv/
 env/
+.env
 backend/.env
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
 
 # MacOS
 .DS_Store
@@ -39,3 +46,4 @@ frontend/out/
 frontend/.next/
 
 temp/
+CONFIDENTIAL/
