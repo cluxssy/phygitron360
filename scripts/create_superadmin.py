@@ -21,7 +21,7 @@ def create_superadmin(username, password):
                 return
             
             # Create user
-            auth_service.create_user(username, password, role='Superadmin')
+            auth_service.create_user(username, password, role='super_admin')
             print(f"Successfully created Superadmin user: {username}")
     except Exception as e:
         print(f"Error creating superadmin: {e}")

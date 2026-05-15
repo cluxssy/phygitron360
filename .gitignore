@@ -1,41 +1,59 @@
-# Node.js
-node_modules/
-dist/
-dist-ssr/
-*.local
-
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
 venv/
 .venv/
 env/
+.env
 backend/.env
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
 
 # MacOS
 .DS_Store
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-*.log
-
-# Databases
-*.sqlite3
-*.db
-
 # IDEs
 .vscode/
 .idea/
-*.swp
-*.swo
+
+# Logs
+*.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/out/
+frontend/.next/
 
 # Project Specific
 temp/
 backend/data/
-frontend/out/
-frontend/.next/
-
-temp/
+CONFIDENTIAL/
