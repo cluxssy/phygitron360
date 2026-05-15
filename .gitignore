@@ -1,13 +1,30 @@
-# Node.js
-node_modules/
-dist/
-dist-ssr/
-*.local
-
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
 venv/
 .venv/
 env/
@@ -23,25 +40,16 @@ backend/.env
 # MacOS
 .DS_Store
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-*.log
-
-# Databases
-*.sqlite3
-*.db
-
 # IDEs
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# Project Specific
-temp/
-backend/data/
+# Logs
+*.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
 frontend/out/
 frontend/.next/
 
