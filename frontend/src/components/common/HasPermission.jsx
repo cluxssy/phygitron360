@@ -18,4 +18,8 @@ const HasPermission = ({ permission, children, fallback = null }) => {
     return fallback ? <>{fallback}</> : null;
 };
 
+<<<<<<< HEAD
 export default HasPermission;
+=======
+export default HasPermission;
+>>>>>>> dev
