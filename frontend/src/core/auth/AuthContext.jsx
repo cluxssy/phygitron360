@@ -69,7 +69,7 @@ export function AuthProvider({ children }) {
                 setMustChange(true);
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         } else {
           setUser(null);
         }
@@ -80,7 +80,6 @@ export function AuthProvider({ children }) {
         setLoading(false);
       }
     };
-
     checkAuth();
   }, []);
 

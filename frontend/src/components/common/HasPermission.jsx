@@ -10,11 +10,11 @@ import { usePermissions } from '../../core/auth/usePermissions';
  */
 const HasPermission = ({ permission, children, fallback = null }) => {
     const { hasPermission } = usePermissions();
-    
+
     if (hasPermission(permission)) {
         return <>{children}</>;
     }
-    
+
     return fallback ? <>{fallback}</> : null;
 };
 

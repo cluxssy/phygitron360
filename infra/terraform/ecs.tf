@@ -67,7 +67,16 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "DB_USER", value = var.db_username },
         { name = "DB_PASSWORD", value = var.db_password },
         { name = "SUPERADMIN_EMAIL", value = var.superadmin_email },
-        { name = "SUPERADMIN_PASSWORD", value = var.superadmin_password }
+        { name = "SUPERADMIN_PASSWORD", value = var.superadmin_password },
+        { name = "SECRET_KEY", value = var.secret_key },
+        { name = "SMTP_HOST", value = var.smtp_host },
+        { name = "SMTP_PORT", value = var.smtp_port },
+        { name = "SMTP_USER", value = var.smtp_user },
+        { name = "SMTP_PASS", value = var.smtp_pass },
+        { name = "GOOGLE_API_KEY", value = var.google_api_key },
+        { name = "OPENAI_API_KEY", value = var.openai_api_key },
+        { name = "GROQ_API_KEY", value = var.groq_api_key },
+        { name = "APP_BASE_URL", value = "http://${aws_lb.main.dns_name}" }
       ]
       logConfiguration = {
         logDriver = "awslogs"

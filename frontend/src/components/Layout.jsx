@@ -19,15 +19,14 @@ export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, hasRole, hasPermission, refreshUser } = useAuth();
-
   const [notifications, setNotifications] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [deployView, setDeployView] = useState('employee');
 
   // ✅ Detect admin dashboard (LIGHT MODE)
-const isAdminDashboard =
-  location.pathname.startsWith('/admin') ||
-  location.pathname.startsWith('/deploy');
+  const isAdminDashboard =
+    location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/deploy');
   const canSwitchView = hasRole(['org_admin', 'manager', 'super_admin']);
   const hasAdminClearance = hasPermission('deploy.dashboard.view_admin');
 
@@ -42,7 +41,7 @@ const isAdminDashboard =
             const data = await res.json();
             setNotifications(data || []);
           }
-        } catch {}
+        } catch { }
       };
 
       fetchNotifs();
@@ -56,7 +55,7 @@ const isAdminDashboard =
         credentials: 'include',
       });
       setNotifications(prev => prev.filter(n => n.id !== id));
-    } catch {}
+    } catch { }
   };
 
   const markAllRead = async () => {
@@ -66,10 +65,10 @@ const isAdminDashboard =
         credentials: 'include',
       });
       setNotifications([]);
-    } catch {}
+    } catch { }
   };
 
-  
+
 
   // ===== MODULE CONFIG (UNCHANGED LOGIC) =====
   const allModules = [
@@ -131,54 +130,54 @@ const isAdminDashboard =
       options:
         deployView === 'admin'
           ? [
-              { label: 'Analytics', icon: LayoutDashboard, search: '?tab=dashboard', default: true },
-              { label: 'Personnel', icon: Users, search: '?tab=team' },
-              { label: 'Assets', icon: Package, search: '?tab=allocations' },
-            ]
+            { label: 'Analytics', icon: LayoutDashboard, search: '?tab=dashboard', default: true },
+            { label: 'Personnel', icon: Users, search: '?tab=team' },
+            { label: 'Assets', icon: Package, search: '?tab=allocations' },
+          ]
           : [
-              { label: 'Dashboard', icon: LayoutDashboard, search: '?tab=my-dashboard', default: true },
-              { label: 'My Profile', icon: User, search: '?tab=my-profile' },
-              { label: 'Attendance', icon: Clock, search: '?tab=my-attendance' },
-            ],
+            { label: 'Dashboard', icon: LayoutDashboard, search: '?tab=my-dashboard', default: true },
+            { label: 'My Profile', icon: User, search: '?tab=my-profile' },
+            { label: 'Attendance', icon: Clock, search: '?tab=my-attendance' },
+          ],
     },
   ];
 
   const modules = [
-  {
-    id: 'dashboard',
-    name: 'Dashboard',
-    path: '/admin',
-    icon: LayoutDashboard,
-  },
+    {
+      id: 'dashboard',
+      name: 'Dashboard',
+      path: '/admin',
+      icon: LayoutDashboard,
+    },
 
-  ...allModules
-    .filter(m =>
-      m.id !== 'dashboard' &&
-      hasPermission(m.perm)
-    )
-    .map(m => ({
-      id: m.id,
+    ...allModules
+      .filter(m =>
+        m.id !== 'dashboard' &&
+        hasPermission(m.perm)
+      )
+      .map(m => ({
+        id: m.id,
 
-      name:
-        m.id === 'source'
-          ? 'Talent Hub'
-          : m.id === 'forge'
-          ? 'Learning Hub'
-          : m.id === 'verify'
-          ? 'Assessment Hub'
-          : m.id === 'deploy'
-          ? 'Employee Hub'
-          : m.name,
+        name:
+          m.id === 'source'
+            ? 'Talent Hub'
+            : m.id === 'forge'
+              ? 'Learning Hub'
+              : m.id === 'verify'
+                ? 'Assessment Hub'
+                : m.id === 'deploy'
+                  ? 'Employee Hub'
+                  : m.name,
 
-      path: m.path,
+        path: m.path,
 
-      // THIS WAS MISSING
-      icon: m.icon,
+        // THIS WAS MISSING
+        icon: m.icon,
 
-      // KEEP OPTIONS
-      options: m.options,
-    })),
-];
+        // KEEP OPTIONS
+        options: m.options,
+      })),
+  ];
 
   const activeModule =
     modules.find(m => location.pathname.startsWith(m.path)) || modules[0];
@@ -189,9 +188,8 @@ const isAdminDashboard =
 
   return (
     <div
-      className={`flex h-screen w-full ${
-        isAdminDashboard ? 'bg-white text-black' : 'bg-[#040812] text-white'
-      }`}
+      className={`flex h-screen w-full ${isAdminDashboard ? 'bg-white text-black' : 'bg-[#040812] text-white'
+        }`}
     >
       {/* ================= DARK SIDEBARS (DISABLED FOR ADMIN) ================= */}
       {!isAdminDashboard && (
@@ -238,7 +236,7 @@ const isAdminDashboard =
           </aside>
         </>
       )}
-      
+
       {/* ================= MAIN CONTENT ================= */}
       <main className="flex-1 overflow-auto">
         {children}
