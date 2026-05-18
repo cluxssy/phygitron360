@@ -26,3 +26,47 @@ variable "superadmin_password" {
   description = "Superadmin password for initial seeding"
   sensitive   = true
 }
+
+variable "secret_key" {
+  description = "Cryptographic secret key for the backend"
+  sensitive   = true
+}
+
+variable "smtp_host" {
+  description = "SMTP Server Host"
+  default     = ""
+}
+
+variable "smtp_port" {
+  description = "SMTP Server Port"
+  default     = "587"
+}
+
+variable "smtp_user" {
+  description = "SMTP Username"
+  default     = ""
+}
+
+variable "smtp_pass" {
+  description = "SMTP Password"
+  sensitive   = true
+  default     = ""
+}
+
+variable "google_api_key" {
+  description = "Google API Key"
+  sensitive   = true
+  default     = ""
+}
+
+variable "openai_api_key" {
+  description = "OpenAI API Key"
+  sensitive   = true
+  default     = ""
+}
+
+variable "groq_api_key" {
+  description = "Groq API Key"
+  sensitive   = true
+  default     = ""
+}
