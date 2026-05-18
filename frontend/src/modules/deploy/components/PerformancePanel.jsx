@@ -35,8 +35,9 @@ const STATUS_CONFIG = {
   'Finalized': { bg: 'bg-emerald-500/10',       text: 'text-emerald-400' },
 };
 
-export default function PerformancePanel({ isAdmin }) {
-  const { user } = useAuth();
+export default function PerformancePanel({ isAdmin, user: propUser }) {
+  const { user: authUser } = useAuth();
+  const user = propUser || authUser;
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(user?.employee_code || '');
   const [year, setYear] = useState(new Date().getFullYear());
@@ -76,7 +77,7 @@ export default function PerformancePanel({ isAdmin }) {
       const data = await res.json();
       const list = (Array.isArray(data) ? data : []).map(a => ({
         ...a,
-        entries: a.entries.map(e => {
+        entries: (Array.isArray(a.entries) ? a.entries : []).map(e => {
             const template = KRA_TEMPLATE.find(t => t.subcategory === e.subcategory);
             return { ...e, options: template?.options || {} };
         })
@@ -93,7 +94,7 @@ export default function PerformancePanel({ isAdmin }) {
     }
   }, [selectedEmp, year, activePeriod, periodType]);
 
-  useEffect(() => { loadAssessments(); }, [selectedEmp, year, periodType]);
+  useEffect(() => { loadAssessments(); }, [selectedEmp, year, periodType, isAdmin]);
 
   const handleTabChange = (p) => {
     setActivePeriod(p);
@@ -218,19 +219,142 @@ export default function PerformancePanel({ isAdmin }) {
   const canManagerEdit = isAdmin && localData?.status !== 'Finalized';
   const statusCfg = STATUS_CONFIG[localData?.status] || STATUS_CONFIG['Draft'];
 
+  const isLightMode = window.location.pathname.startsWith('/deploy');
+
+  // Theme-aware styles
+  const styles = {
+    // Containers
+    mainCard: isLightMode 
+      ? "bg-white border border-[#ebe7ff] rounded-[2rem] p-6 shadow-[0_10px_40px_rgba(180,140,255,0.04)]" 
+      : "glass-panel p-6 border-white/5",
+    
+    heroCard: isLightMode
+      ? "rounded-[2rem] border border-[#ebe7ff] bg-[#f7f3ff] p-6"
+      : "glass-panel p-6 border-white/5",
+    
+    statCard: (isActive) => isLightMode
+      ? `bg-white border border-[#ebe7ff] p-4 text-center cursor-pointer transition-all hover:border-[#7c3aed]/20 hover:scale-[1.02] ${isActive ? '!border-[#7c3aed]/30 !bg-[#7c3aed]/5' : ''}`
+      : `glass-panel p-4 border-white/5 text-center cursor-pointer transition-all hover:border-primary/20 hover:scale-[1.02] ${isActive ? 'border-primary/30 bg-primary/5' : ''}`,
+
+    emptyCard: isLightMode
+      ? "bg-white border border-[#ebe7ff] rounded-[2rem] p-16 flex flex-col items-center justify-center gap-6"
+      : "glass-panel border-white/5 p-16 flex flex-col items-center justify-center gap-6",
+
+    // Tabs
+    tabButton: (isActive) => isLightMode
+      ? `flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 ${
+          isActive ? 'bg-[#7c3aed] text-white shadow-lg shadow-purple-200' : 'border border-[#ece6ff] bg-white text-black/50 hover:bg-[#faf7ff]'
+        }`
+      : `flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 ${
+          isActive ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'glass-panel border-white/5 text-white/40 hover:text-white hover:border-white/10'
+        }`,
+
+    periodSelectContainer: isLightMode ? "flex bg-[#f3f0ff] p-1 rounded-xl border border-[#ebe4ff]" : "flex bg-white/5 rounded-xl p-1",
+    
+    periodSelectBtn: (isActive) => isLightMode
+      ? `px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${isActive ? '!bg-black !text-white' : 'text-black/60 hover:bg-white'}`
+      : `px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${isActive ? 'bg-primary text-black' : 'text-white/40 hover:text-white'}`,
+
+    // Selects / Inputs
+    select: isLightMode
+      ? "border border-[#ece6ff] bg-white text-black text-xs px-4 py-2.5 rounded-xl outline-none focus:border-[#8b5cf6]"
+      : "glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-2.5 rounded-xl focus:outline-none focus:border-primary/30",
+
+    textInput: isLightMode
+      ? "w-full border border-[#ece6ff] bg-white text-black text-[10px] px-3 py-2 rounded-lg focus:outline-none focus:border-[#8b5cf6] placeholder-black/20"
+      : "w-full glass-panel border-white/10 text-white text-[10px] bg-transparent px-3 py-2 rounded-lg focus:outline-none disabled:opacity-30 placeholder-white/10",
+
+    managerTextInput: isLightMode
+      ? "w-full mt-2 border border-[#d8fbe0] bg-white text-emerald-600 text-[10px] px-3 py-2 rounded-lg focus:outline-none focus:border-emerald-500/30 placeholder-emerald-600/20"
+      : "w-full mt-2 glass-panel border-white/10 text-emerald-400 text-[10px] bg-transparent px-3 py-2 rounded-lg focus:outline-none focus:border-emerald-500/30 placeholder-white/10",
+
+    // Text Colors
+    titleText: isLightMode ? "text-black" : "text-white",
+    subtitleText: isLightMode ? "text-[#7c3aed]" : "text-white/30",
+    bodyText: isLightMode ? "text-black/80" : "text-white/60",
+    mutedText: isLightMode ? "text-black/40" : "text-white/20",
+    periodTabText: (isActive) => isLightMode
+      ? `text-[8px] font-black uppercase tracking-widest mb-1 ${isActive ? 'text-[#7c3aed]' : 'text-black/30'}`
+      : `text-[8px] font-black uppercase tracking-widest mb-1 ${isActive ? 'text-primary' : 'text-white/20'}`,
+    percentageText: isLightMode ? "text-black/80" : "text-white",
+
+    // Table elements
+    thead: isLightMode ? "border-b border-[#ebe7ff] bg-[#f7f3ff]" : "border-b border-white/5 bg-white/[0.01]",
+    th: (isColor) => isLightMode
+      ? `px-4 py-4 text-[9px] font-black uppercase tracking-widest ${isColor === 'primary' ? 'text-[#7c3aed]' : isColor === 'emerald' ? 'text-emerald-600' : 'text-black/50'}`
+      : `px-4 py-4 text-[9px] font-black uppercase tracking-widest ${isColor === 'primary' ? 'text-primary' : isColor === 'emerald' ? 'text-emerald-400' : 'text-white/30'}`,
+    tbody: isLightMode ? "divide-y divide-[#f1ecff]" : "divide-y divide-white/[0.04]",
+    tr: isLightMode ? "hover:bg-[#faf7ff] transition-colors group" : "hover:bg-white/[0.02] transition-colors group",
+    categoryTd: isLightMode ? "px-8 py-4 text-xs font-black text-[#7c3aed] uppercase tracking-widest" : "px-8 py-4 text-xs font-black text-primary/70 uppercase tracking-widest",
+    subcategoryText: isLightMode ? "text-xs font-black text-black mb-1 uppercase tracking-tight" : "text-xs font-bold text-white mb-1 uppercase tracking-tight",
+    definitionBox: isLightMode
+      ? "text-[10px] text-[#7c3aed] leading-tight bg-[#f7f3ff] p-2 rounded-lg border border-[#e9ddff] italic"
+      : "text-[10px] text-primary/40 leading-tight bg-primary/5 p-2 rounded-lg border border-primary/10 italic",
+
+    // Entry score buttons
+    entryScoreBtn: (isActive, isManager) => {
+      if (isActive) {
+        return isManager 
+          ? 'w-8 h-8 rounded-lg text-[10px] font-black bg-emerald-500 text-white shadow-lg shadow-emerald-200'
+          : 'w-8 h-8 rounded-lg text-[10px] font-black bg-[#7c3aed] text-white shadow-lg shadow-purple-200';
+      }
+      return isLightMode
+        ? 'w-8 h-8 rounded-lg text-[10px] font-black border border-[#ece6ff] bg-white text-black/40 hover:bg-[#faf7ff]'
+        : 'w-8 h-8 rounded-lg text-[10px] font-black glass-panel border-white/5 text-white/20 hover:text-white/40';
+    },
+
+    // Footer actions
+    footer: isLightMode ? "px-8 py-5 border-t border-[#ebe7ff] bg-[#faf7ff] flex gap-3 justify-end items-center flex-wrap" : "px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-3 justify-end items-center flex-wrap",
+    btnSaveDraft: isLightMode
+      ? "flex items-center gap-2 px-6 py-2.5 border border-[#ece6ff] bg-white hover:bg-[#faf7ff] text-[#7c3aed] text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+      : "flex items-center gap-2 px-6 py-2.5 glass-panel border-white/10 hover:border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all",
+    btnCommit: isLightMode
+      ? "flex items-center gap-2 px-8 py-2.5 bg-gradient-to-r from-[#8b5cf6] to-[#c084fc] text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-purple-100 hover:scale-[1.02] active:scale-[0.98] transition-all"
+      : "flex items-center gap-2 px-8 py-2.5 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all",
+
+    // XLSX Export
+    btnExport: isLightMode
+      ? "flex items-center gap-2 px-5 py-2.5 border border-[#ece6ff] bg-white text-black/50 hover:text-black hover:border-black/20 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-30"
+      : "flex items-center gap-2 px-5 py-2.5 glass-panel border-white/10 hover:border-primary/30 text-white/40 hover:text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-30",
+
+    iconBadge: isLightMode 
+      ? "w-10 h-10 rounded-2xl bg-[#7c3aed]/10 border border-[#7c3aed]/20 flex items-center justify-center text-[#7c3aed]" 
+      : "w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary",
+
+    optionClass: isLightMode ? "bg-white text-black" : "bg-[#080f1f]",
+    emptyDot: isLightMode ? "w-1 h-1 rounded-full bg-black/10" : "w-1 h-1 rounded-full bg-white/5",
+    assessmentGrid: isLightMode 
+      ? "bg-white border border-[#ebe7ff] rounded-[2rem] overflow-hidden shadow-[0_10px_40px_rgba(180,140,255,0.04)] animate-fade-in-up" 
+      : "glass-panel border-white/5 overflow-hidden animate-fade-in-up",
+    
+    emptyIconBg: isLightMode 
+      ? "w-20 h-20 bg-[#f7f3ff] rounded-3xl flex items-center justify-center border border-[#e9ddff]" 
+      : "w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center border border-white/5",
+    
+    emptyIconColor: isLightMode ? "text-[#7c3aed]/30" : "text-white/10",
+    btnInitiateEmp: isLightMode 
+      ? "flex items-center gap-3 px-10 py-4 bg-gradient-to-r from-[#8b5cf6] to-[#c084fc] text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-lg shadow-purple-100 hover:scale-[1.02] active:scale-[0.98] transition-all" 
+      : "flex items-center gap-3 px-10 py-4 bg-primary text-black font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all",
+    
+    btnInitiateAdmin: isLightMode 
+      ? "flex items-center gap-3 px-10 py-4 border border-[#ece6ff] bg-white text-[#7c3aed] font-black text-[11px] uppercase tracking-widest rounded-2xl hover:bg-[#f7f3ff] transition-all" 
+      : "flex items-center gap-3 px-10 py-4 glass-panel border-white/10 text-white/60 hover:text-white font-black text-[11px] uppercase tracking-widest rounded-2xl transition-all"
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Toolbar */}
-      <div className="glass-panel p-6 border-white/5 flex flex-wrap gap-4 items-center justify-between">
+      <div className={`${styles.heroCard} flex flex-wrap gap-4 items-center justify-between`}>
         <div className="flex gap-3 items-center flex-wrap">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+          <div className={styles.iconBadge}>
             <Activity size={20} />
           </div>
           <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-white/30">Performance Intelligence Node</p>
-            <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic">
-            {isAdmin ? 'Performance Intelligence Panel' : 'My Success Matrix'}
-          </h1>
+            <p className={`text-[9px] font-black uppercase tracking-widest ${styles.subtitleText}`}>Performance Intelligence Node</p>
+            <h1 className={`text-4xl font-display font-black uppercase tracking-tighter italic ${styles.titleText}`}>
+              {isAdmin ? 'Performance Intelligence Panel' : 'My Success Matrix'}
+            </h1>
+          </div>
         </div>
 
         <div className="flex gap-4 items-center">
@@ -242,12 +366,12 @@ export default function PerformancePanel({ isAdmin }) {
                     <Send size={14} /> Request Submission
                 </button>
             )}
-            <div className="flex bg-white/5 rounded-xl p-1">
+            <div className={styles.periodSelectContainer}>
                 {['Quarterly', 'Monthly'].map(t => (
                     <button 
                         key={t}
                         onClick={() => { setPeriodType(t); setActivePeriod(t === 'Quarterly' ? 'Q1' : 'Jan'); }}
-                        className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${periodType === t ? 'bg-primary text-black' : 'text-white/40 hover:text-white'}`}
+                        className={styles.periodSelectBtn(periodType === t)}
                     >
                         {t}
                     </button>
@@ -256,31 +380,30 @@ export default function PerformancePanel({ isAdmin }) {
         </div>
       </div>
 
-        <div className="flex gap-3 items-center flex-wrap">
-          {isAdmin && employees.length > 0 && (
-            <select
-              value={selectedEmp}
-              onChange={e => setSelectedEmp(e.target.value)}
-              className="glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-2.5 rounded-xl focus:outline-none focus:border-primary/30"
-            >
-              {employees.map(e => <option key={e.employee_code} value={e.employee_code} className="bg-[#080f1f]">{e.name} ({e.employee_code})</option>)}
-            </select>
-          )}
+      <div className={`${styles.mainCard} !p-4 flex gap-3 items-center flex-wrap`}>
+        {isAdmin && employees.length > 0 && (
           <select
-            value={year}
-            onChange={e => { setYear(Number(e.target.value)); }}
-            className="glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-2.5 rounded-xl focus:outline-none"
+            value={selectedEmp}
+            onChange={e => setSelectedEmp(e.target.value)}
+            className={styles.select}
           >
-            {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y} className="bg-[#080f1f]">{y}</option>)}
+            {employees.map(e => <option key={e.employee_code} value={e.employee_code} className={styles.optionClass}>{e.name} ({e.employee_code})</option>)}
           </select>
-          <button
-            onClick={exportXLSX}
-            disabled={!localData}
-            className="flex items-center gap-2 px-5 py-2.5 glass-panel border-white/10 hover:border-primary/30 text-white/40 hover:text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-30"
-          >
-            <Download size={14} /> Export XLSX
-          </button>
-        </div>
+        )}
+        <select
+          value={year}
+          onChange={e => { setYear(Number(e.target.value)); }}
+          className={styles.select}
+        >
+          {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y} className={styles.optionClass}>{y}</option>)}
+        </select>
+        <button
+          onClick={exportXLSX}
+          disabled={!localData}
+          className={styles.btnExport}
+        >
+          <Download size={14} /> Export XLSX
+        </button>
       </div>
 
       {/* Period Overview Stats */}
@@ -291,17 +414,24 @@ export default function PerformancePanel({ isAdmin }) {
             <div
               key={p}
               onClick={() => handleTabChange(p)}
-              className={`glass-panel p-4 border-white/5 text-center cursor-pointer transition-all hover:border-primary/20 hover:scale-[1.02] ${activePeriod === p ? 'border-primary/30 bg-primary/5' : ''}`}
+              className={styles.statCard(activePeriod === p)}
             >
-              <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${activePeriod === p ? 'text-primary' : 'text-white/20'}`}>{p}</p>
+              <p className={styles.periodTabText(activePeriod === p)}>{p}</p>
               {ast ? (
                 <div className="space-y-1">
-                  <p className="text-sm font-display font-black text-white">{ast.percentage ?? 0}%</p>
-                  <div className={`w-1.5 h-1.5 rounded-full mx-auto ${STATUS_CONFIG[ast.status]?.text.replace('text-', 'bg-') || 'bg-white/10'}`} />
+                  <p className={`text-sm font-display font-black ${styles.percentageText}`}>{ast.percentage ?? 0}%</p>
+                  <div className={`w-1.5 h-1.5 rounded-full mx-auto ${
+                    isLightMode 
+                      ? (ast.status === 'Draft' ? 'bg-black/20' :
+                         ast.status === 'Requested' ? 'bg-amber-500' :
+                         ast.status === 'Submitted' ? 'bg-[#7c3aed]' :
+                         'bg-emerald-500')
+                      : (STATUS_CONFIG[ast.status]?.text.replace('text-', 'bg-') || 'bg-white/10')
+                  }`} />
                 </div>
               ) : (
                 <div className="h-4 flex items-center justify-center">
-                    <div className="w-1 h-1 rounded-full bg-white/5" />
+                    <div className={styles.emptyDot} />
                 </div>
               )}
             </div>
@@ -317,9 +447,7 @@ export default function PerformancePanel({ isAdmin }) {
             <button
               key={p}
               onClick={() => handleTabChange(p)}
-              className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 ${
-                activePeriod === p ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'glass-panel border-white/5 text-white/40 hover:text-white hover:border-white/10'
-              }`}
+              className={styles.tabButton(activePeriod === p)}
             >
               {p}
               {ast?.status === 'Submitted' && <span className="w-2 h-2 rounded-full bg-amber-400" />}
@@ -336,20 +464,20 @@ export default function PerformancePanel({ isAdmin }) {
         </div>
       ) : !localData ? (
         /* Empty State */
-        <div className="glass-panel border-white/5 p-16 flex flex-col items-center justify-center gap-6 animate-fade-in-up">
-          <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center border border-white/5">
-            <BarChart3 size={40} className="text-white/10" />
+        <div className={`${styles.emptyCard} animate-fade-in-up`}>
+          <div className={styles.emptyIconBg}>
+            <BarChart3 size={40} className={styles.emptyIconColor} />
           </div>
           <div className="text-center">
-            <p className="text-white/60 font-bold text-lg mb-2">No {activePeriod} Assessment</p>
-            <p className="text-[10px] text-white/20 font-black uppercase tracking-widest">
+            <p className={`font-bold text-lg mb-2 ${styles.bodyText}`}>No {activePeriod} Assessment</p>
+            <p className={`text-[10px] font-black uppercase tracking-widest ${styles.mutedText}`}>
               {isAdmin ? `No assessment started for ${empName} - ${activePeriod} ${year}` : `Your ${activePeriod} self-assessment hasn't been initialized yet`}
             </p>
           </div>
           {!isAdmin && (
             <button
               onClick={createNewAssessment}
-              className="flex items-center gap-3 px-10 py-4 bg-primary text-black font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              className={styles.btnInitiateEmp}
             >
               <Plus size={18} /> Initiate {activePeriod} Self-Assessment
             </button>
@@ -357,7 +485,7 @@ export default function PerformancePanel({ isAdmin }) {
           {isAdmin && (
             <button
               onClick={createNewAssessment}
-              className="flex items-center gap-3 px-10 py-4 glass-panel border-white/10 text-white/60 hover:text-white font-black text-[11px] uppercase tracking-widest rounded-2xl transition-all"
+              className={styles.btnInitiateAdmin}
             >
               <Plus size={18} /> Create Assessment for {empName}
             </button>
@@ -365,24 +493,31 @@ export default function PerformancePanel({ isAdmin }) {
         </div>
       ) : (
         /* Assessment Grid */
-        <div className="glass-panel border-white/5 overflow-hidden animate-fade-in-up">
+        <div className={styles.assessmentGrid}>
           {/* Assessment Header */}
-          <div className="px-8 py-6 border-b border-white/10 bg-white/[0.02] flex justify-between items-center">
+          <div className={`px-8 py-6 border-b flex justify-between items-center ${isLightMode ? 'border-[#ebe7ff] bg-[#f7f3ff]/50' : 'border-white/10 bg-white/[0.02]'}`}>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-1">{empName} // {year}</p>
-              <h3 className="text-lg font-black uppercase tracking-tighter text-white">{activePeriod} Performance Assessment</h3>
-              <span className={`px-3 py-1 mt-2 inline-block rounded-full text-[9px] font-black uppercase tracking-widest ${statusCfg.bg} ${statusCfg.text}`}>
+              <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>{empName} // {year}</p>
+              <h3 className={`text-lg font-black uppercase tracking-tighter ${styles.titleText}`}>{activePeriod} Performance Assessment</h3>
+              <span className={`px-3 py-1 mt-2 inline-block rounded-full text-[9px] font-black uppercase tracking-widest ${
+                isLightMode 
+                  ? (localData.status === 'Draft' ? 'bg-black/5 text-black/50 border border-black/10' :
+                     localData.status === 'Requested' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
+                     localData.status === 'Submitted' ? 'bg-[#7c3aed]/10 text-[#7c3aed] border border-[#7c3aed]/20' :
+                     'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20')
+                  : `${statusCfg.bg} ${statusCfg.text}`
+              }`}>
                 {localData.status || 'Draft'}
               </span>
             </div>
             <div className="text-right">
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-1">Composite Score</p>
+              <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>Composite Score</p>
               <p className="text-5xl font-display font-black" style={{
                 color: localData.percentage >= 80 ? '#10B981' : localData.percentage >= 60 ? '#F59E0B' : '#F43F5E'
               }}>
                 {localData.percentage ?? 0}%
               </p>
-              <p className="text-[10px] text-white/20 uppercase tracking-widest font-black">
+              <p className={`text-[10px] uppercase tracking-widest font-black ${styles.mutedText}`}>
                 {localData.total_score ?? 0} / {(localData.entries?.length || 0) * 10} pts
               </p>
             </div>
@@ -391,23 +526,23 @@ export default function PerformancePanel({ isAdmin }) {
           {/* Assessment Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="border-b border-white/5 bg-white/[0.01]">
+              <thead className={styles.thead}>
                 <tr>
-                  <th className="px-8 py-4 text-[9px] font-black uppercase tracking-widest text-white/30">Category</th>
-                  <th className="px-4 py-4 text-[9px] font-black uppercase tracking-widest text-white/30">KRA & Criteria</th>
-                  <th className="px-4 py-4 text-[9px] font-black uppercase tracking-widest text-primary w-24">Self (1/5/10)</th>
-                  <th className="px-4 py-4 text-[9px] font-black uppercase tracking-widest text-emerald-400 w-24">Mgr (1/5/10)</th>
-                  <th className="px-4 py-4 text-[9px] font-black uppercase tracking-widest text-white/20">Final</th>
-                  <th className="px-4 py-4 text-[9px] font-black uppercase tracking-widest text-white/30">Notes</th>
+                  <th className={styles.th()}>Category</th>
+                  <th className={styles.th()}>KRA & Criteria</th>
+                  <th className={styles.th('primary')}>Self (1/5/10)</th>
+                  <th className={styles.th('emerald')}>Mgr (1/5/10)</th>
+                  <th className={styles.th('muted')}>Final</th>
+                  <th className={styles.th()}>Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className={styles.tbody}>
                 {(localData.entries || []).map((entry, idx) => (
-                  <tr key={idx} className="hover:bg-white/[0.02] transition-colors group">
-                    <td className="px-8 py-4 text-xs font-black text-primary/70 uppercase tracking-widest">{entry.category}</td>
+                  <tr key={idx} className={styles.tr}>
+                    <td className={styles.categoryTd}>{entry.category}</td>
                     <td className="px-4 py-4 min-w-[280px]">
-                      <div className="text-xs font-bold text-white mb-1 uppercase tracking-tight">{entry.subcategory}</div>
-                      <div className="text-[10px] text-primary/40 leading-tight bg-primary/5 p-2 rounded-lg border border-primary/10 italic">
+                      <div className={styles.subcategoryText}>{entry.subcategory}</div>
+                      <div className={styles.definitionBox}>
                         {entry.options?.[entry.manager_score || entry.self_score] || "Metric definition will appear upon selection"}
                       </div>
                     </td>
@@ -418,7 +553,7 @@ export default function PerformancePanel({ isAdmin }) {
                             key={s}
                             onClick={() => handleEntryChange(idx, 'self_score', s)}
                             disabled={isAdmin || !canEmployeeEdit}
-                            className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${entry.self_score === s ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'glass-panel border-white/5 text-white/20 hover:text-white/40'}`}
+                            className={styles.entryScoreBtn(entry.self_score === s, false)}
                           >
                             {s}
                           </button>
@@ -432,7 +567,7 @@ export default function PerformancePanel({ isAdmin }) {
                             key={s}
                             onClick={() => handleEntryChange(idx, 'manager_score', s)}
                             disabled={!canManagerEdit}
-                            className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${entry.manager_score === s ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'glass-panel border-white/5 text-white/20 hover:text-white/40'}`}
+                            className={styles.entryScoreBtn(entry.manager_score === s, true)}
                           >
                             {s}
                           </button>
@@ -453,7 +588,7 @@ export default function PerformancePanel({ isAdmin }) {
                         onChange={e => handleEntryChange(idx, 'employee_comment', e.target.value)}
                         disabled={!canEmployeeEdit}
                         placeholder={isAdmin ? "Employee notes locked" : "Add self-observation..."}
-                        className="w-full glass-panel border-white/10 text-white text-[10px] bg-transparent px-3 py-2 rounded-lg focus:outline-none disabled:opacity-30 placeholder-white/10"
+                        className={styles.textInput}
                       />
                       {isAdmin && (
                         <input
@@ -461,7 +596,7 @@ export default function PerformancePanel({ isAdmin }) {
                           value={entry.manager_comment || ''}
                           onChange={e => handleEntryChange(idx, 'manager_comment', e.target.value)}
                           placeholder="Manager feedback..."
-                          className="w-full mt-2 glass-panel border-white/10 text-emerald-400 text-[10px] bg-transparent px-3 py-2 rounded-lg focus:outline-none focus:border-emerald-500/30 placeholder-white/10"
+                          className={styles.managerTextInput}
                         />
                       )}
                     </td>
@@ -472,9 +607,9 @@ export default function PerformancePanel({ isAdmin }) {
           </div>
 
           {/* Action Footer */}
-          <div className="px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-3 justify-end items-center flex-wrap">
+          <div className={styles.footer}>
             {saving && (
-              <div className="flex items-center gap-2 text-[10px] text-white/40 font-black uppercase tracking-widest">
+              <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${styles.mutedText}`}>
                 <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                 Syncing Matrix...
               </div>
@@ -487,25 +622,25 @@ export default function PerformancePanel({ isAdmin }) {
                   <>
                     <button
                       onClick={() => saveAssessment('Draft')}
-                      className="flex items-center gap-2 px-6 py-2.5 glass-panel border-white/10 hover:border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+                      className={styles.btnSaveDraft}
                     >
                       <Save size={14} /> Save Draft
                     </button>
                     <button
                       onClick={() => saveAssessment('Submitted')}
-                      className="flex items-center gap-2 px-8 py-2.5 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all"
+                      className={styles.btnCommit}
                     >
                       <Send size={14} /> Commit Submission
                     </button>
                   </>
                 )}
                 {localData.status === 'Submitted' && (
-                  <div className="flex items-center gap-2 px-6 py-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                  <div className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'bg-amber-500/10 border border-amber-500/20 text-amber-600' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'}`}>
                     <AlertCircle size={14} /> Awaiting Managerial Review
                   </div>
                 )}
                 {(localData.status === 'Reviewed' || localData.status === 'Finalized') && (
-                  <div className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                  <div className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-600' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'}`}>
                     <CheckCircle size={14} /> Protocol Finalized
                   </div>
                 )}
@@ -517,13 +652,13 @@ export default function PerformancePanel({ isAdmin }) {
               <>
                 <button
                   onClick={() => saveAssessment(localData.status || 'Draft')}
-                  className="flex items-center gap-2 px-6 py-2.5 glass-panel border-white/10 hover:border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+                  className={styles.btnSaveDraft}
                 >
                   <Save size={14} /> Save Changes
                 </button>
                 <button
                   onClick={() => saveAssessment('Reviewed')}
-                  className="flex items-center gap-2 px-8 py-2.5 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/20"
+                  className={isLightMode ? "flex items-center gap-2 px-8 py-2.5 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-100" : "flex items-center gap-2 px-8 py-2.5 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/20"}
                 >
                   <CheckCircle size={14} /> Finalize Protocol
                 </button>
@@ -532,7 +667,7 @@ export default function PerformancePanel({ isAdmin }) {
             
             <button
                onClick={exportXLSX}
-               className="flex items-center gap-2 px-4 py-2.5 glass-panel border-white/10 hover:border-white/20 text-white/40 hover:text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+               className={styles.btnExport}
             >
               <Download size={14} /> Export Node
             </button>
