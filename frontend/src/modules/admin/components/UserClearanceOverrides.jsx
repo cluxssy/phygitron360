@@ -1,99 +1,433 @@
 import React from 'react';
-import { Shield, X, Check, Activity, Trash2 } from 'lucide-react';
+import { Shield, X, Check, Activity } from 'lucide-react';
 import { PERMISSIONS_CATEGORIES } from './ClearanceMatrix';
 
-export default function UserClearanceOverrides({ user, overrides, onUpdate, onClose }) {
+export default function UserClearanceOverrides({
+  user,
+  overrides,
+  onUpdate,
+  onClose
+}) {
+
   if (!user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="glass-panel border-white/10 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up bg-[#0a0a0a] shadow-2xl">
-        {/* Header */}
-        <div className="p-8 border-b border-white/5 flex justify-between items-start">
+
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-6">
+
+      <div
+        className="
+          w-full
+          max-w-5xl
+          max-h-[92vh]
+          overflow-hidden
+          rounded-[2.8rem]
+          border
+          border-[#e9e2fb]
+          bg-[#faf8ff]
+          shadow-[0_35px_100px_rgba(120,80,255,0.18)]
+          animate-fade-in-up
+          flex
+          flex-col
+        "
+      >
+
+        {/* HEADER */}
+
+        <div
+          className="
+            px-10
+            py-8
+            border-b
+            border-[#ece7fa]
+            bg-gradient-to-r
+            from-[#ffffff]
+            to-[#f6f1ff]
+            flex
+            justify-between
+            items-start
+            gap-6
+          "
+        >
+
           <div>
-            <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary italic">Neural Clearance Override</p>
+
+            <div className="flex items-center gap-3 mb-4">
+
+              <div
+                className="
+                  w-10
+                  h-10
+                  rounded-2xl
+                  bg-gradient-to-br
+                  from-[#c084fc]
+                  to-[#8b5cf6]
+                  flex
+                  items-center
+                  justify-center
+                  text-white
+                  shadow-[0_10px_25px_rgba(180,140,255,0.35)]
+                "
+              >
+                <Shield size={18} />
+              </div>
+
+              <p
+                className="
+                  text-[10px]
+                  font-black
+                  uppercase
+                  tracking-[0.35em]
+                  text-[#8b5cf6]
+                "
+              >
+                Permission Override Center
+              </p>
+
             </div>
-            <h3 className="text-3xl font-display font-black text-white uppercase tracking-tighter">
-              Adjusting Node Access: <span className="text-primary">{user.username}</span>
+
+            <h3
+              className="
+                text-4xl
+                font-black
+                tracking-tight
+                text-black
+              "
+            >
+              User Access Controls
             </h3>
-            <p className="text-xs text-white/40 mt-2">Explicitly allow or block capabilities for this specific identity session.</p>
+
+            <p
+              className="
+                mt-3
+                text-[15px]
+                text-[#6b7280]
+                leading-relaxed
+              "
+            >
+              Adjust permissions specifically for
+              <span className="font-bold text-black">
+                {' '}@{user.username}
+              </span>
+            </p>
+
           </div>
-          <button 
-            onClick={onClose} 
-            className="text-white/20 hover:text-white transition-all uppercase text-[10px] font-black tracking-widest bg-white/5 hover:bg-white/10 px-6 py-3 rounded-2xl border border-white/5 active:scale-95"
+
+          <button
+            onClick={onClose}
+            className="
+              px-6
+              py-3
+              rounded-2xl
+              bg-black
+              text-white
+              text-[10px]
+              font-black
+              uppercase
+              tracking-[0.25em]
+              hover:bg-[#8b5cf6]
+              transition-all
+              duration-300
+              active:scale-95
+            "
           >
-            Close Terminal
+            Close
           </button>
+
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-          <div className="grid grid-cols-1 gap-12">
-            {PERMISSIONS_CATEGORIES.map(cat => (
-              <div key={cat.group} className="space-y-6">
-                <div className="flex items-center gap-4">
-                    <h4 className="text-xs font-black uppercase tracking-[0.3em] text-white/20 whitespace-nowrap">{cat.group}</h4>
-                    <div className="h-px bg-white/5 flex-1" />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {cat.perms.map(p => {
-                    const overrideValue = overrides[p.key];
-                    const isOverridden = overrideValue !== undefined && overrideValue !== null;
-                    
-                    return (
-                      <div 
-                        key={p.key} 
-                        className={`glass-panel p-5 border-white/5 flex items-center justify-between transition-all duration-300 hover:border-white/10 ${isOverridden ? 'bg-primary/5 border-primary/20' : 'bg-white/[0.01]'}`}
-                      >
-                        <div className="space-y-1">
-                          <p className={`text-sm font-bold transition-colors ${isOverridden ? 'text-primary' : 'text-white/80'}`}>{p.label}</p>
-                          <p className="text-[9px] text-white/20 uppercase font-mono tracking-tight">{p.key}</p>
-                        </div>
-                        
-                        <div className="flex gap-2 p-1 glass-panel border-white/5 bg-black/40 rounded-xl">
-                          <button 
-                            onClick={() => onUpdate(user.id, p.key, true)}
-                            className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${overrideValue === true ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-white/20 hover:text-white/40'}`}
-                            title="Force Allow"
-                          >
-                            <Check size={14} strokeWidth={4} />
-                          </button>
-                          <button 
-                            onClick={() => onUpdate(user.id, p.key, false)}
-                            className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${overrideValue === false ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-white/20 hover:text-white/40'}`}
-                            title="Force Block"
-                          >
-                            <X size={14} strokeWidth={4} />
-                          </button>
-                          <button 
-                            onClick={() => onUpdate(user.id, p.key, null)}
-                            className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isOverridden ? 'bg-white/10 text-white' : 'text-white/10 hover:text-white/20 hover:bg-white/5'}`}
-                            title="Inherit from Role"
-                          >
-                            <Activity size={14} strokeWidth={2} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+        {/* CONTENT */}
+
+        <div className="flex-1 overflow-y-auto px-10 py-10 space-y-12">
+
+          {PERMISSIONS_CATEGORIES.map(cat => (
+
+            <div key={cat.group} className="space-y-6">
+
+              {/* SECTION HEADER */}
+
+              <div className="flex items-center gap-5">
+
+                <h4
+                  className="
+                    text-[11px]
+                    font-black
+                    uppercase
+                    tracking-[0.35em]
+                    text-[#8b5cf6]
+                    whitespace-nowrap
+                  "
+                >
+                  {cat.group}
+                </h4>
+
+                <div className="h-px bg-[#e8e2f7] flex-1" />
+
               </div>
-            ))}
-          </div>
-        </div>
-        
-        {/* Footer */}
-        <div className="p-8 border-t border-white/5 bg-black/60 rounded-b-3xl flex justify-between items-center">
-            <div className="flex items-center gap-3">
-                <Shield className="text-primary/40" size={18} />
-                <p className="text-[10px] text-white/30 uppercase font-black tracking-widest">Modified clearances take priority over default role assignments.</p>
+
+              {/* GRID */}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                {cat.perms.map(p => {
+
+                  const overrideValue = overrides[p.key];
+
+                  const isOverridden =
+                    overrideValue !== undefined &&
+                    overrideValue !== null;
+
+                  return (
+
+                    <div
+                      key={p.key}
+                      className={`
+                        rounded-[2rem]
+                        border
+                        p-6
+                        transition-all
+                        duration-300
+                        flex
+                        items-center
+                        justify-between
+                        gap-6
+                        ${
+                          isOverridden
+                            ? 'bg-[#f7f1ff] border-[#d9c8ff] shadow-[0_10px_30px_rgba(180,140,255,0.08)]'
+                            : 'bg-white border-[#ece7fa]'
+                        }
+                      `}
+                    >
+
+                      {/* LEFT */}
+
+                      <div className="space-y-2">
+
+                        <p
+                          className={`
+                            text-[15px]
+                            font-black
+                            tracking-tight
+                            ${
+                              isOverridden
+                                ? 'text-[#8b5cf6]'
+                                : 'text-black'
+                            }
+                          `}
+                        >
+                          {p.label}
+                        </p>
+
+                        <p
+                          className="
+                            text-[10px]
+                            uppercase
+                            tracking-[0.15em]
+                            text-[#9ca3af]
+                            font-mono
+                          "
+                        >
+                          {p.key}
+                        </p>
+
+                      </div>
+
+                      {/* BUTTONS */}
+
+                      <div
+                        className="
+                          flex
+                          gap-2
+                          p-2
+                          rounded-2xl
+                          bg-[#f5f1fd]
+                          border
+                          border-[#ebe5fa]
+                        "
+                      >
+
+                        {/* ALLOW */}
+
+                        <button
+                          onClick={() =>
+                            onUpdate(user.id, p.key, true)
+                          }
+                          className={`
+                            w-11
+                            h-11
+                            rounded-xl
+                            flex
+                            items-center
+                            justify-center
+                            transition-all
+                            duration-300
+                            ${
+                              overrideValue === true
+                                ? `
+                                  bg-gradient-to-br
+                                  from-[#c084fc]
+                                  to-[#8b5cf6]
+                                  text-white
+                                  shadow-[0_10px_25px_rgba(180,140,255,0.35)]
+                                `
+                                : `
+                                  bg-white
+                                  border
+                                  border-[#ebe5fa]
+                                  text-[#8b5cf6]
+                                  hover:bg-[#f4efff]
+                                `
+                            }
+                          `}
+                          title="Allow"
+                        >
+                          <Check size={16} strokeWidth={3} />
+                        </button>
+
+                        {/* BLOCK */}
+
+                        <button
+                          onClick={() =>
+                            onUpdate(user.id, p.key, false)
+                          }
+                          className={`
+                            w-11
+                            h-11
+                            rounded-xl
+                            flex
+                            items-center
+                            justify-center
+                            transition-all
+                            duration-300
+                            ${
+                              overrideValue === false
+                                ? `
+                                  bg-black
+                                  text-white
+                                  shadow-[0_10px_25px_rgba(0,0,0,0.15)]
+                                `
+                                : `
+                                  bg-white
+                                  border
+                                  border-[#ebe5fa]
+                                  text-black
+                                  hover:bg-[#f3f4f6]
+                                `
+                            }
+                          `}
+                          title="Block"
+                        >
+                          <X size={16} strokeWidth={3} />
+                        </button>
+
+                        {/* DEFAULT */}
+
+                        <button
+                          onClick={() =>
+                            onUpdate(user.id, p.key, null)
+                          }
+                          className={`
+                            w-11
+                            h-11
+                            rounded-xl
+                            flex
+                            items-center
+                            justify-center
+                            transition-all
+                            duration-300
+                            ${
+                              !isOverridden
+                                ? `
+                                  bg-[#8b5cf6]
+                                  text-white
+                                  shadow-[0_10px_25px_rgba(180,140,255,0.35)]
+                                `
+                                : `
+                                  bg-white
+                                  border
+                                  border-[#ebe5fa]
+                                  text-[#6b7280]
+                                  hover:bg-[#f3f4f6]
+                                `
+                            }
+                          `}
+                          title="Default"
+                        >
+                          <Activity size={16} strokeWidth={2.5} />
+                        </button>
+
+                      </div>
+
+                    </div>
+
+                  );
+                })}
+
+              </div>
+
             </div>
-            <p className="text-[9px] text-primary font-mono uppercase tracking-[0.2em] animate-pulse">Encryption Status: Active Node Restricted</p>
+
+          ))}
+
         </div>
+
+        {/* FOOTER */}
+
+        <div
+          className="
+            px-10
+            py-7
+            border-t
+            border-[#ece7fa]
+            bg-gradient-to-r
+            from-[#ffffff]
+            to-[#f7f2ff]
+            flex
+            items-center
+            justify-between
+            gap-6
+            flex-wrap
+          "
+        >
+
+          <div className="flex items-center gap-3">
+
+            <Shield
+              className="text-[#8b5cf6]"
+              size={18}
+            />
+
+            <p
+              className="
+                text-[11px]
+                uppercase
+                tracking-[0.2em]
+                font-black
+                text-[#6b7280]
+              "
+            >
+              Custom user permissions override role defaults
+            </p>
+
+          </div>
+
+          <p
+            className="
+              text-[10px]
+              uppercase
+              tracking-[0.3em]
+              font-black
+              text-[#8b5cf6]
+            "
+          >
+            Security Layer Active
+          </p>
+
+        </div>
+
       </div>
+
     </div>
+
   );
 }

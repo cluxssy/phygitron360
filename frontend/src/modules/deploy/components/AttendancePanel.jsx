@@ -26,7 +26,20 @@ export default function AttendancePanel({ mode }) {
   const [employees, setEmployees] = useState([]);
   const [editingRecord, setEditingRecord] = useState(null);
   const [editForm, setEditForm] = useState({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
+  const panelStyle =
+  "bg-white border border-[#ebe4ff] rounded-[2.5rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)]";
 
+const inputStyle =
+  "w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#c084fc] transition-all";
+
+const buttonPrimary =
+  "bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-[0_12px_30px_rgba(180,140,255,0.28)]";
+
+const buttonSecondary =
+  "bg-white border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff]";
+
+const tableHeader =
+  "bg-[#f5efff] border-b border-[#ece2ff]";
   useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
@@ -165,29 +178,29 @@ export default function AttendancePanel({ mode }) {
     <div className="space-y-6">
       {/* Clock In/Out Widget */}
       {isEmployee && (
-        <div className="glass-panel p-8 border-white/5 relative overflow-hidden">
+        <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] p-8 border-white/5 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-5">
              <Clock size={120} />
           </div>
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary mb-3">Live Session // Matrix Sync</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8b5cf6] mb-3">Live Session // Matrix Sync</p>
               <div className="flex items-center gap-4">
                 <div className={`w-3 h-3 rounded-full ${status?.status === 'clocked_in' ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-white/10'} ${status?.status === 'clocked_in' ? 'animate-pulse' : ''}`} />
-                <p className="text-3xl font-display font-black text-white uppercase tracking-tighter italic">
+                <p className="text-3xl font-display font-black text-black uppercase tracking-tighter italic">
                   {status?.status === 'clocked_in' ? 'Active Uplink' : status?.status === 'completed' ? 'Session Terminated' : 'Standby Mode'}
                 </p>
               </div>
               {status?.data?.clock_in && (
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mt-3 flex items-center gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] mt-3 flex items-center gap-2">
                   <LogIn size={12} className="text-emerald-400" />
-                  Synchronized at <span className="text-white">{status.data.clock_in}</span>
+                  Synchronized at <span className="text-black">{status.data.clock_in}</span>
                 </p>
               )}
               {status?.data?.clock_out && (
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mt-1 flex items-center gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] mt-1 flex items-center gap-2">
                   <LogOut size={12} className="text-red-400" />
-                  Closed at <span className="text-white">{status.data.clock_out}</span>
+                  Closed at <span className="text-black">{status.data.clock_out}</span>
                 </p>
               )}
             </div>
@@ -199,13 +212,13 @@ export default function AttendancePanel({ mode }) {
                 </button>
               ) : status?.status === 'not_started' ? (
                 <button onClick={clockIn}
-                  className="flex items-center justify-center gap-3 px-10 py-5 bg-primary text-black text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white transition-all shadow-xl shadow-primary/20 font-display italic">
+                  className="flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:opacity-90 transition-all shadow-xl shadow-transparent font-display italic">
                   <LogIn size={18} /> Initiate Uplink
                 </button>
               ) : (
                   <div className="px-8 py-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3 opacity-50">
                       <CheckCircle size={16} className="text-emerald-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Quota Satisfied</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Quota Satisfied</span>
                   </div>
               )}
             </div>
@@ -221,13 +234,13 @@ export default function AttendancePanel({ mode }) {
                   { label: 'Available Protocol', value: (leaveBalance?.total_leaves || 15) - (leaveBalance?.used_leaves || 0), total: leaveBalance?.total_leaves || 15, color: '#10B981', icon: Shield, suffix: 'Days' },
                   { label: 'Extended Matrix', value: leaveBalance?.extended_leaves || 0, total: 100, color: '#F43F5E', icon: Activity, suffix: 'Days' },
               ].map((lb, i) => (
-                  <div key={i} className="glass-panel p-6 border-white/5 relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 p-4 text-white/5 group-hover:text-white/10 transition-colors">
+                  <div key={i} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] p-6 border-white/5 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-4 text-black/5 group-hover:text-black/10 transition-colors">
                           <lb.icon size={48} />
                       </div>
                       <div className="flex justify-between items-start mb-4 relative z-10">
-                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{lb.label}</span>
-                          <span className="text-xl font-black font-display italic text-white">{lb.value} {lb.suffix}</span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b8ba3]">{lb.label}</span>
+                          <span className="text-xl font-black font-display italic text-black">{lb.value} {lb.suffix}</span>
                       </div>
                       <div className="w-full bg-white/5 rounded-full h-1.5 mb-2 relative z-10">
                           <div className="h-1.5 rounded-full transition-all duration-700" style={{ width: lb.total > 0 ? `${(lb.value / lb.total) * 100}%` : '0%', background: lb.color }} />
@@ -237,12 +250,12 @@ export default function AttendancePanel({ mode }) {
           </div>
           <button 
               onClick={() => setShowLeaveForm(true)}
-              className="glass-panel border-white/10 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-3 p-6 group"
+              className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-3 p-6 group"
           >
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-black transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-[#f3e8ff] flex items-center justify-center text-[#8b5cf6] group-hover:bg-[#8b5cf6] group-hover:text-white transition-all">
                   <Calendar size={24} />
               </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 group-hover:text-white">Request Absence</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] group-hover:text-black">Request Absence</span>
           </button>
         </div>
       )}
@@ -259,7 +272,7 @@ export default function AttendancePanel({ mode }) {
                 ].map(t => (
                 <button key={t.id} onClick={() => setAdminTab(t.id)}
                     className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    adminTab === t.id ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'glass-panel border-white/5 text-white/40 hover:text-white'
+                    adminTab === t.id ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg shadow-transparent' : 'bg-[#f5efff] border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] text-[#6b7280] hover:text-black'
                     }`}>
                     <t.icon size={14} />
                     {t.label}
@@ -272,7 +285,7 @@ export default function AttendancePanel({ mode }) {
                     <select 
                         value={selectedMonth} 
                         onChange={e => setSelectedMonth(Number(e.target.value))}
-                        className="glass-panel border-white/10 text-white text-[10px] font-black uppercase tracking-widest bg-[#0b1426] px-4 py-2 rounded-xl focus:outline-none"
+                        className="bg-[#faf7ff] border border-[#ebe4ff] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
                     >
                         {Array.from({length: 12}, (_, i) => (
                             <option key={i+1} value={i+1}>{new Date(2000, i).toLocaleString('default', { month: 'long' })}</option>
@@ -282,12 +295,12 @@ export default function AttendancePanel({ mode }) {
                         type="number" 
                         value={selectedYear}
                         onChange={e => setSelectedYear(Number(e.target.value))}
-                        className="w-24 glass-panel border-white/10 text-white text-[10px] font-black uppercase tracking-widest bg-[#0b1426] px-4 py-2 rounded-xl focus:outline-none"
+                        className="w-24 bg-[#faf7ff] border border-[#ebe4ff] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
                     />
                 </div>
             )}
 
-            {adminTab === 'today' && (
+            {/* {adminTab === 'today' && (
                 <button 
                     onClick={() => {
                         setEditingRecord({ isNew: true });
@@ -297,27 +310,27 @@ export default function AttendancePanel({ mode }) {
                 >
                     <Plus size={14} /> Manual Sync
                 </button>
-            )}
+            )} */}
           </div>
 
           {adminTab === 'today' && (
-            <div className="glass-panel border-white/5 overflow-hidden animate-fade-in-up">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-hidden animate-fade-in-up">
               <table className="w-full text-left">
                 <thead className="bg-white/5 border-b border-white/10">
                   <tr>
                     {['Personnel', 'Clock In', 'Clock Out', 'Status', 'Mission Log', 'Control'].map(h => (
-                      <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-white/30">{h}</th>
+                      <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3]">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {dailyLog.length === 0 ? (
-                    <tr><td colSpan={4} className="px-6 py-16 text-center text-[10px] text-white/20 uppercase font-black tracking-widest italic animate-pulse">Scanning matrix for records...</td></tr>
+                    <tr><td colSpan={4} className="px-6 py-16 text-center text-[10px] text-[#b6b6c7] uppercase font-black tracking-widest italic animate-pulse">Scanning matrix for records...</td></tr>
                   ) : dailyLog.map((r, i) => (
                     <tr key={i} className="hover:bg-white/[0.02]">
                       <td className="px-6 py-4">
-                          <p className="text-xs font-bold text-white uppercase italic">{r.employee_name || r.employee_code}</p>
-                          <p className="text-[9px] text-white/30 font-mono tracking-tighter uppercase">{r.designation || 'Specialist'}</p>
+                          <p className="text-xs font-bold text-black uppercase italic">{r.employee_name || r.employee_code}</p>
+                          <p className="text-[9px] text-[#8b8ba3] font-mono tracking-tighter uppercase">{r.designation || 'Specialist'}</p>
                       </td>
                       <td className="px-6 py-4 text-xs font-mono text-emerald-400">{r.clock_in || '—'}</td>
                       <td className="px-6 py-4 text-xs font-mono text-red-500">{r.clock_out || '—'}</td>
@@ -326,7 +339,7 @@ export default function AttendancePanel({ mode }) {
                           r.status === 'Present' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
                         }`}>{r.status}</span>
                       </td>
-                      <td className="px-6 py-4 text-[10px] text-white/40 italic truncate max-w-[200px]">{r.work_log || 'No notes found'}</td>
+                      <td className="px-6 py-4 text-[10px] text-[#6b7280] italic truncate max-w-[200px]">{r.work_log || 'No notes found'}</td>
                       <td className="px-6 py-4">
                         <button 
                             onClick={() => {
@@ -339,7 +352,7 @@ export default function AttendancePanel({ mode }) {
                                     work_log: r.work_log || '' 
                                 });
                             }}
-                            className="p-2 rounded-xl bg-white/5 text-white/40 hover:bg-primary hover:text-black transition-all"
+                            className="p-2 rounded-xl bg-[#faf7ff] text-[#6b7280] hover:bg-gradient-to-r hover:from-[#c084fc] hover:to-[#8b5cf6] hover:text-white transition-all"
                         >
                             <Edit size={14} />
                         </button>
@@ -352,27 +365,27 @@ export default function AttendancePanel({ mode }) {
           )}
 
           {adminTab === 'leaves' && (
-            <div className="glass-panel border-white/5 overflow-hidden animate-fade-in-up">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-hidden animate-fade-in-up">
               <table className="w-full text-left">
-                <thead className="bg-white/5 border-b border-white/10">
+                <thead className="bg-[#f5efff] border-b border-[#ebe4ff]">
                   <tr>
                     {['Applicant', 'Protocol', 'Window', 'Rationale', 'Control'].map(h => (
-                      <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-white/30">{h}</th>
+                      <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3]">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-[#ece2ff]">
                   {allLeaves.length === 0 ? (
-                    <tr><td colSpan={5} className="px-6 py-16 text-center text-[10px] text-white/20 uppercase font-black tracking-widest italic animate-pulse">Absence Queue Clear</td></tr>
+                    <tr><td colSpan={5} className="px-6 py-16 text-center text-[10px] text-[#b6b6c7] uppercase font-black tracking-widest italic animate-pulse">Absence Queue Clear</td></tr>
                   ) : allLeaves.map((l, i) => (
-                    <tr key={i} className="hover:bg-white/[0.02]">
+                    <tr key={i} className="hover:bg-[#faf7ff]">
                       <td className="px-6 py-4">
-                          <p className="text-xs font-bold text-white uppercase italic">{l.employee_name || l.employee_code}</p>
-                          <p className="text-[9px] text-white/30 font-mono uppercase">Level {l.applicant_role || '4'}</p>
+                          <p className="text-xs font-bold text-black uppercase italic">{l.employee_name || l.employee_code}</p>
+                          <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">Level {l.applicant_role || '4'}</p>
                       </td>
-                      <td className="px-6 py-4 text-xs text-primary font-black uppercase italic">{l.leave_type}</td>
-                      <td className="px-6 py-4 text-xs font-mono text-white/50">{l.start_date} → {l.end_date}</td>
-                      <td className="px-6 py-4 text-[10px] text-white/40 max-w-xs truncate">{l.reason}</td>
+                      <td className="px-6 py-4 text-xs text-[#8b5cf6] font-black uppercase italic">{l.leave_type}</td>
+                      <td className="px-6 py-4 text-xs font-mono text-[#6b7280]">{l.start_date} → {l.end_date}</td>
+                      <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-xs truncate">{l.reason}</td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
                           <button onClick={() => leaveAction(l.id, 'Approved')}
@@ -393,46 +406,101 @@ export default function AttendancePanel({ mode }) {
           )}
 
           {adminTab === 'heatmap' && (
-              <div className="glass-panel border-white/5 overflow-x-auto animate-fade-in-up">
-                  <table className="w-full text-left border-collapse min-w-[1000px]">
+              <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-x-auto animate-fade-in-up">
+                  <table className="w-full text-left border-collapse min-w-[1400px]">
                       <thead>
-                          <tr className="bg-white/5">
-                              <th className="sticky left-0 bg-[#0B1326] px-6 py-4 text-[9px] font-black uppercase tracking-widest text-white/30 border-r border-white/5">Personnel Matrix</th>
+                          <tr className="bg-[#f5efff]">
+                              <th className="sticky left-0 bg-[#f5efff] px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3] border-r border-[#ece2ff]">Personnel Matrix</th>
                               {Array.from({length: new Date(selectedYear, selectedMonth, 0).getDate()}, (_, i) => (
-                                  <th key={i+1} className="px-2 py-4 text-[8px] font-black text-center text-white/20 border-r border-white/5 w-8">{i+1}</th>
+                                  <th
+                    key={i + 1}
+                    className="
+  h-[58px]
+  min-w-[44px]
+  text-[11px]
+  font-black
+  text-center
+  text-[#6b7280]
+  border-r
+  border-[#ebe7f5]
+  bg-[#f5f1ff]
+"
+>{i+1}</th>
                               ))}
                           </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/5">
+                      <tbody className="divide-y divide-[#ece2ff]">
                           {attendanceSummary.map((emp, i) => (
-                              <tr key={i} className="hover:bg-white/[0.02]">
-                                  <td className="sticky left-0 bg-[#0B1326] px-6 py-3 border-r border-white/5 z-10">
-                                      <p className="text-[10px] font-bold text-white uppercase italic truncate max-w-[150px]">{emp.name}</p>
-                                      <p className="text-[8px] text-white/30 font-mono">{emp.code}</p>
+                              <tr key={i} className="hover:bg-[#faf7ff]">
+                                  <td className="sticky left-0 bg-[#f5efff] px-6 py-3 border-r border-[#ece2ff] z-10">
+                                      <p className="text-[10px] font-bold text-black uppercase italic truncate max-w-[220px]">{emp.name}</p>
+                                      <p className="text-[8px] text-[#8b8ba3] font-mono">{emp.code}</p>
                                   </td>
                                   {emp.days.map((d, di) => {
-                                      let color = 'bg-white/5';
-                                      if (d.status === 'Present') color = 'bg-emerald-500/40 border border-emerald-500/20';
-                                      if (d.status === 'Half Day') color = 'bg-amber-500/40 border border-amber-500/20';
-                                      if (d.status === 'Absent') color = 'bg-red-500/40 border border-red-500/20';
-                                      if (d.status === 'Leave') color = 'bg-primary/40 border border-primary/20';
-                                      if (d.status === 'Active') color = 'bg-emerald-400/20 border border-emerald-400/40 animate-pulse';
-                                      if (d.status === 'Weekend') color = 'bg-white/[0.02]';
+                                      let color =
+  'bg-[#ece8f4] border border-[#e0dbea]';
+
+if (d.status === 'Present')
+  color =
+    'bg-[#22c55e] border border-[#16a34a]';
+
+if (d.status === 'Active')
+  color =
+    'bg-[#06b6d4] border border-[#0891b2]';
+
+if (d.status === 'Half Day')
+  color =
+    'bg-[#facc15] border border-[#eab308]';
+
+if (d.status === 'Absent')
+  color =
+    'bg-[#ff5c7c] border border-[#ff4268]';
+
+if (d.status === 'Leave')
+  color =
+    'bg-[#b784ff] border border-[#9f67ff]';
+
+if (
+  d.status === 'Weekend' ||
+  d.status === 'No Data'
+)
+  color =
+    'bg-[#ece8f4] border border-[#e0dbea]';
                                       
-                                      return (
-                                          <td key={di} className="p-0.5 border-r border-white/5 h-10">
-                                              <div 
-                                                title={`${d.date}: ${d.status}`}
-                                                className={`w-full h-full rounded-sm ${color} transition-all hover:scale-110 hover:z-20 cursor-help`}
-                                              />
-                                          </td>
+  return (
+  <td
+  className="
+    h-[58px]
+    w-[44px]
+    border-r
+    border-[#ebe7f5]
+    bg-[#faf8ff]
+    text-center
+    align-middle
+  "
+>
+  <div className="flex items-center justify-center w-full h-full">
+    <div
+      title={`${d.date}: ${d.status}`}
+      className={`
+        w-[50px]
+        h-[42px]
+        rounded-[10px]
+        transition-all
+        duration-200
+        hover:scale-[1.05]
+        ${color}
+      `}
+    />
+  </div>
+</td>
                                       );
                                   })}
                               </tr>
                           ))}
                       </tbody>
                   </table>
-                  <div className="px-6 py-4 border-t border-white/5 flex gap-6">
+                  <div className="px-6 py-4 border-t border-[#ece2ff] flex gap-6">
                       {[
                           { label: 'Present', color: 'bg-emerald-500' },
                           { label: 'Active', color: 'bg-emerald-400 animate-pulse' },
@@ -442,7 +510,7 @@ export default function AttendancePanel({ mode }) {
                       ].map(l => (
                           <div key={l.label} className="flex items-center gap-2">
                               <div className={`w-2 h-2 rounded-full ${l.color}`} />
-                              <span className="text-[8px] font-black uppercase tracking-widest text-white/30">{l.label}</span>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[#8b8ba3]">{l.label}</span>
                           </div>
                       ))}
                   </div>
@@ -454,20 +522,20 @@ export default function AttendancePanel({ mode }) {
       {/* History Grids */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Attendance History */}
-        <div className="glass-panel border-white/5 overflow-hidden flex flex-col">
-            <div className="px-6 py-5 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 flex items-center gap-2">
-                    <BarChart3 size={14} className="text-primary" /> Log History
+        <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff] flex justify-between items-center">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
+                    <BarChart3 size={14} className="text-[#8b5cf6]" /> Log History
                 </h3>
             </div>
-            <div className="max-h-80 overflow-y-auto divide-y divide-white/5 scrollbar-hide">
+            <div className="max-h-80 overflow-y-auto divide-y divide-[#ece2ff] scrollbar-hide">
                 {history.length === 0 ? (
-                    <p className="p-10 text-center text-[9px] uppercase font-black text-white/10">No logs decrypted</p>
+                    <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No logs decrypted</p>
                 ) : history.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-white/[0.02] transition-colors">
+                    <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors">
                         <div>
-                            <p className="text-xs font-black text-white italic">{new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                            <p className="text-[9px] text-white/30 font-mono uppercase">Session: {h.clock_in} - {h.clock_out || '??'}</p>
+                            <p className="text-xs font-black text-black italic">{new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                            <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">Session: {h.clock_in} - {h.clock_out || '??'}</p>
                         </div>
                         <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
                             h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
@@ -478,20 +546,20 @@ export default function AttendancePanel({ mode }) {
         </div>
 
         {/* Absence History */}
-        <div className="glass-panel border-white/5 overflow-hidden flex flex-col">
-          <div className="px-6 py-5 border-b border-white/10 bg-white/5 flex justify-between items-center">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 flex items-center gap-2">
+        <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
+          <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff] flex justify-between items-center">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
                 <Calendar size={14} className="text-secondary" /> Request History
             </h3>
           </div>
-          <div className="max-h-80 overflow-y-auto divide-y divide-white/5 scrollbar-hide">
+          <div className="max-h-80 overflow-y-auto divide-y divide-[#ece2ff] scrollbar-hide">
             {myLeaves.length === 0 ? (
-                <p className="p-10 text-center text-[9px] uppercase font-black text-white/10">No requests filed</p>
+                <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No requests filed</p>
             ) : myLeaves.map((l, i) => (
-              <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-white/[0.02] transition-colors">
+              <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors">
                 <div>
-                  <p className="text-xs font-black text-white italic">{l.leave_type} Protocol</p>
-                  <p className="text-[9px] text-white/30 font-mono uppercase">{l.start_date} to {l.end_date}</p>
+                  <p className="text-xs font-black text-black italic">{l.leave_type} Protocol</p>
+                  <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} to {l.end_date}</p>
                 </div>
                 <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
                   l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400' :
@@ -505,56 +573,56 @@ export default function AttendancePanel({ mode }) {
 
       {/* Absence Request Modal */}
       {showLeaveForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl animate-fade-in p-4">
-          <form onSubmit={applyLeave} className="glass-panel border-white/10 p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#060E20]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
+          <form onSubmit={applyLeave} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff]">
             <div className="absolute top-0 right-0 p-8 opacity-5"><Calendar size={100} /></div>
             
             <div className="relative z-10">
-                <h3 className="text-xl font-display font-black text-white uppercase italic tracking-widest mb-1">Request <span className="text-primary">Absence</span></h3>
-                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/30 mb-8">Authorization Protocol 77-A</p>
+                <h3 className="text-xl font-display font-black text-black uppercase italic tracking-widest mb-1">Request <span className="text-[#8b5cf6]">Absence</span></h3>
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#8b8ba3] mb-8">Authorization Protocol 77-A</p>
                 
                 <div className="space-y-4">
                     <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Protocol Type</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Protocol Type</label>
                         <input 
                             disabled
                             value="Standard Leave"
-                            className="w-full glass-panel border-white/10 text-white/40 text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none uppercase font-bold"
+                            className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black/40 text-xs px-4 py-4 rounded-xl focus:outline-none uppercase font-bold"
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Commencement</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Commencement</label>
                             <input 
                                 type="date"
                                 required
                                 value={leaveForm.start_date}
                                 onChange={e => setLeaveForm({...leaveForm, start_date: e.target.value})}
-                                className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all uppercase font-mono"
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
                             />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Termination</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Termination</label>
                             <input 
                                 type="date"
                                 required
                                 value={leaveForm.end_date}
                                 onChange={e => setLeaveForm({...leaveForm, end_date: e.target.value})}
-                                className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all uppercase font-mono"
+                                className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all uppercase font-mono"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Protocol Rationale</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Protocol Rationale</label>
                         <textarea 
                             required
                             placeholder="State mission-critical reasons for absence..."
                             value={leaveForm.reason}
                             onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})}
                             rows={3}
-                            className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all resize-none placeholder:text-white/10"
+                            className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all resize-none placeholder:text-black/10"
                         />
                     </div>
                 </div>
@@ -563,7 +631,7 @@ export default function AttendancePanel({ mode }) {
                     <button 
                         type="button"
                         onClick={() => setShowLeaveForm(false)}
-                        className="flex-1 py-4 rounded-2xl border border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest hover:text-white hover:bg-white/5 transition-all"
+                        className="flex-1 py-4 rounded-2xl border border-white/10 text-black/40 text-[10px] font-black uppercase tracking-widest hover:text-black hover:bg-white/5 transition-all"
                     >
                         Abort
                     </button>
@@ -581,12 +649,12 @@ export default function AttendancePanel({ mode }) {
       {/* Clock Out Modal */}
       {showClockOutModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl animate-fade-in p-4">
-          <div className="glass-panel border-white/10 p-10 w-full max-w-md space-y-8 relative overflow-hidden bg-[#060E20]">
+          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 p-10 w-full max-w-md space-y-8 relative overflow-hidden bg-[#0B1326]">
              <div className="absolute top-0 right-0 p-8 opacity-5 text-red-500"><LogOut size={120} /></div>
              
              <div className="relative z-10 text-center">
-                 <h3 className="text-2xl font-display font-black text-white uppercase italic tracking-widest mb-2">Finalize <span className="text-red-500">Session</span></h3>
-                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 mb-8">Debrief Protocol Required</p>
+<h3 className="text-2xl font-display font-black text-black uppercase italic tracking-widest mb-2">Finalize <span className="text-red-500">Session</span></h3>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/30 mb-8">Debrief Protocol Required</p>
                  
                  <div className="space-y-6 text-left">
                     <div>
@@ -597,14 +665,14 @@ export default function AttendancePanel({ mode }) {
                             value={workLog}
                             onChange={e => setWorkLog(e.target.value)}
                             rows={4}
-                            className="w-full glass-panel border-white/10 text-white text-sm bg-white/5 px-5 py-5 rounded-2xl focus:outline-none focus:border-red-500/50 transition-all resize-none placeholder:text-white/10"
+                            className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-sm bg-white/5 px-5 py-5 rounded-2xl focus:outline-none focus:border-red-500/50 transition-all resize-none placeholder:text-black/10"
                         />
                     </div>
                     
                     <div className="flex gap-4">
                         <button 
                             onClick={() => setShowClockOutModal(false)}
-                            className="flex-1 px-8 py-5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all"
+                            className="flex-1 px-8 py-5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-black/40 hover:bg-white/5 transition-all"
                         >
                             Abort
                         </button>
@@ -625,78 +693,78 @@ export default function AttendancePanel({ mode }) {
       {editingRecord && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-[#060b19]/80 backdrop-blur-sm" onClick={() => setEditingRecord(null)} />
-              <div className="glass-panel border-white/10 w-full max-w-lg relative z-10 animate-fade-in-up overflow-hidden">
+              <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 w-full max-w-lg relative z-10 animate-fade-in-up overflow-hidden">
                   <div className="p-6 border-b border-white/5 bg-white/5 flex justify-between items-center">
                       <div>
-                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white italic">Matrix Synchronization</h3>
-                          <p className="text-[9px] text-white/30 uppercase font-bold mt-1">Personnel Record Adjustment Protocol</p>
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black italic">Matrix Synchronization</h3>
+                          <p className="text-[9px] text-black/30 uppercase font-bold mt-1">Personnel Record Adjustment Protocol</p>
                       </div>
-                      <button onClick={() => setEditingRecord(null)} className="p-2 text-white/20 hover:text-white transition-colors">
+                      <button onClick={() => setEditingRecord(null)} className="p-2 text-black/20 hover:text-black transition-colors">
                           <XCircle size={20} />
                       </button>
                   </div>
                   <div className="p-8 space-y-6">
                       <div className="grid grid-cols-2 gap-6">
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Personnel Node</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Personnel Node</label>
                             {editingRecord.isNew ? (
                                 <select 
                                     value={editForm.employee_code}
                                     onChange={e => setEditForm({...editForm, employee_code: e.target.value})}
-                                    className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                                    className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
                                 >
-                                    <option value="" className="bg-[#0b1426]">Select Node...</option>
+                                    <option value="" className="bg-white">Select Node...</option>
                                     {employees.map(e => (
-                                        <option key={e.employee_code} value={e.employee_code} className="bg-[#0b1426]">{e.name} ({e.employee_code})</option>
+                                        <option key={e.employee_code} value={e.employee_code} className="text-black">{e.name} ({e.employee_code})</option>
                                     ))}
                                 </select>
                             ) : (
-                                <div className="w-full glass-panel border-white/5 text-white/40 text-xs bg-white/5 px-4 py-4 rounded-xl font-bold uppercase italic">
+                                <div className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 text-black/40 text-xs bg-white/5 px-4 py-4 rounded-xl font-bold uppercase italic">
                                     {editingRecord.employee_name || editingRecord.employee_code}
                                 </div>
                             )}
                           </div>
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Time Vector (Date)</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time Vector (Date)</label>
                             <input 
                                 type="date"
                                 disabled={!editingRecord.isNew}
                                 value={editForm.date}
                                 onChange={e => setEditForm({...editForm, date: e.target.value})}
-                                className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none disabled:opacity-50"
+                                className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none disabled:opacity-50"
                             />
                           </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-6">
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Signal Start (Clock In)</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Signal Start (Clock In)</label>
                             <input 
                                 type="time"
                                 step="1"
                                 value={editForm.clock_in}
                                 onChange={e => setEditForm({...editForm, clock_in: e.target.value})}
-                                className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                                className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Signal End (Clock Out)</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Signal End (Clock Out)</label>
                             <input 
                                 type="time"
                                 step="1"
                                 value={editForm.clock_out}
                                 onChange={e => setEditForm({...editForm, clock_out: e.target.value})}
-                                className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                                className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
                             />
                           </div>
                       </div>
 
                       <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-primary mb-2 block ml-1">Mission Rationale (Work Log)</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Mission Rationale (Work Log)</label>
                         <textarea 
                             value={editForm.work_log}
                             onChange={e => setEditForm({...editForm, work_log: e.target.value})}
-                            className="w-full glass-panel border-white/10 text-white text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none h-24 resize-none"
+                            className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none h-24 resize-none"
                             placeholder="Detail the activities conducted during this shift..."
                         />
                       </div>

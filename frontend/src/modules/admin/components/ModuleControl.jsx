@@ -3,94 +3,323 @@ import { Activity, Zap, ShieldCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export default function ModuleControl({ tenantOps, onUpdate }) {
+
   const toggleModule = async (module) => {
     const current = tenantOps.modules_enabled || [];
-    const updated = current.includes(module) 
+
+    const updated = current.includes(module)
       ? current.filter(m => m !== module)
       : [...current, module];
-    
+
     try {
       const res = await fetch('/api/admin/tenants/current/ops', {
-        method: 'PATCH', credentials: 'include',
+        method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ modules_enabled: updated })
       });
+
       if (!res.ok) throw new Error();
-      onUpdate({ ...tenantOps, modules_enabled: updated });
-      toast.success(`${module.toUpperCase()} module ecosystem updated`);
+
+      onUpdate({
+        ...tenantOps,
+        modules_enabled: updated
+      });
+
+      toast.success(`${module.toUpperCase()} workspace updated`);
+
     } catch {
-      toast.error('Ecological Sync Error');
+      toast.error('Workspace sync failed');
     }
   };
 
   const MODULES = [
-    { id: 'source', label: 'Source', desc: 'Neural Talent Acquisition & HR Pipeline' },
-    { id: 'forge', label: 'Forge', desc: 'Skill Synthesis & Cognitive Hub' },
-    { id: 'verify', label: 'Verify', desc: 'Deep Assessment & Validation Node' },
-    { id: 'deploy', label: 'Deploy', desc: 'Core Identity & Personnel Matrix' },
+    {
+      id: 'source',
+      label: 'Source',
+      desc: 'Hiring & candidate management'
+    },
+
+    {
+      id: 'forge',
+      label: 'Forge',
+      desc: 'Training & skill development'
+    },
+
+    {
+      id: 'verify',
+      label: 'Verify',
+      desc: 'Assessments & validation tools'
+    },
+
+    {
+      id: 'deploy',
+      label: 'Deploy',
+      desc: 'Employees & workspace operations'
+    },
   ];
 
   return (
+
     <div className="space-y-10 animate-fade-in-up">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+      {/* MODULE GRID */}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7">
+
         {MODULES.map(m => {
-          const isActive = tenantOps.modules_enabled.includes(m.id);
+
+          const isActive =
+            tenantOps.modules_enabled.includes(m.id);
+
           return (
-            <div key={m.id} className={`glass-panel p-8 border-white/5 bg-white/[0.01] flex flex-col justify-between gap-10 group transition-all duration-500 hover:border-primary/30 ${isActive ? 'ring-1 ring-primary/20 bg-primary/[0.02]' : 'grayscale opacity-60 hover:grayscale-0 hover:opacity-100'}`}>
-              <div className="space-y-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isActive ? 'bg-primary/20 text-primary' : 'bg-white/5 text-white/20'}`}>
-                   <Activity size={24} className={isActive ? 'animate-pulse' : ''} />
-                </div>
-                <div>
-                  <h4 className="text-base font-black uppercase tracking-tighter text-white group-hover:text-primary transition-colors">{m.label}</h4>
-                  <p className="text-[10px] text-white/30 mt-2 uppercase leading-relaxed font-bold tracking-widest">{m.desc}</p>
-                </div>
-              </div>
-              
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isActive ? 'text-emerald-400' : 'text-white/20'}`}>
-                    {isActive ? 'Status: Integrated' : 'Status: Isolated'}
-                  </span>
-                  <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-400 shadow-[0_0_10px_rgba(20,184,166,0.5)]' : 'bg-white/5'}`} />
-                </div>
-                <button 
-                  onClick={() => toggleModule(m.id)}
-                  className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all duration-300 active:scale-95 ${
-                    isActive 
-                      ? 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white' 
-                      : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-black'
-                  }`}
+
+            <div
+              key={m.id}
+              className={`
+                rounded-[2.5rem]
+                border
+                overflow-hidden
+                transition-all
+                duration-500
+                group
+                ${
+                  isActive
+                    ? 'bg-white border-primary/20 shadow-[0_20px_60px_rgba(180,140,255,0.08)]'
+                    : 'bg-[#f4f1fb] border-[#ebe5fa]'
+                }
+              `}
+            >
+
+              {/* TOP */}
+
+              <div className="p-8 flex flex-col gap-8">
+
+                <div
+                  className={`
+                    w-14 h-14 rounded-2xl flex items-center justify-center transition-all
+                    ${
+                      isActive
+                        ? 'bg-gradient-to-br from-[#c084fc] to-[#8b5cf6] text-white shadow-[0_10px_30px_rgba(180,140,255,0.35)]'
+                        : 'bg-white text-[#8f96aa] border border-[#ece7fa]'
+                    }
+                  `}
                 >
-                  {isActive ? 'Sever Access' : 'Integrate Node'}
-                </button>
+                  <Activity
+                    size={24}
+                    className={isActive ? 'animate-pulse' : ''}
+                  />
+                </div>
+
+                <div>
+
+                  <h4
+                    className="
+                      text-[1.4rem]
+                      font-black
+                      uppercase
+                      tracking-tight
+                      text-black
+                    "
+                  >
+                    {m.label}
+                  </h4>
+
+                  <p
+                    className="
+                      mt-3
+                      text-[11px]
+                      uppercase
+                      tracking-[0.18em]
+                      leading-relaxed
+                      font-bold
+                      text-[#7e7890]
+                    "
+                  >
+                    {m.desc}
+                  </p>
+
+                </div>
+
               </div>
+
+              {/* STATUS */}
+
+              <div className="px-8 pb-8 flex flex-col gap-5">
+
+                <div className="flex items-center justify-between">
+
+                  <span
+                    className={`
+                      text-[10px]
+                      font-black
+                      uppercase
+                      tracking-[0.25em]
+                      ${
+                        isActive
+                          ? 'text-[#8b5cf6]'
+                          : 'text-[#9ca3af]'
+                      }
+                    `}
+                  >
+                    {isActive ? 'ACTIVE' : 'DISABLED'}
+                  </span>
+
+                  <div
+                    className={`
+                      w-3 h-3 rounded-full
+                      ${
+                        isActive
+                          ? 'bg-[#8b5cf6] shadow-[0_0_20px_rgba(180,140,255,0.6)]'
+                          : 'bg-[#d6d3df]'
+                      }
+                    `}
+                  />
+
+                </div>
+
+                <button
+                  onClick={() => toggleModule(m.id)}
+                  className={`
+                    w-full
+                    py-4
+                    rounded-2xl
+                    text-[10px]
+                    font-black
+                    uppercase
+                    tracking-[0.28em]
+                    transition-all
+                    duration-300
+                    active:scale-95
+                    ${
+                      isActive
+                        ? `
+                          bg-[#f4efff]
+                          border
+                          border-[#d8c7ff]
+                          text-[#8b5cf6]
+                          hover:bg-[#8b5cf6]
+                          hover:text-white
+                        `
+                        : `
+                          bg-black
+                          text-white
+                          hover:bg-[#8b5cf6]
+                        `
+                    }
+                  `}
+                >
+                  {isActive ? 'Disable Module' : 'Enable Module'}
+                </button>
+
+              </div>
+
             </div>
+
           );
         })}
+
       </div>
-      
-      <div className="glass-panel p-12 border-primary/10 bg-primary/[0.01] flex items-center justify-between relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-8 text-primary shadow-[0_0_100px_rgba(var(--color-primary),0.1)] transition-transform duration-1000 group-hover:scale-125">
-             <ShieldCheck size={120} strokeWidth={0.5} className="opacity-5" />
+
+      {/* BOTTOM PANEL */}
+
+      <div
+        className="
+          relative
+          overflow-hidden
+          rounded-[2.8rem]
+          border
+          border-primary/15
+          bg-gradient-to-br
+          from-[#ffffff]
+          to-[#f4efff]
+          p-12
+          shadow-[0_25px_80px_rgba(180,140,255,0.08)]
+        "
+      >
+
+        <div
+          className="
+            absolute
+            top-0
+            right-0
+            p-8
+            text-primary
+            opacity-10
+          "
+        >
+          <ShieldCheck
+            size={140}
+            strokeWidth={0.5}
+          />
         </div>
-        <div className="space-y-4 relative z-10">
-          <div className="flex items-center gap-3">
-             <Zap size={18} className="text-primary" />
-             <h3 className="text-lg font-black uppercase tracking-tighter text-primary italic">Workspace Ecosystem Enforcement</h3>
+
+        <div className="relative z-10 flex items-center justify-between gap-10 flex-wrap">
+
+          <div className="space-y-5 max-w-3xl">
+
+            <div className="flex items-center gap-3">
+
+              <Zap
+                size={18}
+                className="text-[#8b5cf6]"
+              />
+
+              <h3
+                className="
+                  text-2xl
+                  font-black
+                  uppercase
+                  tracking-tight
+                  text-[#8b5cf6]
+                  italic
+                "
+              >
+                Workspace Controls
+              </h3>
+
+            </div>
+
+            <p
+              className="
+                text-[15px]
+                leading-[1.9]
+                text-[#5d6475]
+              "
+            >
+              Turning modules on or off updates access instantly across the workspace.
+              Disabled modules become unavailable to standard users while administrator
+              access remains protected.
+            </p>
+
           </div>
-          <p className="text-sm text-white/40 max-w-2xl leading-relaxed">
-            Changes to core neural modules propagate instantly. Revoking access to a module will immediately 
-            <span className="text-white/80 font-bold"> decouple restricted interfaces</span> for all non-privileged identities within this workspace. 
-            Data persistence is maintained across disconnects.
-          </p>
+
+          <div
+            className="
+              px-8
+              py-5
+              rounded-3xl
+              bg-black
+              shadow-[0_15px_40px_rgba(0,0,0,0.15)]
+            "
+          >
+            <p
+              className="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-[0.35em]
+                text-[#c084fc]
+              "
+            >
+              Workspace Mode : Enterprise
+            </p>
+          </div>
+
         </div>
-        <div className="relative z-10">
-             <div className="p-4 rounded-3xl glass-panel border-white/5 bg-black/40">
-                <p className="text-[9px] font-mono text-primary uppercase tracking-[0.3em]">Protocol Layer: Enterprise</p>
-             </div>
-        </div>
+
       </div>
+
     </div>
   );
 }
