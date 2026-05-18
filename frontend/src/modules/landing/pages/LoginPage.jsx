@@ -7,7 +7,6 @@ import loginImg from "../../../assets/login.png";
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
-
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -69,7 +68,6 @@ export default function LoginPage() {
       } else {
         setError(data.detail || 'Access Denied: Invalid Credentials.');
       }
-
     } catch (err) {
       setError('Phygitron 360 Network Interrupted: Check Connection.');
     } finally {
