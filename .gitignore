@@ -56,4 +56,5 @@ frontend/.next/
 # Project Specific
 temp/
 backend/data/
+temp/
 CONFIDENTIAL/

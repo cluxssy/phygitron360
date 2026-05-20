@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Shield, Check, X, Zap } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -68,105 +68,235 @@ export const PERMISSIONS_CATEGORIES = [
 ];
 
 export default function ClearanceMatrix({ rolesPerms, onUpdate }) {
+
   const roles = Object.keys(rolesPerms);
 
   const togglePermission = async (role, permKey) => {
+
     const currentList = rolesPerms[role] || [];
+
     const newList = currentList.includes(permKey)
       ? currentList.filter(p => p !== permKey)
       : [...currentList, permKey];
-    
+
     try {
+
       const res = await fetch('/api/admin/permissions/roles', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, permissions: newList })
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          role,
+          permissions: newList
+        })
       });
+
       if (!res.ok) throw new Error();
+
       onUpdate(role, newList);
+
       toast.success('Clearance Updated');
+
     } catch {
+
       toast.error('Sync Error');
+
     }
   };
 
   return (
-    <div className="glass-panel border-white/5 overflow-hidden animate-fade-in-up">
-      <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+
+    <div className="bg-white/70 backdrop-blur-2xl border border-primary/10 shadow-[0_10px_60px_rgba(180,140,255,0.08)] overflow-hidden animate-fade-in-up rounded-[2.5rem]">
+
+      {/* HEADER */}
+
+      <div className="p-8 border-b border-primary/10 flex justify-between items-center bg-gradient-to-r from-primary/[0.08] to-transparent">
+
         <div>
-          <h3 className="text-lg font-black text-white uppercase tracking-tighter flex items-center gap-3">
-            <Shield className="text-primary" size={20} /> Identity Clearance Matrix
+
+          <h3 className="text-2xl font-black text-black uppercase tracking-tight flex items-center gap-3">
+
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 text-primary shadow-[0_0_30px_rgba(180,140,255,0.15)]">
+              <Shield size={22} />
+            </div>
+
+            Identity Clearance Matrix
+
           </h3>
-          <p className="text-[10px] text-white/30 mt-1 uppercase tracking-[0.2em] font-bold">Standard Role Permission Governance</p>
+
+          <p className="text-[10px] text-black/80 mt-2 uppercase tracking-[0.25em] font-black">
+            Standard Role Permission Governance
+          </p>
+
         </div>
-        <div className="flex gap-2">
-            {roles.map(r => (
-                <div key={r} className="px-3 py-1 glass-panel border-white/10 text-[9px] font-black uppercase text-white/60">
-                    {r}
-                </div>
-            ))}
+
+        <div className="flex gap-3 flex-wrap">
+
+          {roles.map(r => (
+
+            <div
+              key={r}
+              className="px-4 py-2 bg-white border border-primary/15 rounded-2xl text-[10px] font-black uppercase tracking-[0.12em] text-primary shadow-[0_0_20px_rgba(180,140,255,0.08)]"
+            >
+              {r}
+            </div>
+
+          ))}
+
         </div>
+
       </div>
 
+      {/* TABLE */}
+
       <div className="overflow-x-auto">
+
         <table className="w-full text-left border-collapse">
+
           <thead>
-            <tr>
-              <th className="p-6 text-[10px] font-black uppercase tracking-widest text-white/20 border-b border-white/5 bg-black/20 w-1/3">Clearance Key</th>
+
+            <tr className="bg-gradient-to-r from-primary/[0.08] to-transparent border-b border-primary/10">
+
+              <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-black/50 w-1/3">
+                Clearance Key
+              </th>
+
               {roles.map(r => (
-                <th key={r} className="p-6 text-[10px] font-semibold uppercase tracking-widest text-primary border-b border-white/5 text-center bg-black/20">
+
+                <th
+                  key={r}
+                  className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-black/50 text-center"
+                >
                   {r}
                 </th>
+
               ))}
+
             </tr>
+
           </thead>
-          <tbody className="divide-y divide-white/5">
+
+          <tbody className="divide-y divide-primary/[0.05]">
+
             {PERMISSIONS_CATEGORIES.map(cat => (
+
               <React.Fragment key={cat.group}>
-                <tr className="bg-primary/5">
-                  <td colSpan={roles.length + 1} className="px-6 py-3 text-[10px] font-black uppercase tracking-[0.3em] text-primary/60 border-y border-white/5">
+
+                {/* CATEGORY HEADER */}
+
+                <tr className="bg-primary/[0.04]">
+
+                  <td
+                    colSpan={roles.length + 1}
+                    className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.3em] text-primary border-y border-primary/10"
+                  >
                     {cat.group}
                   </td>
+
                 </tr>
+
+                {/* PERMISSIONS */}
+
                 {cat.perms.map(p => (
-                  <tr key={p.key} className="hover:bg-white/[0.03] group transition-colors">
-                    <td className="p-6 border-b border-white/[0.02]">
-                      <p className="text-sm font-bold text-white transition-colors group-hover:text-primary">{p.label}</p>
-                      <p className="text-[9px] text-white/20 font-mono mt-1 uppercase tracking-tight">{p.key}</p>
+
+                  <tr
+                    key={p.key}
+                    className="hover:bg-primary/[0.03] group transition-all duration-300"
+                  >
+
+                    {/* PERMISSION LABEL */}
+
+                    <td className="p-6 border-b border-primary/[0.04]">
+
+                      <p className="text-sm font-black text-black transition-colors group-hover:text-violet-700">
+                        {p.label}
+                      </p>
+
+                      <p className="text-[9px] text-primary/50 font-mono mt-1 uppercase tracking-tight">
+                        {p.key}
+                      </p>
+
                     </td>
+
+                    {/* ROLES */}
+
                     {roles.map(r => {
+
                       const isAllowed = rolesPerms[r]?.includes(p.key);
+
                       return (
-                        <td key={`${r}-${p.key}`} className="p-6 border-b border-white/[0.02] text-center">
+
+                        <td
+                          key={`${r}-${p.key}`}
+                          className="p-6 border-b border-primary/[0.04] text-center"
+                        >
+
                           <button
                             onClick={() => togglePermission(r, p.key)}
-                            className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-300 ${
-                              isAllowed 
-                                ? 'bg-primary/20 text-primary border border-primary/20 shadow-[0_0_15px_-5px_rgba(var(--color-primary),0.3)]' 
-                                : 'bg-white/[0.03] text-white/10 border border-white/5 hover:border-white/20 hover:text-white/40'
+                            className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-300 border ${
+                              isAllowed
+                                ? 'bg-gradient-to-br from-primary/20 to-primary/5 text-violet-700 border-primary/20 shadow-[0_0_25px_rgba(180,140,255,0.18)] hover:scale-105'
+                                : 'bg-white text-black/20 border-primary/10 hover:border-primary/30 hover:text-primary hover:bg-primary/[0.04]'
                             }`}
                           >
-                            {isAllowed ? <Check size={18} strokeWidth={3} /> : <X size={16} strokeWidth={2} />}
+
+                            {isAllowed
+                              ? <Check size={18} strokeWidth={3} />
+                              : <X size={16} strokeWidth={2.5} />
+                            }
+
                           </button>
+
                         </td>
+
                       );
+
                     })}
+
                   </tr>
+
                 ))}
+
               </React.Fragment>
+
             ))}
+
           </tbody>
+
         </table>
+
       </div>
-      
-      <div className="p-8 bg-black/40 border-t border-white/5">
-        <div className="flex items-center gap-4 text-white/40">
-            <Zap size={16} className="text-primary animate-pulse" />
-            <p className="text-[10px] font-medium uppercase tracking-widest leading-relaxed">
-                Changes propagate instantly to all active neural sessions. <span className="text-white/60">SuperAdmin</span> and <span className="text-white/60">OrgAdmin</span> bypass these checks for platform integrity.
+
+      {/* FOOTER */}
+
+      <div className="p-8 bg-gradient-to-r from-primary/[0.04] to-transparent border-t border-primary/10">
+
+        <div className="flex items-start gap-4">
+
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 text-primary">
+            <Zap size={16} />
+          </div>
+
+          <div>
+
+            <p className="text-sm font-black uppercase tracking-tight text-primary italic">
+              Workspace Ecosystem Enforcement
             </p>
+
+            <p className="text-sm text-black/50 mt-3 leading-relaxed max-w-4xl">
+              Changes to core neural modules propagate instantly. Revoking access to a module will immediately
+              decouple restricted interfaces for all non-privileged identities within this workspace.
+              Data persistence is maintained across disconnects.
+            </p>
+
+          </div>
+
         </div>
+
       </div>
+
     </div>
   );
 }
