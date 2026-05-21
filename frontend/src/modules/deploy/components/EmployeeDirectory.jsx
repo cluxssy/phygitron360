@@ -249,36 +249,7 @@ setEmployees(employeeList);
 
         {/* BUTTON */}
 
-        <HasPermission permission="deploy.employees.create">
-
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="
-              px-7
-              py-4
-              rounded-2xl
-              bg-gradient-to-r
-              from-[#8b5cf6]
-              to-[#c084fc]
-              text-white
-              text-sm
-              font-black
-              tracking-wide
-              flex
-              items-center
-              gap-3
-              shadow-lg
-              shadow-purple-200
-            "
-          >
-
-            <Plus size={16} />
-
-            Add Personnel
-
-          </button>
-
-        </HasPermission>
+        
 
       </div>
 
@@ -392,8 +363,7 @@ setEmployees(employeeList);
                   'Designation',
                   'Department',
                   'Location',
-                  'Status',
-                  'Actions'
+                  'Status'
                 ].map((h) => (
 
                   <th
@@ -548,27 +518,6 @@ setEmployees(employeeList);
                         {emp.employment_status || 'Active'}
 
                       </span>
-
-                    </td>
-
-                    {/* ACTION */}
-
-                    <td className="px-8 py-6">
-
-                      <button className="
-                        flex
-                        items-center
-                        gap-2
-                        text-[#7c3aed]
-                        font-black
-                        text-sm
-                      ">
-
-                        Open
-
-                        <ArrowRight size={15} />
-
-                      </button>
 
                     </td>
 
