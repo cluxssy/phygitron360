@@ -14,6 +14,8 @@ export default function ComboBox({
     const [search, setSearch] = useState('');
     const containerRef = useRef(null);
 
+    const isLightMode = window.location.pathname.startsWith('/deploy');
+
     // Filter options based on search
     const filteredOptions = options.filter(opt => 
         (typeof opt === 'string' ? opt : opt.name)
@@ -40,26 +42,52 @@ export default function ComboBox({
 
     return (
         <div className={`space-y-1.5 relative ${className}`} ref={containerRef}>
-            {label && <label className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-2">{label}</label>}
+            {label && (
+                <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${
+                    isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'
+                }`}>{label}</label>
+            )}
             
             <div 
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full glass-panel border-white/5 bg-black/20 px-5 py-4 rounded-xl flex justify-between items-center cursor-pointer hover:border-white/10 transition-all border group"
+                className={`w-full px-5 py-4 rounded-xl flex justify-between items-center cursor-pointer transition-all border group ${
+                    isLightMode 
+                        ? 'bg-white border-[#ebe4ff] hover:border-[#c084fc]' 
+                        : 'glass-panel border-white/5 bg-black/20 hover:border-white/10'
+                }`}
             >
-                <span className={`text-xs ${value ? 'text-white' : 'text-white/20'}`}>
+                <span className={`text-xs ${
+                    value 
+                        ? (isLightMode ? 'text-black' : 'text-white') 
+                        : (isLightMode ? 'text-black/30' : 'text-white/20')
+                }`}>
                     {value || placeholder}
                 </span>
-                <ChevronDown size={14} className={`text-white/20 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={`transition-transform ${
+                    isLightMode ? 'text-black/30' : 'text-white/20'
+                } ${isOpen ? 'rotate-180' : ''}`} />
             </div>
 
             {isOpen && (
-                <div className="absolute z-[60] left-0 right-0 mt-2 glass-panel border-white/10 bg-[#0A1225] shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="p-3 border-b border-white/5 relative">
-                        <Search size={12} className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20" />
+                <div className={`absolute z-[60] left-0 right-0 mt-2 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${
+                    isLightMode 
+                        ? 'bg-white border border-[#ebe4ff] shadow-[0_20px_50px_rgba(139,92,246,0.1)]' 
+                        : 'glass-panel border-white/10 bg-[#0A1225] shadow-[0_20px_50px_rgba(0,0,0,0.5)]'
+                }`}>
+                    <div className={`p-3 relative ${
+                        isLightMode ? 'border-b border-[#f1ebff]' : 'border-b border-white/5'
+                    }`}>
+                        <Search size={12} className={`absolute left-6 top-1/2 -translate-y-1/2 ${
+                            isLightMode ? 'text-black/30' : 'text-white/20'
+                        }`} />
                         <input 
                             autoFocus
                             placeholder="Search or type custom..."
-                            className="w-full bg-white/5 border-white/5 rounded-lg pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-primary/40 border"
+                            className={`w-full rounded-lg pl-10 pr-4 py-2.5 text-xs outline-none border transition-all ${
+                                isLightMode 
+                                    ? 'bg-[#faf7ff] border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                    : 'bg-white/5 border-white/5 text-white focus:border-primary/40'
+                            }`}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
@@ -77,16 +105,24 @@ export default function ComboBox({
                                             e.stopPropagation();
                                             handleSelect(val);
                                         }}
-                                        className="px-4 py-3 text-xs text-white/70 hover:text-white hover:bg-white/5 cursor-pointer flex items-center justify-between group"
+                                        className={`px-4 py-3 text-xs cursor-pointer flex items-center justify-between group transition-colors ${
+                                            isLightMode 
+                                                ? 'text-black hover:bg-[#faf7ff] hover:text-[#8b5cf6]' 
+                                                : 'text-white/70 hover:text-white hover:bg-white/5'
+                                        }`}
                                     >
                                         <span>{val}</span>
-                                        {value === val && <Check size={12} className="text-primary" />}
+                                        {value === val && (
+                                            <Check size={12} className={isLightMode ? 'text-[#8b5cf6]' : 'text-primary'} />
+                                        )}
                                     </div>
                                 );
                             })
                         ) : (
                             <div className="px-4 py-8 text-center">
-                                <p className="text-[10px] text-white/20 uppercase font-black tracking-widest">No results found</p>
+                                <p className={`text-[10px] uppercase font-black tracking-widest ${
+                                    isLightMode ? 'text-[#b6b6c7]' : 'text-white/20'
+                                }`}>No results found</p>
                             </div>
                         )}
 
@@ -96,7 +132,11 @@ export default function ComboBox({
                                     e.stopPropagation();
                                     handleSelect(search);
                                 }}
-                                className="px-4 py-3 bg-primary/5 text-xs text-primary hover:bg-primary/10 cursor-pointer flex items-center gap-2 border-t border-white/5"
+                                className={`px-4 py-3 text-xs cursor-pointer flex items-center gap-2 transition-colors border-t ${
+                                    isLightMode 
+                                        ? 'bg-[#f5efff] text-[#8b5cf6] hover:bg-[#ece2ff] border-[#f1ebff]' 
+                                        : 'bg-primary/5 text-primary hover:bg-primary/10 border-white/5'
+                                }`}
                             >
                                 <Plus size={12} />
                                 <span>Add "<span className="font-bold">{search}</span>" as Custom</span>
@@ -108,3 +148,4 @@ export default function ComboBox({
         </div>
     );
 }
+

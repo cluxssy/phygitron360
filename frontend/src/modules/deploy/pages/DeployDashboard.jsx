@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
-import EmployeeDirectory from '../components/EmployeeDirectory';
 import PerformancePanel from '../components/PerformancePanel';
 import AssetsPanel from '../components/AssetsPanel';
 import OnboardingPanel from '../components/OnboardingPanel';
-
+import EmployeeDashboard from '../components/EmployeeDashboard';
 import AttendancePanel from '../components/AttendancePanel';
-import MyProfile from '../components/MyProfile';
 import DeployAnalytics from '../components/DeployAnalytics';
+import EmployeeDirectory from '../components/EmployeeDirectory';
+import MyProfile from '../components/MyProfile';
+import EmployeeProfileFull from '../components/EmployeeProfileFull';
 import "../styles/deploy.css";
 
 import logo from "../../../assets/phy360.png";
@@ -38,9 +39,9 @@ export default function DeployDashboard() {
   );
 
   const panelMode =
-    deployView === 'management'
-      ? 'admin'
-      : 'employee';
+  deployView === 'management'
+    ? 'admin'
+    : 'employee';
 
   /* =========================================
      MODULES
@@ -87,6 +88,15 @@ export default function DeployDashboard() {
     user?.email?.split('@')[0] ||
     "User";
 
+  useEffect(() => {
+    if (
+      deployView === 'employee' &&
+      (currentTab === 'assets' || currentTab === 'onboard')
+    ) {
+      navigate('/deploy?tab=dashboard');
+    }
+  }, [deployView, currentTab, navigate]);
+
   return (
 
     <div className="dashboard-page">
@@ -109,6 +119,8 @@ export default function DeployDashboard() {
 
           <div className="hub-tabs">
 
+            {deployView === 'management' && (
+
             <button
               className={`hub-tab ${
                 location.pathname === "/admin"
@@ -119,6 +131,8 @@ export default function DeployDashboard() {
             >
               Dashboard
             </button>
+
+          )}
 
             {modules.map((m) => (
 
@@ -274,8 +288,8 @@ export default function DeployDashboard() {
               </button>
 
               <button
-                className={currentTab === 'team' ? 'active' : ''}
-                onClick={() => setTab('team')}
+                className={currentTab === 'personnel' ? 'active' : ''}
+                onClick={() => setTab('personnel')}
               >
                 Personnel
               </button>
@@ -323,8 +337,8 @@ export default function DeployDashboard() {
               </button>
 
               <button
-                className={currentTab === 'team' ? 'active' : ''}
-                onClick={() => setTab('team')}
+                className={currentTab === 'profile' ? 'active' : ''}
+                onClick={() => setTab('profile')}
               >
                 My Profile
               </button>
@@ -357,101 +371,108 @@ export default function DeployDashboard() {
 
         <div className="content">
 
-          <div
-            className="
-              bg-gradient-to-r
-              from-white
-              via-[#faf7ff]
-              to-[#f3ecff]
-              border
-              border-[#ece4ff]
-              rounded-[2rem]
-              px-8
-              py-6
-              mb-8
-              shadow-[0_10px_40px_rgba(180,140,255,0.08)]
-            "
-          >
+  {/* =========================================
+    DASHBOARD
+========================================= */}
 
-            <p
-              className="
-                text-[10px]
-                font-black
-                uppercase
-                tracking-[0.3em]
-                text-[#7c3aed]
-                mb-2
-              "
-            >
-              Workforce Command Center
-            </p>
+{deployView === 'management' &&
+  currentTab === 'dashboard' &&
+  canViewDashboard && (
 
-            <h2
-              className="
-                text-4xl
-                font-black
-                text-black
-                tracking-tight
-              "
-            >
-              Good Afternoon,
-              <span className="ml-2">
-                {displayName}
-              </span>
-            </h2>
+  <DeployAnalytics
+    key="management-dashboard"
+    mode={panelMode}
+    user={user}
+  />
 
-          </div>
+)}
 
-          {/* DASHBOARD */}
+{deployView === 'employee' &&
+  currentTab === 'dashboard' &&
+  canViewDashboard && (
 
-          {currentTab === 'dashboard' && canViewDashboard && (
-            
-              
-            <DeployAnalytics
-              mode={panelMode}
-              user={user}
-              
-            />
+  <EmployeeDashboard
+    key="employee-dashboard"
+    mode="employee"
+    user={user}
+  />
 
-          )}
+)}
 
-          {/* PROFILE */}
 
-          {currentTab === 'team' && canViewProfile && (
+{/* =========================================
+    MANAGEMENT PERSONNEL
+========================================= */}
 
-            <MyProfile
-              mode={panelMode}
-              user={user}
-            />
+{deployView === 'management' &&
+  currentTab === 'personnel' &&
+  canViewProfile && (
 
-          )}
+  <EmployeeDirectory
+    key="management-personnel"
+  />
 
-          {/* ATTENDANCE */}
+)}
 
-          {currentTab === 'attendance' && canViewAttendance && (
 
-            <AttendancePanel
-              mode={panelMode}
-              user={user}
-            />
+{/* =========================================
+    EMPLOYEE PROFILE
+========================================= */}
 
-          )}
+{deployView === 'employee' &&
+  currentTab === 'profile' && (
 
-          {/* PERFORMANCE */}
+  <MyProfile
+    key="management-personnel"
+    mode="admin"
+    user={user}
+  />
 
-          {currentTab === 'performance' && (
+)}
 
-            <PerformancePanel
-              isAdmin={panelMode === 'admin'}
-              mode={panelMode}
-              user={user}
-            />
 
-          )}
+{/* =========================================
+    ATTENDANCE
+========================================= */}
+
+{currentTab === 'attendance' &&
+  canViewAttendance && (
+
+  <AttendancePanel
+    key={`${deployView}-attendance`}
+    mode={
+      deployView === 'management'
+        ? panelMode
+        : 'employee'
+    }
+    user={user}
+  />
+
+)}
+
+
+{/* =========================================
+    PERFORMANCE
+========================================= */}
+
+{currentTab === 'performance' && (
+
+  <PerformancePanel
+    key={`${deployView}-performance`}
+    isAdmin={deployView === 'management'}
+    mode={
+      deployView === 'management'
+        ? panelMode
+        : 'employee'
+    }
+    user={user}
+  />
+
+)}
 
           {/* ASSETS */}
 
-          {currentTab === 'assets' && (
+          {currentTab === 'assets' && deployView === 'management' && (
 
             <AssetsPanel
               mode={panelMode}
@@ -462,7 +483,7 @@ export default function DeployDashboard() {
 
           {/* ONBOARDING */}
 
-          {currentTab === 'onboard' && (
+          {currentTab === 'onboard' && deployView === 'management' && (
 
             <OnboardingPanel
               mode={panelMode}
@@ -475,7 +496,7 @@ export default function DeployDashboard() {
         </div>
 
       </div>
-
-    </div>
+</div>
+    
   );
 }
