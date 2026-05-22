@@ -809,6 +809,77 @@ def create_tables(schema_name='public'):
             )
         ''')
 
+        # --- Source Module Extensions ---
+
+        # Offer Letters table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS offer_letters (
+                id SERIAL PRIMARY KEY,
+                candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+                created_by INTEGER REFERENCES users(id),
+                approved_by INTEGER REFERENCES users(id),
+                role_title TEXT NOT NULL,
+                salary TEXT NOT NULL,
+                department TEXT,
+                location TEXT,
+                start_date TIMESTAMP,
+                offer_content JSONB DEFAULT '{}'::jsonb,
+                status TEXT DEFAULT 'pending',
+                feedback TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Bulk Upload Jobs table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS bulk_upload_jobs (
+                id SERIAL PRIMARY KEY,
+                created_by INTEGER REFERENCES users(id),
+                filename TEXT,
+                total_files INTEGER DEFAULT 0,
+                processed_files INTEGER DEFAULT 0,
+                processed_details JSONB DEFAULT '[]'::jsonb,
+                status TEXT DEFAULT 'pending',
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Add status/tracking columns to candidate_invites if not exists
+        cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent'")
+        cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS opened_at TIMESTAMP")
+        cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS logged_in_at TIMESTAMP")
+
+        # --- Verify Module Extensions ---
+
+        # Enrich assessments table for verify module
+        cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS org_id INTEGER")
+
+        # Update assessment_results for malpractice detection
+        cur.execute("ALTER TABLE assessment_results ADD COLUMN IF NOT EXISTS is_malpractice BOOLEAN DEFAULT FALSE")
+
+        # Add custom_questions to assignments for AI variant support
+        cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS custom_questions JSONB")
+
+        # Assessment queries (candidate disputes)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS assessment_queries (
+                id SERIAL PRIMARY KEY,
+                assessment_id INTEGER REFERENCES assessments(id) ON DELETE CASCADE,
+                assessment_result_id INTEGER REFERENCES assessment_results(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id),
+                subject TEXT,
+                message TEXT NOT NULL,
+                status TEXT DEFAULT 'open',
+                response TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         conn.commit()
     except Exception as e:
         conn.rollback()

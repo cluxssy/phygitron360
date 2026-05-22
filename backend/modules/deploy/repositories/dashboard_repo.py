@@ -89,7 +89,7 @@ class DashboardRepository:
                 result['attendance_status'] = "Present" if att else "Absent"
                 
                 # 7. Leaves - Cast EXTRACT result to INT to match year column
-                cur.execute("SELECT sick_used, sick_total, casual_used, casual_total FROM leave_balances WHERE employee_code = %s AND year = CAST(EXTRACT(YEAR FROM CURRENT_DATE) AS INTEGER)", (employee_code,))
+                cur.execute("SELECT 0 as sick_used, 0 as sick_total, used_leaves as casual_used, total_leaves as casual_total FROM leave_balances WHERE employee_code = %s AND year = CAST(EXTRACT(YEAR FROM CURRENT_DATE) AS INTEGER)", (employee_code,))
                 balance = cur.fetchone()
                 result['leaves'] = dict(balance) if balance else {"sick_used": 0, "sick_total": 0, "casual_used": 0, "casual_total": 0}
             

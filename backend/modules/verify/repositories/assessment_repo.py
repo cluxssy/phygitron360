@@ -19,8 +19,8 @@ class AssessmentRepository:
                 cur.execute('''
                     INSERT INTO assessments 
                     (title, description, type, time_limit_minutes, pass_score, 
-                     shuffle_questions, show_result_immediately, created_by, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     shuffle_questions, show_result_immediately, created_by, status, is_deleted, org_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 ''', (
                     data.get("title"),
@@ -31,7 +31,9 @@ class AssessmentRepository:
                     data.get("shuffle_questions", False),
                     data.get("show_result_immediately", True),
                     data.get("created_by"),
-                    data.get("status", "draft")
+                    data.get("status", "draft"),
+                    False,
+                    data.get("org_id")
                 ))
                 asm_id = cur.fetchone()[0]
                 
@@ -69,7 +71,7 @@ class AssessmentRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                cur.execute("SELECT * FROM assessments WHERE id = %s", (asm_id,))
+                cur.execute("SELECT * FROM assessments WHERE id = %s AND is_deleted = FALSE", (asm_id,))
                 row = cur.fetchone()
                 if not row:
                     return None
@@ -81,71 +83,52 @@ class AssessmentRepository:
         finally:
             conn.close()
 
-    def get_assignment_status(self, user_id: int, assessment_id: int) -> Optional[Dict[str, Any]]:
-        conn = get_db_connection()
-        try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                self._set_search_path(cur)
-                cur.execute('''
-                    SELECT * FROM assessment_assignments 
-                    WHERE user_id = %s AND assessment_id = %s
-                ''', (user_id, assessment_id))
-                row = cur.fetchone()
-                return dict(row) if row else None
-        finally:
-            conn.close()
-
-    def create_result(self, data: Dict[str, Any]) -> int:
-        conn = get_db_connection()
-        try:
-            with conn.cursor() as cur:
-                self._set_search_path(cur)
-                cur.execute('''
-                    INSERT INTO assessment_results 
-                    (assessment_id, user_id, answers, scores_per_question, score, 
-                     pass_status, feedback, weak_skill_ids, time_taken_seconds, submitted_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                ''', (
-                    data.get("assessment_id"),
-                    data.get("user_id"),
-                    json.dumps(data.get("answers")),
-                    json.dumps(data.get("scores_per_question")),
-                    data.get("score"),
-                    data.get("pass_status"),
-                    data.get("feedback"),
-                    json.dumps(data.get("weak_skill_ids", [])),
-                    data.get("time_taken_seconds"),
-                    data.get("submitted_at")
-                ))
-                res_id = cur.fetchone()[0]
-                
-                # Update assignment status
-                cur.execute('''
-                    UPDATE assessment_assignments 
-                    SET status = %s, updated_at = CURRENT_TIMESTAMP
-                    WHERE user_id = %s AND assessment_id = %s
-                ''', (data.get("assignment_status", "submitted"), data.get("user_id"), data.get("assessment_id")))
-                
-                # Add Proctoring Flags
-                for flag in data.get("proctoring_events", []):
-                    cur.execute('''
-                        INSERT INTO proctoring_flags (assessment_result_id, flag_type, details)
-                        VALUES (%s, %s, %s)
-                    ''', (res_id, flag.get("type"), flag.get("details")))
-
-                conn.commit()
-                return res_id
-        finally:
-            conn.close()
-
     def get_all_assessments(self) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                cur.execute("SELECT * FROM assessments ORDER BY created_at DESC")
+                cur.execute('''
+                    SELECT a.*, COUNT(q.id) AS question_count
+                    FROM assessments a
+                    LEFT JOIN assessment_questions q ON q.assessment_id = a.id
+                    WHERE a.is_deleted = FALSE
+                    GROUP BY a.id
+                    ORDER BY a.created_at DESC
+                ''')
                 return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def update_assessment(self, asm_id: int, updates: Dict[str, Any]) -> bool:
+        if not updates:
+            return True
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                set_clauses = ", ".join(f"{k} = %s" for k in updates)
+                values = list(updates.values()) + [asm_id]
+                cur.execute(
+                    f"UPDATE assessments SET {set_clauses}, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND is_deleted = FALSE",
+                    values,
+                )
+                conn.commit()
+                return cur.rowcount > 0
+        finally:
+            conn.close()
+
+    def delete_assessment(self, asm_id: int) -> bool:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    "UPDATE assessments SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (asm_id,),
+                )
+                conn.commit()
+                return cur.rowcount > 0
         finally:
             conn.close()
 
@@ -154,13 +137,13 @@ class AssessmentRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                cur.execute("UPDATE assessments SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", (status, asm_id))
+                cur.execute("UPDATE assessments SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND is_deleted = FALSE", (status, asm_id))
                 conn.commit()
                 return cur.rowcount > 0
         finally:
             conn.close()
 
-    def create_assignment(self, assessment_id: int, user_id: int, assigned_by: int, deadline: str = None) -> int:
+    def get_assignment_status(self, user_id: int, assessment_id: int) -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
