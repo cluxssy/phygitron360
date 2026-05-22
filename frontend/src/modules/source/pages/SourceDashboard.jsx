@@ -152,7 +152,6 @@ export default function SourceDashboard() {
   const [showUpload, setShowUpload] = useState(false);
   const [showNewRole, setShowNewRole] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
-  const [showConvert, setShowConvert] = useState(false);
   const [showScore, setShowScore] = useState(false);
   const [showRankings, setShowRankings] = useState(false);
   const [rankings, setRankings] = useState([]);
@@ -168,7 +167,6 @@ export default function SourceDashboard() {
   const [uploading, setUploading] = useState(false);
   const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0 });
   const [inviteForm, setInviteForm] = useState({ role_id: '' });
-  const [convertForm, setConvertForm] = useState({ candidate_id: '', employee_code: '', doj: '' });
   const [scoreRoleId, setScoreRoleId] = useState('');
   const [scoring, setScoring] = useState(false);
 
@@ -301,29 +299,6 @@ export default function SourceDashboard() {
     fetchCandidates();
   };
 
-  // ── Convert to employee ────────────────────────────────────────────────────
-  const handleConvert = async (e) => {
-    e.preventDefault();
-    try {
-      const r = await fetch('/api/source/convert-to-employee', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          candidate_id: parseInt(convertForm.candidate_id),
-          employee_code: convertForm.employee_code,
-          doj: convertForm.doj,
-        }),
-      });
-      const d = await r.json();
-      if (r.ok) {
-        toast.success('Candidate converted to employee!');
-        setShowConvert(false);
-        setConvertForm({ candidate_id: '', employee_code: '', doj: '' });
-        fetchCandidates();
-        setDrawerCandidate(null);
-      } else { toast.error(d.detail || 'Conversion failed'); }
-    } catch { toast.error('Conversion interrupted'); }
-  };
 
   const fetchRankings = async (roleId) => {
     setRankingRoleId(roleId);
@@ -887,17 +862,7 @@ export default function SourceDashboard() {
           >
             <Send size={14} /> Send Invite
           </button>
-          {selectedIds.size === 1 && (
-            <button
-              onClick={() => {
-                setConvertForm(f => ({ ...f, candidate_id: [...selectedIds][0] }));
-                setShowConvert(true);
-              }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-[11px] font-black uppercase tracking-widest hover:bg-emerald-400/20 transition-colors duration-150"
-            >
-              <UserCheck size={14} /> Convert to Employee
-            </button>
-          )}
+
           <button onClick={clearSel} className="p-2.5 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-colors duration-150">
             <X size={16} />
           </button>
@@ -910,7 +875,6 @@ export default function SourceDashboard() {
         jobRoles={jobRoles}
         onClose={() => setDrawerCandidate(null)}
         onRefresh={fetchCandidates}
-        onConvert={(cid) => { setConvertForm(f => ({ ...f, candidate_id: cid })); setShowConvert(true); }}
       />
 
       {/* ── Upload Modal ── */}
@@ -991,24 +955,7 @@ export default function SourceDashboard() {
         </Modal>
       )}
 
-      {/* ── Convert to Employee Modal ── */}
-      {showConvert && (
-        <Modal onClose={() => setShowConvert(false)} title="Convert to Employee">
-          <form onSubmit={handleConvert} className="flex flex-col gap-5">
-            <p className="text-xs text-white/40">Creates an employee record in the Deploy module.</p>
-            <Field label="Employee Code *">
-              <input required className="form-input" placeholder="e.g. EMP-1042" value={convertForm.employee_code} onChange={e => setConvertForm(f => ({ ...f, employee_code: e.target.value }))} />
-            </Field>
-            <Field label="Date of Joining *">
-              <input required type="date" className="form-input" value={convertForm.doj} onChange={e => setConvertForm(f => ({ ...f, doj: e.target.value }))} />
-            </Field>
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowConvert(false)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
-              <button type="submit" className="flex-1 py-3 rounded-xl bg-emerald-400 text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors">Confirm Hire</button>
-            </div>
-          </form>
-        </Modal>
-      )}
+
 
       {showRankings && (
         <Modal onClose={() => setShowRankings(false)} title={`Leaderboard: ${jobRoles.find(r => r.id === rankingRoleId)?.title}`}>
