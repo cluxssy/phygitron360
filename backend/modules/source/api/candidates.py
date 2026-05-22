@@ -1,217 +1,341 @@
+"""
+Phygitron 360 — Source Module: Candidates API
+===============================================
+Handles resume upload, candidate management, AI parsing, offer letter generation,
+and ATS scoring for the Talent Vault (Source) module.
+"""
+import json
 import os
-import shutil
 import uuid
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Body
+from datetime import datetime
+
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import os
+
+from backend.core.database import DATA_DIR
 from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.source.services.candidate_service import CandidateService
-from backend.modules.source.schemas.candidates import CandidateStatusUpdate, CandidateNoteCreate, CandidateCreate, CandidateSearchFilters
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/source/candidates", tags=["Source - Candidates"])
 
-def get_service(current_user: dict = Depends(get_current_user)):
-    tenant_id = current_user.get("tenant_id", "public")
-    return CandidateService(tenant_id=tenant_id)
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
 
-# --- Upload & Creation ---
+class ManualCandidateCreate(BaseModel):
+    full_name: str
+    email: str
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    total_experience_years: float = 0
+    current_designation: Optional[str] = None
+    current_company: Optional[str] = None
+    expected_salary: Optional[str] = None
+    notice_period: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    skills: Optional[List[str]] = None
+
+
+class StatusUpdate(BaseModel):
+    status: str
+
+
+class NoteCreate(BaseModel):
+    content: str
+
+
+class OfferPreviewRequest(BaseModel):
+    salary: str
+    role_title: str
+    department: Optional[str] = None
+    location: Optional[str] = None
+    start_date: Optional[str] = None
+
+
+class ConvertRequest(BaseModel):
+    salary: str
+    role_title: str
+    department: Optional[str] = None
+    location: Optional[str] = None
+    start_date: Optional[str] = None
+    offer_content: Optional[dict] = None
+
+
+# ---------------------------------------------------------------------------
+def get_candidate_service(user=Depends(get_current_user)):
+    return CandidateService(tenant_id=user.get('tenant_id', 'public'))
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.post("/upload")
 async def upload_and_parse_resume(
-    file: UploadFile = File(...), 
-    service: CandidateService = Depends(get_service)
+    file: UploadFile = File(...),
+    service: CandidateService = Depends(get_candidate_service)
 ):
-    """
-    1. Uploads a resume file (PDF/DOCX/TXT)
-    2. Extracts text
-    3. Runs AI ResumeParser
-    4. Saves to database with structured skills
-    """
-    if not file.filename.lower().endswith((".pdf", ".docx", ".txt")):
-        raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed.")
+    """Upload a single resume PDF/DOCX/TXT and run AI parse pipeline."""
+    allowed_exts = (".pdf", ".docx", ".doc", ".txt")
+    if not file.filename.lower().endswith(allowed_exts):
+        raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(allowed_exts)}")
 
     try:
         content = await file.read()
         result = await service.process_and_save_resume(content, file.filename)
-        
         return {
-            "status": "success",
-            "message": "Resume parsed and saved successfully!",
-            "candidate_id": result["candidate_id"],
-            "parsed_data": result["parsed_data"]
+            "success": True,
+            "message": "Resume uploaded and parsed successfully",
+            "data": result,
         }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Process failed: {str(e)}")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error(f"Resume upload failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(exc)}")
+
 
 @router.post("/bulk-upload")
 async def bulk_upload_resumes(
     files: List[UploadFile] = File(...),
-    service: CandidateService = Depends(get_service)
+    user: dict = Depends(get_current_user),
+    service: CandidateService = Depends(get_candidate_service)
 ):
-    """Processes multiple resumes at once."""
-    succeeded = []
-    failed = []
-    skipped = []
-
-    for file in files:
-        filename = file.filename
-        if not filename.lower().endswith((".pdf", ".docx", ".txt")):
-            skipped.append(filename)
-            continue
+    """Process multiple resume files at once. Returns per-file status."""
+    files_data = []
+    for f in files:
+        files_data.append((f.filename, await f.read()))
         
-        try:
-            content = await file.read()
-            result = await service.process_and_save_resume(content, filename)
-            succeeded.append({
-                "filename": filename,
-                "candidate_id": result["candidate_id"],
-                "full_name": result["parsed_data"].get("full_name")
-            })
-        except Exception as e:
-            failed.append({"filename": filename, "error": str(e)})
-
+    result = await service.bulk_upload_resumes(files_data, user.get("id"))
     return {
-        "status": "complete",
-        "succeeded": succeeded,
-        "failed": failed,
-        "skipped": skipped,
-        "summary": f"{len(succeeded)} uploaded, {len(failed)} failed, {len(skipped)} skipped"
+        "success": True,
+        "data": result,
+        "message": f"Bulk upload complete: {len(result['succeeded'])} of {len(files)} processed"
     }
 
+
 @router.post("/manual")
-async def create_manual_candidate(
-    data: CandidateCreate,
-    service: CandidateService = Depends(get_service)
+def create_manual_candidate(
+    data: ManualCandidateCreate,
+    current_user: dict = Depends(get_current_user),
+    service: CandidateService = Depends(get_candidate_service)
 ):
-    """Creates a new candidate from a manual entry form."""
+    """Create a candidate record from a manual entry form (no resume)."""
     try:
-        candidate_id = service.create_manual_candidate(data.dict())
-        return {"status": "success", "message": "Candidate created successfully", "candidate_id": candidate_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create candidate: {str(e)}")
+        actor_name = current_user.get("name") or current_user.get("username")
+        candidate_id = service.create_manual_candidate(data.dict(), actor_name)
+        return {"success": True, "message": "Candidate created successfully", "data": {"candidate_id": candidate_id}}
+    except Exception as exc:
+        logger.error(f"Manual candidate creation failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to create candidate: {str(exc)}")
 
-# --- Retrieval & Search ---
-
-@router.get("/")
-async def list_candidates(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    service: CandidateService = Depends(get_service)
-):
-    """Returns a paginated list of all candidates."""
-    try:
-        result = service.get_all_candidates(page=page, page_size=page_size)
-        return {"status": "success", "data": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.get("/search")
 def search_candidates(
-    search: str = Query(None),
-    status: str = Query(None),
-    service: CandidateService = Depends(get_service)
+    pool: Optional[str] = Query(None),          # all, candidate, trainee, employee
+    location: Optional[str] = Query(None),
+    min_exp: Optional[float] = Query(None),
+    exp_range: Optional[str] = Query(None),     # fresher, 1-2, 2-5, 5+
+    search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("newest"),   # newest, experience
+    role_id: Optional[int] = Query(None),
+    limit: int = Query(20, ge=1, le=200),
+    current_user: dict = Depends(get_current_user),
+    service: CandidateService = Depends(get_candidate_service)
 ):
-    """Simple search with filters."""
-    filters = {"search": search, "status": status}
-    results = service.repo.search_candidates(filters)
-    return {"status": "success", "data": results}
-
-@router.post("/advanced-search")
-async def advanced_search(
-    filters: CandidateSearchFilters,
-    service: CandidateService = Depends(get_service)
-):
-    """Advanced filtering (skills, experience, etc.)"""
+    """Advanced candidate search with optional ATS scoring against a job role."""
     try:
-        results = service.search_candidates(filters.dict(exclude_none=True))
-        return {"status": "success", "data": results, "count": len(results)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        results = service.search_candidates(
+            pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
+            search=search, sort_by=sort_by, role_id=role_id, limit=limit
+        )
+        return {"success": True, "data": results, "count": len(results)}
+    except Exception as exc:
+        logger.error(f"search_candidates failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
-# --- Profile Management ---
+
+@router.get("/active")
+def list_active_candidates(service: CandidateService = Depends(get_candidate_service)):
+    """List active candidates (those that have first_login or employee-type status)."""
+    try:
+        rows = service.get_active_candidates()
+        return {"success": True, "data": rows, "count": len(rows)}
+    except Exception as exc:
+        logger.error(f"Active candidates list failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 @router.get("/{candidate_id}")
-async def get_candidate(candidate_id: int, service: CandidateService = Depends(get_service)):
-    """Returns full profile with skills and notes."""
+def get_candidate(
+    candidate_id: int,
+    role_id: Optional[int] = Query(None),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Full candidate profile with skills, notes, AI scores, and latest offer letter."""
     try:
-        candidate = service.get_candidate(candidate_id)
+        candidate = service.get_full_candidate_profile(candidate_id, role_id)
         if not candidate:
             raise HTTPException(status_code=404, detail="Candidate not found")
-        return {"status": "success", "data": candidate}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/{candidate_id}/resume")
-async def get_candidate_resume(candidate_id: int, service: CandidateService = Depends(get_service)):
-    """Downloads or views the candidate's uploaded resume."""
-    try:
-        candidate = service.get_candidate(candidate_id)
-        if not candidate or not candidate.get("resume_path"):
-            raise HTTPException(status_code=404, detail="Resume not found")
-        
-        file_path = candidate["resume_path"]
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="Resume file missing from storage")
-            
-        return FileResponse(file_path, filename=os.path.basename(file_path))
+        return {"success": True, "data": candidate}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.error(f"get_candidate failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/{candidate_id}/resume")
+def get_candidate_resume(
+    candidate_id: int, 
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Download the candidate's stored resume file."""
+    candidate = service.get_candidate(candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    row = candidate
+
+    if not row or not row["resume_path"]:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    file_path = row["resume_path"]
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Resume file missing from storage")
+
+    return FileResponse(file_path, filename=os.path.basename(file_path))
+
 
 @router.put("/{candidate_id}/status")
-async def update_status(
-    candidate_id: int, 
-    update_data: CandidateStatusUpdate,
+def update_status(
+    candidate_id: int,
+    body: StatusUpdate,
     current_user: dict = Depends(get_current_user),
-    service: CandidateService = Depends(get_service)
+    service: CandidateService = Depends(get_candidate_service)
 ):
-    """Updates status and logs activity."""
-    try:
-        success = service.update_status(candidate_id, update_data.status)
-        if not success:
-            raise HTTPException(status_code=404, detail="Candidate not found")
-        
-        # Log activity
-        author = current_user.get("name") or current_user.get("username")
-        service.repo.log_activity(candidate_id, author, 'status_changed', f'Status changed to {update_data.status}')
-        
-        return {"status": "success", "message": "Status updated successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Update a candidate's pipeline status."""
+    updated = service.update_status(candidate_id, body.status)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    author = current_user.get("name") or current_user.get("username")
+    service.repo.log_activity(candidate_id, author, "status_changed", f"Status changed to {body.status}")
+    return {"success": True, "message": "Status updated successfully"}
+
 
 @router.post("/{candidate_id}/notes")
-async def add_note(
-    candidate_id: int, 
-    note_data: CandidateNoteCreate,
+def add_note(
+    candidate_id: int,
+    body: NoteCreate,
     current_user: dict = Depends(get_current_user),
-    service: CandidateService = Depends(get_service)
+    service: CandidateService = Depends(get_candidate_service)
 ):
-    """Adds a note to the candidate's activity log."""
+    """Add a note to the candidate's timeline."""
+    author = current_user.get("name") or current_user.get("username")
+    note = service.add_note(candidate_id, author, body.content)
+    return {"success": True, "data": note}
+
+
+@router.post("/{candidate_id}/offer-preview")
+async def offer_preview(
+    candidate_id: int,
+    body: OfferPreviewRequest,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """
+    Generate an AI offer letter preview for a candidate.
+    Does NOT persist — returns content only.
+    """
+    hiring_details = {
+        "role_title": body.role_title,
+        "salary": body.salary,
+        "department": body.department,
+        "location": body.location,
+        "start_date": body.start_date,
+        "company": "Phygitron 360",
+    }
+    
+    preview = await service.generate_offer_preview(candidate_id, hiring_details)
+    if not preview:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    return {"success": True, "data": {"offer_content": preview}}
+
+
+@router.post("/{candidate_id}/convert")
+async def convert_to_offer(
+    candidate_id: int,
+    body: ConvertRequest,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """
+    Create an offer letter (starts in 'pending' status).
+    Moves candidate to 'Offered' status.
+    """
+    hiring_details = {
+        "role_title": body.role_title,
+        "salary": body.salary,
+        "department": body.department,
+        "location": body.location,
+        "start_date": body.start_date
+    }
+    
     try:
-        author = current_user.get("name") or current_user.get("username")
-        note = service.add_note(candidate_id, author, note_data.content)
-        return {"status": "success", "data": note}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        await service.convert_to_offer(candidate_id, hiring_details, body.offer_content)
+        return {"success": True, "message": "Offer letter created"}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.error(f"convert_to_offer failed for candidate {candidate_id}: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 @router.delete("/{candidate_id}")
 def delete_candidate(
-    candidate_id: int, 
+    candidate_id: int,
     current_user: dict = Depends(require_permission("source.candidates.manage")),
-    service: CandidateService = Depends(get_service)
+    service: CandidateService = Depends(get_candidate_service)
 ):
-    """Permanently removes a candidate record."""
+    """Permanently delete a candidate and all related records."""
     try:
-        success = service.repo.delete_candidate(candidate_id)
-        if not success:
+        deleted = service.delete_candidate(candidate_id)
+        if not deleted:
             raise HTTPException(status_code=404, detail="Candidate not found")
-        return {"status": "success", "message": "Candidate deleted successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"success": True, "message": "Candidate deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"delete_candidate({candidate_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Employee revert (testing utility)
+# ---------------------------------------------------------------------------
+
+@router.post("/employees/{employee_id}/revert")
+def revert_employee_to_candidate(
+    employee_id: int,
+    current_user: dict = Depends(require_permission("source.candidates.manage")),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """
+    Revert an employee back to candidate status.
+    Testing/correction utility — restores candidate status to 'New' and clears employee link.
+    """
+    try:
+        reverted = service.revert_employee(employee_id)
+        if not reverted:
+            raise HTTPException(status_code=404, detail="Candidate/employee not found")
+        return {"success": True, "message": "Reverted to candidate status", "data": {"candidate_id": employee_id}}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

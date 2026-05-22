@@ -24,11 +24,13 @@ from fastapi import Depends
 # Set up Source & Verify modules
 from backend.modules.source.api.candidates import router as candidates_router
 from backend.modules.source.api.jobs import router as jobs_router
+from backend.modules.source.api.offers import router as offers_router
 
 from backend.modules.verify.api.builder import router as verify_builder_router
 from backend.modules.verify.api.assignments import router as verify_assignments_router
 from backend.modules.verify.api.submissions import router as verify_submissions_router
 from backend.modules.verify.api.sandbox import router as verify_sandbox_router
+from backend.modules.verify.api.queries import router as verify_queries_router
 
 app = FastAPI(
     title="PHYGITRON 360",
@@ -82,11 +84,13 @@ app.include_router(org_router)
 app.include_router(billing_router)
 app.include_router(candidates_router, dependencies=[Depends(require_module("source"))])
 app.include_router(jobs_router, dependencies=[Depends(require_module("source"))])
+app.include_router(offers_router, dependencies=[Depends(require_module("source"))])
 
 app.include_router(verify_builder_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_assignments_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_submissions_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_sandbox_router, dependencies=[Depends(require_module("verify"))])
+app.include_router(verify_queries_router, dependencies=[Depends(require_module("verify"))])
 
 
 if __name__ == "__main__":

@@ -26,7 +26,9 @@ export default function Layout({ children }) {
   // ✅ Detect admin dashboard (LIGHT MODE)
   const isAdminDashboard =
     location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/deploy');
+    location.pathname.startsWith('/deploy') ||
+    location.pathname.startsWith('/source') ||
+    location.pathname.startsWith('/verify');
   const canSwitchView = hasRole(['org_admin', 'manager', 'super_admin']);
   const hasAdminClearance = hasPermission('deploy.dashboard.view_admin');
 
