@@ -237,11 +237,12 @@ def _wrap_python_for_batch(code: str, test_cases: List[Dict]) -> str:
 
 def _wrap_java_solution(code: str, test_cases: List[Dict]) -> str:
     """Wrap a Java Solution class with a Main that provides test input via stdin."""
-    tests_lines = "\n".join(
-        f'runTest("{tc["input"].replace(chr(10), "\\n").replace(chr(34), chr(92)+chr(34))}", '
-        f'"{tc["expected_output"].strip().replace(chr(34), chr(92)+chr(34))}");'
-        for tc in test_cases
-    )
+    lines = []
+    for tc in test_cases:
+        input_val = tc["input"].replace("\n", "\\n").replace('"', '\\"')
+        expected_val = tc["expected_output"].strip().replace('"', '\\"')
+        lines.append(f'runTest("{input_val}", "{expected_val}");')
+    tests_lines = "\n".join(lines)
     wrapper = f"""
 import java.util.*;
 import java.io.*;
