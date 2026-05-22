@@ -3,7 +3,7 @@ import phygitron from "../../../assets/logo.png";
 
 import fb from "../../../assets/facebook.png";
 import ig from "../../../assets/instagram.png";
-import x from "../../../assets/x.png";
+import x from "../../../assets/X.png";
 import li from "../../../assets/linkedin.png";
 
 import usa from "../../../assets/office-usa.png";
