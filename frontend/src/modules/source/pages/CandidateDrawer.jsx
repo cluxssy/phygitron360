@@ -30,6 +30,13 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
   const [scoreRoleId, setScoreRoleId] = useState('');
   const [scoring, setScoring] = useState(false);
 
+  // Offer state
+  const [showOfferForm, setShowOfferForm] = useState(false);
+  const [offerDetails, setOfferDetails] = useState({ role_title: '', salary: '', department: '', location: '', start_date: '' });
+  const [offerPreview, setOfferPreview] = useState(null);
+  const [generatingOffer, setGeneratingOffer] = useState(false);
+  const [creatingOffer, setCreatingOffer] = useState(false);
+
   // AI analysis parsed from stored scores
   const fitScore = profile?.ai_scores?.find(s => s.score_type === 'role_fit');
   let fitData = null;
@@ -99,6 +106,46 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
       } else { toast.error(d.detail || 'Scoring failed'); }
     } catch { toast.error('Scoring error'); }
     finally { setScoring(false); }
+  };
+
+  // ── Offer Generation ──────────────────────────────────────────────────────
+  const handleGenerateOffer = async (e) => {
+    e.preventDefault();
+    setGeneratingOffer(true);
+    try {
+      const r = await fetch(`/api/source/candidates/${candidate.id}/offer-preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(offerDetails),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setOfferPreview(d.data);
+      } else {
+        toast.error(d.detail || 'Generation failed');
+      }
+    } catch { toast.error('Error generating offer'); }
+    finally { setGeneratingOffer(false); }
+  };
+
+  const handleCreateOffer = async () => {
+    setCreatingOffer(true);
+    try {
+      const r = await fetch(`/api/source/candidates/${candidate.id}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...offerDetails, offer_content: { content: offerPreview } }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        toast.success('Offer letter generated and pending approval!');
+        setShowOfferForm(false);
+        onRefresh();
+      } else {
+        toast.error(d.detail || 'Failed');
+      }
+    } catch { toast.error('Error creating offer'); }
+    finally { setCreatingOffer(false); }
   };
 
   if (!candidate) return null;
@@ -439,7 +486,7 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
           </button>
           {data?.status?.toLowerCase() !== 'hired' && (
             <button
-              onClick={() => onConvert(candidate.id)}
+              onClick={() => { setShowOfferForm(true); setOfferPreview(null); }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-xs font-black uppercase tracking-widest hover:bg-emerald-400/20 transition-colors duration-150"
             >
               <UserCheck size={14} /> Hire
@@ -447,6 +494,70 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
           )}
         </div>
       </div>
+
+      {/* Offer Modal */}
+      {showOfferForm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowOfferForm(false)}>
+          <div className="glass-panel w-full max-w-2xl p-8 relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowOfferForm(false)} className="absolute top-5 right-5 p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-colors">
+              <X size={18} />
+            </button>
+            <h2 className="text-xl font-display font-black text-white uppercase tracking-tighter italic mb-6">
+              AI Offer <span className="text-emerald-400">Generation</span>
+            </h2>
+
+            {!offerPreview ? (
+              <form onSubmit={handleGenerateOffer} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Role Title</label>
+                    <input required type="text" value={offerDetails.role_title} onChange={e => setOfferDetails({...offerDetails, role_title: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Salary</label>
+                    <input required type="text" value={offerDetails.salary} onChange={e => setOfferDetails({...offerDetails, salary: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Department</label>
+                    <input type="text" value={offerDetails.department} onChange={e => setOfferDetails({...offerDetails, department: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Location</label>
+                    <input type="text" value={offerDetails.location} onChange={e => setOfferDetails({...offerDetails, location: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Start Date</label>
+                    <input type="date" value={offerDetails.start_date} onChange={e => setOfferDetails({...offerDetails, start_date: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                  </div>
+                </div>
+                <div className="pt-4 mt-4 border-t border-white/10 flex justify-end">
+                  <button type="submit" disabled={generatingOffer} className="px-6 py-3 rounded-xl bg-emerald-400 text-black text-xs font-black uppercase tracking-widest hover:bg-emerald-300 transition-colors flex items-center gap-2">
+                    {generatingOffer ? <Loader2 size={16} className="animate-spin"/> : 'Generate Preview'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                  <textarea 
+                    value={offerPreview} 
+                    onChange={e => setOfferPreview(e.target.value)} 
+                    className="w-full h-[400px] bg-transparent text-sm text-white/90 outline-none resize-none font-mono"
+                  />
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => setOfferPreview(null)} className="px-4 py-3 rounded-xl bg-white/5 text-white/70 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors">
+                    Edit Details
+                  </button>
+                  <button onClick={handleCreateOffer} disabled={creatingOffer} className="px-6 py-3 rounded-xl bg-emerald-400 text-black text-xs font-black uppercase tracking-widest hover:bg-emerald-300 transition-colors flex items-center gap-2">
+                    {creatingOffer ? <Loader2 size={16} className="animate-spin"/> : 'Send to HR for Approval'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

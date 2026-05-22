@@ -285,48 +285,155 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def search_candidates(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 
-                query = "SELECT * FROM candidates"
                 conditions = []
                 params = []
-                
-                if filters.get("status"):
-                    conditions.append("status = %s")
-                    params.append(filters["status"])
-                    
-                if filters.get("skills"):
-                    conditions.append("skills @> %s::text[]")
-                    params.append(filters["skills"])
-                    
-                if filters.get("min_experience") is not None:
-                    conditions.append("total_experience_years >= %s")
-                    params.append(filters["min_experience"])
-                    
-                if filters.get("max_experience") is not None:
-                    conditions.append("total_experience_years <= %s")
-                    params.append(filters["max_experience"])
-                    
-                if filters.get("source"):
-                    conditions.append("source = %s")
-                    params.append(filters["source"])
-                    
-                if filters.get("search"):
-                    search_term = f"%{filters['search']}%"
-                    conditions.append("(full_name ILIKE %s OR current_designation ILIKE %s OR current_company ILIKE %s)")
-                    params.extend([search_term, search_term, search_term])
-                
-                if conditions:
-                    query += " WHERE " + " AND ".join(conditions)
-                    
-                query += " ORDER BY created_at DESC"
-                
-                cur.execute(query, params)
+
+                if pool and pool != "all":
+                    conditions.append("c.status = %s")
+                    params.append(pool.capitalize())
+
+                if location:
+                    conditions.append("c.location ILIKE %s")
+                    params.append(f"%{location}%")
+
+                if min_exp is not None:
+                    conditions.append("c.total_experience_years >= %s")
+                    params.append(min_exp)
+
+                if exp_range:
+                    if exp_range == "fresher":
+                        conditions.append("c.total_experience_years < 1")
+                    elif exp_range == "1-2":
+                        conditions.append("c.total_experience_years >= 1 AND c.total_experience_years <= 2")
+                    elif exp_range == "2-5":
+                        conditions.append("c.total_experience_years > 2 AND c.total_experience_years <= 5")
+                    elif exp_range == "5+":
+                        conditions.append("c.total_experience_years > 5")
+
+                if search:
+                    conditions.append("(c.full_name ILIKE %s OR c.email ILIKE %s OR c.current_designation ILIKE %s)")
+                    params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+                where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+                order_clause = "ORDER BY c.created_at DESC" if sort_by == "newest" else "ORDER BY c.total_experience_years DESC"
+                params.append(limit)
+
+                sql = f"""
+                    SELECT c.*
+                    FROM candidates c
+                    {where_clause}
+                    {order_clause}
+                    LIMIT %s
+                """
+                cur.execute(sql, params)
                 return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def get_active_candidates(self) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """SELECT c.*, u.last_login
+                       FROM candidates c
+                       LEFT JOIN users u ON c.user_id = u.id
+                       WHERE c.status NOT IN ('Archived', 'Rejected')
+                       ORDER BY c.created_at DESC"""
+                )
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def get_candidate_latest_offer(self, candidate_id: int) -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    "SELECT * FROM offer_letters WHERE candidate_id = %s ORDER BY created_at DESC LIMIT 1",
+                    (candidate_id,)
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def create_bulk_upload_job(self, user_id: int, total_files: int) -> int:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status)
+                       VALUES (%s, %s, 'processing') RETURNING id""",
+                    (user_id, total_files)
+                )
+                job_id = cur.fetchone()[0]
+                conn.commit()
+                return job_id
+        finally:
+            conn.close()
+
+    def update_bulk_upload_job(self, job_id: int, processed: int, details: str, status: str):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """UPDATE bulk_upload_jobs
+                       SET status = %s, processed_files = %s,
+                           processed_details = %s, updated_at = CURRENT_TIMESTAMP
+                       WHERE id = %s""",
+                    (status, processed, details, job_id)
+                )
+                conn.commit()
+        finally:
+            conn.close()
+
+    def create_offer(self, candidate_id: int, details: Dict[str, Any], content: Dict[str, Any]) -> int:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                start_date = details.get("start_date")
+                if start_date:
+                    from datetime import datetime
+                    try:
+                        start_date = datetime.fromisoformat(start_date)
+                    except:
+                        pass
+                cur.execute(
+                    """INSERT INTO offer_letters 
+                       (candidate_id, role_title, salary, department, location, start_date, offer_content, status)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending') RETURNING id""",
+                    (candidate_id, details.get("role_title"), details.get("salary"), details.get("department"), 
+                     details.get("location"), start_date, json.dumps(content))
+                )
+                offer_id = cur.fetchone()[0]
+                conn.commit()
+                return offer_id
+        finally:
+            conn.close()
+
+    def revert_employee(self, employee_id: int) -> bool:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    "UPDATE candidates SET status = 'New', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (employee_id,)
+                )
+                conn.commit()
+                return cur.rowcount > 0
         finally:
             conn.close()
 
