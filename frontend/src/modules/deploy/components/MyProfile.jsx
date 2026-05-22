@@ -471,14 +471,5 @@ function FileCard({ label, path, editMode, onUpload }) {
                 )}
             </div>
         </div>
-
-      </div>
-
-      {/* KEEP YOUR EXISTING EDIT/DETAILS UI BELOW */}
-      {/* no backend changes needed */}
-
-    </div>
-
-  );
-
+    );
 }

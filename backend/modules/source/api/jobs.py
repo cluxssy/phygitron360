@@ -1,13 +1,31 @@
+"""
+Phygitron 360 — Source Module: Jobs & Scoring API
+===================================================
+Job roles management, ATS scoring, candidate invite workflow,
+and invite tracking for the Talent Vault (Source) module.
+"""
+import json
 import logging
-import os
-from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Query, Body
-from backend.core.dependencies import get_current_user, require_permission
-from backend.modules.source.services.recruitment_service import RecruitmentService
+import secrets
+from datetime import datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
+
+from fastapi import APIRouter, HTTPException, Depends, Query
+from pydantic import BaseModel
+
+from backend.core.dependencies import get_current_user, require_permission
+from backend.modules.source.services.job_service import JobService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/source", tags=["Source - Jobs & Scoring"])
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
 
 class JobRoleCreate(BaseModel):
     title: str
@@ -15,111 +33,206 @@ class JobRoleCreate(BaseModel):
     required_skills: Optional[list] = None
     min_experience: int = 0
 
+
+class JobRoleUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    required_skills: Optional[list] = None
+    min_experience: Optional[int] = None
+
+
 class ScoreRequest(BaseModel):
     role_id: int
     candidate_ids: List[int]
 
+
 class InviteRequest(BaseModel):
-    candidate_id: int
-    role_id: int
+    candidate_ids: List[int]
+    job_role_id: int
+    deadline: Optional[str] = None
+    email_addresses: Optional[List[str]] = None
 
-class ConvertRequest(BaseModel):
-    candidate_id: int
-    employee_code: str
-    doj: str
 
-def get_service(current_user: dict = Depends(get_current_user)):
-    return RecruitmentService(tenant_id=current_user.get("tenant_id", "public"))
+# ---------------------------------------------------------------------------
+# Job Roles
+# ---------------------------------------------------------------------------
 
-# --- Job Roles ---
+def get_job_service(user=Depends(get_current_user)):
+    return JobService(tenant_id=user.get('tenant_id', 'public'))
 
 @router.get("/job-roles")
-def list_job_roles(service: RecruitmentService = Depends(get_service)):
-    """Returns all available job roles."""
-    roles = service.role_repo.get_all_job_roles()
+def list_job_roles(service: JobService = Depends(get_job_service)):
+    """List all job roles for this tenant."""
+    roles = service.get_all_job_roles()
     return {"success": True, "data": roles}
 
+
 @router.post("/job-roles")
-def create_job_role(
+async def create_job_role(
     body: JobRoleCreate,
-    current_user: dict = Depends(require_permission("source.jobs.manage")),
-    service: RecruitmentService = Depends(get_service)
+    service: JobService = Depends(get_job_service),
 ):
-    """Creates a new job role template."""
-    role_id = service.role_repo.create_job_role(body.dict())
-    return {"success": True, "data": {"id": role_id}}
+    """
+    Create a new job role.
+    If description is provided but no required_skills, attempts AI skill extraction.
+    """
+    role_id = await service.create_job_role({
+        "title": body.title,
+        "description": body.description,
+        "required_skills": body.required_skills or [],
+        "min_experience": body.min_experience,
+    })
+    return {"success": True, "message": "Job role created", "data": {"id": role_id}}
+
+
+@router.put("/job-roles/{role_id}")
+def update_job_role(
+    role_id: int,
+    body: JobRoleUpdate,
+    service: JobService = Depends(get_job_service),
+):
+    """Update an existing job role."""
+    updates = {}
+    if body.title is not None:
+        updates["title"] = body.title
+    if body.description is not None:
+        updates["description"] = body.description
+    if body.required_skills is not None:
+        import json
+        updates["required_skills"] = json.dumps(body.required_skills)
+    if body.min_experience is not None:
+        updates["min_experience"] = body.min_experience
+
+    updated = service.update_job_role(role_id, updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Job role not found")
+
+    return {"success": True, "message": "Job role updated", "data": {"id": role_id}}
+
+
+@router.delete("/job-roles/{role_id}")
+def delete_job_role(
+    role_id: int,
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
+    service: JobService = Depends(get_job_service)
+):
+    """Delete a single job role with cascade on invites and ai_scores."""
+    deleted = service.delete_job_role(role_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Job role not found")
+    return {"success": True, "message": "Job role deleted"}
+
+
+@router.delete("/job-roles")
+def delete_all_job_roles(
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
+    service: JobService = Depends(get_job_service)
+):
+    """Delete ALL job roles for this tenant (with cascade)."""
+    service.delete_all_job_roles()
+    return {"success": True, "message": "All job roles deleted"}
+
 
 @router.get("/job-roles/{role_id}/rankings")
 def get_candidate_rankings(
     role_id: int,
-    service: RecruitmentService = Depends(get_service)
+    service: JobService = Depends(get_job_service)
 ):
-    """Returns candidates ranked by AI scores for this specific job role."""
+    """Get candidates ranked by AI score for a specific job role."""
     rankings = service.get_candidate_rankings(role_id)
     return {"success": True, "data": rankings}
+
 
 @router.post("/job-roles/{role_id}/auto-rank")
 async def auto_rank_candidates(
     role_id: int,
-    service: RecruitmentService = Depends(get_service)
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
+    service: JobService = Depends(get_job_service)
 ):
-    """Triggers bulk AI scoring for all candidates against this role."""
-    result = await service.auto_rank_all_candidates(role_id)
-    return result
+    """
+    Trigger bulk ATS scoring for ALL candidates against a specific role.
+    Upserts scores into ai_scores table.
+    """
+    try:
+        results = service.auto_rank_candidates(role_id)
+        return {
+            "success": True,
+            "message": f"Scored {len(results)} candidates",
+            "data": results,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as exc:
+        logger.error(f"auto_rank({role_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
-# --- AI Scoring & Matching ---
+
+# ---------------------------------------------------------------------------
+# Score selected candidates
+# ---------------------------------------------------------------------------
 
 @router.post("/score-candidates")
-async def score_candidates(
+def score_candidates(
     body: ScoreRequest,
     current_user: dict = Depends(require_permission("source.jobs.manage")),
-    service: RecruitmentService = Depends(get_service)
+    service: JobService = Depends(get_job_service)
 ):
-    """Triggers AI fitment scoring for multiple candidates."""
-    results = []
-    for cid in body.candidate_ids:
-        try:
-            score_res = await service.score_candidate_fit(cid, body.role_id)
-            results.append({"candidate_id": cid, "score": score_res.get("score")})
-        except Exception as e:
-            logger.error(f"Scoring failed for candidate {cid}: {e}")
-            results.append({"candidate_id": cid, "error": str(e)})
+    """
+    Run ATS role-fit scoring for selected candidates against a role.
+    Upserts results into ai_scores table.
+    """
+    try:
+        results = service.score_selected_candidates(body.role_id, body.candidate_ids)
+        return {"success": True, "data": results}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    return {"success": True, "data": results}
 
-# --- Actions & Conversion ---
+# ---------------------------------------------------------------------------
+# Invite workflow
+# ---------------------------------------------------------------------------
 
 @router.post("/send-invite", dependencies=[Depends(require_permission("source.jobs.manage"))])
-def send_invite(
+def send_invites(
     body: InviteRequest,
     current_user: dict = Depends(get_current_user),
-    service: RecruitmentService = Depends(get_service)
+    service: JobService = Depends(get_job_service)
 ):
-    """Sends a talent-portal invitation to a candidate."""
+    """
+    Send talent-portal invitations to a list of candidates for a job role.
+    Generates temp credentials, inserts candidate_invite row, and emails (best-effort).
+    """
+    hr_id = current_user.get("id")
     try:
-        hr_id = current_user.get("id")
-        result = service.send_invite(body.candidate_id, body.role_id, hr_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        result = service.send_invites(
+            role_id=body.job_role_id,
+            hr_id=hr_id,
+            candidate_ids=body.candidate_ids,
+            email_addresses=body.email_addresses,
+            deadline=body.deadline
+        )
+        return {
+            "success": True,
+            "message": f"Invites sent to {result['sent']} candidate(s)",
+            "data": result,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-@router.get("/invite-status", dependencies=[Depends(require_permission("source.jobs.manage"))])
+
+@router.get("/invite-status/{job_role_id}", dependencies=[Depends(require_permission("source.jobs.manage"))])
 def get_invite_status(
-    role_id: int = Query(...),
-    service: RecruitmentService = Depends(get_service)
+    job_role_id: int,
+    service: JobService = Depends(get_job_service)
 ):
-    """Fetches invitation and login status for a specific job role."""
-    invites = service.role_repo.get_invites_by_role(role_id)
-    return {"success": True, "data": invites}
-
-@router.post("/convert-to-employee", dependencies=[Depends(require_permission("source.jobs.manage"))])
-def convert_to_employee(
-    body: ConvertRequest,
-    service: RecruitmentService = Depends(get_service)
-):
-    """Converts a hired candidate into an HRMS employee record."""
+    """Get invite tracking details (sent/opened/logged_in timestamps) for a role."""
     try:
-        result = service.convert_candidate_to_employee(body.candidate_id, body.employee_code, body.doj)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        invites = service.get_invite_status(job_role_id)
+        return {"success": True, "data": invites}
+    except Exception as exc:
+        logger.error(f"get_invite_status({job_role_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))

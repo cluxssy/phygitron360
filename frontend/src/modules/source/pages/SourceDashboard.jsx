@@ -10,6 +10,15 @@ import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import CandidateDrawer from './CandidateDrawer';
+import OfferApprovals from './OfferApprovals';
+import ActiveCandidates from './ActiveCandidates';
+import InviteStatus from './InviteStatus';
+
+import "../../../styles/light-theme-override.css";
+import logo from "../../../assets/phy360.png";
+import bellIcon from "../../../assets/bell.png";
+import logoutIcon from "../../../assets/exit.png";
+import { MODULE_CONFIG } from "../../../core/config/modules";
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-white/30 bg-white/5 border-white/5';
@@ -35,6 +44,17 @@ export default function SourceDashboard() {
   const query = new URLSearchParams(location.search);
   const currentTab = query.get('tab') || 'home';
 
+  const { user, hasPermission, logout } = useAuth();
+  const displayName = user?.name || user?.email?.split('@')[0] || "User";
+
+  const appModules = Object.entries(MODULE_CONFIG)
+    .filter(([_, config]) => hasPermission?.(config.permission))
+    .map(([key, config]) => ({
+      id: key,
+      name: config.label,
+      path: config.route,
+    }));
+
   const isCandidate = hasRole('candidate');
 
   if (!hasRole(['super_admin', 'org_admin', 'manager']) && !isCandidate) {
@@ -52,7 +72,7 @@ export default function SourceDashboard() {
   if (isCandidate) {
     return (
       <div className="max-w-4xl mx-auto space-y-8 animate-fade-in-up">
-        <div className="glass-panel p-10 border-white/5 relative overflow-hidden bg-[#060E20]/50">
+        <div className="section-card p-10 border-white/5 relative overflow-hidden bg-[#060E20]/50">
           <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-primary/10 rounded-full blur-[80px]"></div>
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary mb-4">Candidate Portal // Phygitron Source</p>
           <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic">Application <span className="text-primary">Status</span></h1>
@@ -69,7 +89,7 @@ export default function SourceDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="glass-panel p-8 border-white/5">
+          <div className="section-card p-8 border-white/5">
             <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40 mb-6 flex items-center gap-3">
                <Activity size={16} className="text-primary" /> Active Pipeline
             </h3>
@@ -98,7 +118,7 @@ export default function SourceDashboard() {
             </div>
           </div>
 
-          <div className="glass-panel p-8 border-white/5">
+          <div className="section-card p-8 border-white/5">
             <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40 mb-6 flex items-center gap-3">
                <Database size={16} className="text-primary" /> My Profile
             </h3>
@@ -139,6 +159,10 @@ export default function SourceDashboard() {
   const [rankingRoleId, setRankingRoleId] = useState(null);
   const [loadingRankings, setLoadingRankings] = useState(false);
   const [autoRanking, setAutoRanking] = useState(false);
+
+  // Invite-status tab: role selector
+  const [inviteStatusRoleId, setInviteStatusRoleId] = useState('');
+  const [showInviteStatus, setShowInviteStatus] = useState(false);
 
   // Form states
   const [uploading, setUploading] = useState(false);
@@ -358,8 +382,58 @@ export default function SourceDashboard() {
   const anySelected = selectedIds.size > 0;
   const allSelected = candidates.length > 0 && selectedIds.size === candidates.length;
 
+  const setTab = (tab) => navigate(`/source?tab=${tab}`);
+
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="dashboard-page light-theme-override">
+      <div className="topbar">
+        <div className="top-left">
+          <img src={logo} className="logo" alt="logo" />
+        </div>
+        <div className="top-center">
+          <div className="hub-tabs">
+            {appModules.map((m) => (
+              <button
+                key={m.id}
+                className={`hub-tab ${location.pathname.startsWith(m.path) ? "active" : ""}`}
+                onClick={() => navigate(m.path)}
+              >
+                {m.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="top-right">
+          <img src={bellIcon} className="icon" alt="bell" />
+          <img
+            src={logoutIcon}
+            className="icon logout-icon"
+            alt="logout"
+            onClick={() => { logout(); navigate('/login'); }}
+          />
+          <div className="profile-wrap">
+            <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>
+            <div className="profile-text">
+              <h4>{displayName}</h4>
+              <p>Organisation Admin</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-body">
+        <div className="sidebar">
+          <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>Home</button>
+          <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>
+          <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>
+          <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>
+          <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>
+          <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Pipeline</button>
+          <button className={currentTab === 'invite-status' ? 'active' : ''} onClick={() => setTab('invite-status')}>Invite Status</button>
+        </div>
+        
+        <div className="content">
+          <div className="flex flex-col gap-6 h-full">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 shrink-0">
@@ -371,12 +445,24 @@ export default function SourceDashboard() {
               <>Job <span className="text-primary">Roles</span></>
             ) : currentTab === 'home' ? (
               <>Source <span className="text-primary">Hub</span></>
+            ) : currentTab === 'offers' ? (
+              <>Offer <span className="text-primary">Approvals</span></>
+            ) : currentTab === 'active' ? (
+              <>Active <span className="text-primary">Candidates</span></>
+            ) : currentTab === 'invite-status' ? (
+              <>Invite <span className="text-primary">Status</span></>
             ) : (
               <>Candidate <span className="text-primary">Directory</span></>
             )}
           </h1>
           <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mt-1">
-            {currentTab === 'upload' ? 'Quantum Resume Parsing' : currentTab === 'jobs' ? `${jobRoles.length} active roles` : `${candidates.length} records`} · Phygitron 360 Source
+            {currentTab === 'upload'
+              ? 'Quantum Resume Parsing'
+              : currentTab === 'jobs'
+              ? `${jobRoles.length} active roles`
+              : currentTab === 'offers' || currentTab === 'active' || currentTab === 'invite-status'
+              ? 'Phygitron 360 Source'
+              : `${candidates.length} records`} · Phygitron 360 Source
           </p>
         </div>
 
@@ -415,6 +501,27 @@ export default function SourceDashboard() {
               <Plus size={15} /> Add Job Role
             </button>
           )}
+
+          {currentTab === 'invite-status' && jobRoles.length > 0 && (
+            <div className="flex items-center gap-3">
+              <select
+                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+                value={inviteStatusRoleId}
+                onChange={e => { setInviteStatusRoleId(e.target.value); setShowInviteStatus(false); }}
+              >
+                <option value="">Select a role...</option>
+                {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+              </select>
+              {inviteStatusRoleId && (
+                <button
+                  onClick={() => setShowInviteStatus(true)}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors duration-150"
+                >
+                  View Invites
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -423,25 +530,25 @@ export default function SourceDashboard() {
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
           {/* Top Metrics Row */}
           <div className="grid grid-cols-4 gap-6">
-            <div className="glass-panel p-6 border-l-2 border-primary/50 relative overflow-hidden group">
+            <div className="section-card p-6 border-l-2 border-primary/50 relative overflow-hidden group">
                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Users size={64}/></div>
                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Total Candidates</p>
                <h2 className="text-4xl font-display font-black text-white">{candidates.length}</h2>
                <div className="flex items-center gap-1 mt-4 text-[10px] text-emerald-400 font-bold"><TrendingUp size={12}/> Live Database</div>
             </div>
-            <div className="glass-panel p-6 border-l-2 border-indigo/50 relative overflow-hidden group">
+            <div className="section-card p-6 border-l-2 border-indigo/50 relative overflow-hidden group">
                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Briefcase size={64}/></div>
                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Active Roles</p>
                <h2 className="text-4xl font-display font-black text-white">{jobRoles.length}</h2>
                <div className="flex items-center gap-1 mt-4 text-[10px] text-indigo font-bold"><Activity size={12}/> Requisitions</div>
             </div>
-            <div className="glass-panel p-6 border-l-2 border-secondary/50 relative overflow-hidden group">
+            <div className="section-card p-6 border-l-2 border-secondary/50 relative overflow-hidden group">
                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><CheckCircle size={64}/></div>
                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Hired Talent</p>
                <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'hired').length}</h2>
                <div className="flex items-center gap-1 mt-4 text-[10px] text-secondary font-bold"><TrendingUp size={12}/> Converted</div>
             </div>
-            <div className="glass-panel p-6 border-l-2 border-emerald-400/50 relative overflow-hidden group">
+            <div className="section-card p-6 border-l-2 border-emerald-400/50 relative overflow-hidden group">
                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Star size={64}/></div>
                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Scored Profiles</p>
                <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.fit_score != null).length}</h2>
@@ -450,7 +557,7 @@ export default function SourceDashboard() {
           </div>
 
           {/* Pipeline Funnel */}
-          <div className="glass-panel p-6">
+          <div className="section-card p-6">
             <h3 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 mb-6"><PieChart size={14}/> Talent Pipeline Status</h3>
             <div className="flex gap-2 h-12 rounded-xl overflow-hidden shadow-inner">
                {['New', 'Shortlisted', 'Invited', 'Hired', 'Rejected'].map(status => {
@@ -493,7 +600,7 @@ export default function SourceDashboard() {
       ) : currentTab === 'jobs' ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {jobRoles.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center glass-panel">
+            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center section-card">
               <Briefcase size={48} className="text-white/10" />
               <div>
                 <p className="text-base font-bold text-white mb-1">No active roles</p>
@@ -503,7 +610,7 @@ export default function SourceDashboard() {
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
               {jobRoles.map(r => (
-                <div key={r.id} className="glass-panel p-6 border-white/5 hover:border-primary/30 transition-colors flex flex-col items-start text-left">
+                <div key={r.id} className="section-card p-6 border-white/5 hover:border-primary/30 transition-colors flex flex-col items-start text-left">
                   <h3 className="text-lg font-bold text-white">{r.title}</h3>
                   <p className="text-[10px] font-black uppercase tracking-widest text-primary/80 mt-1 mb-4">Min Exp: {r.min_experience} yrs</p>
                    <p className="text-xs text-white/40 leading-relaxed line-clamp-3 mb-4">{r.description || 'No description provided.'}</p>
@@ -520,7 +627,7 @@ export default function SourceDashboard() {
         </div>
       ) : currentTab === 'upload' ? (
         <div className="flex-1 flex items-center justify-center">
-            <div className="glass-panel w-full max-w-xl p-10 relative">
+            <div className="section-card w-full max-w-xl p-10 relative">
               <h2 className="text-2xl font-display font-black text-white mb-8 uppercase tracking-widest flex items-center gap-2"><Upload size={24} className="text-primary"/> Inject Resume</h2>
               <div className="border-2 border-dashed border-white/20 rounded-xl p-12 text-center bg-white/5 hover:bg-white/10 hover:border-primary/50 transition-all group flex flex-col items-center cursor-pointer" onClick={() => !uploading && fileRef.current.click()}>
                 <input type="file" ref={fileRef} onChange={handleUpload} className="hidden" accept=".pdf,.doc,.docx,.txt" />
@@ -533,11 +640,50 @@ export default function SourceDashboard() {
               </div>
             </div>
         </div>
+      ) : currentTab === 'offers' ? (
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <OfferApprovals />
+        </div>
+      ) : currentTab === 'active' ? (
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <ActiveCandidates />
+        </div>
+      ) : currentTab === 'invite-status' ? (
+        <div className="flex-1 flex items-center justify-center">
+          {!inviteStatusRoleId ? (
+            <div className="section-card flex flex-col items-center justify-center gap-4 py-16 px-12 text-center border-white/5 max-w-md w-full">
+              <Briefcase size={40} className="text-white/10" />
+              <div>
+                <p className="text-base font-bold text-white mb-1">Select a Job Role</p>
+                <p className="text-xs text-white/30">Choose a role from the dropdown above to view invite tracking.</p>
+              </div>
+              <select
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors mt-2"
+                value={inviteStatusRoleId}
+                onChange={e => { setInviteStatusRoleId(e.target.value); setShowInviteStatus(e.target.value !== ''); }}
+              >
+                <option value="">Select a role...</option>
+                {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="text-xs text-white/30 uppercase tracking-widest font-bold">Role selected. Click <span className="text-primary">View Invites</span> in the header.</p>
+            </div>
+          )}
+          {showInviteStatus && inviteStatusRoleId && (
+            <InviteStatus
+              roleId={inviteStatusRoleId}
+              roleName={jobRoles.find(r => String(r.id) === String(inviteStatusRoleId))?.title}
+              onClose={() => setShowInviteStatus(false)}
+            />
+          )}
+        </div>
       ) : (
         <>
           {/* ── Filter Bar ── */}
           {showFilters && (
-        <div className="glass-panel p-5 flex flex-wrap gap-4 items-end shrink-0">
+        <div className="section-card p-5 flex flex-wrap gap-4 items-end shrink-0">
           <div className="flex flex-col gap-1.5">
             <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Job Role</label>
             <div className="flex items-center gap-2">
@@ -626,7 +772,7 @@ export default function SourceDashboard() {
       )}
 
       {/* ── Candidate Table ── */}
-      <div className="glass-panel flex-1 flex flex-col overflow-hidden min-h-0">
+      <div className="section-card flex-1 flex flex-col overflow-hidden min-h-0">
         {/* Table header */}
         <div className="grid grid-cols-[40px_1fr_110px_100px_120px_110px_56px] gap-4 px-6 py-4 border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/30 shrink-0">
           <div className="flex items-center justify-center">
@@ -726,7 +872,7 @@ export default function SourceDashboard() {
 
       {/* ── Bulk Action Bar ── */}
       {anySelected && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-8 py-4 glass-panel border-primary/20 shadow-2xl">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-8 py-4 section-card border-primary/20 shadow-2xl">
           <span className="text-xs font-black text-primary uppercase tracking-widest">{selectedIds.size} selected</span>
           <div className="w-px h-6 bg-white/10" />
           <button
@@ -885,7 +1031,7 @@ export default function SourceDashboard() {
                 <span className="text-xs font-bold uppercase tracking-widest text-white/60">Retrieving Rankings...</span>
               </div>
             ) : rankings.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 glass-panel border-white/5 bg-white/[0.02]">
+              <div className="flex flex-col items-center justify-center py-20 section-card border-white/5 bg-white/[0.02]">
                 <Shield size={48} className="text-white/10 mb-6" />
                 <div className="text-center max-w-xs">
                   <p className="text-sm font-bold text-white mb-2 uppercase italic">No Rankings Data</p>
@@ -904,7 +1050,7 @@ export default function SourceDashboard() {
               </div>
             ) : (
               rankings.map((cand, idx) => (
-                <div key={cand.candidate_id} className="glass-panel p-4 flex items-center justify-between border-white/5 hover:border-primary/20 transition-all group relative overflow-hidden">
+                <div key={cand.candidate_id} className="section-card p-4 flex items-center justify-between border-white/5 hover:border-primary/20 transition-all group relative overflow-hidden">
                   {idx < 3 && <div className="absolute top-0 left-0 w-1 h-full bg-primary/40" />}
                   <div className="flex items-center gap-4">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-display font-black text-xs transition-colors ${idx === 0 ? 'bg-primary text-black' : idx < 3 ? 'bg-white/10 text-primary' : 'bg-white/5 text-white/40 group-hover:text-primary'}`}>
@@ -944,6 +1090,9 @@ export default function SourceDashboard() {
         </Modal>
       )}
     </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -952,7 +1101,7 @@ function Modal({ children, title, onClose }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-lg glass-panel p-8 shadow-2xl">
+      <div className="relative w-full max-w-lg section-card p-8 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
           <button onClick={onClose} className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors"><X size={18} /></button>

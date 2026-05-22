@@ -20,6 +20,15 @@ class AssessmentService:
     def get_assessment(self, asm_id: int) -> Optional[Dict[str, Any]]:
         return self.repo.get_assessment_by_id(asm_id)
 
+    def update_assessment(self, asm_id: int, updates: Dict[str, Any]) -> bool:
+        return self.repo.update_assessment(asm_id, updates)
+
+    def delete_assessment(self, asm_id: int) -> bool:
+        return self.repo.delete_assessment(asm_id)
+
+    def update_status(self, asm_id: int, status: str) -> bool:
+        return self.repo.update_assessment_status(asm_id, status)
+
     def publish_assessment(self, asm_id: int) -> bool:
         return self.repo.update_assessment_status(asm_id, "active")
 
