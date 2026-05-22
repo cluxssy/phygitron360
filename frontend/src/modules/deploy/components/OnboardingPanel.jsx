@@ -103,7 +103,7 @@ export default function OnboardingPanel() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/onboarding/invites', {
+      const res = await fetch('/api/onboarding/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -131,7 +131,7 @@ export default function OnboardingPanel() {
   const deleteInvite = async (id) => {
     if (!confirm('Are you sure you want to revoke this invite?')) return;
     try {
-      const res = await fetch(`/api/onboarding/invites?id=${id}`, {
+      const res = await fetch(`/api/onboarding/invite/${id}`, {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -151,7 +151,7 @@ export default function OnboardingPanel() {
     }
     setSubmitting(true);
     try {
-        const res = await fetch('/api/onboarding/approvals', {
+        const res = await fetch(`/api/onboarding/approve/${approveForm.code}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(approveForm),
