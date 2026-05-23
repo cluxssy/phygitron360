@@ -64,9 +64,13 @@ export default function MyProfile() {
       setDetails(data);
       setFormData({
           ...data,
+          // Flatten skills from nested skill_matrix
           primary_skillset: data.skill_matrix?.primary_skillset || '',
           secondary_skillset: data.skill_matrix?.secondary_skillset || '',
-          experience_years: data.skill_matrix?.experience_years || '0'
+          experience_years: data.skill_matrix?.experience_years || '0',
+          // Normalize date fields to YYYY-MM-DD for date inputs
+          doj: (data.doj || '').split('T')[0],
+          dob: (data.dob || '').split('T')[0],
       });
     } catch { 
       toast.error('Failed to load profile'); 
@@ -78,18 +82,43 @@ export default function MyProfile() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+        // Send only the fields the backend accepts — never send nested objects
+        const payload = {
+            name: formData.name,
+            designation: formData.designation,
+            team: formData.team,
+            employment_type: formData.employment_type,
+            reporting_manager: formData.reporting_manager,
+            location: formData.location,
+            contact_number: formData.contact_number,
+            emergency_contact: formData.emergency_contact,
+            current_address: formData.current_address,
+            permanent_address: formData.permanent_address,
+            dob: formData.dob,
+            email_id: formData.email_id,
+            doj: formData.doj,
+            notes: formData.notes,
+            education_details: formData.education_details,
+            pf_included: formData.pf_included,
+            mediclaim_included: formData.mediclaim_included,
+            // Skill matrix fields (flattened)
+            primary_skillset: formData.primary_skillset,
+            secondary_skillset: formData.secondary_skillset,
+            experience_years: formData.experience_years,
+        };
+
         const res = await fetch(`/api/employee/${details.employee_code}`, {
             method: 'PUT',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
+            body: JSON.stringify(payload)
         });
         const result = await res.json();
         if (!res.ok) throw new Error(result.detail || 'Update failed');
         
-        toast.success('Profile updated. Some changes may require re-login.');
+        toast.success('Profile updated successfully.');
         setEditMode(false);
-        fetchDetails(formData.employee_code);
+        fetchDetails(details.employee_code);
     } catch (e) {
         toast.error(e.message);
     } finally {
