@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
-import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search } from 'lucide-react';
 
 export default function AttendancePanel({ mode }) {
   const { user } = useAuth();
@@ -26,6 +26,14 @@ export default function AttendancePanel({ mode }) {
   const [employees, setEmployees] = useState([]);
   const [editingRecord, setEditingRecord] = useState(null);
   const [editForm, setEditForm] = useState({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
+
+  // New States
+  const [selectedLog, setSelectedLog] = useState(null); // For employee log details modal
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchedEmployeeHistory, setSearchedEmployeeHistory] = useState([]);
+  const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const panelStyle =
   "bg-white border border-[#ebe4ff] rounded-[2.5rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)]";
 
@@ -168,6 +176,23 @@ const tableHeader =
     }
   };
 
+  const searchEmployeeRecords = async (code) => {
+    if (!code) return;
+    setIsSearching(true);
+    try {
+      const [h, l] = await Promise.all([
+        fetch(`/api/attendance/admin/employee/${code}/history`, { credentials: 'include' }).then(r => r.json()),
+        fetch(`/api/attendance/admin/employee/${code}/leaves`, { credentials: 'include' }).then(r => r.json())
+      ]);
+      setSearchedEmployeeHistory(Array.isArray(h) ? h : []);
+      setSearchedEmployeeLeaves(Array.isArray(l) ? l : []);
+    } catch (e) {
+      toast.error(e.message || 'Failed to load employee records');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center h-48">
       <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -269,6 +294,7 @@ const tableHeader =
                 { id: 'today', label: "Daily Log", icon: Users },
                 { id: 'leaves', label: 'Absence Queue', icon: Clock },
                 { id: 'heatmap', label: 'Team Matrix', icon: BarChart3 },
+                { id: 'search', label: 'Personnel Search', icon: Search },
                 ].map(t => (
                 <button key={t.id} onClick={() => setAdminTab(t.id)}
                     className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
@@ -516,8 +542,98 @@ if (
                   </div>
               </div>
           )}
+
+          {adminTab === 'search' && (
+              <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden animate-fade-in-up p-8">
+                  <div className="max-w-xl mx-auto space-y-6">
+                      <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#8b8ba3]">
+                              <Search size={16} />
+                          </div>
+                          <select 
+                              value={selectedEmployee?.employee_code || ''}
+                              onChange={(e) => {
+                                  const emp = employees.find(emp => emp.employee_code === e.target.value);
+                                  setSelectedEmployee(emp);
+                                  searchEmployeeRecords(emp?.employee_code);
+                              }}
+                              className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm px-10 py-4 rounded-2xl focus:outline-none focus:border-[#c084fc] transition-all appearance-none"
+                          >
+                              <option value="">Select personnel to inspect...</option>
+                              {employees.map(e => (
+                                  <option key={e.employee_code} value={e.employee_code}>
+                                      {e.name} ({e.employee_code})
+                                  </option>
+                              ))}
+                          </select>
+                      </div>
+
+                      {isSearching ? (
+                          <div className="flex justify-center p-10"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+                      ) : selectedEmployee ? (
+                          <div className="grid grid-cols-1 gap-6 mt-8">
+                              <div className="flex items-center gap-4 bg-[#f5efff] p-4 rounded-2xl border border-[#ece2ff]">
+                                  <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-primary font-black text-xl">
+                                      {selectedEmployee.name.charAt(0)}
+                                  </div>
+                                  <div>
+                                      <h3 className="font-bold text-black uppercase italic">{selectedEmployee.name}</h3>
+                                      <p className="text-[10px] text-[#8b8ba3] font-mono">{selectedEmployee.employee_code}</p>
+                                  </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  <div className="bg-white border border-[#ece2ff] rounded-2xl overflow-hidden flex flex-col h-80">
+                                      <div className="px-5 py-4 border-b border-[#ece2ff] bg-[#faf7ff]">
+                                          <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Log History</h4>
+                                      </div>
+                                      <div className="overflow-y-auto divide-y divide-[#ece2ff] flex-1">
+                                          {searchedEmployeeHistory.length === 0 ? <p className="p-6 text-center text-[10px] text-[#b6b6c7] font-black uppercase italic">No records</p> : searchedEmployeeHistory.map((h, i) => (
+                                              <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog(h)}>
+                                                  <div className="flex justify-between items-center">
+                                                      <div>
+                                                          <p className="text-[11px] font-bold text-black">{new Date(h.date).toLocaleDateString()}</p>
+                                                          <p className="text-[9px] text-[#8b8ba3] font-mono">{h.clock_in} - {h.clock_out || '??'}</p>
+                                                      </div>
+                                                      <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{h.status}</span>
+                                                  </div>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="bg-white border border-[#ece2ff] rounded-2xl overflow-hidden flex flex-col h-80">
+                                      <div className="px-5 py-4 border-b border-[#ece2ff] bg-[#faf7ff]">
+                                          <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Leave History</h4>
+                                      </div>
+                                      <div className="overflow-y-auto divide-y divide-[#ece2ff] flex-1">
+                                          {searchedEmployeeLeaves.length === 0 ? <p className="p-6 text-center text-[10px] text-[#b6b6c7] font-black uppercase italic">No records</p> : searchedEmployeeLeaves.map((l, i) => (
+                                              <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
+                                                  <div className="flex justify-between items-center">
+                                                      <div>
+                                                          <p className="text-[11px] font-bold text-black">{l.leave_type}</p>
+                                                          <p className="text-[9px] text-[#8b8ba3] font-mono">{l.start_date} to {l.end_date}</p>
+                                                      </div>
+                                                      <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500' : l.status === 'Rejected' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>{l.status || 'Pending'}</span>
+                                                  </div>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      ) : (
+                          <div className="text-center py-10 opacity-30">
+                              <Search size={48} className="mx-auto mb-4 text-[#8b8ba3]" />
+                              <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Select personnel to view matrix</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          )}
         </div>
       )}
+
 
       {/* History Grids */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -532,7 +648,7 @@ if (
                 {history.length === 0 ? (
                     <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No logs decrypted</p>
                 ) : history.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors">
+                    <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog(h)}>
                         <div>
                             <p className="text-xs font-black text-black italic">{new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                             <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">Session: {h.clock_in} - {h.clock_out || '??'}</p>
@@ -556,7 +672,7 @@ if (
             {myLeaves.length === 0 ? (
                 <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No requests filed</p>
             ) : myLeaves.map((l, i) => (
-              <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors">
+              <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
                 <div>
                   <p className="text-xs font-black text-black italic">{l.leave_type} Protocol</p>
                   <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} to {l.end_date}</p>
@@ -694,12 +810,12 @@ if (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-[#060b19]/80 backdrop-blur-sm" onClick={() => setEditingRecord(null)} />
               <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 w-full max-w-lg relative z-10 animate-fade-in-up overflow-hidden">
-                  <div className="p-6 border-b border-white/5 bg-white/5 flex justify-between items-center">
+                  <div className="p-6 border-b border-[#ece2ff] bg-[#faf7ff] flex justify-between items-center">
                       <div>
                           <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black italic">Matrix Synchronization</h3>
-                          <p className="text-[9px] text-black/30 uppercase font-bold mt-1">Personnel Record Adjustment Protocol</p>
+                          <p className="text-[9px] text-[#8b8ba3] uppercase font-bold mt-1">Personnel Record Adjustment Protocol</p>
                       </div>
-                      <button onClick={() => setEditingRecord(null)} className="p-2 text-black/20 hover:text-black transition-colors">
+                      <button onClick={() => setEditingRecord(null)} className="p-2 text-[#8b8ba3] hover:text-black transition-colors">
                           <XCircle size={20} />
                       </button>
                   </div>
@@ -711,7 +827,7 @@ if (
                                 <select 
                                     value={editForm.employee_code}
                                     onChange={e => setEditForm({...editForm, employee_code: e.target.value})}
-                                    className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none"
                                 >
                                     <option value="" className="bg-white">Select Node...</option>
                                     {employees.map(e => (
@@ -719,7 +835,7 @@ if (
                                     ))}
                                 </select>
                             ) : (
-                                <div className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 text-black/40 text-xs bg-white/5 px-4 py-4 rounded-xl font-bold uppercase italic">
+                                <div className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-[#8b8ba3] text-xs px-4 py-4 rounded-xl font-bold uppercase italic">
                                     {editingRecord.employee_name || editingRecord.employee_code}
                                 </div>
                             )}
@@ -731,7 +847,7 @@ if (
                                 disabled={!editingRecord.isNew}
                                 value={editForm.date}
                                 onChange={e => setEditForm({...editForm, date: e.target.value})}
-                                className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none disabled:opacity-50"
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none disabled:opacity-50"
                             />
                           </div>
                       </div>
@@ -744,7 +860,7 @@ if (
                                 step="1"
                                 value={editForm.clock_in}
                                 onChange={e => setEditForm({...editForm, clock_in: e.target.value})}
-                                className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none"
                             />
                           </div>
                           <div>
@@ -754,7 +870,7 @@ if (
                                 step="1"
                                 value={editForm.clock_out}
                                 onChange={e => setEditForm({...editForm, clock_out: e.target.value})}
-                                className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none"
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none"
                             />
                           </div>
                       </div>
@@ -764,7 +880,7 @@ if (
                         <textarea 
                             value={editForm.work_log}
                             onChange={e => setEditForm({...editForm, work_log: e.target.value})}
-                            className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none h-24 resize-none"
+                            className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none h-24 resize-none"
                             placeholder="Detail the activities conducted during this shift..."
                         />
                       </div>
@@ -772,7 +888,7 @@ if (
                       <button 
                         onClick={saveAttendanceEdit}
                         disabled={!editForm.employee_code || !editForm.date}
-                        className="w-full py-4 bg-primary text-black rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
+                        className="w-full py-4 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:opacity-90 transition-all shadow-xl shadow-transparent disabled:opacity-50"
                       >
                         Synchronize Matrix Record
                       </button>
@@ -780,6 +896,54 @@ if (
               </div>
           </div>
       )}
+
+      {/* View Log Modal */}
+      {selectedLog && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-[#060b19]/80 backdrop-blur-sm" onClick={() => setSelectedLog(null)} />
+              <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] w-full max-w-md relative z-10 animate-fade-in-up overflow-hidden">
+                  <div className="p-6 border-b border-[#ece2ff] bg-[#faf7ff] flex justify-between items-center relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-5"><Activity size={60} /></div>
+                      <div className="relative z-10">
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black italic">
+                              {selectedLog.type === 'leave' ? 'Absence Rationale' : 'Session Debrief'}
+                          </h3>
+                          <p className="text-[9px] text-[#8b8ba3] uppercase font-bold mt-1">
+                              {selectedLog.type === 'leave' ? `${selectedLog.start_date} to ${selectedLog.end_date}` : `${selectedLog.date} (${selectedLog.clock_in} - ${selectedLog.clock_out || 'Active'})`}
+                          </p>
+                      </div>
+                      <button onClick={() => setSelectedLog(null)} className="p-2 text-[#8b8ba3] hover:text-black transition-colors relative z-10">
+                          <XCircle size={20} />
+                      </button>
+                  </div>
+                  <div className="p-8">
+                      <div className="bg-[#faf7ff] border border-[#ece2ff] rounded-2xl p-6 relative">
+                          <div className="absolute -top-3 -left-3 bg-white p-1 rounded-full border border-[#ece2ff] text-primary">
+                              <Zap size={16} />
+                          </div>
+                          <p className="text-sm text-black whitespace-pre-wrap font-medium">
+                              {selectedLog.type === 'leave' 
+                                  ? selectedLog.reason || <span className="text-[#8b8ba3] italic">No rationale provided.</span>
+                                  : selectedLog.work_log || <span className="text-[#8b8ba3] italic">No work log recorded for this session.</span>
+                              }
+                          </p>
+                      </div>
+                      {selectedLog.type === 'leave' && selectedLog.rejection_reason && (
+                          <div className="mt-4 bg-[#fff1f2] border border-[#ffe4e6] rounded-2xl p-6 relative">
+                              <div className="absolute -top-3 -left-3 bg-white p-1 rounded-full border border-[#ffe4e6] text-red-500">
+                                  <Shield size={16} />
+                              </div>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-red-400 mb-2">Rejection Feedback</p>
+                              <p className="text-sm text-red-900 whitespace-pre-wrap font-medium">
+                                  {selectedLog.rejection_reason}
+                              </p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }
+

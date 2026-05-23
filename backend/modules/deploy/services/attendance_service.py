@@ -337,6 +337,15 @@ class AttendanceService:
     def get_active_employees(self):
         return self.repo.get_all_active_employees_basic(self.tenant_id)
 
+    def get_history_for_employee(self, employee_code: str, limit: int = 90):
+        """Admin/Manager: retrieve full attendance history for a given employee."""
+        return self.repo.get_history(employee_code, limit, self.tenant_id)
+
+    def get_leaves_for_employee(self, employee_code: str):
+        """Admin/Manager: retrieve all leave records for a given employee."""
+        return self.repo.get_employee_leaves(employee_code, self.tenant_id)
+
+
     def edit_attendance(self, req: EditAttendanceRequest):
         # 1. Determine Status based on duration
         status = 'Absent'
