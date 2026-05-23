@@ -151,10 +151,19 @@ export default function OnboardingPanel() {
     }
     setSubmitting(true);
     try {
-        const res = await fetch(`/api/onboarding/approve/${approveForm.code}`, {
+        const formData = new FormData();
+        formData.append('new_employee_code', approveForm.code);
+        formData.append('doj', approveForm.doj);
+        formData.append('reporting_manager', approveForm.manager);
+        formData.append('employment_type', approveForm.type);
+        formData.append('pf_included', approveForm.pf);
+        formData.append('mediclaim_included', approveForm.mediclaim);
+        formData.append('location', approveForm.location);
+        formData.append('notes', approveForm.notes || '');
+
+        const res = await fetch(`/api/onboarding/approve/${selectedApproval.employee_code}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(approveForm),
+            body: formData,
             credentials: 'include'
         });
         const data = await res.json();
