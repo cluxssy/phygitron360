@@ -127,3 +127,22 @@ def edit_attendance(req: EditAttendanceRequest, user=Depends(require_permission(
 @router.get("/admin/employees")
 def get_active_employees(user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
     return service.get_active_employees()
+
+@router.get("/admin/employee/{employee_code}/history")
+def get_employee_history_admin(
+    employee_code: str,
+    limit: int = 90,
+    user=Depends(require_permission("deploy.attendance.view_team")),
+    service: AttendanceService = Depends(get_service)
+):
+    """Admin/Manager: get full attendance history for any employee."""
+    return service.get_history_for_employee(employee_code, limit)
+
+@router.get("/admin/employee/{employee_code}/leaves")
+def get_employee_leaves_admin(
+    employee_code: str,
+    user=Depends(require_permission("deploy.attendance.view_team")),
+    service: AttendanceService = Depends(get_service)
+):
+    """Admin/Manager: get all leave records for any employee."""
+    return service.get_leaves_for_employee(employee_code)
