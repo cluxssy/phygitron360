@@ -158,8 +158,6 @@ class EmployeeService:
         return result
 
     def update_employee(self, employee_code: str, data: dict):
-        print("UPDATE_EMPLOYEE_DATA:", data)
-        print("DEBUG DATA RECEIVED:", data)
         allowed_fields = [
             'exit_date', 'exit_reason', 'clearance_status', 'employment_status',
             'name', 'designation', 'team', 'employment_type', 'reporting_manager', 'location',
