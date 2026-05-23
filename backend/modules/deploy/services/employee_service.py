@@ -158,6 +158,8 @@ class EmployeeService:
         return result
 
     def update_employee(self, employee_code: str, data: dict):
+        print("UPDATE_EMPLOYEE_DATA:", data)
+        print("DEBUG DATA RECEIVED:", data)
         allowed_fields = [
             'exit_date', 'exit_reason', 'clearance_status', 'employment_status',
             'name', 'designation', 'team', 'employment_type', 'reporting_manager', 'location',
@@ -176,13 +178,21 @@ class EmployeeService:
 
         import json
         for key, value in data.items():
-            if key in allowed_fields and value is not None:
-                # Handle JSONB fields
-                if key == 'education_details' and isinstance(value, (dict, list)):
-                    value = json.dumps(value)
-                
-                fields.append(key)
-                values.append(value)
+            if key not in allowed_fields:
+                continue
+            # Skip None values, but allow empty strings (user may be clearing a field)
+            if value is None:
+                continue
+            # Skip nested objects that aren't meant for the employees table
+            if isinstance(value, (dict, list)) and key != 'education_details':
+                continue
+            # Handle JSONB fields
+            if key == 'education_details' and isinstance(value, (dict, list)):
+                value = json.dumps(value)
+            
+            fields.append(key)
+            values.append(value)
+
         
         if fields:
             self.repo.update_employee_fields(employee_code, fields, values, self.tenant_id)
