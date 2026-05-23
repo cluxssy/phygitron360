@@ -53,7 +53,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         return (
             <div className="flex flex-col items-center justify-center h-96">
                 <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Decrypting Neural Dossier...</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-black/20">Decrypting Neural Dossier...</p>
             </div>
         );
     }
@@ -129,8 +129,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     return (
         <div className="space-y-8 animate-fade-in pb-20">
             {/* Action Bar */}
-            <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5">
-                <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+            <div className="flex justify-between items-center bg-[#faf7ff] p-4 rounded-2xl border border-[#ece4ff]">
+                <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-black/40 hover:text-black transition-all">
                     <ArrowLeft size={14} /> Back to Nexus
                 </button>
                 <div className="flex gap-3">
@@ -138,7 +138,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <>
                             <button 
                                 onClick={() => setEditMode(false)}
-                                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:bg-white/5 transition-all"
+                                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-black/40 hover:bg-[#faf7ff] transition-all"
                             >
                                 Abort
                             </button>
@@ -154,7 +154,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <HasPermission permission="deploy.employees.edit">
                             <button 
                                 onClick={() => setEditMode(true)}
-                                className="flex items-center gap-2 px-8 py-2 glass-panel border-white/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary hover:text-black transition-all"
+                                className="flex items-center gap-2 px-8 py-2 bg-white border border-[#ece4ff] shadow-sm border-[#e9defd] text-primary text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary hover:text-black transition-all"
                             >
                                 <Edit3 size={14} /> Modify Dossier
                             </button>
@@ -164,7 +164,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             </div>
 
             {/* Header / Hero Section */}
-            <div className="glass-panel p-8 border-white/5 relative overflow-hidden">
+            <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff] relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2" />
                 
                 <div className="flex flex-col md:flex-row gap-8 items-start md:items-center relative z-10">
@@ -194,11 +194,11 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     type="text" 
                                     value={formData.name}
                                     onChange={e => setFormData({...formData, name: e.target.value})}
-                                    className="text-4xl font-display font-black text-white uppercase tracking-tighter italic bg-white/5 border border-white/10 rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                    className="text-4xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
                                 />
                             ) : (
                                 <div className="flex items-center gap-4">
-                                    <h2 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic">{details.name}</h2>
+                                    <h2 className="text-4xl font-display font-black text-black uppercase tracking-tighter italic">{details.name}</h2>
                                     <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                                         details.employment_status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                                     }`}>
@@ -216,20 +216,20 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                         placeholder="Designation"
                                         value={formData.designation}
                                         onChange={e => setFormData({...formData, designation: e.target.value})}
-                                        className="bg-white/5 border border-white/10 rounded-lg px-4 py-1.5 text-xs text-primary font-bold uppercase tracking-widest focus:outline-none"
+                                        className="bg-[#faf7ff] border border-[#e9defd] rounded-lg px-4 py-1.5 text-xs text-primary font-bold uppercase tracking-widest focus:outline-none"
                                     />
-                                    <span className="text-white/20">//</span>
+                                    <span className="text-black/20">//</span>
                                     <input 
                                         type="text" 
                                         placeholder="Team"
                                         value={formData.team}
                                         onChange={e => setFormData({...formData, team: e.target.value})}
-                                        className="bg-white/5 border border-white/10 rounded-lg px-4 py-1.5 text-xs text-white/50 font-bold uppercase tracking-widest focus:outline-none"
+                                        className="bg-[#faf7ff] border border-[#e9defd] rounded-lg px-4 py-1.5 text-xs text-black/50 font-bold uppercase tracking-widest focus:outline-none"
                                     />
                                 </>
                             ) : (
                                 <p className="text-primary font-black text-sm uppercase tracking-[0.3em] flex items-center gap-2">
-                                     {details.designation} <span className="text-white/20">//</span> {details.team}
+                                     {details.designation} <span className="text-black/20">//</span> {details.team}
                                 </p>
                             )}
                         </div>
@@ -280,7 +280,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
 
                     {/* Skill Synergy */}
-                    <div className="glass-panel p-8 border-white/5">
+                    <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff]">
                         <SectionHeader icon={TrendingUp} title="Neural Skill Matrix" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                             <div>
@@ -289,7 +289,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     <textarea 
                                         value={formData.primary_skillset}
                                         onChange={e => setFormData({...formData, primary_skillset: e.target.value})}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-white focus:outline-none focus:border-primary"
+                                        className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-primary"
                                         rows={3}
                                         placeholder="Comma separated skills..."
                                     />
@@ -304,19 +304,19 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-4 italic">Auxiliary Capability Blocks</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-black/30 mb-4 italic">Auxiliary Capability Blocks</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.secondary_skillset}
                                         onChange={e => setFormData({...formData, secondary_skillset: e.target.value})}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-white focus:outline-none focus:border-white/20"
+                                        className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-black/20"
                                         rows={3}
                                         placeholder="Comma separated skills..."
                                     />
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
                                         {(details.skill_matrix?.secondary_skillset || '').split(',').map((s, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-white/5 text-white/50 text-[10px] font-bold uppercase rounded-lg border border-white/5">
+                                            <span key={i} className="px-3 py-1.5 bg-[#faf7ff] text-black/50 text-[10px] font-bold uppercase rounded-lg border border-[#ece4ff]">
                                                 {s.trim()}
                                             </span>
                                         ))}
@@ -327,7 +327,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
 
                     {/* Education Logs */}
-                    <div className="glass-panel p-8 border-white/5">
+                    <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff]">
                         <SectionHeader icon={GraduationCap} title="Academic Foundation Blocks" />
                         <div className="mt-6 space-y-4">
                             {editMode ? (
@@ -335,11 +335,11 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                      <textarea 
                                         value={typeof formData.education_details === 'string' ? formData.education_details : JSON.stringify(formData.education_details, null, 2)}
                                         onChange={e => setFormData({...formData, education_details: e.target.value})}
-                                        className="w-full font-mono bg-white/5 border border-white/10 rounded-xl p-6 text-[10px] text-white focus:outline-none"
+                                        className="w-full font-mono bg-[#faf7ff] border border-[#e9defd] rounded-xl p-6 text-[10px] text-black focus:outline-none"
                                         rows={10}
                                         placeholder="[ { 'degree': '...', 'university': '...', 'year': '...' } ]"
                                     />
-                                    <p className="text-[8px] uppercase font-black text-white/20 tracking-tighter">Enter educational history in JSON sequence protocol</p>
+                                    <p className="text-[8px] uppercase font-black text-black/20 tracking-tighter">Enter educational history in JSON sequence protocol</p>
                                 </div>
                             ) : (
                                 (() => {
@@ -348,36 +348,36 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     
                                     if (Array.isArray(edu) && edu.length > 0) {
                                         return edu.map((e, i) => (
-                                            <div key={i} className="flex gap-6 items-start p-6 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/[0.08] transition-all group">
-                                                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white/50 shrink-0 group-hover:text-primary transition-colors">
+                                            <div key={i} className="flex gap-6 items-start p-6 bg-[#faf7ff] rounded-2xl border border-[#ece4ff] hover:bg-black/5 transition-all group">
+                                                <div className="w-12 h-12 rounded-xl bg-[#faf7ff] flex items-center justify-center text-black/30 shrink-0 group-hover:text-primary transition-colors">
                                                     <Landmark size={20} />
                                                 </div>
                                                 <div className="flex-1">
                                                     <div className="flex justify-between items-start">
-                                                        <h4 className="text-white font-bold text-sm uppercase">{e.degree}</h4>
+                                                        <h4 className="text-black font-bold text-sm uppercase">{e.degree}</h4>
                                                         <span className="text-xs font-black text-primary font-mono">{e.year}</span>
                                                     </div>
-                                                    <p className="text-xs text-white/60 mt-1 uppercase tracking-widest">{e.university}</p>
+                                                    <p className="text-xs text-black/40 mt-1 uppercase tracking-widest">{e.university}</p>
                                                 </div>
                                             </div>
                                         ));
                                     }
-                                    return <p className="text-xs text-white/20 italic text-center py-4">No academic history detected.</p>;
+                                    return <p className="text-xs text-black/20 italic text-center py-4">No academic history detected.</p>;
                                 })()
                             )}
                         </div>
                     </div>
 
                     {/* Detailed Allocation Protocol List (Relocated) */}
-                    <div className="glass-panel border-primary/10 bg-primary/5 overflow-hidden">
-                        <div className="p-6 border-b border-white/5 bg-primary/10 flex items-center justify-between">
+                    <div className="bg-white border border-[#ece4ff] shadow-sm border-primary/10 bg-primary/5 overflow-hidden">
+                        <div className="p-6 border-b border-[#ece4ff] bg-primary/10 flex items-center justify-between">
                             <SectionHeader icon={Package} title="Allocation & Lifecycle Matrix" />
                         </div>
                         
                         <div className="p-2 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar">
                             {/* Onboarding Section */}
                             <div className="space-y-1">
-                                <div className="px-4 py-2 bg-white/5 rounded-lg mb-2">
+                                <div className="px-4 py-2 bg-[#faf7ff] rounded-lg mb-2">
                                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/60 italic">I. Onboarding Protocol</p>
                                 </div>
                                 {[
@@ -391,14 +391,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     { key: 'ob_mediclaim', label: 'Mediclaim' },
                                     { key: 'ob_pf', label: 'Provident Fund' }
                                 ].map(a => (
-                                    <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-white/5 transition-colors border-b border-white/[0.02] last:border-0 group">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:text-white/80 transition-colors">{a.label}</span>
+                                    <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#faf7ff] transition-colors border-b border-black/5 last:border-0 group">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-black/40 group-hover:text-black/80 transition-colors">{a.label}</span>
                                         {assets?.[a.key] ? (
                                             <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[8px] font-black uppercase border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
                                                 <CheckCircle size={8} /> Allocated
                                             </span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-white/5 text-white/20 rounded-full text-[8px] font-black uppercase border border-white/5">
+                                            <span className="px-3 py-1 bg-[#faf7ff] text-black/20 rounded-full text-[8px] font-black uppercase border border-[#ece4ff]">
                                                 Pending
                                             </span>
                                         )}
@@ -408,7 +408,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                             {/* Clearance Section */}
                             <div className="space-y-1 pt-4">
-                                <div className="px-4 py-2 bg-white/5 rounded-lg mb-2">
+                                <div className="px-4 py-2 bg-[#faf7ff] rounded-lg mb-2">
                                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-500/60 italic">II. Clearance Protocol</p>
                                 </div>
                                 {[
@@ -420,14 +420,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     { key: 'cl_groups_removed', label: 'Access Purged' },
                                     { key: 'cl_accounts_clearance', label: 'Finance Cleared' }
                                 ].map(a => (
-                                    <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-white/5 transition-colors border-b border-white/[0.02] last:border-0 group">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:text-white/80 transition-colors">{a.label}</span>
+                                    <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#faf7ff] transition-colors border-b border-black/5 last:border-0 group">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-black/40 group-hover:text-black/80 transition-colors">{a.label}</span>
                                         {assets?.[a.key] ? (
                                             <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full text-[8px] font-black uppercase border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
                                                 <CheckCircle size={8} /> Cleared
                                             </span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-white/5 text-white/20 rounded-full text-[8px] font-black uppercase border border-white/5">
+                                            <span className="px-3 py-1 bg-[#faf7ff] text-black/20 rounded-full text-[8px] font-black uppercase border border-[#ece4ff]">
                                                 In Use
                                             </span>
                                         )}
@@ -450,40 +450,40 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 {/* Right Column: Physical Mapping */}
                 <div className="space-y-8">
                     {/* Geographic Anchors */}
-                    <div className="glass-panel p-8 border-white/5">
+                    <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff]">
                         <SectionHeader icon={Landmark} title="Geographic Anchor Points" />
                         <div className="mt-6 space-y-6">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2">Primary Operation Base</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-black/30 mb-2">Primary Operation Base</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.current_address}
                                         onChange={e => setFormData({...formData, current_address: e.target.value})}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-white focus:outline-none"
+                                        className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none"
                                         rows={2}
                                     />
                                 ) : (
-                                    <p className="text-xs text-white leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">{details.current_address || 'Unregistered'}</p>
+                                    <p className="text-xs text-black/70 leading-relaxed bg-[#faf7ff] p-4 rounded-xl border border-[#ece4ff]">{details.current_address || 'Unregistered'}</p>
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2">Permanent Identity Anchor</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-black/30 mb-2">Permanent Identity Anchor</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.permanent_address}
                                         onChange={e => setFormData({...formData, permanent_address: e.target.value})}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-white focus:outline-none"
+                                        className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none"
                                         rows={2}
                                     />
                                 ) : (
-                                    <p className="text-xs text-white leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">{details.permanent_address || 'Matches Primary'}</p>
+                                    <p className="text-xs text-black/70 leading-relaxed bg-[#faf7ff] p-4 rounded-xl border border-[#ece4ff]">{details.permanent_address || 'Matches Primary'}</p>
                                 )}
                             </div>
                         </div>
                     </div>
 
                     {/* Identity Artifacts (Files) */}
-                    <div className="glass-panel p-8 border-white/5">
+                    <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff]">
                         <SectionHeader icon={FileText} title="Identity Artifacts" />
                         <div className="mt-6 space-y-3">
                             <FileCard editMode={editMode} label="Neural Dossier (CV)" path={details.cv_path} onUpload={() => fileInputCv.current.click()} />
@@ -497,7 +497,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     {/* Management Access (Dangerous Area) */}
                     {!editMode && (
                         <HasPermission permission="deploy.employees.offboard">
-                            <div className="glass-panel p-8 border-red-500/10 bg-red-500/5">
+                            <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-red-500/10 bg-red-500/5">
                                 <SectionHeader icon={ShieldCheck} title="Dossier Termination" />
                                 <div className="mt-6">
                                     {details.employment_status === 'Active' ? (
@@ -507,7 +507,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                                     handleOffboard();
                                                 }
                                             }}
-                                            className="w-full py-4 rounded-2xl bg-red-500/20 text-red-500 font-black text-[10px] uppercase tracking-[0.2em] border border-red-500/30 hover:bg-red-500 hover:text-white transition-all shadow-xl shadow-red-500/10"
+                                            className="w-full py-4 rounded-2xl bg-red-500/20 text-red-500 font-black text-[10px] uppercase tracking-[0.2em] border border-red-500/30 hover:bg-red-500 hover:text-black transition-all shadow-xl shadow-red-500/10"
                                         >
                                             Initiate Offboarding
                                         </button>
@@ -530,7 +530,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
     return (
         <div className="space-y-1">
-            <p className="text-[9px] font-black uppercase tracking-widest text-white/50 flex items-center gap-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-black/30 flex items-center gap-2">
                 <Icon size={10} /> {label}
             </p>
             {editMode ? (
@@ -538,10 +538,10 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
                     type="text" 
                     value={value || ''}
                     onChange={e => onChange(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-xs text-white focus:outline-none focus:border-primary"
+                    className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-lg px-3 py-1 text-xs text-black focus:outline-none focus:border-primary"
                 />
             ) : (
-                <p className="text-xs text-white font-bold truncate">{value || 'Unknown'}</p>
+                <p className="text-xs text-black/70 font-bold truncate">{value || 'Unknown'}</p>
             )}
         </div>
     );
@@ -549,17 +549,17 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
 
 function EditStatCard({ label, value, sub, editMode, onChange, type = "text" }) {
     return (
-        <div className={`glass-panel p-6 border-white/5 ${editMode ? 'ring-1 ring-primary/20' : ''}`}>
-            <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-1">{label}</p>
+        <div className={`bg-white border border-[#ece4ff] shadow-sm p-6 border-[#ece4ff] ${editMode ? 'ring-1 ring-primary/20' : ''}`}>
+            <p className="text-[9px] font-black uppercase tracking-widest text-black/30 mb-1">{label}</p>
             {editMode ? (
                 <input 
                     type={type}
                     value={value || ''}
                     onChange={e => onChange(e.target.value)}
-                    className="w-full bg-white/10 border border-white/10 rounded-lg px-2 py-1 text-xs text-white font-black uppercase"
+                    className="w-full bg-black/10 border border-[#e9defd] rounded-lg px-2 py-1 text-xs text-black font-black uppercase"
                 />
             ) : (
-                <p className="text-lg font-display font-black text-white uppercase truncate">{value || '—'}</p>
+                <p className="text-lg font-display font-black text-black uppercase truncate">{value || '—'}</p>
             )}
             <p className="text-[8px] font-black uppercase tracking-[0.2em] text-primary/40 mt-1">{sub}</p>
         </div>
@@ -568,30 +568,30 @@ function EditStatCard({ label, value, sub, editMode, onChange, type = "text" }) 
 
 function SectionHeader({ icon: Icon, title }) {
     return (
-        <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+        <div className="flex items-center gap-3 border-b border-[#ece4ff] pb-4">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                 <Icon size={14} />
             </div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white/80">{title}</h3>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-black/80">{title}</h3>
         </div>
     );
 }
 
 function FileCard({ label, path, editMode, onUpload }) {
     return (
-        <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 group hover:border-primary/30 transition-all">
+        <div className="flex items-center justify-between p-4 bg-[#faf7ff] rounded-xl border border-[#ece4ff] group hover:border-primary/30 transition-all">
             <div className="flex items-center gap-3">
-                <FileText size={16} className="text-white/20 group-hover:text-primary transition-colors" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:text-white/80 transition-colors">{label}</span>
+                <FileText size={16} className="text-black/20 group-hover:text-primary transition-colors" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-black/40 group-hover:text-black/80 transition-colors">{label}</span>
             </div>
             <div className="flex gap-2">
                 {path && (
-                    <a href={`/${path}`} target="_blank" rel="noreferrer" className="p-2 bg-white/5 rounded-lg text-primary hover:bg-primary hover:text-black transition-all">
+                    <a href={`/${path}`} target="_blank" rel="noreferrer" className="p-2 bg-[#faf7ff] rounded-lg text-primary hover:bg-primary hover:text-black transition-all">
                         <ExternalLink size={12} />
                     </a>
                 )}
                 {editMode && (
-                    <button onClick={onUpload} className="p-2 bg-white/5 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-all">
+                    <button onClick={onUpload} className="p-2 bg-[#faf7ff] rounded-lg text-black/40 hover:bg-black/10 hover:text-black transition-all">
                         <Upload size={12} />
                     </button>
                 )}
@@ -603,11 +603,11 @@ function FileCard({ label, path, editMode, onUpload }) {
 function ComplianceRow({ label, active, editMode, onToggle }) {
     return (
         <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-widest text-white/60">{label}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-black/60">{label}</span>
             <button 
                 disabled={!editMode}
                 onClick={onToggle}
-                className={`w-8 h-4 rounded-full relative transition-all ${active ? 'bg-primary' : 'bg-white/10'} ${!editMode ? 'opacity-50' : 'cursor-pointer'}`}
+                className={`w-8 h-4 rounded-full relative transition-all ${active ? 'bg-primary' : 'bg-black/10'} ${!editMode ? 'opacity-50' : 'cursor-pointer'}`}
             >
                 <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-black transition-all ${active ? 'right-0.5' : 'left-0.5'}`} />
             </button>
