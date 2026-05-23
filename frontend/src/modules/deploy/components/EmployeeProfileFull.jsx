@@ -130,7 +130,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         <div className="space-y-8 animate-fade-in pb-20">
             {/* Action Bar */}
             <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5">
-                <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white transition-all">
+                <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
                     <ArrowLeft size={14} /> Back to Nexus
                 </button>
                 <div className="flex gap-3">
@@ -138,7 +138,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <>
                             <button 
                                 onClick={() => setEditMode(false)}
-                                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all"
+                                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:bg-white/5 transition-all"
                             >
                                 Abort
                             </button>
@@ -304,7 +304,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-4 italic">Auxiliary Capability Blocks</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-4 italic">Auxiliary Capability Blocks</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.secondary_skillset}
@@ -349,7 +349,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     if (Array.isArray(edu) && edu.length > 0) {
                                         return edu.map((e, i) => (
                                             <div key={i} className="flex gap-6 items-start p-6 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/[0.08] transition-all group">
-                                                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white/30 shrink-0 group-hover:text-primary transition-colors">
+                                                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white/50 shrink-0 group-hover:text-primary transition-colors">
                                                     <Landmark size={20} />
                                                 </div>
                                                 <div className="flex-1">
@@ -357,7 +357,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                                         <h4 className="text-white font-bold text-sm uppercase">{e.degree}</h4>
                                                         <span className="text-xs font-black text-primary font-mono">{e.year}</span>
                                                     </div>
-                                                    <p className="text-xs text-white/40 mt-1 uppercase tracking-widest">{e.university}</p>
+                                                    <p className="text-xs text-white/60 mt-1 uppercase tracking-widest">{e.university}</p>
                                                 </div>
                                             </div>
                                         ));
@@ -392,7 +392,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     { key: 'ob_pf', label: 'Provident Fund' }
                                 ].map(a => (
                                     <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-white/5 transition-colors border-b border-white/[0.02] last:border-0 group">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/80 transition-colors">{a.label}</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:text-white/80 transition-colors">{a.label}</span>
                                         {assets?.[a.key] ? (
                                             <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[8px] font-black uppercase border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
                                                 <CheckCircle size={8} /> Allocated
@@ -421,7 +421,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     { key: 'cl_accounts_clearance', label: 'Finance Cleared' }
                                 ].map(a => (
                                     <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-white/5 transition-colors border-b border-white/[0.02] last:border-0 group">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/80 transition-colors">{a.label}</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:text-white/80 transition-colors">{a.label}</span>
                                         {assets?.[a.key] ? (
                                             <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full text-[8px] font-black uppercase border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
                                                 <CheckCircle size={8} /> Cleared
@@ -454,7 +454,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={Landmark} title="Geographic Anchor Points" />
                         <div className="mt-6 space-y-6">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-2">Primary Operation Base</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2">Primary Operation Base</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.current_address}
@@ -463,11 +463,11 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                         rows={2}
                                     />
                                 ) : (
-                                    <p className="text-xs text-white/70 leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">{details.current_address || 'Unregistered'}</p>
+                                    <p className="text-xs text-white leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">{details.current_address || 'Unregistered'}</p>
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-2">Permanent Identity Anchor</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2">Permanent Identity Anchor</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.permanent_address}
@@ -476,7 +476,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                         rows={2}
                                     />
                                 ) : (
-                                    <p className="text-xs text-white/70 leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">{details.permanent_address || 'Matches Primary'}</p>
+                                    <p className="text-xs text-white leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">{details.permanent_address || 'Matches Primary'}</p>
                                 )}
                             </div>
                         </div>
@@ -530,7 +530,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
     return (
         <div className="space-y-1">
-            <p className="text-[9px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-white/50 flex items-center gap-2">
                 <Icon size={10} /> {label}
             </p>
             {editMode ? (
@@ -541,7 +541,7 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-xs text-white focus:outline-none focus:border-primary"
                 />
             ) : (
-                <p className="text-xs text-white/70 font-bold truncate">{value || 'Unknown'}</p>
+                <p className="text-xs text-white font-bold truncate">{value || 'Unknown'}</p>
             )}
         </div>
     );
@@ -550,7 +550,7 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
 function EditStatCard({ label, value, sub, editMode, onChange, type = "text" }) {
     return (
         <div className={`glass-panel p-6 border-white/5 ${editMode ? 'ring-1 ring-primary/20' : ''}`}>
-            <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-1">{label}</p>
+            <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-1">{label}</p>
             {editMode ? (
                 <input 
                     type={type}
@@ -582,7 +582,7 @@ function FileCard({ label, path, editMode, onUpload }) {
         <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 group hover:border-primary/30 transition-all">
             <div className="flex items-center gap-3">
                 <FileText size={16} className="text-white/20 group-hover:text-primary transition-colors" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white/80 transition-colors">{label}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:text-white/80 transition-colors">{label}</span>
             </div>
             <div className="flex gap-2">
                 {path && (
@@ -591,7 +591,7 @@ function FileCard({ label, path, editMode, onUpload }) {
                     </a>
                 )}
                 {editMode && (
-                    <button onClick={onUpload} className="p-2 bg-white/5 rounded-lg text-white/40 hover:bg-white/10 hover:text-white transition-all">
+                    <button onClick={onUpload} className="p-2 bg-white/5 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-all">
                         <Upload size={12} />
                     </button>
                 )}
