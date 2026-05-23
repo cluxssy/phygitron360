@@ -4,6 +4,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import { Activity, Download, Save, Send, CheckCircle, Plus, AlertCircle, BarChart3, TrendingUp } from 'lucide-react';
 
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+const HALF_YEARS = ['H1', 'H2'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const KRA_TEMPLATE = [
@@ -42,13 +43,13 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
   const [selectedEmp, setSelectedEmp] = useState(user?.employee_code || '');
   const [year, setYear] = useState(new Date().getFullYear());
   const [assessments, setAssessments] = useState([]);
-  const [periodType, setPeriodType] = useState('Quarterly'); // 'Quarterly' or 'Monthly'
-  const [activePeriod, setActivePeriod] = useState(periodType === 'Quarterly' ? 'Q1' : 'Jan');
+  const [periodType, setPeriodType] = useState('Quarterly'); // 'Quarterly', 'Half Yearly', or 'Monthly'
+  const [activePeriod, setActivePeriod] = useState(periodType === 'Quarterly' ? 'Q1' : periodType === 'Half Yearly' ? 'H1' : 'Jan');
   const [localData, setLocalData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const PERIODS = periodType === 'Quarterly' ? QUARTERS : MONTHS;
+  const PERIODS = periodType === 'Quarterly' ? QUARTERS : periodType === 'Half Yearly' ? HALF_YEARS : MONTHS;
 
   // Load employee list for admin
   useEffect(() => {
@@ -107,8 +108,11 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       period_type: periodType,
       period_value: activePeriod,
       status: 'Draft',
-      total_score: 0,
-      percentage: 0,
+      total_self_score: 0,
+      total_manager_score: 0,
+      self_percentage: 0,
+      manager_percentage: 0,
+      percentage: 0, // Fallback/legacy
       entries: DEFAULT_ENTRIES.map(e => ({ ...e })),
     });
   };
@@ -147,17 +151,33 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
 
     const updated = { ...localData, entries: localData.entries.map((e, i) => {
       if (i !== idx) return e;
-      const val = (field.includes('score') ? Number(value) : value);
+      const val = (field.includes('score') && value !== 'N/A' ? Number(value) : (value === 'N/A' ? null : value));
       const updated_entry = { ...e, [field]: val };
       
-      // Combined score logic
-      updated_entry.score = updated_entry.manager_score || updated_entry.self_score || 0;
       return updated_entry;
     })};
 
-    const total = updated.entries.reduce((s, e) => s + (e.manager_score || e.self_score || 0), 0);
-    updated.total_score = total;
-    updated.percentage = updated.entries.length ? Math.round((total / (updated.entries.length * 10)) * 100) : 0;
+    let selfSum = 0, selfCount = 0;
+    let mgrSum = 0, mgrCount = 0;
+    
+    updated.entries.forEach(e => {
+        if (e.self_score !== null && e.self_score !== undefined) {
+            selfSum += e.self_score;
+            selfCount++;
+        }
+        if (e.manager_score !== null && e.manager_score !== undefined) {
+            mgrSum += e.manager_score;
+            mgrCount++;
+        }
+    });
+
+    updated.total_self_score = selfSum;
+    updated.total_manager_score = mgrSum;
+    updated.self_percentage = selfCount ? Math.round((selfSum / (selfCount * 10)) * 100) : 0;
+    updated.manager_percentage = mgrCount ? Math.round((mgrSum / (mgrCount * 10)) * 100) : 0;
+    
+    // For backward compatibility / composite view
+    updated.percentage = updated.manager_percentage || updated.self_percentage || 0;
     setLocalData(updated);
   };
 
@@ -196,10 +216,10 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
     try {
       const XLSX = await import('xlsx');
       const wsData = [
-        ['Category', 'Subcategory', 'Self Score', 'Manager Score', 'Combined Score', 'Employee Comment', 'Manager Comment'],
-        ...localData.entries.map(e => [e.category, e.subcategory, e.self_score, e.manager_score, e.score, e.employee_comment, e.manager_comment]),
+        ['Category', 'Subcategory', 'Self Score', 'Manager Score', 'Employee Comment', 'Manager Comment'],
+        ...localData.entries.map(e => [e.category, e.subcategory, e.self_score !== null ? e.self_score : 'N/A', e.manager_score !== null ? e.manager_score : 'N/A', e.employee_comment, e.manager_comment]),
         [],
-        ['Total Score', localData.total_score, '', '', '', 'Percentage', `${localData.percentage}%`]
+        ['Self Score', localData.total_self_score, 'Self %', `${localData.self_percentage}%`, 'Manager Score', localData.total_manager_score, 'Mgr %', `${localData.manager_percentage}%`]
       ];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       const wb = XLSX.utils.book_new();
@@ -295,12 +315,12 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
     entryScoreBtn: (isActive, isManager) => {
       if (isActive) {
         return isManager 
-          ? 'w-8 h-8 rounded-lg text-[10px] font-black bg-emerald-500 text-white shadow-lg shadow-emerald-200'
-          : 'w-8 h-8 rounded-lg text-[10px] font-black bg-[#7c3aed] text-white shadow-lg shadow-purple-200';
+          ? 'px-2 py-1 h-8 rounded-lg text-[10px] font-black bg-emerald-500 text-white shadow-lg shadow-emerald-200'
+          : 'px-2 py-1 h-8 rounded-lg text-[10px] font-black bg-[#7c3aed] text-white shadow-lg shadow-purple-200';
       }
       return isLightMode
-        ? 'w-8 h-8 rounded-lg text-[10px] font-black border border-[#ece6ff] bg-white text-black/40 hover:bg-[#faf7ff]'
-        : 'w-8 h-8 rounded-lg text-[10px] font-black glass-panel border-white/5 text-white/20 hover:text-white/40';
+        ? 'px-2 py-1 h-8 rounded-lg text-[10px] font-black border border-[#ece6ff] bg-white text-black/40 hover:bg-[#faf7ff]'
+        : 'px-2 py-1 h-8 rounded-lg text-[10px] font-black glass-panel border-white/5 text-white/20 hover:text-white/40';
     },
 
     // Footer actions
@@ -367,10 +387,10 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
                 </button>
             )}
             <div className={styles.periodSelectContainer}>
-                {['Quarterly', 'Monthly'].map(t => (
+                {['Quarterly', 'Half Yearly', 'Monthly'].map(t => (
                     <button 
                         key={t}
-                        onClick={() => { setPeriodType(t); setActivePeriod(t === 'Quarterly' ? 'Q1' : 'Jan'); }}
+                        onClick={() => { setPeriodType(t); setActivePeriod(t === 'Quarterly' ? 'Q1' : t === 'Half Yearly' ? 'H1' : 'Jan'); }}
                         className={styles.periodSelectBtn(periodType === t)}
                     >
                         {t}
@@ -510,16 +530,26 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
                 {localData.status || 'Draft'}
               </span>
             </div>
-            <div className="text-right">
-              <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>Composite Score</p>
-              <p className="text-5xl font-display font-black" style={{
-                color: localData.percentage >= 80 ? '#10B981' : localData.percentage >= 60 ? '#F59E0B' : '#F43F5E'
-              }}>
-                {localData.percentage ?? 0}%
-              </p>
-              <p className={`text-[10px] uppercase tracking-widest font-black ${styles.mutedText}`}>
-                {localData.total_score ?? 0} / {(localData.entries?.length || 0) * 10} pts
-              </p>
+            <div className="text-right flex gap-6">
+              <div>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>Self Matrix</p>
+                <p className="text-4xl font-display font-black" style={{ color: (localData.self_percentage || 0) >= 80 ? '#10B981' : (localData.self_percentage || 0) >= 60 ? '#F59E0B' : '#F43F5E' }}>
+                  {localData.self_percentage ?? 0}%
+                </p>
+                <p className={`text-[10px] uppercase tracking-widest font-black ${styles.mutedText}`}>
+                  {localData.total_self_score ?? 0} pts
+                </p>
+              </div>
+              <div className="w-px bg-black/10" />
+              <div>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>Manager Matrix</p>
+                <p className="text-4xl font-display font-black" style={{ color: (localData.manager_percentage || 0) >= 80 ? '#10B981' : (localData.manager_percentage || 0) >= 60 ? '#F59E0B' : '#F43F5E' }}>
+                  {localData.manager_percentage ?? 0}%
+                </p>
+                <p className={`text-[10px] uppercase tracking-widest font-black ${styles.mutedText}`}>
+                  {localData.total_manager_score ?? 0} pts
+                </p>
+              </div>
             </div>
           </div>
 
@@ -530,9 +560,8 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
                 <tr>
                   <th className={styles.th()}>Category</th>
                   <th className={styles.th()}>KRA & Criteria</th>
-                  <th className={styles.th('primary')}>Self (1/5/10)</th>
-                  <th className={styles.th('emerald')}>Mgr (1/5/10)</th>
-                  <th className={styles.th('muted')}>Final</th>
+                  <th className={styles.th('primary')}>Self Rating</th>
+                  <th className={styles.th('emerald')}>Mgr Rating</th>
                   <th className={styles.th()}>Notes</th>
                 </tr>
               </thead>
@@ -547,13 +576,16 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex gap-1">
-                        {[1, 5, 10].map(s => (
+                      <div className="flex gap-1 flex-wrap">
+                        {[1, 5, 10, 'N/A'].map(s => (
                           <button
                             key={s}
                             onClick={() => handleEntryChange(idx, 'self_score', s)}
                             disabled={isAdmin || !canEmployeeEdit}
-                            className={styles.entryScoreBtn(entry.self_score === s, false)}
+                            className={styles.entryScoreBtn(
+                                (s === 'N/A' && (entry.self_score === null || entry.self_score === undefined)) || entry.self_score === s, 
+                                false
+                            )}
                           >
                             {s}
                           </button>
@@ -561,25 +593,21 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                       <div className="flex gap-1">
-                        {[1, 5, 10].map(s => (
+                       <div className="flex gap-1 flex-wrap">
+                        {[1, 5, 10, 'N/A'].map(s => (
                           <button
                             key={s}
                             onClick={() => handleEntryChange(idx, 'manager_score', s)}
                             disabled={!canManagerEdit}
-                            className={styles.entryScoreBtn(entry.manager_score === s, true)}
+                            className={styles.entryScoreBtn(
+                                (s === 'N/A' && (entry.manager_score === null || entry.manager_score === undefined)) || entry.manager_score === s, 
+                                true
+                            )}
                           >
                             {s}
                           </button>
                         ))}
                       </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm font-display font-black" style={{
-                        color: (entry.manager_score || entry.self_score || 0) >= 7 ? '#10B981' : (entry.manager_score || entry.self_score || 0) >= 5 ? '#F59E0B' : '#F43F5E'
-                      }}>
-                        {entry.manager_score || entry.self_score || 0}
-                      </span>
                     </td>
                     <td className="px-4 py-4 sm:min-w-[200px]">
                       <input
