@@ -636,6 +636,7 @@ if (
 
 
       {/* History Grids */}
+      {!isAdmin && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Attendance History */}
         <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
@@ -686,6 +687,7 @@ if (
           </div>
         </div>
       </div>
+      )}
 
       {/* Absence Request Modal */}
       {showLeaveForm && (
