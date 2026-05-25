@@ -53,7 +53,7 @@ class DashboardRepository:
                 res = cur.fetchone()
                 result['kras'] = dict(res) if res else {"total": 0, "completed": 0}
                 
-                # 3. Training (HR Activity)
+                # 3. Training (HR Activity counts)
                 cur.execute("""
                     SELECT count(*)::int as total,
                            COALESCE(sum(case when training_status = 'Completed' then 1 else 0 end), 0)::int as completed
@@ -92,6 +92,65 @@ class DashboardRepository:
                 cur.execute("SELECT 0 as sick_used, 0 as sick_total, used_leaves as casual_used, total_leaves as casual_total FROM leave_balances WHERE employee_code = %s AND year = CAST(EXTRACT(YEAR FROM CURRENT_DATE) AS INTEGER)", (employee_code,))
                 balance = cur.fetchone()
                 result['leaves'] = dict(balance) if balance else {"sick_used": 0, "sick_total": 0, "casual_used": 0, "casual_total": 0}
+
+                # 8. Attendance History (For current year trends)
+                cur.execute("""
+                    SELECT date, clock_in, clock_out, status, work_log 
+                    FROM attendance 
+                    WHERE employee_code = %s 
+                      AND date >= CAST(EXTRACT(YEAR FROM CURRENT_DATE) AS TEXT) || '-01-01'
+                    ORDER BY date DESC
+                """, (employee_code,))
+                att_history = cur.fetchall()
+                result['attendance_history'] = [dict(a) for a in att_history]
+
+                # 9. Recent Leaves (Detailed list for the leaves bar chart/timeline)
+                cur.execute("""
+                    SELECT start_date, end_date, leave_type, status, reason, applied_at
+                    FROM leaves
+                    WHERE employee_code = %s
+                    ORDER BY applied_at DESC, start_date DESC
+                    LIMIT 10
+                """, (employee_code,))
+                rec_leaves = cur.fetchall()
+                result['recent_leaves'] = []
+                for leaf in rec_leaves:
+                    d = dict(leaf)
+                    if d.get('applied_at'):
+                        d['applied_at'] = d['applied_at'].isoformat()
+                    result['recent_leaves'].append(d)
+
+                # 10. Latest Performance Assessment
+                cur.execute("""
+                    SELECT year, period_type, period_value, status, percentage
+                    FROM performance_assessments
+                    WHERE employee_code = %s
+                    ORDER BY year DESC, created_at DESC
+                    LIMIT 1
+                """, (employee_code,))
+                latest_p = cur.fetchone()
+                result['latest_performance'] = dict(latest_p) if latest_p else None
+
+                # 11. Performance History (For plotting trend lines/area charts)
+                cur.execute("""
+                    SELECT year, period_type, period_value, status, percentage
+                    FROM performance_assessments
+                    WHERE employee_code = %s
+                    ORDER BY year ASC, created_at ASC
+                """, (employee_code,))
+                p_history = cur.fetchall()
+                result['performance_history'] = [dict(p) for p in p_history]
+
+                # 12. Training List (For training progress chart)
+                cur.execute("""
+                    SELECT program_id, training_assigned as training_name, training_status, training_date, training_duration
+                    FROM hr_activity
+                    WHERE employee_code = %s
+                    ORDER BY id DESC
+                    LIMIT 10
+                """, (employee_code,))
+                t_list = cur.fetchall()
+                result['training_list'] = [dict(t) for t in t_list]
             
             return result
         finally:
