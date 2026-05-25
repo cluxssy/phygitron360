@@ -17,3 +17,4 @@ xlsxwriter==3.2.9
 email-validator==2.2.0
 pdfplumber==0.11.4
 python-jose==3.3.0
+boto3>=1.34.0
