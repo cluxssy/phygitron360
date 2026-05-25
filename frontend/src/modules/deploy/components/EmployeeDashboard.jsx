@@ -466,8 +466,8 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
         </div>
       </div>
 
-      {/* ─── STAT CARDS (4 KPIs) ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+      {/* ─── STAT CARDS (3 KPIs) ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           label="Leave Balance"
           value={leaveBalance}
@@ -491,13 +491,6 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
           icon={Award}
           sub={latestPerf ? `${latestPerf.period_value} ${latestPerf.year} · ${latestPerf.status}` : 'Assessments pending'}
           onClick={() => navigate('/deploy?tab=performance')}
-        />
-        <StatCard
-          label="Training Progress"
-          value={`${trainingPct}%`}
-          color="#3B82F6"
-          icon={BookOpen}
-          sub={`${activeTrainingDone} of ${activeTrainingTotal} courses completed`}
         />
       </div>
 
@@ -576,7 +569,7 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
             )}
           </ResponsiveContainer>
         </ChartCard>
-
+ 
         {/* Performance Evolution line chart over time */}
         <ChartCard 
           title="Performance Evolution" 
@@ -604,68 +597,7 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>
-
-      </div>
-
-      {/* ─── SECTION 2: KRA RADIAL, LEAVES TIMELINE & TRAINING BARS ─── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-
-        {/* KRA Radial ring completion widget */}
-        <ChartCard title="KRA Goal Completion">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadialBarChart
-              cx="50%" cy="50%"
-              innerRadius="58%"
-              outerRadius="83%"
-              data={[
-                { name: 'Completed', value: krasPercent, fill: 'url(#purpleGrad)' },
-                { name: 'Target', value: 100, fill: '#f5f3ff' }
-              ]}
-              startAngle={90}
-              endAngle={-270}
-              barSize={12}
-            >
-              <RadialBar dataKey="value" cornerRadius={8} />
-              <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle"
-                style={{ fontSize: '32px', fontWeight: 900, fill: '#7C3AED', fontFamily: 'inherit' }}>
-                {krasPercent}%
-              </text>
-              <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle"
-                style={{ fontSize: '9px', fontWeight: 900, fill: '#00000040', letterSpacing: '0.15em', textTransform: 'uppercase', fontFamily: 'inherit' }}>
-                {kras.completed} of {kras.total} Completed
-              </text>
-            </RadialBarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        {/* Training courses progress bar representation */}
-        <ChartCard 
-          title="Training Curriculum" 
-          className="xl:col-span-2"
-          action={
-            <span className="text-[8px] font-black uppercase bg-[#eff6ff] text-[#3B82F6] border border-[#dbeafe] px-2.5 py-1 rounded-full">
-              {profile.training_list?.length > 0 ? 'Live Track' : 'Standard Core'}
-            </span>
-          }
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={trainingBarData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(124,58,237,0.06)" horizontal={false} />
-              <XAxis type="number" domain={[0, 100]} stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
-              <YAxis dataKey="name" type="category" stroke="rgba(0,0,0,0.4)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} width={130} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="value" name="Progress" radius={[0, 6, 6, 0]} barSize={10}>
-                {trainingBarData.map((entry, idx) => {
-                  let barColor = 'url(#purpleGrad)';
-                  if (entry.status === 'Completed') barColor = 'url(#greenGrad)';
-                  if (entry.status === 'In Progress') barColor = 'url(#amberGrad)';
-                  return <Cell key={idx} fill={barColor} />;
-                })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
+ 
       </div>
 
       {/* ─── SECTION 3: RECENT LEAVES LIST & TIMELINE ─── */}
