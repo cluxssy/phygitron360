@@ -164,25 +164,21 @@ class DashboardService:
                 "doj": emp.get("doj"),
                 "photo_path": emp.get("photo_path"),
                 "employee_code": emp.get("employee_code"),
+                "employment_type": emp.get("employment_type"),
                 "phone": emp.get("contact_number"),
                 "personal_email": emp.get("email_id"),
-                "current_address": emp.get("current_address"),
-                "emergency_contact_name": emp.get("emergency_contact"),
             },
-            "kras": {
-                "total": kras.get("total", 0),
-                "completed": kras.get("completed", 0) or 0
-            },
-            "training": {
-                "total": training.get("total", 0),
-                "completed": training.get("completed", 0) or 0
-            },
-            "assets": {
-                "total": data['asset_count']
-            },
+            "kras": {"total": kras.get("total", 0), "completed": kras.get("completed", 0) or 0},
+            "training": {"total": training.get("total", 0), "completed": training.get("completed", 0) or 0},
+            "training_list": data.get('training_list', []),
+            "assets": {"total": data['asset_count']},
             "notifications": data['notifications'],
             "attendance": {
-                "status": data['attendance_status']
+                "status": data['attendance_status'],
+                "today": data.get('attendance_today'),
+                "month": data.get('attendance_month', {"present": 0, "half_day": 0, "absent": 0})
             },
-            "leaves": data['leaves']
+            "leaves": data['leaves'],
+            "recent_leaves": data.get('recent_leaves', []),
+            "latest_performance": data.get('latest_performance'),
         }
