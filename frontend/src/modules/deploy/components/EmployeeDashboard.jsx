@@ -105,6 +105,7 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [period, setPeriod] = useState('month'); // 'month' | 'quarter' | 'year'
+  const [selectedPerfType, setSelectedPerfType] = useState('Quarterly');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -124,6 +125,24 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Dynamically set default selected performance review type to the most populated one
+  useEffect(() => {
+    const history = profile?.performance_history || [];
+    if (history.length > 0) {
+      const counts = {};
+      let maxType = 'Quarterly';
+      let maxCount = 0;
+      history.forEach(p => {
+        counts[p.period_type] = (counts[p.period_type] || 0) + 1;
+        if (counts[p.period_type] > maxCount) {
+          maxCount = counts[p.period_type];
+          maxType = p.period_type;
+        }
+      });
+      setSelectedPerfType(maxType);
+    }
+  }, [profile]);
 
   // Client-side analytics parsing and period aggregation
   const analytics = useMemo(() => {
@@ -290,6 +309,30 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
     }
   }, [profile, period]);
 
+  // Safely extract raw performance history for hooks before early returns
+  const perfHistory = useMemo(() => profile?.performance_history || [], [profile]);
+
+  // Get available performance review period types in history
+  const availablePerfTypes = useMemo(() => {
+    if (perfHistory.length === 0) return [];
+    // Ensure consistent ordering of types
+    const order = ['Monthly', 'Quarterly', 'Half-Yearly'];
+    const types = [...new Set(perfHistory.map(p => p.period_type))];
+    return order.filter(t => types.includes(t));
+  }, [perfHistory]);
+
+  // Parse performance assessments filtered by selected review period type
+  const parsedPerfHistory = useMemo(() => {
+    const filtered = perfHistory.filter(p => p.period_type === selectedPerfType);
+    if (filtered.length > 0) {
+      return filtered.map(p => ({
+        name: `${p.period_value} '${String(p.year).slice(2)}`,
+        Score: p.percentage || 0
+      }));
+    }
+    return MOCK_PERF_TREND;
+  }, [perfHistory, selectedPerfType]);
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-96 gap-4 animate-pulse">
       <div className="w-12 h-12 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
@@ -310,7 +353,6 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
   const training    = profile.training || { total: 0, completed: 0 };
   const recentLeaves = profile.recent_leaves || [];
   const latestPerf   = profile.latest_performance;
-  const perfHistory  = profile.performance_history || [];
   const trainingList = profile.training_list?.length > 0 ? profile.training_list : MOCK_TRAINING;
 
   // Compute stats
@@ -332,14 +374,6 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
       return yrs > 0 ? `${yrs}y ${mos}m tenure` : `${mos}m tenure`;
     } catch { return null; }
   })();
-
-  // Parse performance assessments for line chart
-  const parsedPerfHistory = perfHistory.length > 0 
-    ? perfHistory.map(p => ({
-        name: `${p.period_value} '${String(p.year).slice(2)}`,
-        Score: p.percentage || 0
-      }))
-    : MOCK_PERF_TREND;
 
   // Parse training list for horizontal bars
   const trainingBarData = trainingList.map(t => ({
@@ -575,9 +609,23 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
           title="Performance Evolution" 
           className="xl:col-span-2"
           action={
-            <span className="text-[8px] font-black uppercase bg-[#fff7ed] text-[#F59E0B] border border-[#ffedd5] px-2.5 py-1 rounded-full">
-              {perfHistory.length > 0 ? 'Live evaluations' : 'Projected baseline'}
-            </span>
+            availablePerfTypes.length > 1 ? (
+              <div className="flex bg-[#fffcf5] p-1 rounded-xl border border-[#ffeed5] text-[9px] font-black uppercase tracking-wider">
+                {availablePerfTypes.map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setSelectedPerfType(type)}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${selectedPerfType === type ? 'bg-[#F59E0B] text-white shadow-sm' : 'text-black/55 hover:text-black'}`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="text-[8px] font-black uppercase bg-[#fff7ed] text-[#F59E0B] border border-[#ffedd5] px-2.5 py-1 rounded-full">
+                {perfHistory.length > 0 ? `${selectedPerfType} Reviews` : 'Projected baseline'}
+              </span>
+            )
           }
         >
           <ResponsiveContainer width="100%" height="100%">
