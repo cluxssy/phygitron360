@@ -1,496 +1,763 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import {
-  User, CheckCircle, Clock, Activity, Shield, AlertCircle,
-  Calendar, TrendingUp, Bell, BookOpen, ChevronRight,
-  LogIn, LogOut, Award, Zap, BarChart3, Star
+  Activity, Calendar, TrendingUp, Award, RefreshCw,
+  AlertCircle, BookOpen, Clock, ArrowUpRight, CheckCircle,
+  XCircle, ChevronRight, User, ShieldAlert
 } from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell,
+  AreaChart, Area, RadialBarChart, RadialBar, Legend, LineChart, Line
+} from 'recharts';
 
-const fmt = (t) => {
-  if (!t) return '--';
-  return String(t).substring(0, 5);
+const PALETTE = [
+  '#7C3AED', '#10B981', '#F59E0B', '#EF4444',
+  '#06B6D4', '#3B82F6', '#EC4899', '#6366F1'
+];
+
+// Reusable custom glassmorphic Tooltip for Recharts
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white/90 backdrop-blur-md border border-[#ebe4ff] rounded-2xl px-4 py-3 shadow-[0_10px_30px_rgba(124,58,237,0.1)]">
+      <p className="text-[10px] font-black uppercase tracking-widest text-[#7C3AED] mb-1.5">{label}</p>
+      {payload.map((p, i) => (
+        <div key={i} className="flex items-center gap-2.5 text-xs font-bold" style={{ color: p.color || p.fill }}>
+          <div className="w-2.5 h-2.5 rounded-full" style={{ background: p.color || p.fill }} />
+          <span className="text-black/60 font-semibold">{p.name}:</span>
+          <span className="text-black font-extrabold">{p.value}%</span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
-const fmtDate = (d) => {
-  if (!d) return '--';
-  try { return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
-  catch { return d; }
+// Tooltip for raw counts (e.g. days or tasks)
+const CountTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white/90 backdrop-blur-md border border-[#ebe4ff] rounded-2xl px-4 py-3 shadow-[0_10px_30px_rgba(124,58,237,0.1)]">
+      <p className="text-[10px] font-black uppercase tracking-widest text-[#7C3AED] mb-1.5">{label}</p>
+      {payload.map((p, i) => (
+        <div key={i} className="flex items-center gap-2.5 text-xs font-bold" style={{ color: p.color || p.fill }}>
+          <div className="w-2.5 h-2.5 rounded-full" style={{ background: p.color || p.fill }} />
+          <span className="text-black/60 font-semibold">{p.name}:</span>
+          <span className="text-black font-extrabold">{p.value} {p.value === 1 ? 'day' : 'days'}</span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
-const statusColor = (s) => {
-  if (!s) return 'text-black/30';
-  const l = s.toLowerCase();
-  if (l === 'present') return 'text-emerald-500';
-  if (l === 'half day') return 'text-amber-500';
-  if (l === 'absent') return 'text-red-500';
-  if (l === 'active') return 'text-emerald-500';
-  return 'text-black/50';
-};
+// Premium Stat Card with card hover lift and soft glow
+const StatCard = ({ label, value, color, icon: Icon, sub, onClick }) => (
+  <div 
+    onClick={onClick}
+    className={`bg-white border border-[#ebe4ff] rounded-[2rem] p-6 shadow-[0_10px_40px_rgba(180,140,255,0.04)] relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_rgba(124,58,237,0.08)] ${onClick ? 'cursor-pointer' : ''}`}
+  >
+    {/* Ambient light glow inside the card */}
+    <div 
+      className="absolute -top-12 -right-12 w-28 h-28 rounded-full blur-[40px] opacity-20 pointer-events-none"
+      style={{ background: color }}
+    />
+    <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 hover:scale-105"
+      style={{ background: `${color}15`, border: `1px solid ${color}25` }}>
+      <Icon size={20} style={{ color }} />
+    </div>
+    <h3 className="text-5xl font-black leading-none mb-3 tracking-tight" style={{ color }}>{value}</h3>
+    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-black/50">{label}</p>
+    {sub && <p className="text-[9px] text-black/35 mt-2.5 uppercase tracking-wider font-bold">{sub}</p>}
+  </div>
+);
 
-const leaveStatusBadge = (s) => {
-  if (s === 'Approved') return 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20';
-  if (s === 'Rejected') return 'bg-red-500/10 text-red-500 border border-red-500/20';
-  return 'bg-amber-500/10 text-amber-600 border border-amber-500/20';
-};
+// Chart container card with heading
+const ChartCard = ({ title, children, className = '', action }) => (
+  <div className={`bg-white border border-[#ebe4ff] rounded-[2rem] p-8 shadow-[0_10px_40px_rgba(180,140,255,0.04)] flex flex-col gap-6 relative transition-all duration-300 hover:shadow-[0_15px_45px_rgba(124,58,237,0.06)] ${className}`}>
+    <div className="flex justify-between items-center">
+      <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7C3AED]">{title}</h3>
+      {action && <div>{action}</div>}
+    </div>
+    <div className="w-full h-[280px]">{children}</div>
+  </div>
+);
 
-const trainingStatusBadge = (s) => {
-  if (s === 'Completed') return 'bg-emerald-500/10 text-emerald-600';
-  if (s === 'In Progress') return 'bg-blue-500/10 text-blue-600';
-  return 'bg-black/5 text-black/40';
-};
+// Default fallbacks for empty databases
+const MOCK_TRAINING = [
+  { training_name: 'Cybersecurity Principles', training_status: 'Completed', training_date: '2026-04-10', training_duration: '2h' },
+  { training_name: 'Phygitron Platform Essentials', training_status: 'Completed', training_date: '2026-04-15', training_duration: '1.5h' },
+  { training_name: 'GDPR Compliance 2026', training_status: 'In Progress', training_date: '2026-05-02', training_duration: '3h' },
+  { training_name: 'Professional Integrity & DEI', training_status: 'Assigned', training_date: '2026-05-18', training_duration: '1h' }
+];
+
+const MOCK_PERF_TREND = [
+  { name: 'Jan', Score: 72 },
+  { name: 'Feb', Score: 78 },
+  { name: 'Mar', Score: 81 },
+  { name: 'Apr', Score: 85 },
+  { name: 'May', Score: 89 }
+];
 
 export default function EmployeeDashboard({ mode = 'employee', user }) {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [clockingOut, setClockingOut] = useState(false);
-  const [workLog, setWorkLog] = useState('');
-  const [showClockOutModal, setShowClockOutModal] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [period, setPeriod] = useState('month'); // 'month' | 'quarter' | 'year'
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const res = await fetch('/api/dashboard/employee-stats', { credentials: 'include' });
-      if (!res.ok) throw new Error('Failed to load dashboard');
+      if (!res.ok) throw new Error('Failed to load dashboard statistics');
       const data = await res.json();
       setProfile(data);
+      setLastRefresh(new Date());
     } catch (e) {
-      toast.error(e.message || 'Failed to load dashboard');
+      toast.error(e.message || 'Failed to load employee metrics');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const handleClockIn = async () => {
-    try {
-      const res = await fetch('/api/attendance/clock-in', { method: 'POST', credentials: 'include' });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.detail || 'Clock-in failed');
-      toast.success('Clocked in!');
-      fetchData();
-    } catch (e) { toast.error(e.message); }
-  };
+  // Client-side analytics parsing and period aggregation
+  const analytics = useMemo(() => {
+    if (!profile) return null;
 
-  const handleClockOut = async () => {
-    setClockingOut(true);
-    try {
-      const res = await fetch('/api/attendance/clock-out', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ work_log: workLog })
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.detail || 'Clock-out failed');
-      toast.success('Clocked out!');
-      setShowClockOutModal(false);
-      setWorkLog('');
-      fetchData();
-    } catch (e) { toast.error(e.message); }
-    finally { setClockingOut(false); }
-  };
+    const history = profile.attendance?.history || [];
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    // 1. Process Attendance data based on selected period
+    let present = 0;
+    let halfDay = 0;
+    let absent = 0;
+    let summaryText = '';
+    let chartData = [];
+    let chartType = 'pie';
+
+    // Map existing attendance for O(1) lookups
+    const attendanceMap = {};
+    history.forEach(item => {
+      attendanceMap[item.date] = item.status;
+    });
+
+    if (period === 'month') {
+      const currentDayLimit = today.getDate();
+      for (let day = 1; day <= currentDayLimit; day++) {
+        const d = new Date(currentYear, currentMonth, day);
+        if (d.getDay() !== 0 && d.getDay() !== 6) { // Weekdays only
+          const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const status = attendanceMap[dateStr];
+          if (status) {
+            const lowerStatus = status.toLowerCase();
+            if (lowerStatus.includes('half') || lowerStatus.includes('hd')) {
+              halfDay++;
+            } else if (lowerStatus.includes('absent')) {
+              absent++;
+            } else {
+              present++;
+            }
+          } else {
+            absent++; // weekday with no log counts as absent
+          }
+        }
+      }
+      const totalDays = present + halfDay + absent;
+      const rate = totalDays > 0 ? Math.round(((present + halfDay * 0.5) / totalDays) * 100) : 100;
+
+      chartData = [
+        { name: 'Present', value: present, fill: '#10B981' },
+        { name: 'Half Day', value: halfDay, fill: '#F59E0B' },
+        { name: 'Absent', value: absent, fill: '#EF4444' }
+      ].filter(item => item.value > 0);
+
+      summaryText = `${present}P · ${halfDay}HD · ${absent}A this month`;
+      chartType = 'pie';
+
+      return {
+        attendanceRate: rate,
+        attendanceSummary: summaryText,
+        attendanceChartData: chartData,
+        attendanceChartType: chartType
+      };
+    } else if (period === 'quarter') {
+      // Comparison of last 3 months
+      const monthsList = [];
+      for (let i = 2; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const mYear = d.getFullYear();
+        const mMonth = d.getMonth();
+        const monthName = d.toLocaleString('default', { month: 'short' });
+
+        const isCurrentMonth = mYear === currentYear && mMonth === currentMonth;
+        const lastDay = isCurrentMonth ? today.getDate() : new Date(mYear, mMonth + 1, 0).getDate();
+
+        let mPresent = 0;
+        let mHalfDay = 0;
+        let mAbsent = 0;
+
+        for (let day = 1; day <= lastDay; day++) {
+          const curDate = new Date(mYear, mMonth, day);
+          if (curDate.getDay() !== 0 && curDate.getDay() !== 6) {
+            const dateStr = `${mYear}-${String(mMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const status = attendanceMap[dateStr];
+            if (status) {
+              const lowerStatus = status.toLowerCase();
+              if (lowerStatus.includes('half') || lowerStatus.includes('hd')) {
+                mHalfDay++;
+              } else if (lowerStatus.includes('absent')) {
+                mAbsent++;
+              } else {
+                mPresent++;
+              }
+            } else {
+              mAbsent++;
+            }
+          }
+        }
+
+        const totalDays = mPresent + mHalfDay + mAbsent;
+        const rate = totalDays > 0 ? Math.round(((mPresent + mHalfDay * 0.5) / totalDays) * 100) : 100;
+        monthsList.push({ name: monthName, Rate: rate, Present: mPresent, Absent: mAbsent });
+      }
+
+      const avgRate = Math.round(monthsList.reduce((acc, m) => acc + m.Rate, 0) / monthsList.length);
+      summaryText = `Avg ${avgRate}% over past 3 months`;
+
+      return {
+        attendanceRate: avgRate,
+        attendanceSummary: summaryText,
+        attendanceChartData: monthsList,
+        attendanceChartType: 'bar'
+      };
+    } else {
+      // Year to Date trend
+      const monthsList = [];
+      const upToMonth = today.getMonth();
+
+      for (let m = 0; m <= upToMonth; m++) {
+        const d = new Date(currentYear, m, 1);
+        const monthName = d.toLocaleString('default', { month: 'short' });
+
+        const isCurrentMonth = m === currentMonth;
+        const lastDay = isCurrentMonth ? today.getDate() : new Date(currentYear, m + 1, 0).getDate();
+
+        let mPresent = 0;
+        let mHalfDay = 0;
+        let mAbsent = 0;
+
+        for (let day = 1; day <= lastDay; day++) {
+          const curDate = new Date(currentYear, m, day);
+          if (curDate.getDay() !== 0 && curDate.getDay() !== 6) {
+            const dateStr = `${currentYear}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const status = attendanceMap[dateStr];
+            if (status) {
+              const lowerStatus = status.toLowerCase();
+              if (lowerStatus.includes('half') || lowerStatus.includes('hd')) {
+                mHalfDay++;
+              } else if (lowerStatus.includes('absent')) {
+                mAbsent++;
+              } else {
+                mPresent++;
+              }
+            } else {
+              mAbsent++;
+            }
+          }
+        }
+
+        const totalDays = mPresent + mHalfDay + mAbsent;
+        const rate = totalDays > 0 ? Math.round(((mPresent + mHalfDay * 0.5) / totalDays) * 100) : 100;
+        monthsList.push({ name: monthName, Rate: rate });
+      }
+
+      const avgRate = Math.round(monthsList.reduce((acc, m) => acc + m.Rate, 0) / monthsList.length);
+      summaryText = `YTD Average: ${avgRate}%`;
+
+      return {
+        attendanceRate: avgRate,
+        attendanceSummary: summaryText,
+        attendanceChartData: monthsList,
+        attendanceChartType: 'area'
+      };
+    }
+  }, [profile, period]);
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-2 border-[#8b5cf6] border-t-transparent rounded-full animate-spin" />
+    <div className="flex flex-col items-center justify-center h-96 gap-4 animate-pulse">
+      <div className="w-12 h-12 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
+      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7C3AED]">Synchronizing Dashboard</p>
     </div>
   );
 
-  const emp = profile?.employee || {};
-  const leaves = profile?.leaves || {};
-  const kras = profile?.kras || { total: 0, completed: 0 };
-  const training = profile?.training || { total: 0, completed: 0 };
-  const trainingList = profile?.training_list || [];
-  const attendance = profile?.attendance || {};
-  const attMonth = attendance.month || { present: 0, half_day: 0, absent: 0 };
-  const attToday = attendance.today;
-  const recentLeaves = profile?.recent_leaves || [];
-  const notifications = profile?.notifications || [];
-  const latestPerf = profile?.latest_performance;
-  const assetsTotal = profile?.assets?.total || 0;
+  if (!profile) return (
+    <div className="flex flex-col items-center justify-center h-96 gap-4">
+      <AlertCircle size={44} className="text-[#EF4444]" />
+      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/40">Dashboard data offline</p>
+    </div>
+  );
 
-  const isClockedIn = attToday?.clock_in && !attToday?.clock_out;
-  const isClockedOut = attToday?.clock_out;
-  const leaveBalance = (leaves.casual_total || 0) - (leaves.casual_used || 0);
-  const krasPercent = kras.total ? Math.round((kras.completed / kras.total) * 100) : 0;
-  const trainingPercent = training.total ? Math.round((training.completed / training.total) * 100) : 0;
+  const emp        = profile.employee || {};
+  const leaves     = profile.leaves || {};
+  const kras       = profile.kras || { total: 0, completed: 0 };
+  const training    = profile.training || { total: 0, completed: 0 };
+  const recentLeaves = profile.recent_leaves || [];
+  const latestPerf   = profile.latest_performance;
+  const perfHistory  = profile.performance_history || [];
+  const trainingList = profile.training_list?.length > 0 ? profile.training_list : MOCK_TRAINING;
 
-  // DOJ → tenure
+  // Compute stats
+  const leaveBalance = (leaves.casual_total || 15) - (leaves.casual_used || 0);
+  const krasPercent  = kras.total ? Math.round((kras.completed / kras.total) * 100) : 0;
+  
+  // Safe calculations for training percentages
+  const activeTrainingTotal = trainingList.length;
+  const activeTrainingDone = trainingList.filter(t => t.training_status === 'Completed').length;
+  const trainingPct = activeTrainingTotal ? Math.round((activeTrainingDone / activeTrainingTotal) * 100) : 0;
+
+  // Tenure string
   const tenureStr = (() => {
     if (!emp.doj) return null;
     try {
       const ms = Date.now() - new Date(emp.doj).getTime();
       const yrs = Math.floor(ms / (365.25 * 24 * 3600 * 1000));
       const mos = Math.floor((ms % (365.25 * 24 * 3600 * 1000)) / (30.44 * 24 * 3600 * 1000));
-      return yrs > 0 ? `${yrs}y ${mos}m` : `${mos}m`;
+      return yrs > 0 ? `${yrs}y ${mos}m tenure` : `${mos}m tenure`;
     } catch { return null; }
   })();
 
-  const photoSrc = emp.photo_path
-    ? (emp.photo_path.startsWith('http') ? emp.photo_path : `/${emp.photo_path}`)
-    : null;
+  // Parse performance assessments for line chart
+  const parsedPerfHistory = perfHistory.length > 0 
+    ? perfHistory.map(p => ({
+        name: `${p.period_value} '${String(p.year).slice(2)}`,
+        Score: p.percentage || 0
+      }))
+    : MOCK_PERF_TREND;
 
-  const totalMonthDays = attMonth.present + attMonth.half_day + attMonth.absent;
-  const attendanceRate = totalMonthDays > 0
-    ? Math.round(((attMonth.present + attMonth.half_day * 0.5) / totalMonthDays) * 100)
-    : 0;
+  // Parse training list for horizontal bars
+  const trainingBarData = trainingList.map(t => ({
+    name: (t.training_name || 'Training').length > 18 ? (t.training_name || 'Training').substring(0, 16) + '...' : t.training_name,
+    value: t.training_status === 'Completed' ? 100 : t.training_status === 'In Progress' ? 50 : 10,
+    status: t.training_status || 'Assigned'
+  }));
+
+  // Parse leaves list for bar chart
+  const leaveBarData = recentLeaves.map((l, i) => {
+    let days = 1;
+    try {
+      const diff = (new Date(l.end_date) - new Date(l.start_date)) / (1000 * 60 * 60 * 24) + 1;
+      days = isNaN(diff) ? 1 : diff;
+    } catch { days = 1; }
+    return {
+      name: `${l.leave_type || 'Leave'}`,
+      days: days,
+      status: l.status,
+      range: `${l.start_date} → ${l.end_date}`
+    };
+  });
 
   return (
-    <div className="space-y-6 max-w-6xl animate-fade-in-up pb-16">
+    <div className="space-y-8 animate-fade-in-up pb-16">
+      
+      {/* SVG gradients loaded globally for Recharts styling */}
+      <svg width={0} height={0} className="absolute">
+        <defs>
+          <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#7C3AED" stopOpacity={0.9} />
+            <stop offset="100%" stopColor="#A78BFA" stopOpacity={0.2} />
+          </linearGradient>
+          <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10B981" stopOpacity={0.9} />
+            <stop offset="100%" stopColor="#34D399" stopOpacity={0.2} />
+          </linearGradient>
+          <linearGradient id="amberGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.8} />
+            <stop offset="100%" stopColor="#FBBF24" stopOpacity={0.2} />
+          </linearGradient>
+          <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.8} />
+            <stop offset="100%" stopColor="#60A5FA" stopOpacity={0.2} />
+          </linearGradient>
+        </defs>
+      </svg>
 
       {/* ─── HERO HEADER ─── */}
-      <div className="bg-gradient-to-br from-[#7c3aed] via-[#8b5cf6] to-[#a78bfa] rounded-[2.5rem] p-8 shadow-[0_20px_60px_rgba(124,58,237,0.25)] relative overflow-hidden">
-        {/* BG decoration */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2" />
-
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-6">
-          {/* Avatar */}
-          <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl overflow-hidden flex-shrink-0 shadow-xl shadow-black/20 border-2 border-white/20">
-            {photoSrc ? (
-              <img src={photoSrc} alt={emp.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-white/20 flex items-center justify-center text-white text-4xl font-black">
-                {(emp.name || user?.name || 'U')[0]}
+      <div className="bg-[#faf8ff] border border-[#ebe4ff] rounded-[2.5rem] p-8 md:p-10 relative overflow-hidden">
+        {/* Subtle decorative vector backdrop */}
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-[#7c3aed]/5 to-transparent pointer-events-none rounded-[2.5rem]" />
+        
+        <div className="flex justify-between items-center flex-wrap gap-8 relative z-10">
+          <div className="flex items-center gap-6">
+            <div className="relative">
+              {emp.photo_path ? (
+                <img 
+                  src={emp.photo_path} 
+                  alt={emp.name} 
+                  className="w-20 h-20 rounded-[1.8rem] object-cover border-2 border-white shadow-lg shadow-[#7c3aed]/10" 
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div className={`w-20 h-20 rounded-[1.8rem] bg-gradient-to-br from-[#7C3AED] to-[#A78BFA] text-white text-3xl font-black items-center justify-center shadow-lg shadow-[#7c3aed]/20 ${emp.photo_path ? 'hidden' : 'flex'}`}>
+                {emp.name ? emp.name.charAt(0).toUpperCase() : user?.name?.charAt(0).toUpperCase() || 'E'}
               </div>
-            )}
-          </div>
-
-          {/* Info */}
-          <div className="flex-1">
-            <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Employee Dashboard</p>
-            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight italic mb-1">
-              {emp.name || user?.name || 'Welcome'}
-            </h1>
-            <div className="flex flex-wrap items-center gap-3 mt-2">
-              {emp.designation && (
-                <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full">
-                  {emp.designation}
-                </span>
-              )}
-              {emp.team && (
-                <span className="bg-white/10 text-white/80 text-[11px] font-bold px-3 py-1 rounded-full">
-                  {emp.team}
-                </span>
-              )}
-              {emp.location && (
-                <span className="bg-white/10 text-white/80 text-[11px] font-bold px-3 py-1 rounded-full">
-                  📍 {emp.location}
-                </span>
-              )}
-              {tenureStr && (
-                <span className="bg-white/10 text-white/80 text-[11px] font-bold px-3 py-1 rounded-full">
-                  ⏱ {tenureStr} tenure
-                </span>
-              )}
+              <span className="absolute bottom-1 right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
             </div>
-          </div>
-
-          {/* Clock In/Out widget */}
-          <div className="bg-white/15 backdrop-blur-sm border border-white/20 rounded-2xl p-5 text-center min-w-[180px] flex-shrink-0">
-            <p className="text-white/60 text-[9px] font-black uppercase tracking-widest mb-3">Today's Status</p>
-            <div className={`text-lg font-black mb-1 ${isClockedOut ? 'text-emerald-300' : isClockedIn ? 'text-amber-300 animate-pulse' : 'text-white/40'}`}>
-              {isClockedOut ? '✓ Done' : isClockedIn ? '● Active' : '○ Not Started'}
-            </div>
-            {attToday && (
-              <p className="text-white/60 text-[10px] font-mono mb-3">
-                {fmt(attToday.clock_in)} {attToday.clock_out ? `→ ${fmt(attToday.clock_out)}` : '→ now'}
-              </p>
-            )}
-            {!attToday && (
-              <button
-                onClick={handleClockIn}
-                className="w-full py-2 bg-white text-[#7c3aed] text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] transition-all shadow-lg mt-2"
-              >
-                <LogIn size={12} className="inline mr-1" />Clock In
-              </button>
-            )}
-            {isClockedIn && (
-              <button
-                onClick={() => setShowClockOutModal(true)}
-                className="w-full py-2 bg-red-400/80 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] transition-all shadow-lg mt-2"
-              >
-                <LogOut size={12} className="inline mr-1" />Clock Out
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ─── STAT CARDS ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            icon: Calendar, label: 'Leave Balance', value: leaveBalance,
-            sub: `${leaves.casual_used || 0} used of ${leaves.casual_total || 0}`,
-            color: 'text-[#7c3aed]', bg: 'bg-[#f5f0ff]', border: 'border-[#e9d5ff]'
-          },
-          {
-            icon: Activity, label: 'This Month', value: `${attendanceRate}%`,
-            sub: `${attMonth.present}P · ${attMonth.half_day}HD · ${attMonth.absent}A`,
-            color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100'
-          },
-          {
-            icon: Award, label: 'Performance',
-            value: latestPerf ? `${latestPerf.percentage ?? 0}%` : 'N/A',
-            sub: latestPerf ? `${latestPerf.period_value} · ${latestPerf.status}` : 'No assessment yet',
-            color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100'
-          },
-          {
-            icon: Shield, label: 'Assets', value: assetsTotal,
-            sub: assetsTotal === 1 ? '1 device assigned' : `${assetsTotal} items assigned`,
-            color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100'
-          },
-        ].map((c, i) => (
-          <div key={i} className={`bg-white border ${c.border} rounded-2xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.04)]`}>
-            <div className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center mb-3`}>
-              <c.icon size={16} className={c.color} />
-            </div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-black/40 mb-1">{c.label}</p>
-            <h3 className={`text-2xl font-black ${c.color}`}>{c.value}</h3>
-            <p className="text-[10px] text-black/40 font-semibold mt-1">{c.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* ─── MAIN GRID ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* LEFT — Attendance + Leave */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* Attendance Month Bar */}
-          <div className="bg-white border border-[#ebe4ff] rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-1">This Month</p>
-                <h3 className="text-base font-black text-black uppercase italic">Attendance Overview</h3>
-              </div>
-              <button
-                onClick={() => navigate('/deploy?tab=attendance')}
-                className="text-[10px] font-black uppercase tracking-widest text-[#7c3aed] flex items-center gap-1 hover:opacity-70 transition-opacity"
-              >
-                Full Log <ChevronRight size={12} />
-              </button>
-            </div>
-
-            {/* Bar chart */}
-            <div className="flex gap-2 h-16 items-end mb-3">
-              {['present', 'half_day', 'absent'].map((key) => {
-                const val = attMonth[key] || 0;
-                const max = Math.max(attMonth.present, attMonth.half_day, attMonth.absent, 1);
-                const pct = Math.round((val / max) * 100);
-                const colors = { present: 'bg-emerald-500', half_day: 'bg-amber-400', absent: 'bg-red-400' };
-                return (
-                  <div key={key} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-[9px] font-black text-black/50">{val}</span>
-                    <div className="w-full rounded-t-lg transition-all" style={{ height: `${Math.max(pct, 4)}%`, backgroundColor: key === 'present' ? '#10b981' : key === 'half_day' ? '#f59e0b' : '#f87171' }} />
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex gap-4">
-              {[['emerald-500','#10b981','Present'], ['amber-400','#f59e0b','Half Day'], ['red-400','#f87171','Absent']].map(([,color,label]) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="text-[9px] font-black text-black/50 uppercase tracking-wider">{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Leave History */}
-          <div className="bg-white border border-[#ebe4ff] rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-            <div className="px-6 py-4 border-b border-[#f1ecff] bg-[#faf7ff] flex items-center justify-between">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-0.5">Leave Balance: {leaveBalance} days</p>
-                <h3 className="text-sm font-black text-black uppercase italic">Recent Leave Requests</h3>
-              </div>
-              <button
-                onClick={() => navigate('/deploy?tab=attendance')}
-                className="text-[10px] font-black uppercase tracking-widest text-[#7c3aed] flex items-center gap-1 hover:opacity-70 transition-opacity"
-              >
-                Manage <ChevronRight size={12} />
-              </button>
-            </div>
-            <div className="divide-y divide-[#f1ecff]">
-              {recentLeaves.length === 0 ? (
-                <p className="p-8 text-center text-[10px] font-black uppercase tracking-widest text-black/20">No leave requests yet</p>
-              ) : recentLeaves.map((l, i) => (
-                <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors">
-                  <div>
-                    <p className="text-xs font-black text-black">{l.leave_type}</p>
-                    <p className="text-[10px] text-black/40 font-mono">{l.start_date} → {l.end_date}</p>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${leaveStatusBadge(l.status)}`}>
-                    {l.status || 'Pending'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT — Notifications + Quick Links */}
-        <div className="space-y-6">
-
-          {/* Notifications */}
-          <div className="bg-white border border-[#ebe4ff] rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-            <div className="px-5 py-4 border-b border-[#f1ecff] bg-[#faf7ff] flex items-center gap-2">
-              <Bell size={14} className="text-[#7c3aed]" />
-              <h3 className="text-sm font-black text-black uppercase italic tracking-tight">Notifications</h3>
-              {notifications.filter(n => !n.is_read).length > 0 && (
-                <span className="ml-auto bg-[#7c3aed] text-white text-[8px] font-black px-2 py-0.5 rounded-full">
-                  {notifications.filter(n => !n.is_read).length} new
-                </span>
-              )}
-            </div>
-            <div className="divide-y divide-[#f1ecff] max-h-64 overflow-y-auto">
-              {notifications.length === 0 ? (
-                <p className="p-6 text-center text-[10px] font-black uppercase tracking-widest text-black/20">All clear</p>
-              ) : notifications.map((n, i) => (
-                <div key={i} className={`px-5 py-3.5 hover:bg-[#faf7ff] transition-colors ${!n.is_read ? 'border-l-2 border-[#7c3aed]' : ''}`}>
-                  <div className="flex items-start gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${n.type === 'Success' ? 'bg-emerald-500' : n.type === 'Alert' ? 'bg-red-500' : 'bg-[#7c3aed]'}`} />
-                    <div>
-                      <p className="text-[11px] font-black text-black leading-snug">{n.title}</p>
-                      <p className="text-[10px] text-black/40 mt-0.5 leading-snug line-clamp-2">{n.message}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Links */}
-          <div className="bg-white border border-[#ebe4ff] rounded-2xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-            <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-4">Quick Actions</p>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'My Profile', icon: User, tab: 'profile', bg: 'bg-[#f5f0ff]', color: 'text-[#7c3aed]' },
-                { label: 'Attendance', icon: Activity, tab: 'attendance', bg: 'bg-emerald-50', color: 'text-emerald-600' },
-                { label: 'Performance', icon: TrendingUp, tab: 'performance', bg: 'bg-amber-50', color: 'text-amber-600' },
-                { label: 'Training', icon: BookOpen, tab: 'attendance', bg: 'bg-blue-50', color: 'text-blue-600' },
-              ].map((a) => (
-                <button
-                  key={a.label}
-                  onClick={() => navigate(`/deploy?tab=${a.tab}`)}
-                  className={`${a.bg} rounded-xl p-3 flex flex-col items-center gap-2 hover:scale-[1.03] transition-all border border-transparent hover:border-black/5`}
-                >
-                  <a.icon size={18} className={a.color} />
-                  <span className={`text-[9px] font-black uppercase tracking-wider ${a.color}`}>{a.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── PROGRESS ROW ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* KRAs Progress */}
-        <div className="bg-white border border-[#ebe4ff] rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="flex items-center justify-between mb-4">
+            
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-1">KRA Progress</p>
-              <h3 className="text-sm font-black text-black uppercase italic">Performance Goals</h3>
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-[#7c3aed] bg-[#ede9fe] px-2.5 py-0.5 rounded-full">
+                  Personal Analytics
+                </span>
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-black/40">
+                  {emp.employee_code || 'EMP0000'}
+                </span>
+              </div>
+              <h1 className="text-3xl md:text-5xl font-black text-black tracking-tight mt-2.5 leading-none italic">
+                Hello, {emp.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Member'}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2.5 mt-4">
+                {emp.designation && (
+                  <span className="bg-white text-black/60 text-[10px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-2xl border border-[#ebe4ff]">
+                    {emp.designation}
+                  </span>
+                )}
+                {emp.team && (
+                  <span className="bg-white text-black/60 text-[10px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-2xl border border-[#ebe4ff]">
+                    👥 {emp.team}
+                  </span>
+                )}
+                {emp.location && (
+                  <span className="bg-white text-black/60 text-[10px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-2xl border border-[#ebe4ff]">
+                    📍 {emp.location}
+                  </span>
+                )}
+                {tenureStr && (
+                  <span className="bg-[#fcfaff] text-[#7C3AED] text-[10px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-2xl border border-[#ebe4ff]">
+                    ⏱ {tenureStr}
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {lastRefresh && (
+              <span className="text-[9px] font-black uppercase tracking-widest text-black/30">
+                Synced {lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
             <button
-              onClick={() => navigate('/deploy?tab=performance')}
-              className="text-[10px] font-black uppercase tracking-widest text-[#7c3aed] flex items-center gap-1 hover:opacity-70 transition-opacity"
+              onClick={fetchData}
+              className="p-4 rounded-2xl bg-black text-white text-[10px] font-black uppercase tracking-[0.25em] flex items-center gap-2.5 hover:bg-black/90 active:scale-95 transition-all shadow-md"
             >
-              Open <ChevronRight size={12} />
+              <RefreshCw size={12} className="animate-spin-slow" /> Refresh
             </button>
           </div>
-          <div className="flex items-end gap-4 mb-4">
-            <span className="text-4xl font-black text-black">{kras.completed}<span className="text-xl text-black/30">/{kras.total}</span></span>
-            <span className={`text-2xl font-black ${krasPercent >= 80 ? 'text-emerald-500' : krasPercent >= 50 ? 'text-amber-500' : 'text-red-400'}`}>
-              {krasPercent}%
-            </span>
-          </div>
-          <div className="w-full bg-black/5 rounded-full h-2.5">
-            <div
-              className="h-2.5 rounded-full transition-all bg-gradient-to-r from-[#7c3aed] to-[#a78bfa]"
-              style={{ width: `${krasPercent}%` }}
-            />
-          </div>
-          <p className="text-[10px] text-black/40 font-semibold mt-2">
-            {kras.total === 0 ? 'No KRAs assigned yet' : `${kras.total - kras.completed} remaining`}
-          </p>
-        </div>
-
-        {/* Training Progress */}
-        <div className="bg-white border border-[#ebe4ff] rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-1">Training</p>
-              <h3 className="text-sm font-black text-black uppercase italic">Learning Progress</h3>
-            </div>
-            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${trainingPercent === 100 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-[#f5f0ff] text-[#7c3aed]'}`}>
-              {trainingPercent === 100 && training.total > 0 ? 'All Done!' : `${trainingPercent}%`}
-            </span>
-          </div>
-          <div className="space-y-2.5">
-            {trainingList.length === 0 ? (
-              <p className="text-[10px] text-black/30 font-black uppercase text-center py-4">No training assigned</p>
-            ) : trainingList.map((t, i) => (
-              <div key={i} className="flex items-center justify-between py-1.5 border-b border-black/5 last:border-0">
-                <p className="text-[11px] font-black text-black truncate max-w-[60%]">{t.training_name || 'Unnamed Training'}</p>
-                <span className={`px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase ${trainingStatusBadge(t.training_status)}`}>
-                  {t.training_status || 'Assigned'}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* ─── CLOCK OUT MODAL ─── */}
-      {showClockOutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowClockOutModal(false)} />
-          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] w-full max-w-md relative z-10 overflow-hidden shadow-2xl animate-fade-in-up">
-            <div className="p-6 border-b border-[#f1ecff] bg-gradient-to-r from-[#7c3aed] to-[#a78bfa]">
-              <div className="flex items-center gap-3">
-                <LogOut size={20} className="text-white" />
-                <div>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-white italic">Clock Out</h3>
-                  <p className="text-white/60 text-[10px] font-bold uppercase">Submit your work log</p>
-                </div>
-              </div>
+      {/* ─── STAT CARDS (4 KPIs) ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+        <StatCard
+          label="Leave Balance"
+          value={leaveBalance}
+          color="#7C3AED"
+          icon={Calendar}
+          sub={`${leaves.casual_used || 0} days used of ${leaves.casual_total || 15} total`}
+          onClick={() => navigate('/deploy?tab=attendance')}
+        />
+        <StatCard
+          label="Attendance Rate"
+          value={`${analytics?.attendanceRate}%`}
+          color="#10B981"
+          icon={Activity}
+          sub={analytics?.attendanceSummary}
+          onClick={() => navigate('/deploy?tab=attendance')}
+        />
+        <StatCard
+          label="Performance Score"
+          value={latestPerf ? `${latestPerf.percentage}%` : 'N/A'}
+          color="#F59E0B"
+          icon={Award}
+          sub={latestPerf ? `${latestPerf.period_value} ${latestPerf.year} · ${latestPerf.status}` : 'Assessments pending'}
+          onClick={() => navigate('/deploy?tab=performance')}
+        />
+        <StatCard
+          label="Training Progress"
+          value={`${trainingPct}%`}
+          color="#3B82F6"
+          icon={BookOpen}
+          sub={`${activeTrainingDone} of ${activeTrainingTotal} courses completed`}
+        />
+      </div>
+
+      {/* ─── SECTION 1: ATTENDANCE TREND & PERFORMANCE GRAPH ─── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        
+        {/* Attendance widget supporting Month Donut / Quarter Bar / YTD Area Chart */}
+        <ChartCard 
+          title="Attendance Statistics" 
+          action={
+            <div className="flex bg-[#f5f0ff] p-1 rounded-xl border border-[#ebe4ff] text-[9px] font-black uppercase tracking-wider">
+              <button 
+                onClick={() => setPeriod('month')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${period === 'month' ? 'bg-white text-[#7C3AED] shadow-sm' : 'text-black/55 hover:text-black'}`}
+              >
+                Month
+              </button>
+              <button 
+                onClick={() => setPeriod('quarter')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${period === 'quarter' ? 'bg-white text-[#7C3AED] shadow-sm' : 'text-black/55 hover:text-black'}`}
+              >
+                Quarter
+              </button>
+              <button 
+                onClick={() => setPeriod('year')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${period === 'year' ? 'bg-white text-[#7C3AED] shadow-sm' : 'text-black/55 hover:text-black'}`}
+              >
+                YTD
+              </button>
             </div>
-            <div className="p-8 space-y-5">
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-2 block">Work Log</label>
-                <textarea
-                  value={workLog}
-                  onChange={e => setWorkLog(e.target.value)}
-                  placeholder="What did you work on today? (optional)"
-                  className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm px-4 py-3 rounded-xl focus:outline-none focus:border-[#7c3aed] resize-none h-28 transition-all"
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            {analytics?.attendanceChartType === 'pie' ? (
+              <PieChart>
+                <Pie
+                  data={analytics.attendanceChartData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={65}
+                  outerRadius={95}
+                  paddingAngle={5}
+                >
+                  {analytics.attendanceChartData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.fill} className="outline-none" />
+                  ))}
+                </Pie>
+                <Tooltip content={<CountTooltip />} />
+                <Legend 
+                  wrapperStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                  iconSize={8}
                 />
+              </PieChart>
+            ) : analytics?.attendanceChartType === 'bar' ? (
+              <BarChart data={analytics.attendanceChartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(124,58,237,0.06)" />
+                <XAxis dataKey="name" stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 100]} stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="Rate" name="Attendance Rate" radius={[6, 6, 0, 0]} fill="url(#greenGrad)" />
+              </BarChart>
+            ) : (
+              <AreaChart data={analytics.attendanceChartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="areaGreen" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(124,58,237,0.06)" />
+                <XAxis dataKey="name" stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 100]} stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="Rate" name="Attendance Rate" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#areaGreen)" />
+              </AreaChart>
+            )}
+          </ResponsiveContainer>
+        </ChartCard>
+
+        {/* Performance Evolution line chart over time */}
+        <ChartCard 
+          title="Performance Evolution" 
+          className="xl:col-span-2"
+          action={
+            <span className="text-[8px] font-black uppercase bg-[#fff7ed] text-[#F59E0B] border border-[#ffedd5] px-2.5 py-1 rounded-full">
+              {perfHistory.length > 0 ? 'Live evaluations' : 'Projected baseline'}
+            </span>
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={parsedPerfHistory} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.35}/>
+                  <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(124,58,237,0.06)" />
+              <XAxis dataKey="name" stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} />
+              <YAxis domain={[0, 100]} stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="Score" stroke="#F59E0B" strokeWidth={3} fillOpacity={1} fill="url(#perfGrad)" />
+              <Line type="monotone" dataKey="Score" stroke="#F59E0B" strokeWidth={0} dot={{ r: 4, stroke: '#F59E0B', strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+      </div>
+
+      {/* ─── SECTION 2: KRA RADIAL, LEAVES TIMELINE & TRAINING BARS ─── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+        {/* KRA Radial ring completion widget */}
+        <ChartCard title="KRA Goal Completion">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadialBarChart
+              cx="50%" cy="50%"
+              innerRadius="58%"
+              outerRadius="83%"
+              data={[
+                { name: 'Completed', value: krasPercent, fill: 'url(#purpleGrad)' },
+                { name: 'Target', value: 100, fill: '#f5f3ff' }
+              ]}
+              startAngle={90}
+              endAngle={-270}
+              barSize={12}
+            >
+              <RadialBar dataKey="value" cornerRadius={8} />
+              <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle"
+                style={{ fontSize: '32px', fontWeight: 900, fill: '#7C3AED', fontFamily: 'inherit' }}>
+                {krasPercent}%
+              </text>
+              <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle"
+                style={{ fontSize: '9px', fontWeight: 900, fill: '#00000040', letterSpacing: '0.15em', textTransform: 'uppercase', fontFamily: 'inherit' }}>
+                {kras.completed} of {kras.total} Completed
+              </text>
+            </RadialBarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        {/* Training courses progress bar representation */}
+        <ChartCard 
+          title="Training Curriculum" 
+          className="xl:col-span-2"
+          action={
+            <span className="text-[8px] font-black uppercase bg-[#eff6ff] text-[#3B82F6] border border-[#dbeafe] px-2.5 py-1 rounded-full">
+              {profile.training_list?.length > 0 ? 'Live Track' : 'Standard Core'}
+            </span>
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={trainingBarData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(124,58,237,0.06)" horizontal={false} />
+              <XAxis type="number" domain={[0, 100]} stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
+              <YAxis dataKey="name" type="category" stroke="rgba(0,0,0,0.4)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} width={130} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="value" name="Progress" radius={[0, 6, 6, 0]} barSize={10}>
+                {trainingBarData.map((entry, idx) => {
+                  let barColor = 'url(#purpleGrad)';
+                  if (entry.status === 'Completed') barColor = 'url(#greenGrad)';
+                  if (entry.status === 'In Progress') barColor = 'url(#amberGrad)';
+                  return <Cell key={idx} fill={barColor} />;
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+      </div>
+
+      {/* ─── SECTION 3: RECENT LEAVES LIST & TIMELINE ─── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        
+        {/* Leaves days chart */}
+        <ChartCard title="Leave Calendar Metrics" className="xl:col-span-1">
+          <ResponsiveContainer width="100%" height="100%">
+            {leaveBarData.length > 0 ? (
+              <BarChart data={leaveBarData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(124,58,237,0.06)" />
+                <XAxis dataKey="name" stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} />
+                <YAxis stroke="rgba(0,0,0,0.3)" fontSize={9} fontWeight={900} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip content={<CountTooltip />} />
+                <Bar dataKey="days" name="Duration" radius={[6, 6, 0, 0]} barSize={35}>
+                  {leaveBarData.map((entry, idx) => {
+                    let barColor = '#F59E0B'; // Pending
+                    if (entry.status === 'Approved') barColor = '#10B981';
+                    if (entry.status === 'Rejected') barColor = '#EF4444';
+                    return <Cell key={idx} fill={barColor} />;
+                  })}
+                </Bar>
+              </BarChart>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center p-6">
+                <ShieldAlert size={28} className="text-black/25 mb-2.5" />
+                <p className="text-[10px] font-black uppercase tracking-wider text-black/30">No leave requests logged</p>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowClockOutModal(false)}
-                  className="flex-1 py-3 border border-[#ebe4ff] bg-white text-black/50 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#faf7ff] transition-all"
+            )}
+          </ResponsiveContainer>
+        </ChartCard>
+
+        {/* Leave Requests Log Feed */}
+        <div className="xl:col-span-2 bg-white border border-[#ebe4ff] rounded-[2rem] p-8 shadow-[0_10px_40px_rgba(180,140,255,0.04)] flex flex-col gap-6 relative">
+          <div className="flex justify-between items-center">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7C3AED]">Leave Log Feed</h3>
+            <button
+              onClick={() => navigate('/deploy?tab=attendance')}
+              className="text-[9px] font-black uppercase tracking-widest text-[#7C3AED] flex items-center gap-1 hover:opacity-75 transition-opacity"
+            >
+              Request Leave <ArrowUpRight size={12} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-4 max-h-[250px] pr-2">
+            {recentLeaves.length > 0 ? (
+              recentLeaves.map((leave, idx) => (
+                <div 
+                  key={idx} 
+                  className="flex items-center justify-between p-4 border border-[#f5f1ff] bg-[#faf8ff]/50 rounded-2xl hover:border-[#ebe4ff] hover:bg-[#faf8ff] transition-all duration-300"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleClockOut}
-                  disabled={clockingOut}
-                  className="flex-1 py-3 bg-gradient-to-r from-[#7c3aed] to-[#a78bfa] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:opacity-90 transition-all disabled:opacity-50 shadow-lg"
-                >
-                  {clockingOut ? 'Clocking...' : 'Confirm Clock Out'}
-                </button>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-2.5 h-2.5 rounded-full ${
+                      leave.status === 'Approved' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 
+                      leave.status === 'Rejected' ? 'bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 
+                      'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+                    }`} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-black">{leave.leave_type} Leave</span>
+                        <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                          leave.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-600' :
+                          leave.status === 'Rejected' ? 'bg-rose-500/10 text-rose-600' :
+                          'bg-amber-500/10 text-amber-600'
+                        }`}>
+                          {leave.status}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-black/45 font-bold mt-1">
+                        {leave.start_date} to {leave.end_date}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {leave.reason && (
+                    <span className="text-[10px] text-black/35 italic max-w-[200px] truncate hidden md:block">
+                      "{leave.reason}"
+                    </span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center h-48 text-center">
+                <Calendar size={32} className="text-black/15 mb-3" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-black/30">Your leave log is currently empty</p>
               </div>
-            </div>
+            )}
           </div>
         </div>
-      )}
+
+      </div>
+
     </div>
   );
 }

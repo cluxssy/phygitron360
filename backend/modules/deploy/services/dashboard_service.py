@@ -176,9 +176,11 @@ class DashboardService:
             "attendance": {
                 "status": data['attendance_status'],
                 "today": data.get('attendance_today'),
-                "month": data.get('attendance_month', {"present": 0, "half_day": 0, "absent": 0})
+                "month": data.get('attendance_month', {"present": 0, "half_day": 0, "absent": 0}),
+                "history": data.get('attendance_history', [])
             },
             "leaves": data['leaves'],
             "recent_leaves": data.get('recent_leaves', []),
             "latest_performance": data.get('latest_performance'),
+            "performance_history": data.get('performance_history', []),
         }

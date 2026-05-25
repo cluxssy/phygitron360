@@ -693,8 +693,17 @@ export default function AdminPanel() {
 
 )}
 
+
         </div>
 
+      )}
+      {selectedUserForOverride && (
+        <UserClearanceOverrides
+          user={selectedUserForOverride}
+          overrides={userOverrides}
+          onUpdate={(userId, perm, value) => updateOverride(userId, perm, value)}
+          onClose={() => setSelectedUserForOverride(null)}
+        />
       )}
 
     </div>
