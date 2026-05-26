@@ -175,55 +175,191 @@ export default function MyProfile() {
       <div className="flex justify-between items-center bg-white p-4 rounded-[1.5rem] border border-[#ece4ff] shadow-sm">
         <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#6b7280] italic">Personnel Dossier // Self Management</h2>
         <div className="flex gap-3">
-            <button 
-                onClick={() => setShowPwdModal(true)}
-                className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-black hover:text-black transition-all"
+
+    <button
+        onClick={() => setShowPwdModal(true)}
+        className="
+            flex
+            items-center
+            gap-2
+            px-4
+            py-2
+            text-[10px]
+            font-black
+            uppercase
+            tracking-widest
+            text-black
+            hover:text-[#7c3aed]
+            transition-all
+        "
+    >
+        <Key size={14} />
+        Update Key
+    </button>
+
+    {editMode ? (
+        <>
+
+            <button
+                onClick={() => setEditMode(false)}
+                className="
+                    px-6
+                    py-2
+                    text-[10px]
+                    font-black
+                    uppercase
+                    tracking-widest
+                    text-black
+                    hover:text-[#7c3aed]
+                    transition-all
+                "
             >
-                <Key size={14} /> Update Key
+                Abort
             </button>
-            {editMode ? (
-                <>
-                    <button onClick={() => setEditMode(false)} className="px-6 py-2 text-[10px] font-black uppercase tracking-widest text-black">Abort</button>
-                    <button 
-                        onClick={handleSave} 
-                        disabled={isSaving}
-                        className="flex items-center gap-2 px-8 py-2 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white transition-all shadow-lg shadow-primary/20"
-                    >
-                        {isSaving ? 'Syncing...' : 'Synchronize'}
-                    </button>
-                </>
-            ) : (
-                <button 
-                    onClick={() => setEditMode(true)}
-                    className="flex items-center gap-2 px-8 py-2 bg-white border border-[#ece4ff] rounded-[1.8rem] border-white/10 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary hover:text-black transition-all"
-                >
-                    <Edit3 size={14} /> Modify Profile
-                </button>
-            )}
-        </div>
+
+            <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="
+                    flex
+                    items-center
+                    gap-2
+                    px-8
+                    py-2
+                    bg-[#7c3aed]
+                    text-white
+                    text-[10px]
+                    font-black
+                    uppercase
+                    tracking-widest
+                    rounded-xl
+                    hover:bg-[#6d28d9]
+                    transition-all
+                    shadow-lg
+                    shadow-[#7c3aed]/20
+                "
+            >
+                {isSaving ? 'Syncing...' : 'Synchronize'}
+            </button>
+
+        </>
+    ) : (
+
+        <button
+            onClick={() => setEditMode(true)}
+            className="
+                flex
+                items-center
+                gap-2
+                px-8
+                py-2
+                bg-white
+                border
+                border-[#ece4ff]
+                rounded-[1.2rem]
+                text-black
+                text-[10px]
+                font-black
+                uppercase
+                tracking-widest
+                hover:bg-[#7c3aed]
+                hover:text-white
+                hover:border-[#7c3aed]
+                transition-all
+            "
+        >
+            <Edit3 size={14} />
+            Modify Profile
+        </button>
+
+    )}
+
+</div>
       </div>
 
       {/* Profile Hero */}
       <div className="bg-white border border-[#ece4ff] rounded-[2rem] p-7 shadow-[0_10px_40px_rgba(180,140,255,0.08)] flex flex-col md:flex-row items-start gap-8 relative overflow-hidden">
         
         <div className="relative group">
-            <div className="w-24 h-24 rounded-[1.6rem] bg-gradient-to-br from-[#b784f7] to-[#8b5cf6] flex items-center justify-center text-black font-display font-black text-4xl shrink-0 shadow-[0_0_30px_rgba(204,151,255,0.2)] overflow-hidden">
-            {details.photo_path ? (
-                <img src={`/${details.photo_path}`} className="w-full h-full object-cover" alt="" />
-            ) : (
-                details.name?.[0] || 'U'
-            )}
-            </div>
-            {editMode && (
-                <button 
-                    onClick={() => fileInputPfp.current.click()}
-                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-1 rounded-[1.6rem] text-black text-[8px] font-black uppercase tracking-widest"
-                >
-                    <Image size={14} /> Update
-                </button>
-            )}
-            <input type="file" ref={fileInputPfp} hidden accept="image/*" onChange={e => handleFileUpload('pfp', e.target.files[0])} />
-        </div>
+
+    <div
+        className="
+            w-24
+            h-24
+            rounded-[1.6rem]
+            bg-gradient-to-br
+            from-[#b784f7]
+            to-[#8b5cf6]
+            flex
+            items-center
+            justify-center
+            text-white
+            font-display
+            font-black
+            text-4xl
+            shrink-0
+            shadow-[0_0_30px_rgba(204,151,255,0.2)]
+            overflow-hidden
+        "
+    >
+
+        {details.photo_path ? (
+
+            <img
+                src={`/${details.photo_path}`}
+                className="w-full h-full object-cover"
+                alt=""
+            />
+
+        ) : (
+
+            details.name?.[0] || 'U'
+
+        )}
+
+    </div>
+
+    {editMode && (
+
+        <button
+            onClick={() => fileInputPfp.current.click()}
+            className="
+                absolute
+                inset-0
+                bg-black/60
+                opacity-0
+                group-hover:opacity-100
+                transition-all
+                flex
+                flex-col
+                items-center
+                justify-center
+                gap-1
+                rounded-[1.6rem]
+                text-white
+                text-[8px]
+                font-black
+                uppercase
+                tracking-widest
+            "
+        >
+            <Image size={14} />
+            Update
+        </button>
+
+    )}
+
+    <input
+        type="file"
+        ref={fileInputPfp}
+        hidden
+        accept="image/*"
+        onChange={e =>
+            handleFileUpload('pfp', e.target.files[0])
+        }
+    />
+
+</div>
 
         <div className="flex-1 space-y-4">
           <div>
@@ -236,7 +372,7 @@ export default function MyProfile() {
                         type="text" 
                         value={formData.employee_code}
                         onChange={e => setFormData({...formData, employee_code: e.target.value})}
-                        className="bg-[#faf7ff] border border-[#e9defd] rounded-lg px-2 py-0.5 text-[10px] text-black focus:outline-none"
+                        className="bg-[#f4ecff] border border-[#e9defd] rounded-lg px-2 py-0.5 text-[10px] text-black focus:outline-none"
                     />
                 )}
             </div>
@@ -245,7 +381,7 @@ export default function MyProfile() {
                     type="text" 
                     value={formData.name}
                     onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="text-3xl font-display font-black text-black uppercase tracking-tighter bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full max-w-md"
+                    className="text-3xl font-display font-black text-black uppercase tracking-tighter bg-[#f4ecff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full max-w-md"
                 />
             ) : (
                 <h1 className="text-3xl font-display font-black text-black uppercase tracking-tighter italic">
@@ -277,44 +413,231 @@ export default function MyProfile() {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
-            <EditMetaItem editMode={editMode} icon={Mail} label="Email" value={formData.email_id} onChange={v => setFormData({...formData, email_id: v})} />
-            <EditMetaItem editMode={editMode} icon={Phone} label="Contact" value={formData.contact_number} onChange={v => setFormData({...formData, contact_number: v})} />
-            <div className="space-y-1">
-                <p className="text-[9px] font-black uppercase tracking-widest text-black flex items-center gap-2">
-                    <MapPin size={10} /> Location
-                </p>
-                {editMode ? (
-                    <ComboBox 
-                        options={locations.length > 0 ? locations : ['Remote', 'On-Site', 'Hybrid']}
-                        value={formData.location}
-                        onChange={v => setFormData({...formData, location: v})}
-                        placeholder="Location..."
-                        className="w-full"
-                    />
-                ) : (
-                    <p className="text-xs text-black font-bold truncate">{formData.location || '—'}</p>
-                )}
-            </div>
-            <EditMetaItem editMode={editMode} icon={Calendar} label="DOJ" value={formData.doj} type="date" onChange={v => setFormData({...formData, doj: v})} />
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+
+    {/* EMAIL */}
+    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+
+        <div className="flex items-center gap-2 mb-2">
+
+            <Mail
+                size={12}
+                className="text-[#7c3aed]"
+            />
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+                Email
+            </p>
+
+        </div>
+
+        {editMode ? (
+
+            <input
+                type="text"
+                value={formData.email_id || ''}
+                onChange={e =>
+                    setFormData({
+                        ...formData,
+                        email_id: e.target.value
+                    })
+                }
+                className="
+                    w-full
+                    bg-white
+                    border
+                    border-[#ddd6fe]
+                    rounded-xl
+                    px-3
+                    py-2
+                    text-xs
+                    text-black
+                    font-semibold
+                    focus:outline-none
+                    focus:border-[#7c3aed]
+                "
+            />
+
+        ) : (
+
+            <p className="text-xs font-black text-black truncate">
+                {formData.email_id || '—'}
+            </p>
+
+        )}
+
+    </div>
+
+    {/* CONTACT */}
+    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+
+        <div className="flex items-center gap-2 mb-2">
+
+            <Phone
+                size={12}
+                className="text-[#7c3aed]"
+            />
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+                Contact
+            </p>
+
+        </div>
+
+        {editMode ? (
+
+            <input
+                type="text"
+                value={formData.contact_number || ''}
+                onChange={e =>
+                    setFormData({
+                        ...formData,
+                        contact_number: e.target.value
+                    })
+                }
+                className="
+                    w-full
+                    bg-white
+                    border
+                    border-[#ddd6fe]
+                    rounded-xl
+                    px-3
+                    py-2
+                    text-xs
+                    text-black
+                    font-semibold
+                    focus:outline-none
+                    focus:border-[#7c3aed]
+                "
+            />
+
+        ) : (
+
+            <p className="text-xs font-black text-black truncate">
+                {formData.contact_number || '—'}
+            </p>
+
+        )}
+
+    </div>
+
+    {/* LOCATION */}
+    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+
+        <div className="flex items-center gap-2 mb-2">
+
+            <MapPin
+                size={12}
+                className="text-[#7c3aed]"
+            />
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+                Location
+            </p>
+
+        </div>
+
+        {editMode ? (
+
+            <ComboBox
+                options={
+                    locations.length > 0
+                        ? locations
+                        : ['Remote', 'On-Site', 'Hybrid']
+                }
+                value={formData.location}
+                onChange={v =>
+                    setFormData({
+                        ...formData,
+                        location: v
+                    })
+                }
+                placeholder="Location..."
+                className="w-full"
+            />
+
+        ) : (
+
+            <p className="text-xs font-black text-black truncate">
+                {formData.location || '—'}
+            </p>
+
+        )}
+
+    </div>
+
+    {/* DOJ */}
+    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+
+        <div className="flex items-center gap-2 mb-2">
+
+            <Calendar
+                size={12}
+                className="text-[#7c3aed]"
+            />
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+                DOJ
+            </p>
+
+        </div>
+
+        {editMode ? (
+
+            <input
+                type="date"
+                value={formData.doj || ''}
+                onChange={e =>
+                    setFormData({
+                        ...formData,
+                        doj: e.target.value
+                    })
+                }
+                className="
+                    w-full
+                    bg-white
+                    border
+                    border-[#ddd6fe]
+                    rounded-xl
+                    px-3
+                    py-2
+                    text-xs
+                    text-black
+                    font-semibold
+                    focus:outline-none
+                    focus:border-[#7c3aed]
+                "
+            />
+
+        ) : (
+
+            <p className="text-xs font-black text-black truncate">
+                {formData.doj || '—'}
+            </p>
+
+        )}
+
+    </div>
+
+</div>
+
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
               {/* Skill Matrix */}
-              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8 border-white/5">
+              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8">
                 <SectionHeader icon={TrendingUp} title="Neural Capability Matrix" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                     <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-[#000000] mb-3">Primary Skills</p>
                         {editMode ? (
-                            <textarea value={formData.primary_skillset} onChange={e => setFormData({...formData, primary_skillset: e.target.value})} className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none" rows={3}/>
+                            <textarea value={formData.primary_skillset} onChange={e => setFormData({...formData, primary_skillset: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none" rows={3}/>
                         ) : (
                             <div className="flex flex-wrap gap-2">
                                 {(details.skill_matrix?.primary_skillset || '').split(',').map((s, i) => (
-                                    <span key={i} className="px-2 py-1 bg-primary/10 text-black text-[9px] font-bold uppercase rounded-lg">
+                                    <span key={i} className="px-2 py-1 bg-[#ede9fe] text-[#6d28d9] text-[9px] font-bold uppercase rounded-lg border border-[#ddd6fe]">
                                         {s.trim()}
                                     </span>
                                 ))}
@@ -324,11 +647,11 @@ export default function MyProfile() {
                     <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-black mb-3">Secondary Skills</p>
                         {editMode ? (
-                            <textarea value={formData.secondary_skillset} onChange={e => setFormData({...formData, secondary_skillset: e.target.value})} className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none" rows={3}/>
+                            <textarea value={formData.secondary_skillset} onChange={e => setFormData({...formData, secondary_skillset: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none" rows={3}/>
                         ) : (
                             <div className="flex flex-wrap gap-2">
                                 {(details.skill_matrix?.secondary_skillset || '').split(',').map((s, i) => (
-                                    <span key={i} className="px-2 py-1 bg-white/5 text-black text-[9px] font-bold uppercase rounded-lg">
+                                    <span key={i} className="px-2 py-1 bg-[#f4ecff] text-black text-[9px] font-bold uppercase rounded-lg border border-[#ece4ff]">
                                         {s.trim()}
                                     </span>
                                 ))}
@@ -339,7 +662,7 @@ export default function MyProfile() {
               </div>
 
               {/* Identity Documents */}
-              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8 border-white/5">
+              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8">
                 <SectionHeader icon={FileText} title="Document Registry" />
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FileCard editMode={editMode} label="CV / Resume" path={details.cv_path} onUpload={() => fileInputCv.current.click()} />
@@ -350,8 +673,8 @@ export default function MyProfile() {
               </div>
 
               {/* Detailed Allocation List (Relocated) */}
-              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] border-primary/10 bg-primary/5 overflow-hidden">
-                <div className="p-6 border-b border-white/5 bg-primary/10 flex items-center justify-between">
+              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] overflow-hidden">
+                <div className="p-6 border-b border-[#ece4ff] flex items-center justify-between">
                     <SectionHeader icon={Package} title="Allocation Matrix" />
                 </div>
                 
@@ -372,14 +695,14 @@ export default function MyProfile() {
                             { key: 'ob_mediclaim', label: 'Mediclaim Status' },
                             { key: 'ob_pf', label: 'Provident Fund' }
                         ].map(a => (
-                            <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-white/5 transition-colors border-b border-white/[0.02] last:border-0 group">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-black transition-colors">{a.label}</span>
+                            <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-black/5 transition-colors border-b border-black/[0.02] last:border-0 group">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-black transition-colors">{a.label}</span>
                                 {assets?.[a.key] ? (
-                                    <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[8px] font-black uppercase border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
+                                    <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-600 rounded-full text-[8px] font-black uppercase border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
                                         <CheckCircle size={8} /> Allocated
                                     </span>
                                 ) : (
-                                    <span className="px-3 py-1 bg-white/5 text-black rounded-full text-[8px] font-black uppercase border border-white/5">
+                                    <span className="px-3 py-1 bg-black/5 text-black rounded-full text-[8px] font-black uppercase border border-black/5">
                                         Pending
                                     </span>
                                 )}
@@ -401,14 +724,14 @@ export default function MyProfile() {
                             { key: 'cl_groups_removed', label: 'Access Purged' },
                             { key: 'cl_accounts_clearance', label: 'Finance Cleared' }
                         ].map(a => (
-                            <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-white/5 transition-colors border-b border-white/[0.02] last:border-0 group">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-black transition-colors">{a.label}</span>
+                            <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-black/5 transition-colors border-b border-black/[0.02] last:border-0 group">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-black transition-colors">{a.label}</span>
                                 {assets?.[a.key] ? (
-                                    <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full text-[8px] font-black uppercase border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
+                                    <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-600 rounded-full text-[8px] font-black uppercase border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
                                         <CheckCircle size={8} /> Cleared
                                     </span>
                                 ) : (
-                                    <span className="px-3 py-1 bg-white/5 text-black rounded-full text-[8px] font-black uppercase border border-white/5">
+                                    <span className="px-3 py-1 bg-black/5 text-black rounded-full text-[8px] font-black uppercase border border-black/5">
                                         In Use
                                     </span>
                                 )}
@@ -421,13 +744,13 @@ export default function MyProfile() {
 
           <div className="space-y-6">
               {/* Address Details */}
-              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8 border-white/5">
+              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8 shadow-sm">
                 <SectionHeader icon={Landmark} title="Geography" />
                 <div className="mt-6 space-y-4">
                     <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Current Base</p>
                         {editMode ? (
-                            <textarea value={formData.current_address} onChange={e => setFormData({...formData, current_address: e.target.value})} className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" rows={2}/>
+                            <textarea value={formData.current_address} onChange={e => setFormData({...formData, current_address: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" rows={2}/>
                         ) : (
                             <p className="text-xs text-black">{details.current_address || 'Unregistered'}</p>
                         )}
@@ -435,7 +758,7 @@ export default function MyProfile() {
                     <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Permanent Anchor</p>
                         {editMode ? (
-                            <textarea value={formData.permanent_address} onChange={e => setFormData({...formData, permanent_address: e.target.value})} className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" rows={2}/>
+                            <textarea value={formData.permanent_address} onChange={e => setFormData({...formData, permanent_address: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" rows={2}/>
                         ) : (
                             <p className="text-xs text-black">{details.permanent_address || 'Unregistered'}</p>
                         )}
@@ -460,7 +783,7 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange, type="text
                     type={type}
                     value={value || ''}
                     onChange={e => onChange(e.target.value)}
-                    className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-lg px-2 py-1 text-xs text-black focus:outline-none"
+                    className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-lg px-2 py-1 text-xs text-black focus:outline-none"
                 />
             ) : (
                 <p className="text-xs text-black font-bold truncate">{value || '—'}</p>
@@ -471,33 +794,51 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange, type="text
 
 function SectionHeader({ icon: Icon, title }) {
     return (
-        <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-black">
+        <div className="flex items-center gap-3 border-b border-[#ece4ff] pb-4">
+
+            <div className="w-8 h-8 rounded-lg bg-[#f4ecff] flex items-center justify-center text-[#7c3aed] border border-[#ddd6fe]">
                 <Icon size={14} />
             </div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-black">{title}</h3>
+
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-black">
+                {title}
+            </h3>
+
         </div>
     );
 }
 
 function FileCard({ label, path, editMode, onUpload }) {
     return (
-        <div className="flex items-center justify-between p-4 bg-[#faf7ff] rounded-xl border border-[#ece4ff] group hover:border-primary/30 transition-all">
+        <div
+            className="
+                flex
+                items-center
+                justify-between
+                p-4
+                bg-[#f8f5ff]
+                rounded-xl
+                border
+                border-[#e9ddff]
+                group
+                hover:border-[#c4b5fd]
+                hover:shadow-md
+                hover:shadow-[#7c3aed]/10
+                transition-all
+            "
+        >
             <div className="flex items-center gap-3">
-                <FileText size={16} className="text-black group-hover:text-black" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-black">{label}</span>
-            </div>
-            <div className="flex gap-2">
-                {path && (
-                    <a href={`/${path}`} target="_blank" rel="noreferrer" className="p-2 bg-white/5 rounded-lg text-black hover:bg-primary hover:text-black">
-                        <ExternalLink size={12} />
-                    </a>
-                )}
-                {editMode && (
-                    <button onClick={onUpload} className="p-2 bg-white/5 rounded-lg text-black hover:text-black transition-all">
-                        <Upload size={12} />
-                    </button>
-                )}
+                <FileText
+                    size={16}
+                    className="
+                        text-[#7c3aed]
+                        group-hover:text-[#6d28d9]
+                        transition-colors
+                    "
+                />
+                <span className="text-[10px] font-black uppercase tracking-widest text-black">
+                    {label}
+                </span>
             </div>
         </div>
     );

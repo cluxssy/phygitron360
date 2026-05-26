@@ -362,69 +362,178 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header Toolbar */}
-      <div className={`${styles.heroCard} flex flex-wrap gap-4 items-center justify-between`}>
-        <div className="flex gap-3 items-center flex-wrap">
-          <div className={styles.iconBadge}>
-            <Activity size={20} />
-          </div>
-          <div>
-            <p className={`text-[9px] font-black uppercase tracking-widest ${styles.subtitleText}`}>Performance Intelligence Node</p>
-            <h1 className={`text-4xl font-display font-black uppercase tracking-tighter italic ${styles.titleText}`}>
-              {isAdmin ? 'Performance Intelligence Panel' : 'My Success Matrix'}
-            </h1>
-          </div>
+  <div className="space-y-6">
+
+    {/* Header Toolbar */}
+    <div className={`${styles.heroCard} flex flex-wrap gap-6 items-center justify-between`}>
+
+      <div className="flex gap-4 items-center flex-wrap">
+
+        <div className={styles.iconBadge}>
+          <Activity size={20} />
         </div>
 
-        <div className="flex gap-4 items-center">
-            {isAdmin && !localData && (
-                 <button 
-                  onClick={handleRequestReview}
-                  className="px-6 py-3 bg-amber-500 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-400 transition-all flex items-center gap-2"
-                >
-                    <Send size={14} /> Request Submission
-                </button>
-            )}
-            <div className={styles.periodSelectContainer}>
-                {['Quarterly', 'Half Yearly', 'Monthly'].map(t => (
-                    <button 
-                        key={t}
-                        onClick={() => { setPeriodType(t); setActivePeriod(t === 'Quarterly' ? 'Q1' : t === 'Half Yearly' ? 'H1' : 'Jan'); }}
-                        className={styles.periodSelectBtn(periodType === t)}
-                    >
-                        {t}
-                    </button>
-                ))}
-            </div>
+        <div>
+          <p className={`text-[9px] font-black uppercase tracking-[0.22em] ${styles.subtitleText}`}>
+            Performance Intelligence Node
+          </p>
+
+          <h1
+            className={`
+              text-[42px]
+              leading-none
+              font-display
+              font-black
+              uppercase
+              tracking-[-0.04em]
+              italic
+              ${styles.titleText}
+            `}
+          >
+            {isAdmin
+              ? 'Performance Intelligence Panel'
+              : 'My Success Matrix'}
+          </h1>
         </div>
+
       </div>
 
-      <div className={`${styles.mainCard} !p-4 flex gap-3 items-center flex-wrap`}>
-        {isAdmin && employees.length > 0 && (
-          <select
-            value={selectedEmp}
-            onChange={e => setSelectedEmp(e.target.value)}
-            className={styles.select}
+      <div className="flex items-center gap-4 flex-wrap">
+
+        {isAdmin && !localData && (
+          <button
+            onClick={handleRequestReview}
+            className="
+              px-6
+              h-[46px]
+              bg-amber-500
+              text-black
+              text-[10px]
+              font-black
+              uppercase
+              tracking-[0.16em]
+              rounded-2xl
+              hover:bg-amber-400
+              transition-all
+              flex
+              items-center
+              gap-2
+              shrink-0
+            "
           >
-            {employees.map(e => <option key={e.employee_code} value={e.employee_code} className={styles.optionClass}>{e.name} ({e.employee_code})</option>)}
-          </select>
+            <Send size={14} />
+            Request Submission
+          </button>
         )}
+
+        {/* PERIOD TYPE SWITCH */}
+        <div
+          className="
+            flex
+            items-center
+            bg-[#f5efff]
+            border
+            border-[#ece2ff]
+            rounded-2xl
+            p-1.5
+            w-[370px]
+            shrink-0
+          "
+        >
+
+          {['Quarterly', 'Half Yearly', 'Monthly'].map((t) => (
+
+            <button
+              key={t}
+              onClick={() => {
+                setPeriodType(t);
+
+                setActivePeriod(
+                  t === 'Quarterly'
+                    ? 'Q1'
+                    : t === 'Half Yearly'
+                    ? 'H1'
+                    : 'Jan'
+                );
+              }}
+              className={`
+                flex-1
+                h-[42px]
+                rounded-xl
+                text-[10px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                transition-all
+                whitespace-nowrap
+
+                ${
+                  periodType === t
+                    ? 'bg-black text-white shadow-sm'
+                    : 'text-[#6b7280] hover:text-black'
+                }
+              `}
+            >
+              {t}
+            </button>
+
+          ))}
+
+        </div>
+
+      </div>
+
+    </div>
+
+    {/* FILTER BAR */}
+    <div className={`${styles.mainCard} !p-4 flex gap-3 items-center flex-wrap`}>
+
+      {isAdmin && employees.length > 0 && (
         <select
-          value={year}
-          onChange={e => { setYear(Number(e.target.value)); }}
+          value={selectedEmp}
+          onChange={(e) => setSelectedEmp(e.target.value)}
           className={styles.select}
         >
-          {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y} className={styles.optionClass}>{y}</option>)}
+          {employees.map((e) => (
+            <option
+              key={e.employee_code}
+              value={e.employee_code}
+              className={styles.optionClass}
+            >
+              {e.name} ({e.employee_code})
+            </option>
+          ))}
         </select>
-        <button
-          onClick={exportXLSX}
-          disabled={!localData}
-          className={styles.btnExport}
-        >
-          <Download size={14} /> Export XLSX
-        </button>
-      </div>
+      )}
+
+      <select
+        value={year}
+        onChange={(e) => {
+          setYear(Number(e.target.value));
+        }}
+        className={styles.select}
+      >
+        {[2024, 2025, 2026, 2027].map((y) => (
+          <option
+            key={y}
+            value={y}
+            className={styles.optionClass}
+          >
+            {y}
+          </option>
+        ))}
+      </select>
+
+      <button
+        onClick={exportXLSX}
+        disabled={!localData}
+        className={styles.btnExport}
+      >
+        <Download size={14} />
+        Export XLSX
+      </button>
+
+    </div>
 
       {/* Period Overview Stats */}
       <div className={`grid gap-4 ${periodType === 'Quarterly' ? 'grid-cols-4' : 'grid-cols-6 md:grid-cols-12'}`}>

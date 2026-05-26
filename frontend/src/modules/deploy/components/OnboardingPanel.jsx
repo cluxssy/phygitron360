@@ -123,7 +123,7 @@ export default function OnboardingPanel() {
   };
 
   const copyInviteLink = (token) => {
-    const link = `${window.location.origin}/register?token=${token}`;
+    const link = `${window.location.origin}/onboard?token=${token}`;
     navigator.clipboard.writeText(link);
     toast.success('Sequence link copied to clipboards');
   };
@@ -140,6 +140,43 @@ export default function OnboardingPanel() {
       loadInvites();
     } catch {
       toast.error('Failed to abort invitation sequence');
+    }
+  };
+
+  const openApprovalReview = (approval) => {
+    setSelectedApproval(approval);
+    setApproveForm(prev => ({
+      ...prev,
+      code: approval.employee_code,
+      location: approval.location || '',
+      doj: approval.doj || new Date().toISOString().split('T')[0]
+    }));
+  };
+
+  const manageCompletedInvite = async (invite) => {
+    try {
+      const [approvalsRes] = await Promise.all([
+        fetch('/api/onboarding/approvals', { credentials: 'include' }),
+        loadOptions()
+      ]);
+
+      if (!approvalsRes.ok) throw new Error();
+
+      const pendingApprovals = await approvalsRes.json();
+      setApprovals(pendingApprovals);
+
+      const approval = pendingApprovals.find(app =>
+        app.email_id?.toLowerCase?.() === invite.email?.toLowerCase?.()
+      );
+
+      if (!approval) {
+        toast.error('No pending approval found for this invite');
+        return;
+      }
+
+      openApprovalReview(approval);
+    } catch {
+      toast.error('Failed to load onboarding approval');
     }
   };
 
@@ -301,8 +338,21 @@ export default function OnboardingPanel() {
                         {new Date(inv.created_at).toLocaleDateString()}
                      </td>
                       <td className="px-6 py-4">
-                        {inv.status === 'Pending' && (
-                          <div className="flex gap-2">
+                        <div className="flex gap-2">
+                          {inv.status === 'Completed' && (
+                            <button
+                              onClick={() => manageCompletedInvite(inv)}
+                              className={`px-4 py-2 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all ${
+                                isLightMode
+                                  ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]'
+                                  : 'text-white/40 bg-white/5 border-white/5 hover:text-primary hover:bg-white/10'
+                              }`}
+                            >
+                              Manage
+                            </button>
+                          )}
+                          {inv.status === 'Pending' && (
+                            <>
                             <button 
                               onClick={() => copyInviteLink(inv.token)} 
                               title="Copy Neural Link"
@@ -325,8 +375,9 @@ export default function OnboardingPanel() {
                             >
                                <Trash2 size={14} />
                             </button>
-                          </div>
-                        )}
+                            </>
+                          )}
+                        </div>
                       </td>
                    </tr>
                  ))}
@@ -393,15 +444,7 @@ export default function OnboardingPanel() {
                      </td>
                      <td className="px-6 py-6 text-right">
                         <button 
-                          onClick={() => {
-                              setSelectedApproval(app);
-                              setApproveForm(prev => ({ 
-                                  ...prev, 
-                                  code: app.employee_code, 
-                                  location: app.location || '',
-                                  doj: app.doj || new Date().toISOString().split('T')[0]
-                              }));
-                          }}
+                          onClick={() => openApprovalReview(app)}
                           className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all group ${
                             isLightMode 
                               ? 'bg-[#faf7ff] border border-[#ebe4ff] text-[#6b7280] hover:bg-gradient-to-r hover:from-[#c084fc] hover:to-[#8b5cf6] hover:text-white' 

@@ -53,7 +53,7 @@ function ProtectedRoute({ children, requiredPermission, requiredModule }) {
 
 function AdminGate() {
   const { hasRole } = useAuth();
-  if (hasRole(['org_admin'])) return <OrgDashboard />;
+  if (hasRole(['org_admin', 'manager'])) return <OrgDashboard />;
   return <MasterConsole />;
 }
 
@@ -83,7 +83,7 @@ export default function App() {
         <Route 
           path="/admin" 
           element={
-            <ProtectedRoute requiredPermission="admin.users.manage">
+            <ProtectedRoute requiredPermission="deploy.dashboard.view_admin">
               <Layout><AdminGate /></Layout>
             </ProtectedRoute>
           } 
