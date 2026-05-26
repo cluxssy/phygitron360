@@ -336,3 +336,6 @@ class CandidateService:
         self.repo.create_offer(candidate_id, details, offer_content)
         self.repo.update_candidate_status(candidate_id, "Offered")
         return True
+
+    def get_global_activity(self, limit: int = 10) -> List[Dict[str, Any]]:
+        return self.repo.get_global_activity(limit=limit)

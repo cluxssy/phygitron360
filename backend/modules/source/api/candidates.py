@@ -172,6 +172,20 @@ def list_active_candidates(service: CandidateService = Depends(get_candidate_ser
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/activity")
+def get_global_activity(
+    limit: int = Query(10, ge=1, le=100),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Get recent global activity logs across all candidates."""
+    try:
+        rows = service.get_global_activity(limit=limit)
+        return {"success": True, "data": rows}
+    except Exception as e:
+        logger.error(f"Failed to get global activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{candidate_id}")
 def get_candidate(
     candidate_id: int,
