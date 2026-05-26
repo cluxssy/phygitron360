@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
-  UserPlus, Command, ArrowRight, Zap, CheckCircle, Upload, 
+  UserPlus, ArrowRight, Zap, CheckCircle, Upload, 
   Trash2, Plus, Info, ShieldCheck, Phone, MapPin, GraduationCap 
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
+import logo from "../../../assets/phy360.png";
 export default function OnboardPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,7 +45,7 @@ export default function OnboardPage() {
 
   useEffect(() => {
     if (!token) {
-        setError('Missing neural secure token.');
+        setError('Missing secure onboarding token.');
         setLoading(false);
         return;
     }
@@ -165,8 +165,8 @@ export default function OnboardPage() {
           toast.promise(
               new Promise(resolve => setTimeout(resolve, 1500)),
               {
-                  loading: 'Neural Parser analyzing resume...',
-                  success: 'Skills & Experience vectors extracted',
+                  loading: 'Reading resume details...',
+                  success: 'Skills and experience added',
                   error: 'Parsing failed',
               }
           ).then(() => {
@@ -208,7 +208,7 @@ export default function OnboardPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to submit data');
         setSuccess(true);
-        toast.success("Identity Matrix Synchronized!");
+        toast.success("Onboarding details submitted!");
     } catch (err) {
         toast.error(err.message);
     } finally {
@@ -217,19 +217,19 @@ export default function OnboardPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#040812] text-white flex items-center justify-center p-6 overflow-hidden font-inter">
-      <div className="absolute inset-0 z-0 h-full w-full pointer-events-none overflow-hidden">
+    <div className="onboard-page relative min-h-screen bg-[#f5f5f5] text-black flex items-center justify-center p-6 overflow-hidden font-inter">
+      <div className="onboard-bg-glow absolute inset-0 z-0 h-full w-full pointer-events-none overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[1000px] h-[1000px] bg-primary/10 blur-[200px] rounded-full animate-pulse opacity-40 will-change-transform" />
       </div>
 
       <div className="relative z-10 w-full max-w-2xl animate-fade-in-up">
         <div className="mb-10 flex flex-col items-center">
-          <div onClick={() => navigate('/')} className="cursor-pointer w-20 h-20 bg-primary flex items-center justify-center rounded-3xl shadow-[0_0_50px_rgba(204,151,255,0.4)] mb-6 transition-all hover:scale-105 active:scale-95">
-             <Command className="text-black" size={40} />
+          <div onClick={() => navigate('/')} className="cursor-pointer mb-6 transition-all hover:scale-105 active:scale-95">
+             <img src={logo} alt="PHYGITRON 360" className="onboard-logo" />
           </div>
-          <h1 className="text-4xl font-display font-black tracking-tighter uppercase mb-2">Neural <span className="text-primary text-glow">Onboarding</span></h1>
+          <h1 className="text-4xl font-display font-black tracking-tighter uppercase mb-2">Complete <span className="text-primary text-glow">Onboarding</span></h1>
           <div className="flex items-center gap-2 opacity-50 uppercase tracking-[0.4em] text-[10px] font-black">
-              <ShieldCheck size={12} /> Secure Candidate Matrix Initiation
+              <ShieldCheck size={12} /> Secure candidate onboarding
           </div>
         </div>
 
@@ -238,35 +238,35 @@ export default function OnboardPage() {
              {loading ? (
                  <div className="text-center py-20">
                      <div className="w-12 h-12 border-3 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
-                     <p className="text-[12px] text-white/40 uppercase font-black tracking-widest animate-pulse">Initializing Security Decryption...</p>
+                     <p className="text-[12px] text-white/40 uppercase font-black tracking-widest animate-pulse">Checking onboarding link...</p>
                  </div>
              ) : error ? (
                  <div className="text-center space-y-6 py-12">
                      <div className="w-20 h-20 bg-error/10 text-error border border-error/20 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
                         <Zap size={40} />
                      </div>
-                     <h2 className="text-3xl font-display font-black text-white uppercase tracking-tighter">Protocol Violation</h2>
+                     <h2 className="text-3xl font-display font-black text-white uppercase tracking-tighter">Link unavailable</h2>
                      <p className="text-[14px] text-white/50 pb-8 leading-relaxed uppercase tracking-wider">{error}</p>
-                     <button onClick={() => navigate('/')} className="px-10 py-4 glass-panel border-white/10 text-white text-[11px] font-black uppercase tracking-widest rounded-2xl hover:bg-white/5 transition-all">Exit Neural Path</button>
+                     <button onClick={() => navigate('/')} className="px-10 py-4 glass-panel border-white/10 text-white text-[11px] font-black uppercase tracking-widest rounded-2xl hover:bg-white/5 transition-all">Return home</button>
                  </div>
              ) : success ? (
                  <div className="text-center space-y-6 py-12">
                      <div className="w-20 h-20 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-[0_0_40px_rgba(16,185,129,0.2)]">
                         <CheckCircle size={40} />
                      </div>
-                     <h2 className="text-3xl font-display font-black text-white uppercase tracking-tighter">Sequence Complete</h2>
+                     <h2 className="text-3xl font-display font-black text-white uppercase tracking-tighter">Onboarding submitted</h2>
                      <p className="text-sm text-white/50 pb-10 leading-relaxed max-w-md mx-auto">
-                        Your neural footprint has been captured. The Strategic Hub (HR) will verify your credentials shortly. Activation notification will follow via encrypted mail.
+                        Your details have been submitted. The HR team will verify your credentials shortly and notify you when your account is ready.
                      </p>
                      <button onClick={() => navigate('/login')} className="w-full bg-primary text-black font-black text-[12px] uppercase tracking-[0.2em] py-6 rounded-2xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20">
-                        Initiate Portal Access
+                        Go to login
                      </button>
                  </div>
              ) : (
                 <form onSubmit={handleSubmit} className="space-y-8">
                    <div className="flex justify-between items-end mb-10 border-b border-white/5 pb-8">
                        <div className="space-y-1">
-                           <p className="text-[10px] font-black uppercase tracking-widest text-primary">Candidate Identification</p>
+                           <p className="text-[10px] font-black uppercase tracking-widest text-primary">Candidate details</p>
                            <h2 className="text-2xl font-display font-black text-white uppercase">{tokenInfo.name}</h2>
                            <p className="text-[11px] text-white/40 font-medium">{tokenInfo.email} // {ROLE_LABELS[tokenInfo.role] || tokenInfo.role}</p>
                        </div>
@@ -276,7 +276,7 @@ export default function OnboardPage() {
                                    <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${step >= i ? 'w-6 bg-primary shadow-glow' : 'w-2 bg-white/10'}`} />
                                ))}
                            </div>
-                           <span className="text-[10px] font-black tracking-widest uppercase text-white/30">Node {step} / 4</span>
+                           <span className="text-[10px] font-black tracking-widest uppercase text-white/30">Step {step} / 4</span>
                        </div>
                    </div>
 
@@ -285,17 +285,17 @@ export default function OnboardPage() {
                       <div className="space-y-6 animate-fade-in-up">
                          <div className="flex items-center gap-2 mb-2">
                              <ShieldCheck size={16} className="text-primary" />
-                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Credential Initialization</h3>
+                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Account setup</h3>
                          </div>
                          
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Master Access Key (Password)</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Password</label>
                                <input type="password" name="password" value={form.password} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.password ? 'border-error/50' : 'border-white/5'}`} placeholder="Min 8 characters" />
                                {validationErrors.password && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.password}</p>}
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Temporal Origin (DOB)</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Date of birth</label>
                                <input type="date" name="dob" value={form.dob} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.dob ? 'border-error/50' : 'border-white/5'}`} />
                                {validationErrors.dob && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.dob}</p>}
                             </div>
@@ -303,12 +303,12 @@ export default function OnboardPage() {
 
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Contact Frequency</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Contact number</label>
                                <input type="text" name="contact_number" value={form.contact_number} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.contact_number ? 'border-error/50' : 'border-white/5'}`} placeholder="+91 XXXX XXX XXX" />
                                {validationErrors.contact_number && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.contact_number}</p>}
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Distress Contact</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency contact</label>
                                <input type="text" name="emergency_contact" value={form.emergency_contact} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.emergency_contact ? 'border-error/50' : 'border-white/5'}`} placeholder="Name - +91..." />
                                {validationErrors.emergency_contact && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.emergency_contact}</p>}
                             </div>
@@ -321,23 +321,23 @@ export default function OnboardPage() {
                       <div className="space-y-6 animate-fade-in-up">
                          <div className="flex items-center gap-2 mb-2">
                              <MapPin size={16} className="text-primary" />
-                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Geographic & Skill Vectors</h3>
+                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Location and skills</h3>
                          </div>
                          
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                              <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Primary Operation Base (Current Address)</label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Current address</label>
                                 <textarea name="current_address" rows="2" value={form.current_address} onChange={handleChange} className="w-full glass-panel-input resize-none" />
                              </div>
                              <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">City / Base Location</label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">City / location</label>
                                 <input name="location" value={form.location} onChange={handleChange} className="w-full glass-panel-input" placeholder="e.g. Mumbai, Bangalore" />
                              </div>
                           </div>
 
                          <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Permanent Anchor Point</label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Permanent address</label>
                                 <label className="flex items-center gap-2 cursor-pointer group">
                                     <input type="checkbox" checked={sameAsCurrent} onChange={e => handleSameAsCurrent(e.target.checked)} className="hidden" />
                                     <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${sameAsCurrent ? 'bg-primary border-primary' : 'border-white/20'}`}>
@@ -351,11 +351,11 @@ export default function OnboardPage() {
 
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Primary Neural Assets (Skills)</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Primary skills</label>
                                <input type="text" name="primary_skills" value={form.primary_skills} onChange={handleChange} className="w-full glass-panel-input" placeholder="Core Skills" />
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Secondary Capability Nodes</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Secondary skills</label>
                                <input type="text" name="secondary_skills" value={form.secondary_skills} onChange={handleChange} className="w-full glass-panel-input" placeholder="Auxiliary Skills" />
                             </div>
                          </div>
@@ -368,10 +368,10 @@ export default function OnboardPage() {
                          <div className="flex items-center justify-between mb-4">
                              <div className="flex items-center gap-2">
                                 <GraduationCap size={16} className="text-primary" />
-                                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Academic History Blocks</h3>
+                                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Education history</h3>
                              </div>
                              <button type="button" onClick={addEducation} className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-primary rounded-xl transition-all border border-primary/20">
-                                <Plus size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Add Module</span>
+                                <Plus size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Add education</span>
                              </button>
                          </div>
 
@@ -402,17 +402,17 @@ export default function OnboardPage() {
                       <div className="space-y-6 animate-fade-in-up">
                          <div className="flex items-center gap-2 mb-2">
                              <Upload size={16} className="text-primary" />
-                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Credential Validation (uploads)</h3>
+                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Document uploads</h3>
                          </div>
                          
                          <div className="space-y-4">
                             {[
-                                { k: 'cv_file', label: 'Neural Resume / CV', desc: 'Vector extraction protocol will initialize upon upload', icon: ShieldCheck },
-                                { k: 'photo_file', label: 'Identity Visual (Photo)', desc: 'Clear passport size digital capture', icon: UserPlus },
-                                { k: 'id_proof_file', label: 'Citizen Identification (ID)', desc: 'Government issued credential proof', icon: ShieldCheck }
+                                { k: 'cv_file', label: 'Resume / CV', desc: 'Upload your latest resume', icon: ShieldCheck },
+                                { k: 'photo_file', label: 'Photo', desc: 'Clear passport size photo', icon: UserPlus },
+                                { k: 'id_proof_file', label: 'ID proof', desc: 'Government issued identity proof', icon: ShieldCheck }
                             ].map((f, i) => (
-                               <div key={i} className={`flex items-center gap-6 p-6 rounded-[22px] border transition-all ${files[f.k] ? 'bg-primary/5 border-primary/20' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}>
-                                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${files[f.k] ? 'bg-primary text-black border-primary shadow-glow' : 'bg-white/5 text-white/30 border-white/5'}`}>
+                               <div key={i} className={`onboard-upload-row flex items-center gap-6 p-6 rounded-[22px] border transition-all ${files[f.k] ? 'is-complete' : 'is-empty'}`}>
+                                  <div className={`onboard-upload-icon w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${files[f.k] ? 'is-complete' : 'is-empty'}`}>
                                       {files[f.k] ? <CheckCircle size={24} /> : <f.icon size={24} />}
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -423,7 +423,7 @@ export default function OnboardPage() {
                                      <p className="text-[10px] text-white/30 mt-1 uppercase tracking-wider truncate">{files[f.k] ? files[f.k].name : f.desc}</p>
                                   </div>
                                   <label className="cursor-pointer px-5 py-2.5 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white border border-white/10 rounded-xl transition-all">
-                                      {files[f.k] ? 'Replace' : 'Initialize'}
+                                      {files[f.k] ? 'Replace' : 'Upload'}
                                       <input type="file" name={f.k} onChange={handleFileChange} className="hidden" />
                                   </label>
                                </div>
@@ -443,11 +443,11 @@ export default function OnboardPage() {
                            {submitting ? (
                                <>
                                    <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                                   Transmitting Packet...
+                                   Submitting...
                                </>
                            ) : (
                                <>
-                                   {step < 4 ? 'Advance Node' : 'Finalize Encryption'}
+                                   {step < 4 ? 'Continue' : 'Submit onboarding'}
                                    <ArrowRight size={18} />
                                </>
                            )}
@@ -459,35 +459,181 @@ export default function OnboardPage() {
         </div>
         
         <div className="mt-10 flex items-center justify-center gap-6 opacity-30 text-[9px] font-black uppercase tracking-widest">
-            <span className="flex items-center gap-2"><ShieldCheck size={12}/> AES-256 Encrypted</span>
-            <span className="flex items-center gap-2"><Info size={12}/> Auto-Parsing Active</span>
-            <span className="flex items-center gap-2">Node v4.2.0</span>
+            <span className="flex items-center gap-2"><ShieldCheck size={12}/> Secure form</span>
+            <span className="flex items-center gap-2"><Info size={12}/> Resume parsing enabled</span>
         </div>
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
+        .onboard-page {
+          background: #f5f5f5;
+          color: #111111;
+          min-height: 100vh;
+          align-items: flex-start;
+          padding-top: 48px;
+          padding-bottom: 48px;
+        }
+
+        .onboard-bg-glow {
+          display: none;
+        }
+
+        .onboard-page .glass-panel {
+          background: #ffffff !important;
+          border: 1px solid #e5e5e5 !important;
+          border-radius: 8px !important;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08) !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+
+        .onboard-page [class*="bg-[#0B1326"] {
+          background: #ffffff !important;
+          border-radius: 8px !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+
+        .onboard-page [class*="bg-[#060E20"],
+        .onboard-page [class*="bg-black/40"],
+        .onboard-page [class*="bg-white/5"] {
+          background: #f7f7f7 !important;
+        }
+
+        .onboard-page [class*="border-white"] {
+          border-color: #e5e5e5 !important;
+        }
+
+        .onboard-page [class*="text-white"],
+        .onboard-page [class*="text-on-surface"] {
+          color: #111111 !important;
+        }
+
+        .onboard-page [class*="text-white/"],
+        .onboard-page [class*="opacity-50"],
+        .onboard-page [class*="opacity-40"],
+        .onboard-page [class*="opacity-30"] {
+          color: #666666 !important;
+          opacity: 1 !important;
+        }
+
+        .onboard-page .text-primary,
+        .onboard-page [class*="text-primary"] {
+          color: #7b1eff !important;
+        }
+
+        .onboard-page .bg-primary,
+        .onboard-page [class*="bg-primary"] {
+          background: #7b1eff !important;
+        }
+
+        .onboard-page .text-black,
+        .onboard-page button.bg-primary,
+        .onboard-page button[class*="bg-primary"] {
+          color: #ffffff !important;
+        }
+
+        .onboard-page h1,
+        .onboard-page h2,
+        .onboard-page h3,
+        .onboard-page label,
+        .onboard-page button,
+        .onboard-page p,
+        .onboard-page span {
+          letter-spacing: 0 !important;
+        }
+
+        .onboard-page h1 {
+          font-size: clamp(28px, 4vw, 42px) !important;
+          font-weight: 500 !important;
+          text-transform: none !important;
+        }
+
+        .onboard-logo {
+          width: min(150px, 64vw);
+          height: auto;
+          display: block;
+        }
+
+        .onboard-page h2 {
+          font-weight: 600 !important;
+          text-transform: none !important;
+        }
+
+        .onboard-page label,
+        .onboard-page h3,
+        .onboard-page p,
+        .onboard-page span {
+          text-transform: none !important;
+        }
+
+        .onboard-page button,
+        .onboard-page label[class*="cursor-pointer"] {
+          border-radius: 6px !important;
+        }
+
+        .onboard-page .rounded-3xl,
+        .onboard-page .rounded-2xl,
+        .onboard-page .rounded-[22px],
+        .onboard-page .rounded-[26px] {
+          border-radius: 8px !important;
+        }
+
+        .onboard-page .shadow-glow,
+        .onboard-page .text-glow {
+          box-shadow: none !important;
+          text-shadow: none !important;
+        }
+
+        .onboard-upload-row.is-complete {
+          background: #eeeeee !important;
+          border-color: #d6d6d6 !important;
+        }
+
+        .onboard-upload-row.is-empty {
+          background: #f7f7f7 !important;
+          border-color: #e5e5e5 !important;
+        }
+
+        .onboard-upload-row.is-empty:hover {
+          background: #f1f1f1 !important;
+        }
+
+        .onboard-upload-icon.is-complete {
+          background: #4a4a4a !important;
+          border-color: #4a4a4a !important;
+          color: #ffffff !important;
+        }
+
+        .onboard-upload-icon.is-empty {
+          background: #ffffff !important;
+          border-color: #d8d8d8 !important;
+          color: #777777 !important;
+        }
+
         .glass-panel-input {
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          border-radius: 16px;
+          background: #ffffff;
+          border: 1px solid #d8d8d8;
+          border-radius: 6px;
           padding: 16px 20px;
-          color: white;
+          color: #111111;
           font-size: 13px;
           width: 100%;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
           outline: none;
         }
         .glass-panel-input:focus {
-          border-color: #CC97FF;
-          background: rgba(255, 255, 255, 0.06);
-          box-shadow: 0 0 20px rgba(204, 151, 255, 0.1);
+          border-color: #7b1eff;
+          background: #ffffff;
+          box-shadow: 0 0 0 3px rgba(123, 30, 255, 0.12);
         }
-        .shadow-glow { box-shadow: 0 0 15px rgba(204, 151, 255, 0.5); }
-        .text-glow { text-shadow: 0 0 15px rgba(204, 151, 255, 0.4); }
+        .glass-panel-input::placeholder {
+          color: #8a8a8a;
+        }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(204, 151, 255, 0.1); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(204, 151, 255, 0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cccccc; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #999999; }
       `}} />
     </div>
   );

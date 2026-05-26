@@ -33,7 +33,6 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 primary_skillset: data.skill_matrix?.primary_skillset || '',
                 secondary_skillset: data.skill_matrix?.secondary_skillset || '',
                 experience_years: data.skill_matrix?.experience_years || '0',
-                // Normalize date fields for date inputs
                 doj: (data.doj || '').split('T')[0],
                 dob: (data.dob || '').split('T')[0],
             });
@@ -56,7 +55,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         return (
             <div className="flex flex-col items-center justify-center h-96">
                 <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-black/20">Decrypting Neural Dossier...</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-black/80">Decrypting Neural Dossier...</p>
             </div>
         );
     }
@@ -66,7 +65,6 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            // Send only clean scalar fields — never send nested objects like skill_matrix, assets etc.
             const payload = {
                 name: formData.name,
                 designation: formData.designation,
@@ -85,7 +83,6 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 education_details: formData.education_details,
                 pf_included: formData.pf_included,
                 mediclaim_included: formData.mediclaim_included,
-                // Skill matrix fields (flattened)
                 primary_skillset: formData.primary_skillset,
                 secondary_skillset: formData.secondary_skillset,
                 experience_years: formData.experience_years,
@@ -153,8 +150,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     return (
         <div className="space-y-8 animate-fade-in pb-20">
             {/* Action Bar */}
-            <div className="flex justify-between items-center bg-[#faf7ff] p-4 rounded-2xl border border-[#ece4ff]">
-                <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-black/40 hover:text-black transition-all">
+            <div className="flex justify-between items-center bg-gradient-to-r from-[#f7f3ff] to-[#faf7ff] p-4 rounded-2xl border border-[#e9ddff] shadow-lg shadow-primary/5">
+                <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-black/90 hover:text-black transition-all">
                     <ArrowLeft size={14} /> Back to Nexus
                 </button>
                 <div className="flex gap-3">
@@ -162,7 +159,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <>
                             <button 
                                 onClick={() => setEditMode(false)}
-                                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-black/40 hover:bg-[#faf7ff] transition-all"
+                                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-black/90 hover:bg-[#faf7ff] transition-all"
                             >
                                 Abort
                             </button>
@@ -178,7 +175,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <HasPermission permission="deploy.employees.edit">
                             <button 
                                 onClick={() => setEditMode(true)}
-                                className="flex items-center gap-2 px-8 py-2 bg-white border border-[#ece4ff] shadow-sm border-[#e9defd] text-primary text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary hover:text-black transition-all"
+                                className="flex items-center gap-2 px-8 py-2 bg-white border border-[#ece4ff] shadow-sm border-[#e9defd] text-primary text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#7c3aed] hover:text-white transition-all"
                             >
                                 <Edit3 size={14} /> Modify Dossier
                             </button>
@@ -188,12 +185,13 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             </div>
 
             {/* Header / Hero Section */}
-            <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff] relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="bg-gradient-to-br from-white via-[#faf7ff] to-[#f7f3ff] border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/10 to-primary/5 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2" />
                 
                 <div className="flex flex-col md:flex-row gap-8 items-start md:items-center relative z-10">
+                    {/* Profile Photo */}
                     <div className="relative group">
-                        <div className="w-32 h-32 rounded-3xl bg-primary/10 border-2 border-primary/20 flex items-center justify-center text-primary font-display font-black text-5xl shrink-0 shadow-2xl shadow-primary/10 overflow-hidden">
+                        <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-primary/15 to-primary/5 border-2 border-primary/30 flex items-center justify-center text-primary font-display font-black text-5xl shrink-0 shadow-2xl shadow-primary/20 overflow-hidden">
                             {details.photo_path ? (
                                 <img src={`/${details.photo_path}`} className="w-full h-full object-cover" alt="" />
                             ) : (
@@ -242,59 +240,212 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                         onChange={e => setFormData({...formData, designation: e.target.value})}
                                         className="bg-[#faf7ff] border border-[#e9defd] rounded-lg px-4 py-1.5 text-xs text-primary font-bold uppercase tracking-widest focus:outline-none"
                                     />
-                                    <span className="text-black/20">//</span>
+                                    <span className="text-black/90">//</span>
                                     <input 
                                         type="text" 
                                         placeholder="Team"
                                         value={formData.team}
                                         onChange={e => setFormData({...formData, team: e.target.value})}
-                                        className="bg-[#faf7ff] border border-[#e9defd] rounded-lg px-4 py-1.5 text-xs text-black/50 font-bold uppercase tracking-widest focus:outline-none"
+                                        className="bg-[#faf7ff] border border-[#e9defd] rounded-lg px-4 py-1.5 text-xs text-black/75 font-bold uppercase tracking-widest focus:outline-none"
                                     />
                                 </>
                             ) : (
                                 <p className="text-primary font-black text-sm uppercase tracking-[0.3em] flex items-center gap-2">
-                                     {details.designation} <span className="text-black/20">//</span> {details.team}
+                                    {details.designation} <span className="text-black/90">//</span> {details.team}
                                 </p>
                             )}
                         </div>
                         
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
-                            <EditMetaItem 
-                                editMode={editMode} 
-                                icon={Mail} 
-                                label="Email Access" 
-                                value={formData.email_id} 
-                                onChange={v => setFormData({...formData, email_id: v})}
-                            />
-                            <EditMetaItem 
-                                editMode={editMode} 
-                                icon={Phone} 
-                                label="Neural Link" 
-                                value={formData.contact_number} 
-                                onChange={v => setFormData({...formData, contact_number: v})}
-                            />
-                            <EditMetaItem 
-                                editMode={editMode} 
-                                icon={MapPin} 
-                                label="Geo Anchor" 
-                                value={formData.location} 
-                                onChange={v => setFormData({...formData, location: v})}
-                            />
-                            <EditMetaItem 
-                                editMode={editMode} 
-                                icon={Briefcase} 
-                                label="Operation Code" 
-                                value={formData.employee_code} 
-                                onChange={v => setFormData({...formData, employee_code: v})}
-                            />
-                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+
+    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+
+        <div className="flex items-center gap-2 mb-2">
+
+            <Mail
+                size={12}
+                className="text-[#7c3aed]"
+            />
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+                Email
+            </p>
+
+        </div>
+
+        {editMode ? (
+
+            <input
+                type="text"
+                value={formData.email_id || ''}
+                onChange={e =>
+                    setFormData({
+                        ...formData,
+                        email_id: e.target.value
+                    })
+                }
+                className="
+                    w-full
+                    bg-white
+                    border
+                    border-[#ddd6fe]
+                    rounded-xl
+                    px-3
+                    py-2
+                    text-xs
+                    text-black
+                    font-semibold
+                    focus:outline-none
+                    focus:border-[#7c3aed]
+                "
+            />
+
+        ) : (
+
+            <p className="text-xs font-black text-black truncate">
+                {formData.email_id || '—'}
+            </p>
+
+        )}
+
+    </div>
+
+    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+
+        <div className="flex items-center gap-2 mb-2">
+
+            <Phone
+                size={12}
+                className="text-[#7c3aed]"
+            />
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+                Contact
+            </p>
+
+        </div>
+
+        {editMode ? (
+
+            <input
+                type="text"
+                value={formData.contact_number || ''}
+                onChange={e =>
+                    setFormData({
+                        ...formData,
+                        contact_number: e.target.value
+                    })
+                }
+                className="
+                    w-full
+                    bg-white
+                    border
+                    border-[#ddd6fe]
+                    rounded-xl
+                    px-3
+                    py-2
+                    text-xs
+                    text-black
+                    font-semibold
+                    focus:outline-none
+                    focus:border-[#7c3aed]
+                "
+            />
+
+        ) : (
+
+            <p className="text-xs font-black text-black truncate">
+                {formData.contact_number || '—'}
+            </p>
+
+        )}
+
+    </div>
+
+    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+
+        <div className="flex items-center gap-2 mb-2">
+
+            <MapPin
+                size={12}
+                className="text-[#7c3aed]"
+            />
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+                Location
+            </p>
+
+        </div>
+
+        {editMode ? (
+
+            <input
+                type="text"
+                value={formData.location || ''}
+                onChange={e =>
+                    setFormData({
+                        ...formData,
+                        location: e.target.value
+                    })
+                }
+                className="
+                    w-full
+                    bg-white
+                    border
+                    border-[#ddd6fe]
+                    rounded-xl
+                    px-3
+                    py-2
+                    text-xs
+                    text-black
+                    font-semibold
+                    focus:outline-none
+                    focus:border-[#7c3aed]
+                "
+            />
+
+        ) : (
+
+            <p className="text-xs font-black text-black truncate">
+                {formData.location || '—'}
+            </p>
+
+        )}
+
+    </div>
+
+    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+
+        <div className="flex items-center gap-2 mb-2">
+
+            <Briefcase
+                size={12}
+                className="text-[#7c3aed]"
+            />
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+                Employee ID
+            </p>
+
+        </div>
+
+        <p className="text-xs font-black text-black truncate">
+            {formData.employee_code || '—'}
+        </p>
+
+    </div>
+
+</div>
                     </div>
                 </div>
             </div>
 
+            {/* Main Grid: Left (2/3) + Right (1/3) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Core Dossier */}
+
+                {/* ── LEFT COLUMN ── */}
                 <div className="lg:col-span-2 space-y-8">
+
                     {/* Personnel Statistics */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editMode} onChange={v => setFormData({...formData, doj: v})} />
@@ -304,7 +455,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
 
                     {/* Skill Synergy */}
-                    <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff]">
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={TrendingUp} title="Neural Skill Matrix" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                             <div>
@@ -313,14 +464,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     <textarea 
                                         value={formData.primary_skillset}
                                         onChange={e => setFormData({...formData, primary_skillset: e.target.value})}
-                                        className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-primary"
+                                        className="w-full bg-gradient-to-br from-[#f7f3ff] to-[#faf7ff] border border-[#e9ddff] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-primary"
                                         rows={3}
                                         placeholder="Comma separated skills..."
                                     />
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
                                         {(details.skill_matrix?.primary_skillset || '').split(',').map((s, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-primary/5 text-primary text-[10px] font-bold uppercase rounded-lg border border-primary/10">
+                                            <span key={i} className="px-3 py-1.5 bg-gradient-to-r from-primary/10 to-primary/5 text-primary text-[10px] font-bold uppercase rounded-lg border border-primary/20 shadow-sm shadow-primary/10">
                                                 {s.trim()}
                                             </span>
                                         ))}
@@ -328,19 +479,19 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-black/30 mb-4 italic">Auxiliary Capability Blocks</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-black/75 mb-4 italic">Auxiliary Capability Blocks</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.secondary_skillset}
                                         onChange={e => setFormData({...formData, secondary_skillset: e.target.value})}
-                                        className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-black/20"
+                                        className="w-full bg-gradient-to-br from-[#f7f3ff] to-[#faf7ff] border border-[#e9ddff] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-primary/20"
                                         rows={3}
                                         placeholder="Comma separated skills..."
                                     />
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
                                         {(details.skill_matrix?.secondary_skillset || '').split(',').map((s, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-[#faf7ff] text-black/50 text-[10px] font-bold uppercase rounded-lg border border-[#ece4ff]">
+                                            <span key={i} className="px-3 py-1.5 bg-gradient-to-r from-[#f7f3ff] to-[#faf7ff] text-black/75 text-[10px] font-bold uppercase rounded-lg border border-[#e9ddff] shadow-sm">
                                                 {s.trim()}
                                             </span>
                                         ))}
@@ -351,19 +502,19 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
 
                     {/* Education Logs */}
-                    <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff]">
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={GraduationCap} title="Academic Foundation Blocks" />
                         <div className="mt-6 space-y-4">
                             {editMode ? (
                                 <div className="space-y-4">
-                                     <textarea 
+                                    <textarea 
                                         value={typeof formData.education_details === 'string' ? formData.education_details : JSON.stringify(formData.education_details, null, 2)}
                                         onChange={e => setFormData({...formData, education_details: e.target.value})}
-                                        className="w-full font-mono bg-[#faf7ff] border border-[#e9defd] rounded-xl p-6 text-[10px] text-black focus:outline-none"
+                                        className="w-full font-mono bg-gradient-to-br from-[#f7f3ff] to-[#faf7ff] border border-[#e9ddff] rounded-xl p-6 text-[10px] text-black focus:outline-none focus:border-primary/30"
                                         rows={10}
                                         placeholder="[ { 'degree': '...', 'university': '...', 'year': '...' } ]"
                                     />
-                                    <p className="text-[8px] uppercase font-black text-black/20 tracking-tighter">Enter educational history in JSON sequence protocol</p>
+                                    <p className="text-[8px] uppercase font-black text-black/80 tracking-tighter">Enter educational history in JSON sequence protocol</p>
                                 </div>
                             ) : (
                                 (() => {
@@ -372,8 +523,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     
                                     if (Array.isArray(edu) && edu.length > 0) {
                                         return edu.map((e, i) => (
-                                            <div key={i} className="flex gap-6 items-start p-6 bg-[#faf7ff] rounded-2xl border border-[#ece4ff] hover:bg-black/5 transition-all group">
-                                                <div className="w-12 h-12 rounded-xl bg-[#faf7ff] flex items-center justify-center text-black/30 shrink-0 group-hover:text-primary transition-colors">
+                                            <div key={i} className="flex gap-6 items-start p-6 bg-gradient-to-r from-[#f7f3ff] to-[#faf7ff] rounded-2xl border border-[#e9ddff] hover:border-primary/30 hover:bg-primary/5 transition-all group shadow-sm hover:shadow-md hover:shadow-primary/10">
+                                                <div className="w-12 h-12 rounded-xl bg-[#faf7ff] flex items-center justify-center text-black/90 shrink-0 group-hover:text-primary transition-colors">
                                                     <Landmark size={20} />
                                                 </div>
                                                 <div className="flex-1">
@@ -381,28 +532,70 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                                         <h4 className="text-black font-bold text-sm uppercase">{e.degree}</h4>
                                                         <span className="text-xs font-black text-primary font-mono">{e.year}</span>
                                                     </div>
-                                                    <p className="text-xs text-black/40 mt-1 uppercase tracking-widest">{e.university}</p>
+                                                    <p className="text-xs text-black/90 mt-1 uppercase tracking-widest">{e.university}</p>
                                                 </div>
                                             </div>
                                         ));
                                     }
-                                    return <p className="text-xs text-black/20 italic text-center py-4">No academic history detected.</p>;
+                                    return <p className="text-xs text-black/80 italic text-center py-4">No academic history detected.</p>;
                                 })()
                             )}
                         </div>
                     </div>
 
-                    {/* Detailed Allocation Protocol List (Relocated) */}
-                    <div className="bg-white border border-[#ece4ff] shadow-sm border-primary/10 bg-primary/5 overflow-hidden">
-                        <div className="p-6 border-b border-[#ece4ff] bg-primary/10 flex items-center justify-between">
+                    {/* Compliance Toggles */}
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
+                        <SectionHeader icon={ShieldCheck} title="Compliance Protocol" />
+                        <div className="mt-6 space-y-4">
+                            <ComplianceRow
+                                label="PF Included"
+                                active={formData.pf_included}
+                                editMode={editMode}
+                                onToggle={() => setFormData({...formData, pf_included: !formData.pf_included})}
+                            />
+                            <ComplianceRow
+                                label="Mediclaim Included"
+                                active={formData.mediclaim_included}
+                                editMode={editMode}
+                                onToggle={() => setFormData({...formData, mediclaim_included: !formData.mediclaim_included})}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Documents */}
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
+                        <SectionHeader icon={FileText} title="Document Artifacts" />
+                        <div className="mt-6 space-y-3">
+                            <FileCard
+                                label="Curriculum Vitae"
+                                path={details.cv_path}
+                                editMode={editMode}
+                                onUpload={() => fileInputCv.current.click()}
+                            />
+                            <FileCard
+                                label="Identity Proof"
+                                path={details.id_proof_path}
+                                editMode={editMode}
+                                onUpload={() => fileInputId.current.click()}
+                            />
+                        </div>
+                        <input type="file" ref={fileInputCv} hidden accept=".pdf,.doc,.docx" onChange={e => handleFileUpload('cv', e.target.files[0])} />
+                        <input type="file" ref={fileInputId} hidden accept="image/*,.pdf" onChange={e => handleFileUpload('id', e.target.files[0])} />
+                    </div>
+
+                    {/* Allocation & Lifecycle Matrix */}
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/10 overflow-hidden rounded-2xl">
+                        <div className="p-6 border-b border-[#ece4ff] bg-[#f4ecff] flex items-center justify-between">
                             <SectionHeader icon={Package} title="Allocation & Lifecycle Matrix" />
                         </div>
-                        
+
                         <div className="p-2 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar">
                             {/* Onboarding Section */}
                             <div className="space-y-1">
-                                <div className="px-4 py-2 bg-[#faf7ff] rounded-lg mb-2">
-                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/60 italic">I. Onboarding Protocol</p>
+                                <div className="px-4 py-2 bg-[#f4ecff] rounded-lg mb-2 border border-[#e9ddff]">
+                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#7c3aed] italic">
+                                        I. Onboarding Protocol
+                                    </p>
                                 </div>
                                 {[
                                     { key: 'ob_laptop', label: 'Laptop Unit' },
@@ -415,14 +608,16 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     { key: 'ob_mediclaim', label: 'Mediclaim' },
                                     { key: 'ob_pf', label: 'Provident Fund' }
                                 ].map(a => (
-                                    <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#faf7ff] transition-colors border-b border-black/5 last:border-0 group">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-black/40 group-hover:text-black/80 transition-colors">{a.label}</span>
+                                    <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#f4ecff] transition-all border-b border-[#ece4ff] last:border-0 group">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-[#6d28d9] transition-colors">
+                                            {a.label}
+                                        </span>
                                         {assets?.[a.key] ? (
-                                            <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[8px] font-black uppercase border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
+                                            <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[8px] font-black uppercase border border-emerald-200 shadow-sm">
                                                 <CheckCircle size={8} /> Allocated
                                             </span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-[#faf7ff] text-black/20 rounded-full text-[8px] font-black uppercase border border-[#ece4ff]">
+                                            <span className="px-3 py-1 bg-[#f4ecff] text-black rounded-full text-[8px] font-black uppercase border border-[#ddd6fe] shadow-sm">
                                                 Pending
                                             </span>
                                         )}
@@ -432,8 +627,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                             {/* Clearance Section */}
                             <div className="space-y-1 pt-4">
-                                <div className="px-4 py-2 bg-[#faf7ff] rounded-lg mb-2">
-                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-500/60 italic">II. Clearance Protocol</p>
+                                <div className="px-4 py-2 bg-[#f4ecff] rounded-lg mb-2 border border-[#e9ddff]">
+                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-600 italic">
+                                        II. Clearance Protocol
+                                    </p>
                                 </div>
                                 {[
                                     { key: 'cl_laptop', label: 'Laptop Returned' },
@@ -444,14 +641,16 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     { key: 'cl_groups_removed', label: 'Access Purged' },
                                     { key: 'cl_accounts_clearance', label: 'Finance Cleared' }
                                 ].map(a => (
-                                    <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#faf7ff] transition-colors border-b border-black/5 last:border-0 group">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-black/40 group-hover:text-black/80 transition-colors">{a.label}</span>
+                                    <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#f4ecff] transition-all border-b border-[#ece4ff] last:border-0 group">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-[#7c3aed] transition-colors">
+                                            {a.label}
+                                        </span>
                                         {assets?.[a.key] ? (
-                                            <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full text-[8px] font-black uppercase border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
+                                            <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[8px] font-black uppercase border border-amber-200 shadow-sm">
                                                 <CheckCircle size={8} /> Cleared
                                             </span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-[#faf7ff] text-black/20 rounded-full text-[8px] font-black uppercase border border-[#ece4ff]">
+                                            <span className="px-3 py-1 bg-[#f4ecff] text-black rounded-full text-[8px] font-black uppercase border border-[#ddd6fe] shadow-sm">
                                                 In Use
                                             </span>
                                         )}
@@ -459,113 +658,173 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 ))}
                             </div>
                         </div>
-                        
-                        <div className="p-4 bg-black/20">
-                            <button 
+
+                        <div className="p-4 bg-[#faf7ff] border-t border-[#ece4ff]">
+                            <button
                                 onClick={() => window.location.href = `/deploy?tab=allocations&code=${details.employee_code}`}
-                                className="w-full py-3 px-4 rounded-xl border border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-[0.2em] hover:bg-primary hover:text-black hover:scale-[1.02] transition-all"
+                                className="w-full py-3 px-4 rounded-xl border border-[#d8c7ff] bg-white text-[#6d28d9] text-[9px] font-black uppercase tracking-[0.2em] hover:bg-[#7c3aed] hover:text-white hover:scale-[1.02] hover:shadow-lg hover:shadow-[#7c3aed]/20 transition-all"
                             >
                                 Open Deployment Command
                             </button>
                         </div>
                     </div>
-                </div>
 
-                {/* Right Column: Physical Mapping */}
+                    {/* Notes */}
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
+                        <SectionHeader icon={FileText} title="Operator Notes" />
+                        <div className="mt-6">
+                            {editMode ? (
+                                <textarea
+                                    value={formData.notes || ''}
+                                    onChange={e => setFormData({...formData, notes: e.target.value})}
+                                    className="w-full bg-gradient-to-br from-[#f7f3ff] to-[#faf7ff] border border-[#e9ddff] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-primary"
+                                    rows={5}
+                                    placeholder="Internal notes..."
+                                />
+                            ) : (
+                                <p className="text-xs text-black/80 leading-relaxed bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                    {details.notes || 'No operator notes recorded.'}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                </div>
+                {/* ── END LEFT COLUMN ── */}
+
+                {/* ── RIGHT COLUMN ── */}
                 <div className="space-y-8">
+
                     {/* Geographic Anchors */}
-                    <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff]">
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={Landmark} title="Geographic Anchor Points" />
                         <div className="mt-6 space-y-6">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-black/30 mb-2">Primary Operation Base</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+                                    Primary Operation Base
+                                </p>
                                 {editMode ? (
-                                    <textarea 
+                                    <textarea
                                         value={formData.current_address}
                                         onChange={e => setFormData({...formData, current_address: e.target.value})}
-                                        className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none"
+                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
                                         rows={2}
                                     />
                                 ) : (
-                                    <p className="text-xs text-black/70 leading-relaxed bg-[#faf7ff] p-4 rounded-xl border border-[#ece4ff]">{details.current_address || 'Unregistered'}</p>
+                                    <p className="text-xs text-black leading-relaxed bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff] shadow-sm">
+                                        {details.current_address || 'Unregistered'}
+                                    </p>
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-black/30 mb-2">Permanent Identity Anchor</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+                                    Permanent Identity Anchor
+                                </p>
                                 {editMode ? (
-                                    <textarea 
+                                    <textarea
                                         value={formData.permanent_address}
                                         onChange={e => setFormData({...formData, permanent_address: e.target.value})}
-                                        className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none"
+                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
                                         rows={2}
                                     />
                                 ) : (
-                                    <p className="text-xs text-black/70 leading-relaxed bg-[#faf7ff] p-4 rounded-xl border border-[#ece4ff]">{details.permanent_address || 'Matches Primary'}</p>
+                                    <p className="text-xs text-black leading-relaxed bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff] shadow-sm">
+                                        {details.permanent_address || 'Matches Primary'}
+                                    </p>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Identity Artifacts (Files) */}
-                    <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-[#ece4ff]">
-                        <SectionHeader icon={FileText} title="Identity Artifacts" />
-                        <div className="mt-6 space-y-3">
-                            <FileCard editMode={editMode} label="Neural Dossier (CV)" path={details.cv_path} onUpload={() => fileInputCv.current.click()} />
-                            <FileCard editMode={editMode} label="Identity Visual (Photo)" path={details.photo_path} onUpload={() => fileInputPfp.current.click()} />
-                            <FileCard editMode={editMode} label="Compliance ID Proof" path={details.id_proofs} onUpload={() => fileInputId.current.click()} />
+                    {/* Emergency Contact */}
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
+                        <SectionHeader icon={Phone} title="Emergency Contact" />
+                        <div className="mt-6">
+                            {editMode ? (
+                                <input
+                                    type="text"
+                                    value={formData.emergency_contact || ''}
+                                    onChange={e => setFormData({...formData, emergency_contact: e.target.value})}
+                                    className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                    placeholder="Emergency contact number..."
+                                />
+                            ) : (
+                                <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                    {details.emergency_contact || 'Not registered'}
+                                </p>
+                            )}
                         </div>
-                        <input type="file" ref={fileInputCv} hidden accept=".pdf,.doc,.docx" onChange={e => handleFileUpload('cv', e.target.files[0])} />
-                        <input type="file" ref={fileInputId} hidden accept="image/*,.pdf" onChange={e => handleFileUpload('id', e.target.files[0])} />
                     </div>
 
-                    {/* Management Access (Dangerous Area) */}
-                    {!editMode && (
+                    {/* Date of Birth */}
+                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
+                        <SectionHeader icon={Calendar} title="Biological Timestamp" />
+                        <div className="mt-6">
+                            {editMode ? (
+                                <input
+                                    type="date"
+                                    value={formData.dob || ''}
+                                    onChange={e => setFormData({...formData, dob: e.target.value})}
+                                    className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                />
+                            ) : (
+                                <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                    {details.dob ? details.dob.split('T')[0] : 'Not recorded'}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Offboard Danger Zone */}
+                    {details.employment_status === 'Active' && (
                         <HasPermission permission="deploy.employees.offboard">
-                            <div className="bg-white border border-[#ece4ff] shadow-sm p-8 border-red-500/10 bg-red-500/5">
-                                <SectionHeader icon={ShieldCheck} title="Dossier Termination" />
+                            <div className="bg-white border border-red-200 shadow-lg shadow-red-500/5 p-8 rounded-2xl">
+                                <SectionHeader icon={X} title="Danger Zone" />
                                 <div className="mt-6">
-                                    {details.employment_status === 'Active' ? (
-                                        <button 
-                                            onClick={() => {
-                                                if (window.confirm("ARE YOU SURE? This initiates the neural decoupling sequence for this personnel.")) {
-                                                    handleOffboard();
-                                                }
-                                            }}
-                                            className="w-full py-4 rounded-2xl bg-red-500/20 text-red-500 font-black text-[10px] uppercase tracking-[0.2em] border border-red-500/30 hover:bg-red-500 hover:text-black transition-all shadow-xl shadow-red-500/10"
-                                        >
-                                            Initiate Offboarding
-                                        </button>
-                                    ) : (
-                                        <div className="text-center p-4 border border-red-500/30 rounded-2xl">
-                                            <p className="text-[10px] text-red-400 font-black uppercase tracking-widest">Personnel Status: Decoupled</p>
-                                            <p className="text-[8px] text-red-400/40 uppercase tracking-widest mt-1">Exit Date: {details.exit_date || 'N/A'}</p>
-                                        </div>
-                                    )}
+                                    <p className="text-[10px] text-black/70 uppercase tracking-widest mb-4">
+                                        Initiating offboard will immediately decouple this personnel record.
+                                    </p>
+                                    <button
+                                        onClick={handleOffboard}
+                                        className="w-full py-3 px-4 rounded-xl border border-red-200 bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-[0.2em] hover:bg-red-600 hover:text-white hover:border-red-600 transition-all"
+                                    >
+                                        Initiate Offboard Sequence
+                                    </button>
                                 </div>
                             </div>
                         </HasPermission>
                     )}
+
                 </div>
+                {/* ── END RIGHT COLUMN ── */}
+
             </div>
+            {/* ── END MAIN GRID ── */}
+
         </div>
     );
 }
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
 function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
     return (
-        <div className="space-y-1">
-            <p className="text-[9px] font-black uppercase tracking-widest text-black/30 flex items-center gap-2">
-                <Icon size={10} /> {label}
+        <div className="space-y-1.5">
+            <p className="text-[9px] font-black uppercase tracking-widest text-black flex items-center gap-2">
+                <Icon size={10} className="text-[#7c3aed]" />
+                {label}
             </p>
             {editMode ? (
-                <input 
-                    type="text" 
+                <input
+                    type="text"
                     value={value || ''}
                     onChange={e => onChange(e.target.value)}
-                    className="w-full bg-[#faf7ff] border border-[#e9defd] rounded-lg px-3 py-1 text-xs text-black focus:outline-none focus:border-primary"
+                    className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-lg px-3 py-2 text-xs text-black font-semibold focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd] transition-all"
                 />
             ) : (
-                <p className="text-xs text-black/70 font-bold truncate">{value || 'Unknown'}</p>
+                <p className="text-xs text-black font-bold truncate">
+                    {value || 'Unknown'}
+                </p>
             )}
         </div>
     );
@@ -573,19 +832,25 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
 
 function EditStatCard({ label, value, sub, editMode, onChange, type = "text" }) {
     return (
-        <div className={`bg-white border border-[#ece4ff] shadow-sm p-6 border-[#ece4ff] ${editMode ? 'ring-1 ring-primary/20' : ''}`}>
-            <p className="text-[9px] font-black uppercase tracking-widest text-black/30 mb-1">{label}</p>
+        <div className={`bg-white border border-[#e9ddff] rounded-2xl shadow-sm hover:shadow-md hover:shadow-[#7c3aed]/10 p-6 transition-all ${editMode ? 'ring-2 ring-[#c4b5fd]' : ''}`}>
+            <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+                {label}
+            </p>
             {editMode ? (
-                <input 
+                <input
                     type={type}
                     value={value || ''}
                     onChange={e => onChange(e.target.value)}
-                    className="w-full bg-black/10 border border-[#e9defd] rounded-lg px-2 py-1 text-xs text-black font-black uppercase"
+                    className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd]"
                 />
             ) : (
-                <p className="text-lg font-display font-black text-black uppercase truncate">{value || '—'}</p>
+                <p className="text-lg font-display font-black text-black uppercase truncate">
+                    {value || '—'}
+                </p>
             )}
-            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-primary/40 mt-1">{sub}</p>
+            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-[#7c3aed] mt-2">
+                {sub}
+            </p>
         </div>
     );
 }
@@ -593,29 +858,41 @@ function EditStatCard({ label, value, sub, editMode, onChange, type = "text" }) 
 function SectionHeader({ icon: Icon, title }) {
     return (
         <div className="flex items-center gap-3 border-b border-[#ece4ff] pb-4">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+            <div className="w-8 h-8 rounded-lg bg-[#f4ecff] flex items-center justify-center text-[#7c3aed] border border-[#ddd6fe]">
                 <Icon size={14} />
             </div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-black/80">{title}</h3>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-black">
+                {title}
+            </h3>
         </div>
     );
 }
 
 function FileCard({ label, path, editMode, onUpload }) {
     return (
-        <div className="flex items-center justify-between p-4 bg-[#faf7ff] rounded-xl border border-[#ece4ff] group hover:border-primary/30 transition-all">
+        <div className="flex items-center justify-between p-4 bg-[#f8f5ff] rounded-xl border border-[#e9ddff] group hover:border-[#c4b5fd] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
             <div className="flex items-center gap-3">
-                <FileText size={16} className="text-black/20 group-hover:text-primary transition-colors" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-black/40 group-hover:text-black/80 transition-colors">{label}</span>
+                <FileText size={16} className="text-[#7c3aed] group-hover:text-[#6d28d9] transition-colors" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-black">
+                    {label}
+                </span>
             </div>
             <div className="flex gap-2">
                 {path && (
-                    <a href={`/${path}`} target="_blank" rel="noreferrer" className="p-2 bg-[#faf7ff] rounded-lg text-primary hover:bg-primary hover:text-black transition-all">
+                    <a
+                        href={`/${path}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2 bg-white rounded-lg border border-[#e9ddff] text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white hover:shadow-md hover:shadow-[#7c3aed]/20 transition-all"
+                    >
                         <ExternalLink size={12} />
                     </a>
                 )}
                 {editMode && (
-                    <button onClick={onUpload} className="p-2 bg-[#faf7ff] rounded-lg text-black/40 hover:bg-black/10 hover:text-black transition-all">
+                    <button
+                        onClick={onUpload}
+                        className="p-2 bg-white rounded-lg border border-[#e9ddff] text-black hover:bg-[#7c3aed] hover:text-white hover:shadow-md hover:shadow-[#7c3aed]/20 transition-all"
+                    >
                         <Upload size={12} />
                     </button>
                 )}
@@ -627,13 +904,15 @@ function FileCard({ label, path, editMode, onUpload }) {
 function ComplianceRow({ label, active, editMode, onToggle }) {
     return (
         <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-widest text-black/60">{label}</span>
-            <button 
+            <span className="text-[10px] font-black uppercase tracking-widest text-black">
+                {label}
+            </span>
+            <button
                 disabled={!editMode}
                 onClick={onToggle}
-                className={`w-8 h-4 rounded-full relative transition-all ${active ? 'bg-primary' : 'bg-black/10'} ${!editMode ? 'opacity-50' : 'cursor-pointer'}`}
+                className={`w-10 h-5 rounded-full relative transition-all ${active ? 'bg-[#7c3aed]' : 'bg-[#ddd6fe]'} ${!editMode ? 'opacity-50' : 'cursor-pointer'}`}
             >
-                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-black transition-all ${active ? 'right-0.5' : 'left-0.5'}`} />
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${active ? 'right-0.5' : 'left-0.5'}`} />
             </button>
         </div>
     );

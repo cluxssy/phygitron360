@@ -47,6 +47,7 @@ resource "aws_ecs_task_definition" "backend" {
   cpu                      = "512"
   memory                   = "1024"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
     {
@@ -76,7 +77,9 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "GOOGLE_API_KEY", value = var.google_api_key },
         { name = "OPENAI_API_KEY", value = var.openai_api_key },
         { name = "GROQ_API_KEY", value = var.groq_api_key },
-        { name = "APP_BASE_URL", value = "http://${aws_lb.main.dns_name}" }
+        { name = "APP_BASE_URL", value = "http://${aws_lb.main.dns_name}" },
+        { name = "AWS_S3_BUCKET", value = "phygitron360-uploads" },
+        { name = "AWS_S3_REGION", value = var.aws_region }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -171,4 +174,49 @@ resource "aws_ecs_service" "frontend" {
   lifecycle {
     ignore_changes = [task_definition]
   }
+}
+
+# ---------------------------------------------------------
+# S3 ECS Task Role and Permissions
+# ---------------------------------------------------------
+resource "aws_iam_role" "ecs_task_role" {
+  name = "phygitron-ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "s3_access_policy" {
+  name        = "phygitron-ecs-s3-access-policy"
+  description = "Allows the backend app to upload and get objects from S3 uploads bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "arn:aws:s3:::phygitron360-uploads/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_s3_attach" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.s3_access_policy.arn
 }

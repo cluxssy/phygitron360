@@ -474,3 +474,28 @@ class CandidateRepository:
                 return cur.rowcount > 0
         finally:
             conn.close()
+
+    def get_global_activity(self, limit: int = 10) -> List[Dict]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT a.id, a.candidate_id, c.full_name as candidate_name, 
+                           a.actor_name, a.action, a.detail, a.created_at
+                    FROM candidate_activity_log a
+                    JOIN candidates c ON a.candidate_id = c.id
+                    ORDER BY a.created_at DESC
+                    LIMIT %s
+                ''', (limit,))
+                rows = cur.fetchall()
+                results = []
+                for r in rows:
+                    d = dict(r)
+                    if d.get("created_at"):
+                        d["created_at"] = d["created_at"].isoformat()
+                    results.append(d)
+                return results
+        finally:
+            conn.close()
+

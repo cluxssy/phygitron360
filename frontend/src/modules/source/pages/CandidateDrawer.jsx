@@ -55,7 +55,7 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
     setShowScoreForm(false);
     fetch(`/api/source/candidates/${candidate.id}`)
       .then(r => r.json())
-      .then(d => { if (d.status === 'success') setProfile(d.data); })
+      .then(d => { if (d.success) setProfile(d.data); })
       .catch(() => { /* use shallow data */ })
       .finally(() => setLoadingProfile(false));
   }, [candidate?.id]);

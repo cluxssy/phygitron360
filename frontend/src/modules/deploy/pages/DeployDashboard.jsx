@@ -16,11 +16,11 @@ import logo from "../../../assets/phy360.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 
-import { MODULE_CONFIG } from "../../../core/config/modules";
+import { getHubTabs } from "../../../core/navigation/hubTabs";
 
 export default function DeployDashboard() {
 
-  const { user, hasPermission, logout } = useAuth();
+  const { user, hasPermission, hasRole, logout } = useAuth();
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -47,15 +47,7 @@ export default function DeployDashboard() {
      MODULES
   ========================================= */
 
-  const modules = Object.entries(MODULE_CONFIG)
-    .filter(([_, config]) =>
-      hasPermission?.(config.permission)
-    )
-    .map(([key, config]) => ({
-      id: key,
-      name: config.label,
-      path: config.route,
-    }));
+  const modules = getHubTabs({ hasPermission, hasRole });
 
   /* =========================================
      PERMISSIONS
@@ -88,6 +80,31 @@ export default function DeployDashboard() {
     user?.email?.split('@')[0] ||
     "User";
 
+  // Dynamic role display based on current view
+  const getRoleDisplay = () => {
+    // In employee/personal view, always show Employee Workspace
+    if (deployView === 'employee') {
+      return 'Employee Workspace';
+    }
+    
+    // In management view, show actual management role
+    if (deployView === 'management') {
+      if (hasRole?.('super_admin')) return 'Super Admin';
+      if (hasRole?.('org_admin')) return 'Organisation Admin';
+      if (hasRole?.('manager')) return 'Manager';
+      return 'Employee Workspace';
+    }
+    
+    // Fallback
+    return hasRole?.('super_admin')
+      ? 'Super Admin'
+      : hasRole?.('org_admin')
+      ? 'Organisation Admin'
+      : hasRole?.('manager')
+      ? 'Manager Workspace'
+      : 'Employee Workspace';
+  };
+
   useEffect(() => {
     if (
       deployView === 'employee' &&
@@ -118,21 +135,6 @@ export default function DeployDashboard() {
         <div className="top-center">
 
           <div className="hub-tabs">
-
-            {deployView === 'management' && (
-
-            <button
-              className={`hub-tab ${
-                location.pathname === "/admin"
-                  ? "active"
-                  : ""
-              }`}
-              onClick={() => navigate("/admin")}
-            >
-              Dashboard
-            </button>
-
-          )}
 
             {modules.map((m) => (
 
@@ -183,11 +185,7 @@ export default function DeployDashboard() {
               <h4>{displayName}</h4>
 
               <p>
-                {
-                  deployView === 'management'
-                    ? 'Organisation Admin'
-                    : 'Employee Workspace'
-                }
+                {getRoleDisplay()}
               </p>
 
             </div>

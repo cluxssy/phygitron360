@@ -27,7 +27,7 @@ export default function OrgDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { logout, user, hasPermission } = useAuth();
+  const { logout, user, hasPermission, hasRole } = useAuth();
 
   const [activeSideTab, setActiveSideTab] = useState("overview");
 
@@ -100,6 +100,14 @@ export default function OrgDashboard() {
     user?.username ||
     user?.email?.split("@")[0] ||
     "User";
+
+  // Dynamic role display based on actual user roles
+  const getRoleDisplay = () => {
+    if (hasRole?.('super_admin')) return 'Super Admin';
+    if (hasRole?.('org_admin')) return 'Organisation Admin';
+    if (hasRole?.('manager')) return 'Manager';
+    return 'Organisation Admin';
+  };
 
   return (
 
@@ -174,7 +182,7 @@ export default function OrgDashboard() {
 
             <div className="profile-text">
               <h4>{displayName}</h4>
-              <p>Organisation Admin</p>
+              <p>{getRoleDisplay()}</p>
             </div>
 
           </div>
