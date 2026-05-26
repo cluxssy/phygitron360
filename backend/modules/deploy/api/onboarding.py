@@ -110,7 +110,8 @@ def onboard_admin(
     emergency_contact: str = Form(...),
     dob: str = Form(...),
     current_address: str = Form(...),
-    permanent_address: str = Form(...),
+    permanent_address: str = Form(None),
+    full_name: str = Form(None),
     location: str = Form(None),
     education_details: str = Form(None),
     primary_skills: str = Form(None),
@@ -142,11 +143,12 @@ def onboard_admin(
     }
     
     emp_data = {
+        "name": full_name,
         "contact_number": contact_number,
         "emergency_contact": emergency_contact,
         "dob": dob,
         "current_address": current_address,
-        "permanent_address": permanent_address,
+        "permanent_address": permanent_address or current_address,
         "location": location,
         "education_details": education_details,
         "primary_skills": primary_skills,
