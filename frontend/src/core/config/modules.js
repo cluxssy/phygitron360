@@ -1,24 +1,24 @@
 export const MODULE_CONFIG = {
   source: {
-    label: "Talent Hub",
+    label: "Talent Central",
     route: "/source",
     permission: "module.source.access",
   },
 
   forge: {
-    label: "Learning Hub",
+    label: "Learning Central",
     route: "/forge",
     permission: "module.forge.access",
   },
 
   verify: {
-    label: "Assessment Hub",
+    label: "Assessment Central",
     route: "/verify",
     permission: "module.verify.access",
   },
 
   deploy: {
-    label: "Employee Hub",
+    label: "Employee Central",
     route: "/deploy",
     permission: "module.deploy.access",
   },

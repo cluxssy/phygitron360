@@ -16,10 +16,10 @@ import AdminPanel from "../components/AdminPanel";
 axios.defaults.withCredentials = true;
 
 const hubNameMap = {
-  source: "Talent Hub",
-  forge: "Learning Hub",
-  verify: "Assessment Hub",
-  deploy: "Employee Hub",
+  source: "Talent Central",
+  forge: "Learning Central",
+  verify: "Assessment Central",
+  deploy: "Employee Central",
 };
 
 export default function OrgDashboard() {
