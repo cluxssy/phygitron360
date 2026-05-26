@@ -6,6 +6,19 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import logo from "../../../assets/phy360.png";
+
+const COUNTRY_CODES = [
+  { code: '+91', country: 'IN (+91)' },
+  { code: '+1', country: 'US/CA (+1)' },
+  { code: '+44', country: 'UK (+44)' },
+  { code: '+48', country: 'PL (+48)' },
+  { code: '+971', country: 'AE (+971)' },
+  { code: '+61', country: 'AU (+61)' },
+  { code: '+49', country: 'DE (+49)' },
+  { code: '+33', country: 'FR (+33)' },
+  { code: '+65', country: 'SG (+65)' }
+];
+
 export default function OnboardPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,11 +34,17 @@ export default function OnboardPage() {
 
   // Form states
   const [form, setForm] = useState({
-    password: '', contact_number: '', emergency_contact: '', dob: '',
+    password: '', contact_number: '', dob: '',
     current_address: '', permanent_address: '',
     location: '',
     primary_skills: '', secondary_skills: ''
   });
+
+  // Country Code and Emergency States
+  const [phoneCountryCode, setPhoneCountryCode] = useState('+91');
+  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyCountryCode, setEmergencyCountryCode] = useState('+91');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
 
   const [educationList, setEducationList] = useState([
     { degree: '', university: '', year: '', percentage: '' }
@@ -82,15 +101,21 @@ export default function OnboardPage() {
           }
           
           // Phone validation
-          const phoneRegex = /^\+[1-9]\d{1,14}$/; // E.164 format
-          if (!form.contact_number) errors.contact_number = "Required";
-          else if (!phoneRegex.test(form.contact_number.replace(/\s/g, ''))) {
-              errors.contact_number = "Include country code (e.g. +91...)";
+          const phoneDigitsRegex = /^\d{7,15}$/;
+          if (!form.contact_number) {
+              errors.contact_number = "Required";
+          } else if (!phoneDigitsRegex.test(form.contact_number.trim())) {
+              errors.contact_number = "Must be a valid number of digits (7-15 digits)";
+          }
+
+          if (!emergencyName) {
+              errors.emergencyName = "Required";
           }
           
-          if (!form.emergency_contact) errors.emergency_contact = "Required";
-          else if (!phoneRegex.test(form.emergency_contact.split('-').pop().trim().replace(/\s/g, ''))) {
-              errors.emergency_contact = "Format: Name - +91...";
+          if (!emergencyPhone) {
+              errors.emergencyPhone = "Required";
+          } else if (!phoneDigitsRegex.test(emergencyPhone.trim())) {
+              errors.emergencyPhone = "Must be a valid number of digits (7-15 digits)";
           }
       }
 
@@ -188,15 +213,26 @@ export default function OnboardPage() {
     }
 
     // Final file check
-    if (!files.cv_file || !files.photo_file) {
-        toast.error("Resume and Photo are mandatory uploads");
+    if (!files.cv_file || !files.photo_file || !files.id_proof_file) {
+        toast.error("All uploads (Resume/CV, Photo, and ID Proof) are mandatory");
         return;
     }
 
     setSubmitting(true);
     const fd = new FormData();
     fd.append('token', token);
-    Object.keys(form).forEach(k => fd.append(k, form[k]));
+
+    const finalContactNumber = `${phoneCountryCode} ${form.contact_number.trim()}`;
+    const finalEmergencyContact = `${emergencyName} - ${emergencyCountryCode} ${emergencyPhone.trim()}`;
+
+    Object.keys(form).forEach(k => {
+        if (k === 'contact_number') {
+            fd.append(k, finalContactNumber);
+        } else {
+            fd.append(k, form[k]);
+        }
+    });
+    fd.append('emergency_contact', finalEmergencyContact);
     fd.append('education_details', JSON.stringify(educationList));
     Object.keys(files).forEach(k => files[k] && fd.append(k, files[k]));
 
@@ -302,15 +338,66 @@ export default function OnboardPage() {
                          </div>
 
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Primary Contact with Country Code */}
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Contact number</label>
-                               <input type="text" name="contact_number" value={form.contact_number} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.contact_number ? 'border-error/50' : 'border-white/5'}`} placeholder="+91 XXXX XXX XXX" />
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Contact number *</label>
+                               <div className="flex gap-2">
+                                 <select 
+                                   value={phoneCountryCode} 
+                                   onChange={e => setPhoneCountryCode(e.target.value)} 
+                                   className="bg-[#f7f7f7] border border-[#e5e5e5] rounded-xl px-3 text-xs text-black outline-none focus:border-[#7b1eff]/40 transition-colors w-28"
+                                 >
+                                   {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-black">{c.country}</option>)}
+                                 </select>
+                                 <input 
+                                   required
+                                   type="tel"
+                                   name="contact_number" 
+                                   value={form.contact_number} 
+                                   onChange={handleChange} 
+                                   className={`flex-1 glass-panel-input ${validationErrors.contact_number ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
+                                   placeholder="98765 43210" 
+                                 />
+                               </div>
                                {validationErrors.contact_number && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.contact_number}</p>}
                             </div>
+
+                            {/* Emergency Contact Name */}
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency contact</label>
-                               <input type="text" name="emergency_contact" value={form.emergency_contact} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.emergency_contact ? 'border-error/50' : 'border-white/5'}`} placeholder="Name - +91..." />
-                               {validationErrors.emergency_contact && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.emergency_contact}</p>}
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Contact Name *</label>
+                               <input 
+                                 required 
+                                 value={emergencyName} 
+                                 onChange={e => setEmergencyName(e.target.value)} 
+                                 className={`w-full glass-panel-input ${validationErrors.emergencyName ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
+                                 placeholder="e.g. Jane Doe (Relation)" 
+                               />
+                               {validationErrors.emergencyName && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.emergencyName}</p>}
+                            </div>
+                         </div>
+
+                         {/* Emergency Contact Phone with Country Code */}
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Emergency Contact Phone *</label>
+                               <div className="flex gap-2">
+                                 <select 
+                                   value={emergencyCountryCode} 
+                                   onChange={e => setEmergencyCountryCode(e.target.value)} 
+                                   className="bg-[#f7f7f7] border border-[#e5e5e5] rounded-xl px-3 text-xs text-black outline-none focus:border-[#7b1eff]/40 transition-colors w-28"
+                                 >
+                                   {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-black">{c.country}</option>)}
+                                 </select>
+                                 <input 
+                                   required
+                                   type="tel"
+                                   value={emergencyPhone} 
+                                   onChange={e => setEmergencyPhone(e.target.value)} 
+                                   className={`flex-1 glass-panel-input ${validationErrors.emergencyPhone ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
+                                   placeholder="98765 43210" 
+                                 />
+                               </div>
+                               {validationErrors.emergencyPhone && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.emergencyPhone}</p>}
                             </div>
                          </div>
                       </div>
@@ -402,14 +489,27 @@ export default function OnboardPage() {
                       <div className="space-y-6 animate-fade-in-up">
                          <div className="flex items-center gap-2 mb-2">
                              <Upload size={16} className="text-primary" />
-                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Document uploads</h3>
+                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Required Document Uploads (All Mandatory)</h3>
                          </div>
                          
+                         <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-start gap-3 mb-6">
+                             <Info size={16} className="text-primary mt-0.5 shrink-0" />
+                             <div className="text-[11px] text-black/60 leading-relaxed">
+                                 <span className="font-bold text-black block mb-1">Upload Guidelines & Restrictions</span>
+                                 All uploads are <span className="text-error font-bold">strictly mandatory</span>. Supported file formats:
+                                 <ul className="list-disc list-inside mt-1 space-y-0.5">
+                                     <li><strong>Resume/CV:</strong> PDF only (max 5MB, required for AI Parsing)</li>
+                                     <li><strong>Profile Photo:</strong> JPG, JPEG, or PNG (max 2MB, clear facial shot)</li>
+                                     <li><strong>ID Proof:</strong> PDF, JPG, JPEG, or PNG (max 5MB, government issued)</li>
+                                 </ul>
+                             </div>
+                         </div>
+
                          <div className="space-y-4">
                             {[
-                                { k: 'cv_file', label: 'Resume / CV', desc: 'Upload your latest resume', icon: ShieldCheck },
-                                { k: 'photo_file', label: 'Photo', desc: 'Clear passport size photo', icon: UserPlus },
-                                { k: 'id_proof_file', label: 'ID proof', desc: 'Government issued identity proof', icon: ShieldCheck }
+                                { k: 'cv_file', label: 'Resume / CV *', desc: 'Mandatory: Upload your latest resume (PDF)', icon: ShieldCheck, accept: '.pdf' },
+                                { k: 'photo_file', label: 'Photo *', desc: 'Mandatory: Clear passport size photo (JPG/PNG)', icon: UserPlus, accept: '.jpg,.jpeg,.png' },
+                                { k: 'id_proof_file', label: 'ID proof *', desc: 'Mandatory: Government issued identity proof (PDF/JPG/PNG)', icon: ShieldCheck, accept: '.pdf,.jpg,.jpeg,.png' }
                             ].map((f, i) => (
                                <div key={i} className={`onboard-upload-row flex items-center gap-6 p-6 rounded-[22px] border transition-all ${files[f.k] ? 'is-complete' : 'is-empty'}`}>
                                   <div className={`onboard-upload-icon w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${files[f.k] ? 'is-complete' : 'is-empty'}`}>
@@ -424,7 +524,7 @@ export default function OnboardPage() {
                                   </div>
                                   <label className="cursor-pointer px-5 py-2.5 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white border border-white/10 rounded-xl transition-all">
                                       {files[f.k] ? 'Replace' : 'Upload'}
-                                      <input type="file" name={f.k} onChange={handleFileChange} className="hidden" />
+                                      <input type="file" name={f.k} onChange={handleFileChange} className="hidden" accept={f.accept} />
                                   </label>
                                </div>
                             ))}
