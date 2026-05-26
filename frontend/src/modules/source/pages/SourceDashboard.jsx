@@ -18,7 +18,7 @@ import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
-import { MODULE_CONFIG } from "../../../core/config/modules";
+import { getHubTabs } from "../../../core/navigation/hubTabs";
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-white/30 bg-white/5 border-white/5';
@@ -47,13 +47,16 @@ export default function SourceDashboard() {
   const { user, hasPermission, logout } = useAuth();
   const displayName = user?.name || user?.email?.split('@')[0] || "User";
 
-  const appModules = Object.entries(MODULE_CONFIG)
-    .filter(([_, config]) => hasPermission?.(config.permission))
-    .map(([key, config]) => ({
-      id: key,
-      name: config.label,
-      path: config.route,
-    }));
+  const appModules = getHubTabs({ hasPermission, hasRole });
+
+  // Dynamic role display based on actual user roles
+  const getRoleDisplay = () => {
+    if (hasRole?.('super_admin')) return 'Super Admin';
+    if (hasRole?.('org_admin')) return 'Organisation Admin';
+    if (hasRole?.('manager')) return 'Manager';
+    if (hasRole?.('recruiter')) return 'Recruiter';
+    return 'Employee';
+  };
 
   const isCandidate = hasRole('candidate');
 
@@ -390,7 +393,7 @@ export default function SourceDashboard() {
             <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>
             <div className="profile-text">
               <h4>{displayName}</h4>
-              <p>Organisation Admin</p>
+              <p>{getRoleDisplay()}</p>
             </div>
           </div>
         </div>
