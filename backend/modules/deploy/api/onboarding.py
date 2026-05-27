@@ -3,6 +3,7 @@ from backend.modules.deploy.services.onboarding_service import OnboardingService
 from backend.core.dependencies import require_role, require_module, require_permission
 from backend.modules.deploy.schemas.onboarding import InviteRequest
 from backend.core.database import DATA_DIR
+from backend.common.services.storage_service import save_uploaded_file
 import os
 import shutil
 import uuid
@@ -65,19 +66,10 @@ def complete_onboarding(
     service: OnboardingService = Depends(get_service)
 ):
     temp_id = token
-    upload_base = os.path.join(DATA_DIR, 'uploads', 'temp_onboarding', temp_id)
-    os.makedirs(upload_base, exist_ok=True)
     
-    def save(f):
-        if not f: return ''
-        path = os.path.join(upload_base, f.filename)
-        with open(path, "wb") as buffer:
-            shutil.copyfileobj(f.file, buffer)
-        return f"uploads/temp_onboarding/{temp_id}/{f.filename}"
-    
-    p_path = save(photo_file)
-    c_path = save(cv_file)
-    i_path = save(id_proof_file)
+    p_path = save_uploaded_file(photo_file, 'temp_onboarding', temp_id, 'pfp') if photo_file else ''
+    c_path = save_uploaded_file(cv_file, 'temp_onboarding', temp_id, 'cv') if cv_file else ''
+    i_path = save_uploaded_file(id_proof_file, 'temp_onboarding', temp_id, 'id') if id_proof_file else ''
     
     emp_data = {
         "contact_number": contact_number,
@@ -125,6 +117,8 @@ def onboard_admin(
     bank_name: str = Form(...),
     bank_account_no: str = Form(...),
     pan_no: str = Form(...),
+    pf_included: str = Form("No"),
+    mediclaim_included: str = Form("No"),
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
@@ -135,20 +129,14 @@ def onboard_admin(
     tenant_id = current_user['tenant_id']
     username = current_user['username']
     
-    upload_base = os.path.join(DATA_DIR, 'uploads', 'admin_onboarding', str(user_id))
-    os.makedirs(upload_base, exist_ok=True)
-    
-    def save(f):
-        if not f: return ''
-        path = os.path.join(upload_base, f.filename)
-        with open(path, "wb") as buffer:
-            shutil.copyfileobj(f.file, buffer)
-        return f"uploads/admin_onboarding/{user_id}/{f.filename}"
+    p_path = save_uploaded_file(photo_file, 'admin_onboarding', str(user_id), 'pfp') if photo_file else ''
+    c_path = save_uploaded_file(cv_file, 'admin_onboarding', str(user_id), 'cv') if cv_file else ''
+    i_path = save_uploaded_file(id_proof_file, 'admin_onboarding', str(user_id), 'id') if id_proof_file else ''
     
     file_metadata = {
-        "photo": save(photo_file),
-        "cv": save(cv_file),
-        "id_proof": save(id_proof_file)
+        "photo": p_path,
+        "cv": c_path,
+        "id_proof": i_path
     }
     
     emp_data = {
@@ -164,7 +152,9 @@ def onboard_admin(
         "secondary_skills": secondary_skills,
         "bank_name": bank_name,
         "bank_account_no": bank_account_no,
-        "pan_no": pan_no
+        "pan_no": pan_no,
+        "pf_included": pf_included,
+        "mediclaim_included": mediclaim_included
     }
     
     try:
