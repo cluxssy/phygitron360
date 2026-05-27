@@ -12,6 +12,19 @@ def get_service(tenant_id: str = 'public') -> PayrollService:
     return PayrollService(tenant_id=tenant_id)
 
 
+@router.get("/payroll/admin/template", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+def download_payroll_template():
+    """Admin: download the payroll excel template."""
+    import os
+    from fastapi.responses import FileResponse
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    template_path = os.path.join(base_dir, 'assets', 'PAYROLL TEMPLATE.xlsx')
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=404, detail="Template file not found")
+    return FileResponse(template_path, filename="PAYROLL_TEMPLATE.xlsx", media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+
 @router.post("/payroll/upload", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
 async def upload_payroll_excel(
     file: UploadFile = File(...),

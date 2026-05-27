@@ -294,7 +294,17 @@ export default function PayrollPanel() {
             ) : (
               <div>
                 <p className="text-base font-black text-black uppercase italic tracking-tight mb-2">Drop your Excel file here</p>
-                <p className="text-[10px] text-[#6b7280] font-black uppercase tracking-widest">Multi-sheet .xlsx · One sheet per employee code</p>
+                <p className="text-[10px] text-[#6b7280] font-black uppercase tracking-widest mb-5">Multi-sheet .xlsx · One sheet per employee code</p>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = '/api/payroll/admin/template';
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 mx-auto bg-white border border-[#ebe4ff] text-[#8b5cf6] text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-[#8b5cf6] hover:text-white hover:border-[#8b5cf6] transition-all shadow-sm"
+                >
+                  <Download size={13} />
+                  Download Template
+                </button>
               </div>
             )}
           </div>

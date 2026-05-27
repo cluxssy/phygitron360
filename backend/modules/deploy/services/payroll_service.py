@@ -190,8 +190,8 @@ class PayrollService:
         elements = []
 
         # --- Header ---
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-        logo_path = os.path.join(base_dir, 'coll', 'Picture 1.png')
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        logo_path = os.path.join(base_dir, 'assets', 'Picture 1.png')
         
         if os.path.exists(logo_path):
             logo = RLImage(logo_path, width=1.2*inch, height=1.2*inch)
