@@ -151,6 +151,13 @@ export default function SourceDashboard() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [drawerCandidate, setDrawerCandidate] = useState(null);
 
+  // Search state
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Activity feed state
+  const [activities, setActivities] = useState([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+
   // Modals
   const [showUpload, setShowUpload] = useState(false);
   const [showNewRole, setShowNewRole] = useState(false);
@@ -169,7 +176,12 @@ export default function SourceDashboard() {
   // Form states
   const [uploading, setUploading] = useState(false);
   const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0 });
-  const [inviteForm, setInviteForm] = useState({ role_id: '' });
+  const [inviteForm, setInviteForm] = useState({
+    role_id: '',
+    templateType: 'prebuilt',
+    subject: '',
+    custom_body: '',
+  });
   const [scoreRoleId, setScoreRoleId] = useState('');
   const [scoring, setScoring] = useState(false);
 
@@ -205,8 +217,41 @@ export default function SourceDashboard() {
     }
   }, [filters]);
 
+  const fetchActivities = useCallback(async () => {
+    setLoadingActivities(true);
+    try {
+      const r = await fetch('/api/source/candidates/activity?limit=10', { credentials: 'include' });
+      const d = await r.json();
+      if (r.ok && d.success) {
+        setActivities(d.data || []);
+      }
+    } catch { /* silent */ }
+    finally { setLoadingActivities(false); }
+  }, []);
+
   useEffect(() => { fetchJobRoles(); }, [fetchJobRoles]);
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
+  useEffect(() => {
+    if (currentTab === 'home') {
+      fetchActivities();
+    }
+  }, [currentTab, fetchActivities]);
+
+  // ── Filter candidates client-side ──
+  const filteredCandidates = candidates.filter(c => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    const nameMatch = c.full_name?.toLowerCase().includes(term);
+    const emailMatch = c.email?.toLowerCase().includes(term);
+    const designationMatch = c.current_designation?.toLowerCase().includes(term);
+    const locationMatch = c.location?.toLowerCase().includes(term);
+    const skillStrings = [
+      ...(Array.isArray(c.skills) ? c.skills : []),
+      ...(Array.isArray(c.structured_skills) ? c.structured_skills.map(s => s.skill_name || s.name) : [])
+    ];
+    const skillMatch = skillStrings.some(s => s?.toLowerCase().includes(term));
+    return nameMatch || emailMatch || designationMatch || locationMatch || skillMatch;
+  });
 
   // ── Selection helpers ──────────────────────────────────────────────────────
   const toggle = (id) => setSelectedIds(prev => {
@@ -214,8 +259,23 @@ export default function SourceDashboard() {
     s.has(id) ? s.delete(id) : s.add(id);
     return s;
   });
-  const toggleAll = () =>
-    setSelectedIds(selectedIds.size === candidates.length ? new Set() : new Set(candidates.map(c => c.id)));
+  const allSelected = filteredCandidates.length > 0 && filteredCandidates.every(c => selectedIds.has(c.id));
+  
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredCandidates.forEach(c => next.delete(c.id));
+        return next;
+      });
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredCandidates.forEach(c => next.add(c.id));
+        return next;
+      });
+    }
+  };
   const clearSel = () => setSelectedIds(new Set());
 
   // ── Upload ─────────────────────────────────────────────────────────────────
@@ -285,21 +345,37 @@ export default function SourceDashboard() {
     e.preventDefault();
     if (!inviteForm.role_id) return toast.error('Select a role');
     const ids = [...selectedIds];
-    let ok = 0;
-    for (const cid of ids) {
-      try {
-        const r = await fetch('/api/source/send-invite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidate_id: cid, role_id: parseInt(inviteForm.role_id) }),
-        });
-        if (r.ok) ok++;
-      } catch { /* skip */ }
+    
+    const payload = {
+      candidate_ids: ids,
+      job_role_id: parseInt(inviteForm.role_id),
+    };
+    
+    if (inviteForm.templateType === 'custom') {
+      if (inviteForm.subject) payload.subject = inviteForm.subject;
+      if (inviteForm.custom_body) payload.custom_body = inviteForm.custom_body;
     }
-    toast.success(`Invited ${ok} of ${ids.length} candidates`);
-    setShowInvite(false);
-    clearSel();
-    fetchCandidates();
+
+    const tid = toast.loading('Sending invites...');
+    try {
+      const r = await fetch('/api/source/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        toast.success(d.message || `Invited ${ids.length} candidate(s)!`, { id: tid });
+        setShowInvite(false);
+        clearSel();
+        fetchCandidates();
+        fetchActivities();
+      } else {
+        toast.error(d.detail || 'Invitation failed', { id: tid });
+      }
+    } catch {
+      toast.error('Invitation error', { id: tid });
+    }
   };
 
 
@@ -358,8 +434,6 @@ export default function SourceDashboard() {
   };
 
   const anySelected = selectedIds.size > 0;
-  const allSelected = candidates.length > 0 && selectedIds.size === candidates.length;
-
   const setTab = (tab) => navigate(`/source?tab=${tab}`);
 
   return (
@@ -440,7 +514,7 @@ export default function SourceDashboard() {
               ? `${jobRoles.length} active roles`
               : currentTab === 'offers' || currentTab === 'active' || currentTab === 'invite-status'
               ? 'Phygitron 360 Source'
-              : `${candidates.length} records`} · Phygitron 360 Source
+              : `${searchTerm ? `${filteredCandidates.length} of ` : ''}${candidates.length} records`} · Phygitron 360 Source
           </p>
         </div>
 
@@ -456,6 +530,23 @@ export default function SourceDashboard() {
 
           {currentTab === 'directory' && (
             <>
+              <div className="relative w-64 md:w-80">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-white/40">
+                  <Search size={15} />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Search name, email, role, skills..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white outline-none focus:border-primary/40 focus:bg-white/[0.08] transition-all"
+                />
+                {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-0 flex items-center pr-3 text-white/40 hover:text-white">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => setShowFilters(f => !f)}
                 className={`flex items-center gap-2 px-5 py-3 rounded-xl border text-[11px] font-bold uppercase tracking-widest transition-colors duration-150 ${showFilters ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
@@ -515,63 +606,137 @@ export default function SourceDashboard() {
                <div className="flex items-center gap-1 mt-4 text-[10px] text-emerald-400 font-bold"><TrendingUp size={12}/> Live Database</div>
             </div>
             <div className="section-card p-6 border-l-2 border-indigo/50 relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Briefcase size={64}/></div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Active Roles</p>
-               <h2 className="text-4xl font-display font-black text-white">{jobRoles.length}</h2>
-               <div className="flex items-center gap-1 mt-4 text-[10px] text-indigo font-bold"><Activity size={12}/> Requisitions</div>
+               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Zap size={64}/></div>
+               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Shortlisted</p>
+               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'shortlisted').length}</h2>
+               <div className="flex items-center gap-1 mt-4 text-[10px] text-indigo font-bold"><Activity size={12}/> Pipeline</div>
             </div>
             <div className="section-card p-6 border-l-2 border-secondary/50 relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><CheckCircle size={64}/></div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Hired Talent</p>
-               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'hired').length}</h2>
-               <div className="flex items-center gap-1 mt-4 text-[10px] text-secondary font-bold"><TrendingUp size={12}/> Converted</div>
+               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Mail size={64}/></div>
+               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Invited</p>
+               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'invited').length}</h2>
+               <div className="flex items-center gap-1 mt-4 text-[10px] text-secondary font-bold"><TrendingUp size={12}/> Active Invites</div>
             </div>
-            <div className="section-card p-6 border-l-2 border-emerald-400/50 relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Star size={64}/></div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Scored Profiles</p>
-               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.fit_score != null).length}</h2>
-               <div className="flex items-center gap-1 mt-4 text-[10px] text-emerald-400 font-bold"><Star size={12}/> AI Analyzed</div>
+            <div className="section-card p-6 border-l-2 border-rose-400/50 relative overflow-hidden group">
+               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Trash2 size={64}/></div>
+               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Archived</p>
+               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'archived').length}</h2>
+               <div className="flex items-center gap-1 mt-4 text-[10px] text-rose-400 font-bold"><Clock size={12}/> Inactive Pool</div>
             </div>
           </div>
 
-          {/* Pipeline Funnel */}
-          <div className="section-card p-6">
-            <h3 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 mb-6"><PieChart size={14}/> Talent Pipeline Status</h3>
-            <div className="flex gap-2 h-12 rounded-xl overflow-hidden shadow-inner">
-               {['New', 'Shortlisted', 'Invited', 'Hired', 'Rejected'].map(status => {
-                 const count = candidates.filter(c => (c.status || 'New').toLowerCase() === status.toLowerCase()).length;
-                 const percent = candidates.length > 0 ? (count / candidates.length) * 100 : 0;
-                 if (count === 0) return null;
-                 const colors = {
-                    'new': 'bg-white/10',
-                    'shortlisted': 'bg-primary/50',
-                    'invited': 'bg-indigo/50',
-                    'hired': 'bg-secondary/50',
-                    'rejected': 'bg-error/50'
-                 };
-                 return (
-                   <div key={status} style={{ width: `${percent}%` }} className={`${colors[status.toLowerCase()]} h-full transition-all duration-500 relative group flex items-center justify-center`}>
-                      {percent > 5 && <span className="text-[10px] font-black mix-blend-overlay text-white">{count}</span>}
-                      <div className="opacity-0 group-hover:opacity-100 absolute -top-8 bg-black border border-white/10 px-3 py-1.5 rounded-lg text-[10px] font-bold text-white whitespace-nowrap z-10 transition-opacity pointer-events-none">
-                        {status}: {count} ({Math.round(percent)}%)
-                      </div>
-                   </div>
-                 );
-               })}
-               {candidates.length === 0 && <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs text-white/30 font-bold uppercase tracking-widest">No Pipeline Data</div>}
-            </div>
-            <div className="flex flex-wrap items-center gap-6 mt-6">
-               {[
-                 { label: 'New', color: 'bg-white/20' },
-                 { label: 'Shortlisted', color: 'bg-primary/50' },
-                 { label: 'Invited', color: 'bg-indigo/50' },
-                 { label: 'Hired', color: 'bg-secondary/50' },
-                 { label: 'Rejected', color: 'bg-error/50' },
-               ].map(s => (
-                  <div key={s.label} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/60">
-                    <div className={`w-3 h-3 rounded-sm ${s.color}`} /> {s.label}
+          {/* Grid for Funnel and Recent Activity Feed */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 flex flex-col">
+              {/* Pipeline Funnel */}
+              <div className="section-card p-6 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 mb-6"><PieChart size={14}/> Talent Pipeline Status</h3>
+                  <div className="flex gap-2 h-12 rounded-xl overflow-hidden shadow-inner">
+                     {['New', 'Shortlisted', 'Invited', 'Hired', 'Rejected', 'Archived'].map(status => {
+                       const count = candidates.filter(c => (c.status || 'New').toLowerCase() === status.toLowerCase()).length;
+                       const percent = candidates.length > 0 ? (count / candidates.length) * 100 : 0;
+                       if (count === 0) return null;
+                       const colors = {
+                          'new': 'bg-white/10',
+                          'shortlisted': 'bg-primary/50',
+                          'invited': 'bg-indigo/50',
+                          'hired': 'bg-secondary/50',
+                          'rejected': 'bg-error/50',
+                          'archived': 'bg-rose-400/20'
+                       };
+                       return (
+                         <div key={status} style={{ width: `${percent}%` }} className={`${colors[status.toLowerCase()]} h-full transition-all duration-500 relative group flex items-center justify-center`}>
+                            {percent > 5 && <span className="text-[10px] font-black mix-blend-overlay text-white">{count}</span>}
+                            <div className="opacity-0 group-hover:opacity-100 absolute -top-8 bg-black border border-white/10 px-3 py-1.5 rounded-lg text-[10px] font-bold text-white whitespace-nowrap z-10 transition-opacity pointer-events-none">
+                              {status}: {count} ({Math.round(percent)}%)
+                            </div>
+                         </div>
+                       );
+                     })}
+                     {candidates.length === 0 && <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs text-white/30 font-bold uppercase tracking-widest">No Pipeline Data</div>}
                   </div>
-               ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-6 mt-6">
+                   {[
+                     { label: 'New', color: 'bg-white/20' },
+                     { label: 'Shortlisted', color: 'bg-primary/50' },
+                     { label: 'Invited', color: 'bg-indigo/50' },
+                     { label: 'Hired', color: 'bg-secondary/50' },
+                     { label: 'Rejected', color: 'bg-error/50' },
+                     { label: 'Archived', color: 'bg-rose-400/20' }
+                   ].map(s => (
+                      <div key={s.label} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/60">
+                        <div className={`w-3 h-3 rounded-sm ${s.color}`} /> {s.label}
+                      </div>
+                   ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-1">
+              {/* Recent Activity Feed */}
+              <div className="section-card p-6 flex flex-col h-[400px]">
+                <h3 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 mb-6">
+                  <Activity size={14} className="text-primary" /> Recent Candidate Activity
+                </h3>
+                
+                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+                  {loadingActivities ? (
+                    <div className="flex items-center justify-center h-full text-white/40 gap-2">
+                      <Loader2 size={16} className="animate-spin text-primary" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">Loading feed...</span>
+                    </div>
+                  ) : activities.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center text-white/30 gap-2">
+                      <Clock size={24} className="opacity-20" />
+                      <p className="text-xs uppercase font-bold tracking-widest">No activities logged</p>
+                    </div>
+                  ) : (
+                    activities.map((act) => {
+                      const dateStr = act.created_at ? new Date(act.created_at).toLocaleString() : 'Just now';
+                      
+                      let Icon = Activity;
+                      let iconColor = 'text-white/40 bg-white/5 border-white/10';
+                      const action = act.action?.toLowerCase();
+                      if (action?.includes('invite')) {
+                        Icon = Mail;
+                        iconColor = 'text-indigo bg-indigo/10 border-indigo/20';
+                      } else if (action?.includes('create') || action?.includes('upload')) {
+                        Icon = Plus;
+                        iconColor = 'text-primary bg-primary/10 border-primary/20';
+                      } else if (action?.includes('status') || action?.includes('shortlist') || action?.includes('archive')) {
+                        Icon = Zap;
+                        iconColor = 'text-secondary bg-secondary/10 border-secondary/20';
+                      } else if (action?.includes('score') || action?.includes('rank')) {
+                        Icon = Star;
+                        iconColor = 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
+                      }
+                      
+                      return (
+                        <div key={act.id} className="flex gap-4 p-3 rounded-xl bg-white/[0.01] border border-white/5 hover:border-white/10 transition-colors">
+                          <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${iconColor}`}>
+                            <Icon size={14} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-white leading-snug">
+                              {act.candidate_name}
+                            </p>
+                            <p className="text-[10px] text-white/50 mt-0.5 leading-relaxed">
+                              {act.detail || act.action}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">{act.actor_name || 'System'}</span>
+                              <span className="w-1 h-1 rounded-full bg-white/10" />
+                              <span className="text-[9px] text-white/30">{dateStr}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -784,8 +949,16 @@ export default function SourceDashboard() {
                 <p className="text-xs text-white/30">Upload resumes to get started</p>
               </div>
             </div>
+          ) : filteredCandidates.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+              <Search size={48} className="text-white/10" />
+              <div>
+                <p className="text-base font-bold text-white mb-1">No matches found</p>
+                <p className="text-xs text-white/30">Try adjusting your search query</p>
+              </div>
+            </div>
           ) : (
-            candidates.map(c => (
+            filteredCandidates.map(c => (
               <div
                 key={c.id}
                 onClick={() => setDrawerCandidate(c)}
@@ -950,6 +1123,51 @@ export default function SourceDashboard() {
                 {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
               </select>
             </Field>
+            
+            <Field label="Invitation Email Template">
+              <select
+                className="form-input"
+                value={inviteForm.templateType}
+                onChange={e => setInviteForm(f => ({ ...f, templateType: e.target.value }))}
+              >
+                <option value="prebuilt">Pre-built (Default Phygitron 360 Template)</option>
+                <option value="custom">Custom Template</option>
+              </select>
+            </Field>
+
+            {inviteForm.templateType === 'custom' && (
+              <>
+                <Field label="Email Subject">
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Invitation to complete pre-employment assessment"
+                    value={inviteForm.subject}
+                    onChange={e => setInviteForm(f => ({ ...f, subject: e.target.value }))}
+                  />
+                </Field>
+                <Field label="Email Body (Markdown supported)">
+                  <textarea
+                    rows={5}
+                    className="form-input resize-none"
+                    placeholder={`Dear {candidate_name},\n\nWe invite you to take the assessment for {role}.\nYour temporary password is: {temp_password}\nLink: {assessment_link}`}
+                    value={inviteForm.custom_body}
+                    onChange={e => setInviteForm(f => ({ ...f, custom_body: e.target.value }))}
+                  />
+                  <div className="text-[10px] text-white/40 leading-relaxed mt-1">
+                    <strong>Guidelines:</strong> You can use these tokens:
+                    <ul className="list-disc list-inside mt-1 space-y-0.5">
+                      <li><code className="text-primary">{`{candidate_name}`}</code> - Full name</li>
+                      <li><code className="text-primary">{`{role}`}</code> - Job role title</li>
+                      <li><code className="text-primary">{`{org_name}`}</code> - Organisation name</li>
+                      <li><code className="text-primary">{`{assessment_link}`}</code> - URL to access the portal</li>
+                      <li><code className="text-primary">{`{temp_password}`}</code> - Temporary password</li>
+                    </ul>
+                  </div>
+                </Field>
+              </>
+            )}
+
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setShowInvite(false)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
               <button type="submit" className="flex-1 py-3 rounded-xl bg-indigo text-white text-xs font-black uppercase tracking-widest hover:bg-indigo/80 transition-colors">Send Invites</button>

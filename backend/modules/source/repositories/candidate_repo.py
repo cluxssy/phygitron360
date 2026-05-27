@@ -210,8 +210,47 @@ class CandidateRepository:
                 
                 cur.execute("SELECT * FROM ai_scores WHERE entity_type = 'candidate' AND entity_id = %s ORDER BY computed_at DESC", (candidate_id,))
                 result['ai_scores'] = [dict(r) for r in cur.fetchall()]
+
+                # Fetch Verify assessments and Forge courses if user_id is linked
+                user_id = result.get('user_id')
+                if user_id:
+                    cur.execute("""
+                        SELECT ar.*, a.title as assessment_title, a.pass_score
+                        FROM assessment_results ar
+                        JOIN assessments a ON ar.assessment_id = a.id
+                        WHERE ar.user_id = %s
+                        ORDER BY ar.submitted_at DESC
+                    """, (user_id,))
+                    result['assessment_results'] = [dict(r) for r in cur.fetchall()]
+
+                    cur.execute("""
+                        SELECT ce.*, c.title as course_title, c.difficulty_level
+                        FROM course_enrollments ce
+                        JOIN courses c ON ce.course_id = c.id
+                        WHERE ce.user_id = %s
+                        ORDER BY ce.created_at DESC
+                    """, (user_id,))
+                    result['course_enrollments'] = [dict(r) for r in cur.fetchall()]
+                else:
+                    result['assessment_results'] = []
+                    result['course_enrollments'] = []
+
+                # Cast Decimal to float and datetime to ISO string recursively
+                from decimal import Decimal
+                from datetime import datetime
+
+                def serialize_special(obj):
+                    if isinstance(obj, dict):
+                        return {k: serialize_special(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return [serialize_special(i) for i in obj]
+                    elif isinstance(obj, Decimal):
+                        return float(obj)
+                    elif isinstance(obj, datetime):
+                        return obj.isoformat()
+                    return obj
                 
-                return result
+                return serialize_special(result)
         finally:
             conn.close()
 

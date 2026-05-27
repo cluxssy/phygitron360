@@ -65,15 +65,21 @@ def send_invite_email(
     company_name: str,
     temp_password: str,
     deadline: Optional[str] = None,
+    custom_subject: Optional[str] = None,
+    custom_body: Optional[str] = None,
 ) -> bool:
     """
     Send a talent-portal invitation email to a candidate with their temporary credentials.
     Falls back to structured logging if SMTP is not configured.
     """
-    subject = f"You've been invited to apply for {role_name} at {company_name}"
+    subject = custom_subject if custom_subject else f"You've been invited to apply for {role_name} at {company_name}"
     deadline_line = f"Application Deadline: {deadline}" if deadline else "Please complete your application at your earliest convenience."
 
-    plain_body = f"""
+    if custom_body:
+        plain_body = custom_body
+        html_body = f"<html><body style=\"font-family: Arial, sans-serif; color: #333; line-height: 1.6;\">{custom_body.replace(chr(10), '<br/>')}</body></html>"
+    else:
+        plain_body = f"""
 Dear {candidate_name},
 
 You have been invited to apply for the position of {role_name} at {company_name}.
@@ -91,7 +97,7 @@ Talent Acquisition Team
 {company_name}
 """
 
-    html_body = f"""
+        html_body = f"""
 <html><body style="font-family: Arial, sans-serif; color: #333;">
   <h2 style="color:#4f46e5;">You've Been Invited!</h2>
   <p>Dear <strong>{candidate_name}</strong>,</p>
