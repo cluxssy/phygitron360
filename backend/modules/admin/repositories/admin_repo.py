@@ -133,7 +133,7 @@ class AdminRepository:
             for role, perms in DEFAULT_PERMISSIONS.items():
                 for perm in perms:
                     cur.execute(
-                        "INSERT INTO role_permissions (role, permission, is_allowed) VALUES (%s, %s, 1) ON CONFLICT DO NOTHING",
+                        "INSERT INTO role_permissions (role, permission, is_allowed) VALUES (%s, %s, 1) ON CONFLICT (role, permission) DO UPDATE SET is_allowed = 1",
                         (role, perm)
                     )
             conn.commit()

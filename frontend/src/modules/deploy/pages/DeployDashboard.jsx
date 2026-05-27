@@ -10,6 +10,8 @@ import DeployAnalytics from '../components/DeployAnalytics';
 import EmployeeDirectory from '../components/EmployeeDirectory';
 import MyProfile from '../components/MyProfile';
 import EmployeeProfileFull from '../components/EmployeeProfileFull';
+import PayrollPanel from '../components/PayrollPanel';
+import MyPayrollPanel from '../components/MyPayrollPanel';
 import "../styles/deploy.css";
 
 import logo from "../../../assets/phy360.png";
@@ -63,6 +65,13 @@ export default function DeployDashboard() {
 
   const canViewAttendance =
     hasPermission?.('deploy.attendance.view_team') ||
+    hasPermission?.('module.deploy.access');
+
+  const canManagePayroll =
+    hasPermission?.('deploy.payroll.manage');
+
+  const canViewPayroll =
+    hasPermission?.('deploy.payroll.view') ||
     hasPermission?.('module.deploy.access');
 
   /* =========================================
@@ -320,6 +329,15 @@ export default function DeployDashboard() {
                 Onboarding
               </button>
 
+              {canManagePayroll && (
+                <button
+                  className={currentTab === 'payroll' ? 'active' : ''}
+                  onClick={() => setTab('payroll')}
+                >
+                  Payroll
+                </button>
+              )}
+
             </>
 
           ) : (
@@ -355,7 +373,14 @@ export default function DeployDashboard() {
                 My Performance
               </button>
 
-              
+              {canViewPayroll && (
+                <button
+                  className={currentTab === 'payroll' ? 'active' : ''}
+                  onClick={() => setTab('payroll')}
+                >
+                  My Payroll
+                </button>
+              )}
 
             </>
 
@@ -505,6 +530,23 @@ export default function DeployDashboard() {
               isAdmin={panelMode === 'admin'}
             />
 
+          )}
+
+          {/* PAYROLL — ADMIN/MANAGER */}
+          {currentTab === 'payroll' && deployView === 'management' && canManagePayroll && (
+            <PayrollPanel
+              key="management-payroll"
+              mode={panelMode}
+              user={user}
+            />
+          )}
+
+          {/* PAYROLL — EMPLOYEE */}
+          {currentTab === 'payroll' && deployView === 'employee' && canViewPayroll && (
+            <MyPayrollPanel
+              key="employee-payroll"
+              user={user}
+            />
           )}
 
         </div>

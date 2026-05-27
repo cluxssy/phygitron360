@@ -105,6 +105,9 @@ export default function MyProfile() {
             primary_skillset: formData.primary_skillset,
             secondary_skillset: formData.secondary_skillset,
             experience_years: formData.experience_years,
+            bank_name: formData.bank_name,
+            bank_account_no: formData.bank_account_no,
+            pan_no: formData.pan_no,
         };
 
         const res = await fetch(`/api/employee/${details.employee_code}`, {
@@ -761,6 +764,37 @@ export default function MyProfile() {
                             <textarea value={formData.permanent_address} onChange={e => setFormData({...formData, permanent_address: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" rows={2}/>
                         ) : (
                             <p className="text-xs text-black">{details.permanent_address || 'Unregistered'}</p>
+                        )}
+                    </div>
+                </div>
+              </div>
+
+              {/* Financial Details */}
+              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8 shadow-sm">
+                <SectionHeader icon={Landmark} title="Financial Details" />
+                <div className="mt-6 space-y-4">
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Bank Name</p>
+                        {editMode ? (
+                            <input type="text" value={formData.bank_name || ''} onChange={e => setFormData({...formData, bank_name: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" placeholder="e.g. HDFC Bank" />
+                        ) : (
+                            <p className="text-xs text-black">{details.bank_name || 'Not recorded'}</p>
+                        )}
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Bank Account No.</p>
+                        {editMode ? (
+                            <input type="text" value={formData.bank_account_no || ''} onChange={e => setFormData({...formData, bank_account_no: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" placeholder="Account Number" />
+                        ) : (
+                            <p className="text-xs text-black">{details.bank_account_no || 'Not recorded'}</p>
+                        )}
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">PAN No.</p>
+                        {editMode ? (
+                            <input type="text" value={formData.pan_no || ''} onChange={e => setFormData({...formData, pan_no: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black uppercase" placeholder="ABCDE1234F" />
+                        ) : (
+                            <p className="text-xs text-black uppercase">{details.pan_no || 'Not recorded'}</p>
                         )}
                     </div>
                 </div>

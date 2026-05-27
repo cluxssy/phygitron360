@@ -114,6 +114,9 @@ def create_tables(schema_name='public'):
                 pf_included TEXT,
                 mediclaim_included TEXT,
                 notes TEXT,
+                bank_name TEXT,
+                bank_account_no TEXT,
+                pan_no TEXT,
                 exit_date TEXT,
                 exit_reason TEXT,
                 clearance_status TEXT
@@ -698,14 +701,41 @@ def create_tables(schema_name='public'):
         cur.execute('''
             CREATE TABLE IF NOT EXISTS leave_balances (
                 id SERIAL PRIMARY KEY,
-                employee_code TEXT NOT NULL UNIQUE REFERENCES employees(employee_code) ON UPDATE CASCADE,
+                employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 year INTEGER NOT NULL,
                 total_leaves INTEGER DEFAULT 15,
                 used_leaves INTEGER DEFAULT 0,
-                extended_leaves INTEGER DEFAULT 0
+                extended_leaves INTEGER DEFAULT 0,
+                UNIQUE(employee_code, year)
             )
         ''')
 
+        # 19) Payroll Records Table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS payroll_records (
+                id SERIAL PRIMARY KEY,
+                employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE,
+                pay_month INTEGER NOT NULL,
+                pay_year INTEGER NOT NULL,
+                pay_date TEXT,
+                basic_salary NUMERIC(12,2) DEFAULT 0,
+                hra NUMERIC(12,2) DEFAULT 0,
+                special_allowance NUMERIC(12,2) DEFAULT 0,
+                medical_insurance NUMERIC(12,2) DEFAULT 0,
+                pf_employer_contribution NUMERIC(12,2) DEFAULT 0,
+                travelling_reimbursement NUMERIC(12,2) DEFAULT 0,
+                gross_ctc NUMERIC(12,2) DEFAULT 0,
+                income_tax NUMERIC(12,2) DEFAULT 0,
+                medical_deduction NUMERIC(12,2) DEFAULT 0,
+                employer_pf NUMERIC(12,2) DEFAULT 0,
+                employee_pf NUMERIC(12,2) DEFAULT 0,
+                total_deductions NUMERIC(12,2) DEFAULT 0,
+                net_in_hand NUMERIC(12,2) DEFAULT 0,
+                uploaded_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(employee_code, pay_month, pay_year)
+            )
+        ''')
 
         # --- Forge (Learning Hub) Tables ---
         # 19.1) Courses
