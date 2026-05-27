@@ -56,6 +56,9 @@ def complete_onboarding(
     education_details: str = Form(None),
     primary_skills: str = Form(None),
     secondary_skills: str = Form(None),
+    bank_name: str = Form(...),
+    bank_account_no: str = Form(...),
+    pan_no: str = Form(...),
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
@@ -86,7 +89,10 @@ def complete_onboarding(
         "doj": doj,
         "education_details": education_details,
         "primary_skills": primary_skills,
-        "secondary_skills": secondary_skills
+        "secondary_skills": secondary_skills,
+        "bank_name": bank_name,
+        "bank_account_no": bank_account_no,
+        "pan_no": pan_no
     }
     
     file_metadata = {
@@ -116,6 +122,9 @@ def onboard_admin(
     education_details: str = Form(None),
     primary_skills: str = Form(None),
     secondary_skills: str = Form(None),
+    bank_name: str = Form(...),
+    bank_account_no: str = Form(...),
+    pan_no: str = Form(...),
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
@@ -152,7 +161,10 @@ def onboard_admin(
         "location": location,
         "education_details": education_details,
         "primary_skills": primary_skills,
-        "secondary_skills": secondary_skills
+        "secondary_skills": secondary_skills,
+        "bank_name": bank_name,
+        "bank_account_no": bank_account_no,
+        "pan_no": pan_no
     }
     
     try:

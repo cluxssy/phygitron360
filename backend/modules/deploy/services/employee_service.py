@@ -166,7 +166,7 @@ class EmployeeService:
             'contact_number', 'emergency_contact', 'current_address', 
             'permanent_address', 'dob', 'email_id', 'notes', 'doj',
             'photo_path', 'cv_path', 'id_proofs', 'pf_included', 'mediclaim_included',
-            'education_details', 'employee_code'
+            'education_details', 'employee_code', 'bank_name', 'bank_account_no', 'pan_no'
         ]
         
         fields = []

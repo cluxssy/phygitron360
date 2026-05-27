@@ -16,6 +16,7 @@ from backend.modules.deploy.api.training import router as training_router
 from backend.modules.deploy.api.onboarding import router as onboarding_router
 from backend.modules.deploy.api.notifications import router as notifications_router
 from backend.modules.deploy.api.password import router as password_router
+from backend.modules.deploy.api.payroll import router as payroll_router
 from backend.modules.admin.api.admin import router as admin_router
 from backend.modules.admin.api.org import router as org_router
 from backend.api.billing import router as billing_router
@@ -79,6 +80,7 @@ app.include_router(training_router, dependencies=[Depends(require_module("deploy
 app.include_router(onboarding_router)
 app.include_router(notifications_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(password_router)
+app.include_router(payroll_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(admin_router)
 app.include_router(org_router)
 app.include_router(billing_router)

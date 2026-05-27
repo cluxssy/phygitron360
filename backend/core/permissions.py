@@ -71,6 +71,10 @@ class P:
     DEPLOY_NOTIF_ADMIN    = "deploy.notifications.view_admin"
     DEPLOY_NOTIF_MANAGE   = "deploy.notifications.manage"
 
+    # ── Deploy: Payroll ──────────────────────────────────────────────────────
+    DEPLOY_PAYROLL_VIEW   = "deploy.payroll.view"
+    DEPLOY_PAYROLL_MANAGE = "deploy.payroll.manage"
+
     # ── Source: Jobs ─────────────────────────────────────────────────────────
     SOURCE_JOBS_VIEW      = "source.jobs.view"
     SOURCE_JOBS_MANAGE    = "source.jobs.manage"
@@ -123,6 +127,8 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.DEPLOY_PERF_VIEW, P.DEPLOY_PERF_MANAGE,
         # Deploy: Dashboard / Notifications
         P.DEPLOY_DASH_ADMIN, P.DEPLOY_NOTIF_ADMIN, P.DEPLOY_NOTIF_MANAGE,
+        # Deploy: Payroll
+        P.DEPLOY_PAYROLL_VIEW, P.DEPLOY_PAYROLL_MANAGE,
         # Source
         P.SOURCE_JOBS_VIEW, P.SOURCE_JOBS_MANAGE,
         P.SOURCE_CANDIDATES_VIEW, P.SOURCE_CANDIDATES_MANAGE,
@@ -151,6 +157,8 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.DEPLOY_PERF_VIEW, P.DEPLOY_PERF_MANAGE,
         # Deploy: Dashboard / Notifications
         P.DEPLOY_DASH_ADMIN, P.DEPLOY_NOTIF_ADMIN,
+        # Deploy: Payroll
+        P.DEPLOY_PAYROLL_VIEW, P.DEPLOY_PAYROLL_MANAGE,
         # Source
         P.SOURCE_JOBS_VIEW, P.SOURCE_JOBS_MANAGE,
         P.SOURCE_CANDIDATES_VIEW,
@@ -168,6 +176,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.DEPLOY_PERF_VIEW,          # view own KRA scorecard
         P.DEPLOY_ASSESS_VIEW,        # view / submit assigned assessments
         P.DEPLOY_TRAIN_VIEW,         # view own training assignments
+        P.DEPLOY_PAYROLL_VIEW,       # view own payslips
         # Verify: take tests assigned to them
         P.VERIFY_ASSESS_VIEW,
         # Forge: learn

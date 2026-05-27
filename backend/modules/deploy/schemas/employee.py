@@ -39,6 +39,9 @@ class EmployeeFullProfile(BaseModel):
     pf_included: Optional[str]
     mediclaim_included: Optional[str]
     notes: Optional[str]
+    bank_name: Optional[str]
+    bank_account_no: Optional[str]
+    pan_no: Optional[str]
     exit_date: Optional[str]
     exit_reason: Optional[str]
     clearance_status: Optional[str]
@@ -70,6 +73,9 @@ class UpdateEmployeeRequest(BaseModel):
     education_details: Optional[Any] = None
     pf_included: Optional[str] = None
     mediclaim_included: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account_no: Optional[str] = None
+    pan_no: Optional[str] = None
     employee_code: Optional[str] = None
     doj: Optional[str] = None
     skill_matrix: Optional[dict] = None

@@ -28,7 +28,10 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
     current_location: '',
     state: '',
     city: '',
-    pincode: ''
+    pincode: '',
+    bank_name: '',
+    bank_account_no: '',
+    pan_no: ''
   });
 
   // Country Code and Emergency States
@@ -78,8 +81,8 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
 
   const validateStep = () => {
     if (step === 1) {
-      if (!form.full_name || !form.dob || !form.contact_number || !emergencyName || !emergencyPhone) {
-        toast.error("All personal and contact details are mandatory");
+      if (!form.full_name || !form.dob || !form.contact_number || !emergencyName || !emergencyPhone || !form.bank_name || !form.bank_account_no || !form.pan_no) {
+        toast.error("All personal, contact, and financial details are mandatory");
         return false;
       }
       
@@ -139,6 +142,9 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
     fd.append("dob", form.dob);
     fd.append("contact_number", finalContactNumber);
     fd.append("emergency_contact", finalEmergencyContact);
+    fd.append("bank_name", form.bank_name);
+    fd.append("bank_account_no", form.bank_account_no);
+    fd.append("pan_no", form.pan_no);
     fd.append('education_details', JSON.stringify(educationList));
 
     Object.entries(files).forEach(([k, v]) => v && fd.append(k, v));
@@ -267,6 +273,21 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                     className="flex-1 glass-panel-input" 
                     placeholder="98765 43210" 
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-4 border-t border-slate-100">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Name *</label>
+                  <input required name="bank_name" value={form.bank_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="e.g. HDFC Bank" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Account No. *</label>
+                  <input required name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="Account Number" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">PAN No. *</label>
+                  <input required name="pan_no" value={form.pan_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="ABCDE1234F" style={{textTransform: 'uppercase'}} />
                 </div>
               </div>
             </div>

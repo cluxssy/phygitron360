@@ -204,15 +204,16 @@ class OnboardingRepository:
                         employee_code, name, email_id, contact_number, emergency_contact, dob, 
                         current_address, permanent_address, education_details,
                         team, designation, employment_status, doj, location,
-                        photo_path, cv_path, id_proofs
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        photo_path, cv_path, id_proofs, bank_name, bank_account_no, pan_no
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     employee_data['code'], employee_data['name'], employee_data['email'], 
                     employee_data['phone'], employee_data['emergency'], employee_data['dob'],
                     employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
                     employee_data['team'], employee_data['designation'], 'Pending Approval', 
                     employee_data['doj'], employee_data.get('location', ''),
-                    employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path']
+                    employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'],
+                    employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no')
                 ))
 
                 # 2. User

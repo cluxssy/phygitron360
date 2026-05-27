@@ -37,7 +37,8 @@ export default function OnboardPage() {
     password: '', contact_number: '', dob: '',
     current_address: '', permanent_address: '',
     location: '',
-    primary_skills: '', secondary_skills: ''
+    primary_skills: '', secondary_skills: '',
+    bank_name: '', bank_account_no: '', pan_no: ''
   });
 
   // Country Code and Emergency States
@@ -124,6 +125,9 @@ export default function OnboardPage() {
           if (!form.permanent_address && !sameAsCurrent) errors.permanent_address = "Required";
           if (!form.location) errors.location = "Required";
           if (!form.primary_skills) errors.primary_skills = "Required";
+          if (!form.bank_name) errors.bank_name = "Required";
+          if (!form.bank_account_no) errors.bank_account_no = "Required";
+          if (!form.pan_no) errors.pan_no = "Required";
       }
 
       if (currentStep === 3) {
@@ -439,11 +443,30 @@ export default function OnboardPage() {
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Primary skills</label>
-                               <input type="text" name="primary_skills" value={form.primary_skills} onChange={handleChange} className="w-full glass-panel-input" placeholder="Core Skills" />
+                               <input type="text" name="primary_skills" value={form.primary_skills} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.primary_skills ? 'border-error/50' : 'border-white/5'}`} placeholder="Core Skills" />
+                               {validationErrors.primary_skills && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.primary_skills}</p>}
                             </div>
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Secondary skills</label>
                                <input type="text" name="secondary_skills" value={form.secondary_skills} onChange={handleChange} className="w-full glass-panel-input" placeholder="Auxiliary Skills" />
+                            </div>
+                         </div>
+
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-white/5 mt-4">
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Bank Name *</label>
+                               <input type="text" name="bank_name" value={form.bank_name} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.bank_name ? 'border-error/50' : 'border-white/5'}`} placeholder="e.g. HDFC Bank" />
+                               {validationErrors.bank_name && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.bank_name}</p>}
+                            </div>
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Bank Account No. *</label>
+                               <input type="text" name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.bank_account_no ? 'border-error/50' : 'border-white/5'}`} placeholder="Account Number" />
+                               {validationErrors.bank_account_no && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.bank_account_no}</p>}
+                            </div>
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">PAN No. *</label>
+                               <input type="text" name="pan_no" value={form.pan_no} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.pan_no ? 'border-error/50' : 'border-white/5'}`} placeholder="e.g. ABCDE1234F" style={{textTransform: 'uppercase'}} />
+                               {validationErrors.pan_no && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.pan_no}</p>}
                             </div>
                          </div>
                       </div>
