@@ -160,7 +160,10 @@ class OnboardingService:
             "location": employee_data.get('location', ''),
             "photo_path": file_metadata.get('photo', ''),
             "cv_path": file_metadata.get('cv', ''),
-            "id_proof_path": file_metadata.get('id_proof', '')
+            "id_proof_path": file_metadata.get('id_proof', ''),
+            "bank_name": employee_data.get('bank_name'),
+            "bank_account_no": employee_data.get('bank_account_no'),
+            "pan_no": employee_data.get('pan_no')
         }
         
         skill_record = {
@@ -221,8 +224,9 @@ class OnboardingService:
                         employee_code, name, email_id, contact_number, emergency_contact, 
                         dob, current_address, permanent_address, team, designation, 
                         employment_status, location, photo_path, cv_path, id_proofs, doj,
-                        employment_type, education_details
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        employment_type, education_details, bank_name, bank_account_no,
+                        pan_no, pf_included, mediclaim_included
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     emp_code, emp_data.get('name') or username.split('@')[0], username, 
                     emp_data['contact_number'], emp_data['emergency_contact'], emp_data['dob'], 
@@ -230,7 +234,10 @@ class OnboardingService:
                     "Executive", "Organization Admin", "Active", emp_data.get('location', ''),
                     file_metadata.get('photo', ''), file_metadata.get('cv', ''), 
                     file_metadata.get('id_proof', ''), datetime.now().strftime('%Y-%m-%d'),
-                    'Full Time', emp_data.get('education_details', '[]')
+                    'Full Time', emp_data.get('education_details', '[]'),
+                    emp_data.get('bank_name'), emp_data.get('bank_account_no'),
+                    emp_data.get('pan_no'), emp_data.get('pf_included', 'No'),
+                    emp_data.get('mediclaim_included', 'No')
                 ))
 
                 # Insert Skill Matrix (Notice the correct column names found in schema check)

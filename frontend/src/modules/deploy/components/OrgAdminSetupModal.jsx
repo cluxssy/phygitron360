@@ -31,7 +31,9 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
     pincode: '',
     bank_name: '',
     bank_account_no: '',
-    pan_no: ''
+    pan_no: '',
+    pf_included: 'No',
+    mediclaim_included: 'No'
   });
 
   // Country Code and Emergency States
@@ -145,6 +147,8 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
     fd.append("bank_name", form.bank_name);
     fd.append("bank_account_no", form.bank_account_no);
     fd.append("pan_no", form.pan_no);
+    fd.append("pf_included", form.pf_included);
+    fd.append("mediclaim_included", form.mediclaim_included);
     fd.append('education_details', JSON.stringify(educationList));
 
     Object.entries(files).forEach(([k, v]) => v && fd.append(k, v));
@@ -288,6 +292,27 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">PAN No. *</label>
                   <input required name="pan_no" value={form.pan_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="ABCDE1234F" style={{textTransform: 'uppercase'}} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4 border-t border-slate-100">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center justify-between">
+                    <span>PF Included? *</span>
+                  </label>
+                  <select name="pf_included" value={form.pf_included} onChange={handleChange} className="w-full glass-panel-input cursor-pointer">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center justify-between">
+                    <span>Mediclaim Included? *</span>
+                  </label>
+                  <select name="mediclaim_included" value={form.mediclaim_included} onChange={handleChange} className="w-full glass-panel-input cursor-pointer">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
                 </div>
               </div>
             </div>

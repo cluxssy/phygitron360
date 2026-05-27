@@ -843,9 +843,23 @@ function SectionHeader({ icon: Icon, title }) {
 }
 
 function FileCard({ label, path, editMode, onUpload }) {
+    const handleView = () => {
+        if (!path) {
+            toast.error("Document not uploaded yet");
+            return;
+        }
+        if (path.startsWith('http')) {
+            window.open(path, '_blank');
+        } else {
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            window.open(`${baseUrl}/${path.replace(/^\//, '')}`, '_blank');
+        }
+    };
+
     return (
         <div
-            className="
+            onClick={!editMode && path ? handleView : undefined}
+            className={`
                 flex
                 items-center
                 justify-between
@@ -855,24 +869,35 @@ function FileCard({ label, path, editMode, onUpload }) {
                 border
                 border-[#e9ddff]
                 group
-                hover:border-[#c4b5fd]
-                hover:shadow-md
-                hover:shadow-[#7c3aed]/10
                 transition-all
-            "
+                ${!editMode && path ? 'cursor-pointer hover:border-[#c4b5fd] hover:shadow-md hover:shadow-[#7c3aed]/10' : ''}
+            `}
         >
             <div className="flex items-center gap-3">
                 <FileText
                     size={16}
-                    className="
-                        text-[#7c3aed]
-                        group-hover:text-[#6d28d9]
+                    className={`
                         transition-colors
-                    "
+                        ${path ? 'text-[#7c3aed] group-hover:text-[#6d28d9]' : 'text-slate-400'}
+                    `}
                 />
-                <span className="text-[10px] font-black uppercase tracking-widest text-black">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${path ? 'text-black' : 'text-slate-400'}`}>
                     {label}
                 </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+                {path && !editMode && (
+                    <ExternalLink size={14} className="text-[#c4b5fd] group-hover:text-[#7c3aed] transition-colors" />
+                )}
+                {editMode && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onUpload(); }}
+                        className="px-3 py-1.5 bg-white border border-[#e9ddff] hover:bg-[#7c3aed] hover:text-white hover:border-[#7c3aed] rounded-lg text-[9px] font-black uppercase tracking-widest text-[#7c3aed] transition-all"
+                    >
+                        {path ? 'Replace' : 'Upload'}
+                    </button>
+                )}
             </div>
         </div>
     );
