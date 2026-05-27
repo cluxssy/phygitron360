@@ -14,7 +14,7 @@ class AIService:
     def __init__(self):
         self.provider = os.getenv("AI_PROVIDER", "mock").lower()
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         self.groq_api_key = os.getenv("GROQ_API_KEY")
 
         if self.provider == "gemini" and self.gemini_api_key:

@@ -162,13 +162,13 @@ export default function Layout({ children }) {
 
         name:
           m.id === 'source'
-            ? 'Talent Hub'
+            ? 'Talent Central'
             : m.id === 'forge'
-              ? 'Learning Hub'
+              ? 'Learning Central'
               : m.id === 'verify'
-                ? 'Assessment Hub'
+                ? 'Assessment Central'
                 : m.id === 'deploy'
-                  ? 'Employee Hub'
+                  ? 'Employee Central'
                   : m.name,
 
         path: m.path,

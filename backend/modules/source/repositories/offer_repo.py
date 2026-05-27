@@ -18,8 +18,8 @@ class OfferRepository:
                 query = """
                     SELECT o.*,
                            c.full_name AS candidate_name, c.email AS candidate_email,
-                           u.name AS created_by_name,
-                           a.name AS approved_by_name
+                           u.username AS created_by_name,
+                           a.username AS approved_by_name
                     FROM offer_letters o
                     JOIN candidates c ON c.id = o.candidate_id
                     LEFT JOIN users u ON u.id = o.created_by
@@ -44,7 +44,7 @@ class OfferRepository:
                     """
                     SELECT o.*,
                            c.full_name AS candidate_name, c.email AS candidate_email,
-                           u.name AS created_by_name
+                           u.username AS created_by_name
                     FROM offer_letters o
                     JOIN candidates c ON c.id = o.candidate_id
                     LEFT JOIN users u ON u.id = o.created_by
@@ -106,19 +106,20 @@ class OfferRepository:
                 self._set_search_path(cur)
                 
                 # Create employee record
-                start_dt = None
+                start_dt_str = None
                 if offer.get("start_date"):
                     from datetime import datetime
                     try:
-                        start_dt = datetime.fromisoformat(str(offer["start_date"]))
+                        dt = datetime.fromisoformat(str(offer["start_date"]))
+                        start_dt_str = dt.strftime("%Y-%m-%d")
                     except Exception:
-                        pass
+                        start_dt_str = str(offer["start_date"])
 
                 cur.execute(
                     """
                     INSERT INTO employees
-                        (name, email, department, designation, doj, tenant_id, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'active')
+                        (name, email_id, team, designation, doj, location, employment_status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'Active')
                     RETURNING id
                     """,
                     (
@@ -126,8 +127,8 @@ class OfferRepository:
                         offer["candidate_email"],
                         offer.get("department"),
                         offer["role_title"],
-                        start_dt,
-                        self.tenant_id,
+                        start_dt_str,
+                        offer.get("location"),
                     ),
                 )
                 emp_id = cur.fetchone()["id"]

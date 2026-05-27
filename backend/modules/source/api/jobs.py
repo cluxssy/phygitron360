@@ -51,6 +51,8 @@ class InviteRequest(BaseModel):
     job_role_id: int
     deadline: Optional[str] = None
     email_addresses: Optional[List[str]] = None
+    subject: Optional[str] = None
+    custom_body: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +213,9 @@ def send_invites(
             hr_id=hr_id,
             candidate_ids=body.candidate_ids,
             email_addresses=body.email_addresses,
-            deadline=body.deadline
+            deadline=body.deadline,
+            subject=body.subject,
+            custom_body=body.custom_body
         )
         return {
             "success": True,

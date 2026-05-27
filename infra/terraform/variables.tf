@@ -70,3 +70,8 @@ variable "groq_api_key" {
   sensitive   = true
   default     = ""
 }
+
+variable "ai_provider" {
+  description = "The AI Provider (mock, gemini, openai, groq)"
+  default     = "mock"
+}

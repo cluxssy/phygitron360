@@ -79,6 +79,14 @@ class JobService:
                 "score": fit["score"],
                 "reasoning": reasoning,
             })
+        
+        # Log activity in candidate timeline
+        try:
+            role = self.repo.get_job_role_by_id(role_id)
+            role_title = role.get("title") if role else f"ID: {role_id}"
+            self.candidate_repo.log_activity(cid, 'System', 'jd_matched', f"ATS Score computed for role: {role_title}")
+        except Exception as e:
+            logger.warning(f"Failed to log jd_matched activity: {e}")
             
         return {"candidate_id": cid, "score": fit["score"], "detail": fit}
 
@@ -133,7 +141,16 @@ class JobService:
                 
         return results
 
-    def send_invites(self, role_id: int, hr_id: int, candidate_ids: List[int], email_addresses: Optional[List[str]] = None, deadline: Optional[str] = None) -> Dict[str, Any]:
+    def send_invites(
+        self,
+        role_id: int,
+        hr_id: int,
+        candidate_ids: List[int],
+        email_addresses: Optional[List[str]] = None,
+        deadline: Optional[str] = None,
+        subject: Optional[str] = None,
+        custom_body: Optional[str] = None
+    ) -> Dict[str, Any]:
         role = self.repo.get_job_role_by_id(role_id)
         if not role:
             raise ValueError("Job role not found")
@@ -143,6 +160,9 @@ class JobService:
         errors = []
         
         from backend.core.security import hash_password
+        import os
+        base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
+        portal_link = f"{base_url}/login"
 
         for i, cid in enumerate(candidate_ids):
             try:
@@ -161,6 +181,22 @@ class JobService:
 
                 self.repo.create_invite_if_not_exists(cid, role_id, hr_id)
 
+                # Format custom templates candidate-by-candidate
+                cand_subject = subject
+                cand_body = custom_body
+
+                if cand_subject:
+                    cand_subject = cand_subject.replace("{candidate_name}", cand["full_name"])\
+                                               .replace("{role}", role_name)\
+                                               .replace("{org_name}", "Phygitron 360")
+
+                if cand_body:
+                    cand_body = cand_body.replace("{candidate_name}", cand["full_name"])\
+                                         .replace("{role}", role_name)\
+                                         .replace("{org_name}", "Phygitron 360")\
+                                         .replace("{assessment_link}", portal_link)\
+                                         .replace("{temp_password}", temp_password)
+
                 try:
                     send_invite_email(
                         to_email=to_email,
@@ -169,9 +205,14 @@ class JobService:
                         company_name="Phygitron 360",
                         temp_password=temp_password,
                         deadline=deadline,
+                        custom_subject=cand_subject,
+                        custom_body=cand_body
                     )
                 except Exception as exc:
                     logger.warning(f"Invite email failed for {to_email}: {exc}")
+
+                # Log activity in candidate timeline
+                self.candidate_repo.log_activity(cid, 'HR', 'invite_sent', f"Invited to apply for {role_name}")
 
                 sent_count += 1
             except Exception as exc:

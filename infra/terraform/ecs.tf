@@ -77,6 +77,7 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "GOOGLE_API_KEY", value = var.google_api_key },
         { name = "OPENAI_API_KEY", value = var.openai_api_key },
         { name = "GROQ_API_KEY", value = var.groq_api_key },
+        { name = "AI_PROVIDER", value = var.ai_provider },
         { name = "APP_BASE_URL", value = "http://${aws_lb.main.dns_name}" },
         { name = "AWS_S3_BUCKET", value = "phygitron360-uploads" },
         { name = "AWS_S3_REGION", value = var.aws_region }

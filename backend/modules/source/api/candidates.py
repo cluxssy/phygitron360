@@ -8,7 +8,7 @@ import json
 import os
 import uuid
 import logging
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime
 
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
@@ -40,6 +40,27 @@ class ManualCandidateCreate(BaseModel):
     linkedin_url: Optional[str] = None
     portfolio_url: Optional[str] = None
     skills: Optional[List[str]] = None
+
+
+class CandidateUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    total_experience_years: Optional[float] = None
+    current_designation: Optional[str] = None
+    current_company: Optional[str] = None
+    expected_salary: Optional[str] = None
+    notice_period: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    availability: Optional[str] = None
+    ai_summary: Optional[str] = None
+    certifications: Optional[List[str]] = None
+    languages: Optional[List[str]] = None
+    achievements: Optional[List[str]] = None
+    experience: Optional[List[dict]] = None
+    education: Optional[List[dict]] = None
+    skills: Optional[List[Any]] = None
 
 
 class StatusUpdate(BaseModel):
@@ -202,6 +223,27 @@ def get_candidate(
         raise
     except Exception as exc:
         logger.error(f"get_candidate failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.put("/{candidate_id}")
+def update_candidate(
+    candidate_id: int,
+    body: CandidateUpdate,
+    current_user: dict = Depends(get_current_user),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Manually update candidate details and skill taxonomy mapping."""
+    try:
+        actor_name = current_user.get("name") or current_user.get("username")
+        success = service.update_candidate(candidate_id, body.dict(exclude_unset=True), actor_name)
+        if not success:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        return {"success": True, "message": "Candidate updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Failed to update candidate {candidate_id}: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 

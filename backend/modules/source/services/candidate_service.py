@@ -262,15 +262,105 @@ class CandidateService:
                 )
         return cand
 
+    def update_candidate(self, candidate_id: int, data: Dict[str, Any], actor_name: str = "System") -> bool:
+        from backend.core.database import get_db_connection
+        # 1. Update candidate record in DB
+        success = self.repo.update_candidate(candidate_id, data)
+        if not success:
+            return False
+
+        self.repo.log_activity(candidate_id, actor_name, 'profile_updated', 'Profile details manually updated')
+
+        # 2. Update skills list if provided
+        if "skills" in data:
+            # Get current candidate skills to know what to delete
+            current_skills = self.repo.get_candidate_skills(candidate_id)
+            current_skill_ids = {s['skill_id'] for s in current_skills}
+
+            new_skill_ids = set()
+
+            for skill_info in data["skills"]:
+                if isinstance(skill_info, str):
+                    name = skill_info.strip()
+                    level = "intermediate"
+                    years_of_use = None
+                    evidence = None
+                elif isinstance(skill_info, dict):
+                    name = (skill_info.get("name") or skill_info.get("skill_name") or "").strip()
+                    level = skill_info.get("level", "intermediate")
+                    years_of_use = skill_info.get("years_of_use")
+                    evidence = skill_info.get("evidence")
+                else:
+                    continue
+
+                if not name:
+                    continue
+
+                # Get or create from taxonomy
+                skill_record = self.skill_repo.get_skill_by_name(name)
+                if not skill_record:
+                    skill_id = self.skill_repo.create_skill(name=name, category="extracted", aliases=[name])
+                else:
+                    skill_id = skill_record['id']
+
+                new_skill_ids.add(skill_id)
+
+                # Upsert candidate skill
+                self.repo.upsert_candidate_skill(candidate_id, skill_id, {
+                    "level": level,
+                    "source": "manual",
+                    "years_of_use": years_of_use,
+                    "evidence": evidence
+                })
+
+            # Delete skills that are no longer in the updated list
+            skills_to_delete = current_skill_ids - new_skill_ids
+            if skills_to_delete:
+                conn = get_db_connection()
+                try:
+                    with conn.cursor() as cur:
+                        self.repo._set_search_path(cur)
+                        cur.execute(
+                            "DELETE FROM candidate_skills WHERE candidate_id = %s AND skill_id = ANY(%s)",
+                            (candidate_id, list(skills_to_delete))
+                        )
+                        conn.commit()
+                finally:
+                    conn.close()
+
+        return True
+
     async def bulk_upload_resumes(self, files: List[tuple], user_id: int) -> Dict[str, Any]:
         """files is a list of tuples: (filename, content_bytes)"""
-        job_id = self.repo.create_bulk_upload_job(user_id, len(files))
         succeeded = []
         failed = []
         skipped = []
         allowed_exts = (".pdf", ".docx", ".doc", ".txt")
 
+        import zipfile
+        import io
+
+        queue = []
         for fn, content in files:
+            if fn.lower().endswith(".zip"):
+                try:
+                    with zipfile.ZipFile(io.BytesIO(content)) as z:
+                        for name in z.namelist():
+                            if name.endswith("/") or name.split("/")[-1].startswith(".") or "__MACOSX" in name:
+                                continue
+                            file_bytes = z.read(name)
+                            # Clean the path to get only the filename
+                            clean_fn = name.split("/")[-1]
+                            queue.append((clean_fn, file_bytes))
+                except Exception as zip_err:
+                    logger.error(f"Failed to extract zip file {fn}: {zip_err}")
+                    failed.append({"filename": fn, "error": f"Invalid zip format: {zip_err}"})
+            else:
+                queue.append((fn, content))
+
+        job_id = self.repo.create_bulk_upload_job(user_id, len(queue))
+
+        for fn, content in queue:
             if not fn.lower().endswith(allowed_exts):
                 skipped.append(fn)
                 continue

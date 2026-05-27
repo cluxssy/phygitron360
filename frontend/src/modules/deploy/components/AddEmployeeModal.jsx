@@ -253,7 +253,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
               mb-3
             "
           >
-            Employee Hub • Add Team Member
+            Employee Central • Add Team Member
           </p>
 
           <h2
