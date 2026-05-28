@@ -4,7 +4,7 @@ import {
   ShieldCheck, FileText, User, ChevronRight,
   TrendingUp, Award, Clock, ArrowLeft, Download,
   ExternalLink, Building, Landmark, GraduationCap,
-  Save, Edit3, Image, Upload, Trash2, Package, CheckCircle
+  Save, Edit3, Image, Upload, Trash2, Package, CheckCircle, Key
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HasPermission from '../../../components/common/HasPermission';
@@ -147,6 +147,30 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             }
         } catch {
             toast.error("Decoupling failed");
+        }
+    };
+
+    const handleAdminReset = async (type) => {
+        try {
+            const res = await fetch(`/api/auth/admin-reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    employee_code: details.employee_code,
+                    reset_type: type
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || data.message || 'Action failed');
+            
+            if (type === 'temp_password') {
+                toast.success(`Temporary Password: ${data.temporary_password}`, { duration: 10000 });
+            } else {
+                toast.success('Reset link sent to employee email');
+            }
+        } catch (e) {
+            toast.error(e.message);
         }
     };
 
@@ -838,6 +862,32 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             )}
                         </div>
                     </div>
+
+                    {/* Security & Access */}
+                    {details.employment_status === 'Active' && (
+                        <HasPermission permission="deploy.employees.edit">
+                            <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
+                                <SectionHeader icon={Key} title="Security & Access" />
+                                <div className="mt-6 space-y-3">
+                                    <p className="text-[10px] text-black/70 uppercase tracking-widest mb-2">
+                                        Account Recovery & Access Control
+                                    </p>
+                                    <button
+                                        onClick={() => handleAdminReset('temp_password')}
+                                        className="w-full py-3 px-4 rounded-xl border border-[#ddd6fe] bg-[#f4ecff] text-[#6d28d9] text-[9px] font-black uppercase tracking-[0.2em] hover:bg-[#7c3aed] hover:text-white transition-all"
+                                    >
+                                        Generate Temp Password
+                                    </button>
+                                    <button
+                                        onClick={() => handleAdminReset('reset_link')}
+                                        className="w-full py-3 px-4 rounded-xl border border-[#ddd6fe] bg-white text-[#6d28d9] text-[9px] font-black uppercase tracking-[0.2em] hover:bg-[#f4ecff] transition-all"
+                                    >
+                                        Send Reset Link
+                                    </button>
+                                </div>
+                            </div>
+                        </HasPermission>
+                    )}
 
                     {/* Offboard Danger Zone */}
                     {details.employment_status === 'Active' && (

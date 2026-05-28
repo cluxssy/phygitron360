@@ -53,8 +53,10 @@ class EmployeeService:
         if not data['code'].startswith("EMP"):
              raise ValueError("Employee code must start with 'EMP'.")
         
-        if not data['phone'].isdigit() or len(data['phone']) != 10:
-             raise ValueError("Contact number must be exactly 10 digits.")
+        import re
+        phone_cleaned = re.sub(r'[\s\-()]', '', data['phone'])
+        if not re.match(r'^\+?[0-9]{7,15}$', phone_cleaned):
+             raise ValueError("Contact number must be a valid phone number (7-15 digits, optionally starting with +).")
 
         # Date calcs for age validation
         try:
@@ -107,29 +109,31 @@ class EmployeeService:
             pass
 
         if not existing_user:
-            # Generate a secure 8-char URL-safe temp password
-            temp_password = secrets.token_urlsafe(8)
-            password_hash = pbkdf2_sha256.hash(temp_password)
-            try:
-                self.user_repo.create_user(
-                    username=username,
-                    password_hash=password_hash,
-                    role='employee',
-                    employee_code=data['code']
-                )
-                user_created = True
-
-                # Send welcome email with credentials
-                if self.email_service.is_configured():
-                    email_result = self.email_service.send_new_employee_credentials(
-                        recipient_email=username,
-                        recipient_name=data['name'],
+            if data.get('employment_status', 'Active') not in ['Exited', 'Inactive']:
+                # Generate a secure 8-char URL-safe temp password
+                temp_password = secrets.token_urlsafe(8)
+                password_hash = pbkdf2_sha256.hash(temp_password)
+                try:
+                    self.user_repo.create_user(
+                        username=username,
+                        password_hash=password_hash,
+                        role='employee',
                         employee_code=data['code'],
-                        temporary_password=temp_password
+                        tenant_id=self.tenant_id
                     )
-                    email_sent = email_result.get('success', False)
-            except:
-                pass
+                    user_created = True
+    
+                    # Send welcome email with credentials
+                    if self.email_service.is_configured():
+                        email_result = self.email_service.send_new_employee_credentials(
+                            recipient_email=username,
+                            recipient_name=data['name'],
+                            employee_code=data['code'],
+                            temporary_password=temp_password
+                        )
+                        email_sent = email_result.get('success', False)
+                except:
+                    pass
         else:
             # Link existing user to this employee code if not already linked
             if not existing_user.get('employee_code'):

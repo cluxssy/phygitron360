@@ -143,3 +143,107 @@ def offboard_employee(employee_code: str, data: OffboardRequest, current_user: d
         return service.offboard_employee(employee_code, data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+import io
+import json
+import pandas as pd
+from fastapi.responses import StreamingResponse
+
+@router.get("/employees/bulk-upload/template", dependencies=[Depends(require_permission("deploy.employees.create"))])
+def get_bulk_upload_template():
+    columns = [
+        "Employee Code", "Name", "Email ID", "Role", "Date of Joining", 
+        "Designation", "Team / Department", "Employment Type", "Reporting Manager", 
+        "Base Location", "Employment Status", "Date of Birth", "Contact Number", 
+        "Emergency Contact Name", "Emergency Contact", "Current Address", "Permanent Address", 
+        "Primary Skills", "Secondary Skills", "Experience Years", "Education Details",
+        "Bank Name", "Bank Account No.", "PAN No.", "PF Included", "Mediclaim Included", "Notes"
+    ]
+    df = pd.DataFrame(columns=columns)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Template')
+        
+        workbook = writer.book
+        worksheet = writer.sheets['Template']
+        header_format = workbook.add_format({
+            'bold': True,
+            'bg_color': '#D7E4BC',
+            'border': 1
+        })
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+            worksheet.set_column(col_num, col_num, 20)
+            
+    output.seek(0)
+    
+    headers = {
+        'Content-Disposition': 'attachment; filename="employee_bulk_upload_template.xlsx"'
+    }
+    
+    return StreamingResponse(output, headers=headers, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+@router.post("/employees/bulk", dependencies=[Depends(require_permission("deploy.employees.create"))])
+def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
+    
+    results = {
+        "total": len(employees),
+        "success": 0,
+        "failed": 0,
+        "errors": []
+    }
+    
+    for row in employees:
+        try:
+            data = {
+                "code": str(row.get("Employee Code", "")).strip(),
+                "name": str(row.get("Name", "")).strip(),
+                "dob": str(row.get("Date of Birth", "")).strip(),
+                "phone": str(row.get("Contact Number", "")).strip(),
+                "emergency": f"{str(row.get('Emergency Contact Name', '')).strip()} - {str(row.get('Emergency Contact', '')).strip()}" if str(row.get('Emergency Contact Name', '')).strip() else str(row.get('Emergency Contact', '')).strip(),
+                "email": str(row.get("Email ID", "")).strip(),
+                "doj": str(row.get("Date of Joining", "")).strip(),
+                "team": str(row.get("Team / Department", "")).strip(),
+                "designation": str(row.get("Designation", "")).strip(),
+                "role": str(row.get("Role", "employee")).strip().lower() or "employee",
+                "type": str(row.get("Employment Type", "Full-time")).strip() or "Full-time",
+                "manager": str(row.get("Reporting Manager", "")).strip(),
+                "location": str(row.get("Base Location", "")).strip(),
+                "employment_status": str(row.get("Employment Status", "Active")).strip() or "Active",
+                "current_address": str(row.get("Current Address", "")).strip(),
+                "permanent_address": str(row.get("Permanent Address", "")).strip(),
+                "pf": "Yes" if str(row.get("PF Included", "")).strip().lower() in ['yes', 'true', '1'] else "No",
+                "mediclaim": "Yes" if str(row.get("Mediclaim Included", "")).strip().lower() in ['yes', 'true', '1'] else "No",
+                "notes": str(row.get("Notes", "")).strip(),
+                "primary_skillset": str(row.get("Primary Skills", "")).strip(),
+                "secondary_skillset": str(row.get("Secondary Skills", "")).strip(),
+                "experience_years": float(row.get("Experience Years", 0) or 0),
+                "bank_name": str(row.get("Bank Name", "")).strip(),
+                "bank_account_no": str(row.get("Bank Account No.", "")).strip(),
+                "pan_no": str(row.get("PAN No.", "")).strip(),
+                "photo_path": "",
+                "cv_path": "",
+                "id_proofs": "",
+                "education_details": json.loads(str(row.get("Education Details", "[]")).strip() or "[]") if str(row.get("Education Details", "")).strip() else []
+            }
+            
+            # Fallback if parsing fails (handled broadly by except Exception below, but let's be safe)
+            if not isinstance(data["education_details"], list):
+                data["education_details"] = []
+
+            
+            if not data["code"] or not data["name"] or not data["email"]:
+                raise ValueError("Missing mandatory fields (Code, Name, Email)")
+                
+            service.create_employee(data)
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append({
+                "code": str(row.get("Employee Code", "Unknown")),
+                "error": str(e)
+            })
+            
+    return results
