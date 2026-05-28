@@ -6,11 +6,12 @@ from psycopg2.extras import RealDictCursor
 
 class PasswordResetRepository:
     
-    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+    def get_user_by_email(self, email: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         """Get user by email"""
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
                 # Get from users table
                 cur.execute("""
                     SELECT u.*, e.name 
@@ -24,11 +25,12 @@ class PasswordResetRepository:
         finally:
             conn.close()
     
-    def get_employee_by_code(self, employee_code: str) -> Optional[Dict[str, Any]]:
+    def get_employee_by_code(self, employee_code: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         """Get employee by code"""
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("SELECT * FROM employees WHERE employee_code = %s", (employee_code,))
                 employee = cur.fetchone()
                 return dict(employee) if employee else None
@@ -103,12 +105,14 @@ class PasswordResetRepository:
         email: str, 
         password_hash: str, 
         changed_by: str,
-        must_change: bool = False
+        must_change: bool = False,
+        tenant_id: str = 'public'
     ) -> None:
         """Update user password"""
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("""
                     UPDATE users 
                     SET password_hash = %s,
