@@ -10,7 +10,7 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
     # Find the .env file in the backend directory
-    env_path = Path(__file__).parent.parent / '.env'
+    env_path = Path(__file__).parent.parent.parent / '.env'
     load_dotenv(env_path)
 except ImportError:
     # python-dotenv not installed, will use system environment variables

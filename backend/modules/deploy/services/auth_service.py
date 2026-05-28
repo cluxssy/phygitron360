@@ -75,7 +75,8 @@ class AuthService:
             "tenant_id": tenant_id,
             "employee_code": user['employee_code'],
             "permissions": self.repo.get_user_permissions(user['id'], user['roles'], tenant_id=tenant_id),
-            "modules_enabled": modules_enabled
+            "modules_enabled": modules_enabled,
+            "password_must_change": bool(user.get('password_must_change', 0))
         }
         
         return {"token": token, "user": user_info, "expires": expires}

@@ -126,7 +126,7 @@ class EmployeeRepository:
                     photo_path, cv_path, id_proofs, notes, 
                     bank_name, bank_account_no, pan_no,
                     employment_status
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Active')
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 data['code'], data['name'], data['dob'], data['phone'], data['emergency'], 
                 data['email'], data['doj'], data['team'], data.get('designation', ''), data['type'], 
@@ -134,7 +134,8 @@ class EmployeeRepository:
                 json.dumps(data.get('education_details', [])),
                 data['pf'], data['mediclaim'], 
                 data['photo_path'], data['cv_path'], data['id_proofs'], data['notes'],
-                data.get('bank_name'), data.get('bank_account_no'), data.get('pan_no')
+                data.get('bank_name'), data.get('bank_account_no'), data.get('pan_no'),
+                data.get('employment_status', 'Active')
             ))
             
             # Skill Matrix

@@ -10,6 +10,8 @@ import ForgotPasswordPage from './modules/landing/pages/ForgotPasswordPage';
 import ResetPasswordPage from './modules/landing/pages/ResetPasswordPage';
 import OnboardPage from './modules/landing/pages/OnboardPage';
 
+import ForceChangePasswordPage from './modules/landing/pages/ForceChangePasswordPage';
+
 import MasterConsole from './modules/admin/pages/MasterConsole';
 import OrgDashboard from './modules/admin/pages/OrgDashboard';
 import SuperadminDashboard from './modules/admin/pages/SuperadminDashboard';
@@ -25,19 +27,21 @@ function ProtectedRoute({ children, requiredPermission, requiredModule }) {
   if (loading) {
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#f5f5f5]">
-
       <div className="w-12 h-12 border-4 border-[#7c5cff] border-t-transparent rounded-full animate-spin mb-4"></div>
-
       <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[3px]">
         Loading Workspace...
       </p>
-
     </div>
   );
 }
   
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Force password change check
+  if (user.password_must_change) {
+    return <Navigate to="/force-change-password" replace />;
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
@@ -68,6 +72,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/force-change-password" element={<ForceChangePasswordPage />} />
         <Route path="/onboard" element={<OnboardPage />} />
 
         {/* Dashboards */}
