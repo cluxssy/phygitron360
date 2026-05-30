@@ -601,7 +601,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             />
                             <FileCard
                                 label="Identity Proof"
-                                path={details.id_proof_path}
+                                path={details.id_proofs}
                                 editMode={editMode}
                                 onUpload={() => fileInputId.current.click()}
                             />
