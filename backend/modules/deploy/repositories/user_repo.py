@@ -41,14 +41,14 @@ class UserRepository:
         finally:
             conn.close()
 
-    def create_user(self, username: str, password_hash: str, role: str, employee_code: Optional[str] = None, tenant_id: str = 'public'):
+    def create_user(self, username: str, password_hash: str, role: str, employee_code: Optional[str] = None, tenant_id: str = 'public', is_active: int = 1):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute(
-                    "INSERT INTO users (username, password_hash, role, roles, employee_code, password_must_change) VALUES (%s, %s, %s, %s, %s, 1)",
-                    (username, password_hash, role[0] if isinstance(role, list) else role, role if isinstance(role, list) else [role], employee_code)
+                    "INSERT INTO users (username, password_hash, role, roles, employee_code, password_must_change, is_active) VALUES (%s, %s, %s, %s, %s, 1, %s)",
+                    (username, password_hash, role[0] if isinstance(role, list) else role, role if isinstance(role, list) else [role], employee_code, is_active)
                 )
                 conn.commit()
         finally:

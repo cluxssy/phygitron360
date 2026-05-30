@@ -125,10 +125,12 @@ def change_password(
         if not email:
             raise HTTPException(status_code=401, detail="Not authenticated")
         
+        tenant_id = current_user.get('tenant_id', 'public')
         result = service.change_password_logged_in(
             email=email,
             current_password=request.current_password,
-            new_password=request.new_password
+            new_password=request.new_password,
+            tenant_id=tenant_id
         )
         
         if not result['success']:

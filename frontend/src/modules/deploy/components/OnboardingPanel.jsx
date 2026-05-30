@@ -418,7 +418,7 @@ export default function OnboardingPanel() {
                                : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
                            }`}>
                               {app.photo_path ? (
-                                  <img src={`/${app.photo_path}`} className="w-full h-full object-cover" alt="" />
+                                  <img src={app.photo_path.startsWith('http') ? app.photo_path : `/${app.photo_path.replace(/^\//, '')}`} className="w-full h-full object-cover" alt="" />
                               ) : (
                                   app.name?.[0] || '?'
                               )}
@@ -588,7 +588,7 @@ export default function OnboardingPanel() {
                             : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
                         }`}>
                            {selectedApproval.photo_path ? (
-                               <img src={`/${selectedApproval.photo_path}`} className="w-full h-full object-cover" alt="" />
+                               <img src={selectedApproval.photo_path.startsWith('http') ? selectedApproval.photo_path : `/${selectedApproval.photo_path.replace(/^\//, '')}`} className="w-full h-full object-cover" alt="" />
                            ) : (
                                selectedApproval.name?.[0]
                            )}
@@ -695,7 +695,7 @@ export default function OnboardingPanel() {
                               </div>
                                {d.path ? (
                                  <a 
-                                   href={`/${d.path}`} 
+                                   href={d.path.startsWith('http') ? d.path : `/${d.path.replace(/^\//, '')}`} 
                                    target="_blank" 
                                    rel="noreferrer" 
                                    className={`p-2 rounded-lg transition-colors border ${

@@ -236,10 +236,11 @@ class PasswordService:
         self,
         email: str,
         current_password: str,
-        new_password: str
+        new_password: str,
+        tenant_id: str = 'public'
     ) -> Dict[str, Any]:
         """Change password for logged-in user"""
-        user = self.repo.get_user_by_email(email)
+        user = self.repo.get_user_by_email(email, tenant_id)
         if not user:
             return {"success": False, "message": "User not found"}
         
@@ -251,7 +252,7 @@ class PasswordService:
         password_hash = pbkdf2_sha256.hash(new_password)
         
         # Update password
-        self.repo.update_password(email, password_hash, changed_by="Self", must_change=False)
+        self.repo.update_password(email, password_hash, changed_by="Self", must_change=False, tenant_id=tenant_id)
         
         # Send notification
         user_name = user.get('name', email.split('@')[0])
