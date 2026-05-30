@@ -84,6 +84,20 @@ class AssetRepository:
         finally:
             conn.close()
 
+    def update_asset_fields(self, employee_code: str, fields: list, values: list, tenant_id: str = 'public'):
+        if not fields:
+            return
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            self._set_path(cur, tenant_id)
+            values.append(employee_code)
+            query = f"UPDATE assets SET {', '.join([f'{f} = %s' for f in fields])} WHERE employee_code = %s"
+            cur.execute(query, tuple(values))
+            conn.commit()
+        finally:
+            conn.close()
+
     def create_asset_checklist(self, employee_code: str, data: Dict[str, Any], tenant_id: str = 'public'):
         conn = get_db_connection()
         try:

@@ -154,6 +154,7 @@ class OnboardingRepository:
                 
                 cur.execute("UPDATE users SET is_active = 1 WHERE employee_code = %s", (final_code,))
                 conn.commit()
+                return final_code
         finally:
             conn.close()
     
