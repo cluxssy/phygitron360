@@ -109,7 +109,8 @@ class EmployeeService:
             pass
 
         if not existing_user:
-            if data.get('employment_status', 'Active') not in ['Exited', 'Inactive']:
+            emp_status = data.get('employment_status', 'Active')
+            if emp_status != 'Exited':
                 # Generate a secure 8-char URL-safe temp password
                 temp_password = secrets.token_urlsafe(8)
                 password_hash = pbkdf2_sha256.hash(temp_password)
@@ -119,12 +120,13 @@ class EmployeeService:
                         password_hash=password_hash,
                         role='employee',
                         employee_code=data['code'],
-                        tenant_id=self.tenant_id
+                        tenant_id=self.tenant_id,
+                        is_active=0 if emp_status == 'Inactive' else 1
                     )
                     user_created = True
     
-                    # Send welcome email with credentials
-                    if self.email_service.is_configured():
+                    # Send welcome email with credentials (only if Active)
+                    if emp_status == 'Active' and self.email_service.is_configured():
                         email_result = self.email_service.send_new_employee_credentials(
                             recipient_email=username,
                             recipient_name=data['name'],

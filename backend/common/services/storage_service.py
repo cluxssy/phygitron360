@@ -62,8 +62,8 @@ def save_uploaded_file(uploaded_file: UploadFile, folder_name: str, identifier: 
             logger.info(f"[S3] Uploaded {s3_key} → {url}")
             return url
         except Exception as e:
-            logger.error(f"[S3] Upload failed for {s3_key}: {e} — falling back to local disk")
-            # Fall through to local save below
+            logger.error(f"[S3] Upload failed for {s3_key}: {e}")
+            raise Exception(f"S3 Upload Error: {str(e)}")
 
     # ── Local disk fallback ───────────────────────────────────────────────────
     try:

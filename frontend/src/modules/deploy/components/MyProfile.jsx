@@ -307,9 +307,8 @@ export default function MyProfile() {
     >
 
         {details.photo_path ? (
-
-            <img
-                src={`/${details.photo_path}`}
+              <img 
+                src={details.photo_path.startsWith('http') ? details.photo_path : `/${details.photo_path.replace(/^\//, '')}`}
                 className="w-full h-full object-cover"
                 alt=""
             />

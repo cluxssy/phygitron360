@@ -469,7 +469,7 @@ setEmployees(employeeList);
                           {emp.photo_path ? (
 
                             <img
-                              src={`/${emp.photo_path}`}
+                              src={emp.photo_path.startsWith('http') ? emp.photo_path : `/${emp.photo_path.replace(/^\//, '')}`}
                               alt=""
                               className="w-full h-full object-cover"
                             />
