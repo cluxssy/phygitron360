@@ -196,8 +196,21 @@ class OnboardingService:
         return self.repo.get_pending_approvals(tenant_id=tenant_id)
 
     def approve_onboarding(self, employee_code: str, approval_data: dict, tenant_id: str = 'public'):
-        self.repo.approve_employee(employee_code, approval_data, tenant_id=tenant_id)
-        return {"success": True, "message": f"Personnel {employee_code} identity activated."}
+        final_code = self.repo.approve_employee(employee_code, approval_data, tenant_id=tenant_id)
+        final_code = final_code or employee_code
+
+        # Initialize Asset Checklist
+        from backend.modules.deploy.repositories.asset_repo import AssetRepository
+        try:
+            default_assets = {
+                'ob_pf': 1 if approval_data.get('pf') in ['Yes', 'true', '1'] else 0,
+                'ob_mediclaim': 1 if approval_data.get('mediclaim') in ['Yes', 'true', '1'] else 0
+            }
+            AssetRepository().create_asset_checklist(final_code, default_assets, tenant_id)
+        except Exception as e:
+            print("Failed to initialize assets on approve:", e)
+
+        return {"success": True, "message": f"Personnel {final_code} identity activated."}
 
     def unify_admin_identity(self, user_id: int, username: str, emp_data: dict, file_metadata: dict, tenant_id: str = 'public'):
         """

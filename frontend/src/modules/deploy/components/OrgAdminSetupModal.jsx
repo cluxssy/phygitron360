@@ -33,7 +33,9 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
     bank_account_no: '',
     pan_no: '',
     pf_included: 'No',
-    mediclaim_included: 'No'
+    mediclaim_included: 'No',
+    primary_skills: '',
+    secondary_skills: ''
   });
 
   // Country Code and Emergency States
@@ -149,6 +151,8 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
     fd.append("pan_no", form.pan_no);
     fd.append("pf_included", form.pf_included);
     fd.append("mediclaim_included", form.mediclaim_included);
+    fd.append("primary_skills", form.primary_skills);
+    fd.append("secondary_skills", form.secondary_skills);
     fd.append('education_details', JSON.stringify(educationList));
 
     Object.entries(files).forEach(([k, v]) => v && fd.append(k, v));
@@ -394,6 +398,17 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-6 border-t border-slate-100">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Primary Skills</label>
+                  <input name="primary_skills" value={form.primary_skills || ''} onChange={handleChange} className="w-full glass-panel-input" placeholder="e.g. React, Node.js" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Secondary Skills</label>
+                  <input name="secondary_skills" value={form.secondary_skills || ''} onChange={handleChange} className="w-full glass-panel-input" placeholder="e.g. Python, Docker" />
+                </div>
               </div>
             </div>
           )}

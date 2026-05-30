@@ -118,7 +118,7 @@ class EmployeeService:
                     self.user_repo.create_user(
                         username=username,
                         password_hash=password_hash,
-                        role='employee',
+                        role=data.get('role') or 'employee',
                         employee_code=data['code'],
                         tenant_id=self.tenant_id,
                         is_active=0 if emp_status == 'Inactive' else 1
@@ -232,6 +232,27 @@ class EmployeeService:
              
         if p_skill is not None or s_skill is not None or exp is not None:
             self.repo.update_skill_matrix(current_emp_code, p_skill, s_skill, self.tenant_id, experience_years=exp)
+
+        # Sync PF and Mediclaim to Assets Table
+        asset_fields = []
+        asset_values = []
+        if 'pf_included' in fields:
+            idx = fields.index('pf_included')
+            val = values[idx]
+            asset_fields.append('ob_pf')
+            asset_values.append(1 if val in ['Yes', 'true', '1'] else 0)
+        if 'mediclaim_included' in fields:
+            idx = fields.index('mediclaim_included')
+            val = values[idx]
+            asset_fields.append('ob_mediclaim')
+            asset_values.append(1 if val in ['Yes', 'true', '1'] else 0)
+            
+        if asset_fields:
+            try:
+                from backend.modules.deploy.repositories.asset_repo import AssetRepository
+                AssetRepository().update_asset_fields(current_emp_code, asset_fields, asset_values, self.tenant_id)
+            except Exception as e:
+                print("Failed to sync assets:", e)
 
         return {"success": True, "message": "Employee updated successfully"}
     
