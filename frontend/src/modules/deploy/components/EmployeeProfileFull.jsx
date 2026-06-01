@@ -35,6 +35,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 experience_years: data.skill_matrix?.experience_years || '0',
                 doj: (data.doj || '').split('T')[0],
                 dob: (data.dob || '').split('T')[0],
+                pf_included: ['Yes', 'yes', 'true', '1', true].includes(data.pf_included),
+                mediclaim_included: ['Yes', 'yes', 'true', '1', true].includes(data.mediclaim_included),
             });
         } catch {
             toast.error('Failed to load personnel dossier');
@@ -662,11 +664,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 {[
                                     { key: 'cl_laptop', label: 'Laptop Returned' },
                                     { key: 'cl_laptop_bag', label: 'Bag Returned' },
-                                    { key: 'cl_assets_verified', label: 'Assets Verified' },
+                                    { key: 'cl_headphones', label: 'Headphones Returned' },
+                                    { key: 'cl_mouse', label: 'Mouse Returned' },
+                                    { key: 'cl_extra_hardware', label: 'Extra Hardware Returned' },
+                                    { key: 'cl_client_assets', label: 'Client Assets Verified' },
                                     { key: 'cl_id_card', label: 'ID Surrendered' },
-                                    { key: 'cl_email_disabled', label: 'Email Disabled' },
-                                    { key: 'cl_groups_removed', label: 'Access Purged' },
-                                    { key: 'cl_accounts_clearance', label: 'Finance Cleared' }
+                                    { key: 'cl_email_access', label: 'Email Disabled' },
+                                    { key: 'cl_groups', label: 'Access Purged' },
+                                    { key: 'cl_relieving_letter', label: 'Relieving Letter' }
                                 ].map(a => (
                                     <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#f4ecff] transition-all border-b border-[#ece4ff] last:border-0 group">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-[#7c3aed] transition-colors">

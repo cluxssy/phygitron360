@@ -240,12 +240,12 @@ class EmployeeService:
             idx = fields.index('pf_included')
             val = values[idx]
             asset_fields.append('ob_pf')
-            asset_values.append(1 if val in ['Yes', 'true', '1'] else 0)
+            asset_values.append(1 if str(val).lower() in ['yes', 'true', '1'] else 0)
         if 'mediclaim_included' in fields:
             idx = fields.index('mediclaim_included')
             val = values[idx]
             asset_fields.append('ob_mediclaim')
-            asset_values.append(1 if val in ['Yes', 'true', '1'] else 0)
+            asset_values.append(1 if str(val).lower() in ['yes', 'true', '1'] else 0)
             
         if asset_fields:
             try:

@@ -34,5 +34,22 @@ class AssetService:
             self.repo.update_asset_checklist(employee_code, data, tenant_id=self.tenant_id)
         else:
             self.repo.create_asset_checklist(employee_code, data, tenant_id=self.tenant_id)
+
+        # Sync back to employees table to ensure Compliance Protocol stays updated
+        sync_fields = []
+        sync_values = []
+        if 'ob_pf' in data:
+            sync_fields.append('pf_included')
+            sync_values.append('Yes' if data['ob_pf'] else 'No')
+        if 'ob_mediclaim' in data:
+            sync_fields.append('mediclaim_included')
+            sync_values.append('Yes' if data['ob_mediclaim'] else 'No')
+            
+        if sync_fields:
+            try:
+                from backend.modules.deploy.repositories.employee_repo import EmployeeRepository
+                EmployeeRepository().update_employee_fields(employee_code, sync_fields, sync_values, self.tenant_id)
+            except Exception as e:
+                print("Failed to sync employee compliance fields from assets:", e)
         
         return {"success": True, "message": "Allocation protocol updated successfully"}
