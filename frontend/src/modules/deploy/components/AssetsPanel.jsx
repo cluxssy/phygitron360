@@ -27,12 +27,12 @@ const CLEARANCE_LABELS = {
   cl_laptop_bag: 'Bag Returned',
   cl_headphones: 'Headphones Returned',
   cl_mouse: 'Mouse Returned',
+  cl_extra_hardware: 'Extra Hardware Returned',
+  cl_client_assets: 'Client Assets Verified',
   cl_id_card: 'ID Card Returned',
-  cl_email_disabled: 'Email Disabled',
-  cl_groups_removed: 'Access Removed',
-  cl_assets_verified: 'Client Assets Verified',
-  cl_mediclaim_settled: 'Mediclaim Closed',
-  cl_accounts_clearance: 'Accounts Clearance',
+  cl_email_access: 'Email Disabled',
+  cl_groups: 'Access Removed',
+  cl_relieving_letter: 'Relieving Letter',
 };
 
 export default function AssetsPanel({ mode = 'admin', user }) {
