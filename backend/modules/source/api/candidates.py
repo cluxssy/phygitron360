@@ -256,8 +256,11 @@ def get_my_applications(
             conn.close()
     except Exception as exc:
         import traceback
-        logger.error(f"get_my_applications failed: {exc}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        err_msg = f"get_my_applications failed: {exc}\n{traceback.format_exc()}"
+        logger.error(err_msg)
+        with open("/tmp/my_apps_error.log", "w") as f:
+            f.write(err_msg)
+        raise HTTPException(status_code=500, detail=err_msg)
 
 
 @router.get("/{candidate_id}")
