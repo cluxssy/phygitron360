@@ -20,6 +20,7 @@ import SourceDashboard from './modules/source/pages/SourceDashboard';
 import DeployDashboard from './modules/deploy/pages/DeployDashboard';
 import VerifyDashboard from './modules/verify/pages/VerifyDashboard';
 import ForgeDashboard from './modules/forge/pages/ForgeDashboard';
+import TraineeDashboard from './modules/trainee/pages/TraineeDashboard';
 
 function ProtectedRoute({ children, requiredPermission, requiredModule }) {
   const { user, loading, hasPermission } = useAuth();
@@ -56,9 +57,18 @@ function ProtectedRoute({ children, requiredPermission, requiredModule }) {
 }
 
 function AdminGate() {
-  const { hasRole } = useAuth();
-  if (hasRole(['org_admin', 'manager'])) return <OrgDashboard />;
-  return <MasterConsole />;
+  const { hasRole, hasPermission } = useAuth();
+  
+  if (hasPermission('admin.users.manage') || hasRole(['org_admin'])) {
+    return <OrgDashboard />;
+  }
+  
+  if (hasRole(['super_admin'])) {
+    return <MasterConsole />;
+  }
+
+  // Fallback for managers or others who shouldn't be in the admin workspace
+  return <Navigate to="/deploy" replace />;
 }
 
 export default function App() {
@@ -88,7 +98,7 @@ export default function App() {
         <Route 
           path="/admin" 
           element={
-            <ProtectedRoute requiredPermission="deploy.dashboard.view_admin">
+            <ProtectedRoute>
               <Layout><AdminGate /></Layout>
             </ProtectedRoute>
           } 
@@ -126,6 +136,15 @@ export default function App() {
           element={
             <ProtectedRoute requiredModule="deploy">
               <Layout><DeployDashboard /></Layout>
+            </ProtectedRoute>
+          } 
+        />
+
+        <Route 
+          path="/trainee" 
+          element={
+            <ProtectedRoute>
+              <TraineeDashboard />
             </ProtectedRoute>
           } 
         />

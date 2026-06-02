@@ -307,3 +307,72 @@ Assessment Team — Phygitron 360
     except Exception as exc:
         logger.error(f"send_assessment_notification_email failed for {to_email}: {exc}")
         return False
+
+def send_generic_notification_email(
+    to_email: str,
+    candidate_name: str,
+    notification_subject: str,
+    notification_message: str,
+    company_name: str,
+) -> bool:
+    """
+    Send a custom HR notification to a candidate/trainee.
+    Falls back to structured logging if SMTP is not configured.
+    """
+    subject = notification_subject
+
+    plain_body = f"""
+Dear {candidate_name},
+
+You have a new update from {company_name}:
+
+{notification_message}
+
+Please log in to your Trainee Dashboard to view more details.
+
+Best regards,
+Talent Acquisition Team
+{company_name}
+"""
+
+    html_message = notification_message.replace('\n', '<br/>')
+    
+    # We use a simple regex approach (or just let the email client auto-link) but we can wrap http(s) in a tags for the html body if needed. 
+    # For now, most email clients auto-link raw URLs. To be safe, we just render it nicely.
+
+    html_body = f"""
+<html><body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+  <h2 style="color:#4f46e5;">New Notification</h2>
+  <p>Dear <strong>{candidate_name}</strong>,</p>
+  <p>You have a new update from <strong>{company_name}</strong>:</p>
+  <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 16px 0; border: 1px solid #e5e7eb;">
+    {html_message}
+  </div>
+  <p>Please log in to your Trainee Dashboard to view more details.</p>
+  <br/>
+  <p>Best regards,<br/><strong>Talent Acquisition Team</strong><br/>{company_name}</p>
+</body></html>
+"""
+
+    host, _, user, _ = _get_smtp_config()
+    if not all([host, user]):
+        _mock_log(to_email, subject, plain_body)
+        return True
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = user
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(plain_body, "plain"))
+        msg.attach(MIMEText(html_body, "html"))
+        result = _send_via_smtp(msg)
+        if result:
+            logger.info(f"Custom notification sent to {to_email} with subject '{subject}'")
+        else:
+            _mock_log(to_email, subject, plain_body)
+        return True
+    except Exception as exc:
+        logger.error(f"send_generic_notification_email failed for {to_email}: {exc}")
+        return False
+

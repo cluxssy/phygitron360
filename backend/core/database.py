@@ -97,7 +97,7 @@ def create_tables(schema_name='public'):
                 dob TEXT,
                 contact_number TEXT,
                 emergency_contact TEXT,
-                email_id TEXT,
+                email_id TEXT UNIQUE,
                 doj TEXT, 
                 team TEXT,
                 designation TEXT,
@@ -165,7 +165,7 @@ def create_tables(schema_name='public'):
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT CHECK(role IN (
-                    'super_admin', 'org_admin', 'manager', 'employee', 'candidate'
+                    'super_admin', 'org_admin', 'manager', 'employee', 'candidate', 'trainee'
                 )) NOT NULL,
                 roles TEXT[],
                 employee_code TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE,
@@ -277,6 +277,19 @@ def create_tables(schema_name='public'):
                 min_experience INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 3.0.3.a) Candidate Applications (Job-specific Tracking)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS candidate_applications (
+                id SERIAL PRIMARY KEY,
+                candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+                job_role_id INTEGER NOT NULL REFERENCES job_roles(id) ON DELETE CASCADE,
+                status TEXT DEFAULT 'New',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(candidate_id, job_role_id)
             )
         ''')
 
@@ -646,6 +659,7 @@ def create_tables(schema_name='public'):
             CREATE TABLE IF NOT EXISTS notifications (
                 id SERIAL PRIMARY KEY,
                 employee_code TEXT,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                 title TEXT,
                 message TEXT,
                 type TEXT,

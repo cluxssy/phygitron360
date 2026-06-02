@@ -206,12 +206,14 @@ export default function OrgDashboard() {
             Overview
           </button>
 
-          <button
-            className={activeSideTab === "users" ? "active" : ""}
-            onClick={() => setActiveSideTab("users")}
-          >
-            Users
-          </button>
+          {hasPermission?.("admin.users.manage") && (
+            <button
+              className={activeSideTab === "users" ? "active" : ""}
+              onClick={() => setActiveSideTab("users")}
+            >
+              Users
+            </button>
+          )}
 
           {/* <button
             className={activeSideTab === "analytics" ? "active" : ""}
@@ -425,7 +427,7 @@ export default function OrgDashboard() {
 
           {/* USERS */}
 
-          {activeSideTab === "users" && (
+          {activeSideTab === "users" && hasPermission?.("admin.users.manage") && (
             <AdminPanel />
           )}
 

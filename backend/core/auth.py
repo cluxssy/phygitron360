@@ -177,6 +177,20 @@ def get_current_user(request: Request) -> dict:
         if perm_key in permissions and mod not in modules_lower:
             del permissions[perm_key]
 
+    # Fetch tenant company name
+    company_name = tenant_id
+    try:
+        conn2 = get_db_connection()
+        with conn2.cursor() as cur2:
+            cur2.execute("SET search_path TO public")
+            cur2.execute("SELECT company_name FROM tenants WHERE id = %s", (tenant_id,))
+            row2 = cur2.fetchone()
+            if row2:
+                company_name = row2[0]
+        conn2.close()
+    except Exception:
+        pass
+
     return {
         "id":             user_row["id"],
         "username":       user_row["username"],
@@ -187,4 +201,5 @@ def get_current_user(request: Request) -> dict:
         "employee_code":  user_row.get("employee_code"),
         "permissions":    permissions,
         "modules_enabled": modules_enabled,
+        "company_name":   company_name,
     }

@@ -191,17 +191,58 @@ class JobRoleRepository:
         finally:
             conn.close()
 
-    def upsert_user_password_by_candidate(self, candidate_id: int, password_hash: str):
+    def upsert_user_password_by_candidate(self, candidate_id: int, password_hash: str) -> dict:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                cur.execute(
-                    """UPDATE users SET password_hash = %s, password_must_change = 1
-                       WHERE id = (SELECT user_id FROM candidates WHERE id = %s)""",
-                    (password_hash, candidate_id),
-                )
-                conn.commit()
+                # Check if candidate already has a user account linked
+                cur.execute("SELECT user_id, email, full_name FROM candidates WHERE id = %s", (candidate_id,))
+                row = cur.fetchone()
+                if not row:
+                    return {"success": False}
+                user_id, email, full_name = row
+                
+                if user_id:
+                    cur.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+                    u_row = cur.fetchone()
+                    
+                    if u_row and u_row[0] != 'trainee':
+                        # Internal employee who is already linked - do NOT overwrite password
+                        return {"is_internal": True, "user_id": user_id, "success": True}
+                        
+                    # Update password for existing linked account (external trainee)
+                    # We assume an external trainee needs a fresh password for the new invite.
+                    cur.execute(
+                        """UPDATE users 
+                           SET password_hash = %s, password_must_change = 1
+                           WHERE id = %s""",
+                        (password_hash, user_id),
+                    )
+                    conn.commit()
+                    return {"is_internal": False, "user_id": user_id, "success": True}
+                else:
+                    # Candidate is not linked. Check if an account exists with this email (Internal Employee).
+                    cur.execute("SELECT id FROM users WHERE username = %s", (email,))
+                    existing_user = cur.fetchone()
+                    if existing_user:
+                        existing_user_id = existing_user[0]
+                        # Link candidate to existing internal employee, do NOT change their password or role
+                        cur.execute("UPDATE candidates SET user_id = %s WHERE id = %s", (existing_user_id, candidate_id))
+                        conn.commit()
+                        return {"is_internal": True, "user_id": existing_user_id, "success": True}
+                        
+                    # Otherwise, create a brand new external trainee account
+                    cur.execute(
+                        """INSERT INTO users (username, password_hash, role, roles, password_must_change, is_active)
+                           VALUES (%s, %s, 'trainee', ARRAY['trainee'], 1, 1)
+                           RETURNING id""",
+                        (email, password_hash)
+                    )
+                    new_user_id = cur.fetchone()[0]
+                    cur.execute("UPDATE candidates SET user_id = %s WHERE id = %s", (new_user_id, candidate_id))
+                    conn.commit()
+                    return {"is_internal": False, "user_id": new_user_id, "success": True}
         finally:
             conn.close()
 
@@ -210,14 +251,54 @@ class JobRoleRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                cur.execute(
-                    """INSERT INTO candidate_invites
-                       (candidate_id, job_role_id, hr_user_id, email_sent_at, status)
-                       VALUES (%s, %s, %s, CURRENT_TIMESTAMP, 'sent')
-                       ON CONFLICT DO NOTHING""",
-                    (candidate_id, job_role_id, hr_id),
-                )
+                # Check if it exists manually since there's no unique constraint
+                cur.execute("SELECT id FROM candidate_invites WHERE candidate_id = %s AND job_role_id = %s", (candidate_id, job_role_id))
+                if not cur.fetchone():
+                    cur.execute(
+                        """INSERT INTO candidate_invites
+                           (candidate_id, job_role_id, hr_user_id, email_sent_at, status)
+                           VALUES (%s, %s, %s, CURRENT_TIMESTAMP, 'sent')""",
+                        (candidate_id, job_role_id, hr_id),
+                    )
+                    conn.commit()
+        finally:
+            conn.close()
+
+    def cancel_invite(self, candidate_id: int):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                # Check if candidate exists and get their user_id
+                cur.execute("SELECT user_id FROM candidates WHERE id = %s", (candidate_id,))
+                row = cur.fetchone()
+                if not row:
+                    return {"success": False, "error": "Candidate not found"}
+                
+                user_id = row[0]
+                
+                # Delete the invite record
+                cur.execute("DELETE FROM candidate_invites WHERE candidate_id = %s", (candidate_id,))
+                
+                # If they have a user account, check if it's a trainee
+                if user_id:
+                    cur.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+                    u_row = cur.fetchone()
+                    if u_row and u_row[0] == 'trainee':
+                        # Delete the trainee user account (which cascades or we manually unlink)
+                        # First unlink from candidate to prevent cascade issues if candidates shouldn't be deleted
+                        cur.execute("UPDATE candidates SET user_id = NULL, status = 'New' WHERE id = %s", (candidate_id,))
+                        # Now delete the user account entirely
+                        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+                    else:
+                        # Internal employee, just reset their candidate status but keep their user account
+                        cur.execute("UPDATE candidates SET status = 'New' WHERE id = %s", (candidate_id,))
+                else:
+                    # No user account yet, just reset status
+                    cur.execute("UPDATE candidates SET status = 'New' WHERE id = %s", (candidate_id,))
+                
                 conn.commit()
+                return {"success": True}
         finally:
             conn.close()
 

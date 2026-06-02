@@ -18,14 +18,14 @@ const LEVEL_COLOR = {
 
 const STATUS_STYLE = {
   active:      'bg-emerald-400/10 text-emerald-400 border-emerald-400/20',
-  shortlisted: 'bg-primary/10 text-primary border-primary/20',
+  favourite: 'bg-primary/10 text-primary border-primary/20',
   invited:     'bg-indigo/10 text-indigo border-indigo/20',
   hired:       'bg-secondary/10 text-secondary border-secondary/20',
   rejected:    'bg-rose-400/10 text-rose-400 border-rose-400/20',
   archived:    'bg-rose-400/5 text-rose-400/60 border-rose-400/10',
 };
 
-export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefresh, onConvert }) {
+export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, onRefresh, onConvert }) {
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
@@ -74,7 +74,8 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
     setShowInviteForm(false);
     setShowScoreForm(false);
     setIsEditing(false);
-    fetch(`/api/source/candidates/${candidate.id}`)
+    const url = roleId ? `/api/source/candidates/${candidate.id}?role_id=${roleId}` : `/api/source/candidates/${candidate.id}`;
+    fetch(url)
       .then(r => r.json())
       .then(d => { if (d.success) setProfile(d.data); })
       .catch(() => { /* use shallow data */ })
@@ -85,14 +86,24 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
 
   // ── Send invite ──────────────────────────────────────────────────────────
   const handleInvite = async (e) => {
-    e.preventDefault();
-    if (!inviteRoleId) return toast.error('Select a role');
+    e?.preventDefault();
+    if (!inviteRoleId) {
+      return toast.error("Please select a Job Role to invite the candidate for.");
+    }
+    if (!window.confirm(`Are you sure you want to invite ${data.full_name || 'this candidate'} to the Trainee platform? They will receive an email with login credentials.`)) {
+      return;
+    }
     setInviting(true);
     try {
       const r = await fetch('/api/source/send-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidate_ids: [candidate.id], job_role_id: parseInt(inviteRoleId) }),
+        body: JSON.stringify({ 
+          candidate_ids: [candidate.id], 
+          job_role_id: parseInt(inviteRoleId), 
+          subject: "Welcome to Phygitron 360 Trainee Portal", 
+          custom_body: "Your profile has been selected. You can now log in to your Trainee dashboard.\n\nLogin URL: {assessment_link}\nTemporary Password: {temp_password}\n\nPlease log in and change your password immediately." 
+        }),
       });
       const d = await r.json();
       if (r.ok) {
@@ -137,7 +148,7 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
       const r = await fetch(`/api/source/candidates/${candidate.id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, role_id: roleId ? parseInt(roleId) : null }),
       });
       const d = await r.json();
       if (r.ok && d.success) {
@@ -576,13 +587,13 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {data?.status?.toLowerCase() !== 'shortlisted' && (
+                    {data?.status?.toLowerCase() !== 'favourite' && (
                       <button
                         disabled={updatingStatus}
-                        onClick={() => handleStatusUpdate('Shortlisted')}
+                        onClick={() => handleStatusUpdate('Favourite')}
                         className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black text-primary text-[10px] font-black uppercase tracking-widest transition-all"
                       >
-                        Shortlist
+                        Favourite
                       </button>
                     )}
                     {data?.status?.toLowerCase() !== 'archived' && (
@@ -594,7 +605,7 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
                         Archive
                       </button>
                     )}
-                    {(data?.status?.toLowerCase() === 'shortlisted' || data?.status?.toLowerCase() === 'archived' || data?.status?.toLowerCase() === 'rejected') && (
+                    {(data?.status?.toLowerCase() === 'favourite' || data?.status?.toLowerCase() === 'archived' || data?.status?.toLowerCase() === 'rejected') && (
                       <button
                         disabled={updatingStatus}
                         onClick={() => handleStatusUpdate('New')}
@@ -640,125 +651,7 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
                   ))}
                 </section>
 
-                {/* Verify Assessments & Forge Courses Integration */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  {/* Verify Assessments */}
-                  <div className="glass-panel p-4 bg-[#0a1226]/50 border-white/5 flex flex-col h-[240px]">
-                    <SectionLabel icon={<Shield size={13} className="text-secondary" />} label="Verify Assessments" color="text-secondary" />
-                    <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2">
-                      {(!data?.assessment_results || data.assessment_results.length === 0) ? (
-                        <div className="flex flex-col items-center justify-center h-full text-center text-white/30 gap-2">
-                          <Shield size={20} className="opacity-20" />
-                          <p className="text-[9px] uppercase font-bold tracking-widest">No assessments</p>
-                        </div>
-                      ) : (
-                        data.assessment_results.map((asm) => {
-                          const isPass = asm.score >= asm.pass_score;
-                          const dateStr = asm.submitted_at ? new Date(asm.submitted_at).toLocaleDateString() : 'N/A';
-                          return (
-                            <div key={asm.id} className="p-2 rounded-lg bg-white/[0.02] border border-white/5 flex flex-col gap-1.5">
-                              <div className="flex justify-between items-start">
-                                <p className="text-[11px] font-bold text-white truncate max-w-[100px]" title={asm.assessment_title}>{asm.assessment_title}</p>
-                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                                  asm.is_malpractice ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
-                                  isPass ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                                  'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                }`}>
-                                  {asm.is_malpractice ? 'Malpractice' : isPass ? 'Pass' : 'Fail'}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center text-[9px] text-white/40">
-                                <span>Score: <strong className="text-white">{asm.score}%</strong> ({asm.pass_score}%)</span>
-                                <span>{dateStr}</span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Forge Courses */}
-                  <div className="glass-panel p-4 bg-[#0a1226]/50 border-white/5 flex flex-col h-[240px]">
-                    <SectionLabel icon={<BookOpen size={13} className="text-indigo" />} label="Forge Courses" color="text-indigo" />
-                    <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2">
-                      {(!data?.course_enrollments || data.course_enrollments.length === 0) ? (
-                        <div className="flex flex-col items-center justify-center h-full text-center text-white/30 gap-2">
-                          <BookOpen size={20} className="opacity-20" />
-                          <p className="text-[9px] uppercase font-bold tracking-widest">No courses</p>
-                        </div>
-                      ) : (
-                        data.course_enrollments.map((crs) => {
-                          const progress = crs.progress_percent || 0;
-                          const isCompleted = crs.status?.toLowerCase() === 'completed' || progress === 100;
-                          return (
-                            <div key={crs.id} className="p-2 rounded-lg bg-white/[0.02] border border-white/5 flex flex-col gap-1.5">
-                              <div className="flex justify-between items-start">
-                                <p className="text-[11px] font-bold text-white truncate max-w-[100px]" title={crs.course_title}>{crs.course_title}</p>
-                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                                  isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                                  'bg-indigo-500/20 text-indigo border border-indigo-500/30'
-                                }`}>
-                                  {crs.status || (progress === 100 ? 'Completed' : 'Enrolled')}
-                                </span>
-                              </div>
-                              <div className="space-y-1">
-                                <div className="flex justify-between text-[8px] text-white/40">
-                                  <span>Progress</span>
-                                  <span>{progress}%</span>
-                                </div>
-                                <div className="h-0.5 w-full bg-white/5 rounded-full overflow-hidden">
-                                  <div className="h-full bg-indigo transition-all duration-300" style={{ width: `${progress}%` }} />
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* AI Fit Score */}
-                {(data?.fit_score != null || fitScore) && (
-                  <section>
-                    <SectionLabel icon={<Star size={13} />} label="AI Role Fit Score" />
-                    <div className="glass-panel p-5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className={`text-4xl font-display font-black ${
-                          (data.fit_score || fitScore?.score) >= 80 ? 'text-emerald-400' :
-                          (data.fit_score || fitScore?.score) >= 60 ? 'text-primary' : 'text-rose-400'
-                        }`}>
-                          {Math.round(data.fit_score || fitScore?.score || 0)}%
-                        </span>
-                        {fitData?.summary && (
-                          <p className="text-xs text-white/50 max-w-[260px] text-right leading-relaxed">{fitData.summary}</p>
-                        )}
-                      </div>
-
-                      {fitData && (
-                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
-                          <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400 mb-2">Matched</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {(fitData.matched_skills || []).map(s => (
-                                <span key={s} className="px-2.5 py-1 rounded-lg bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-[10px] font-bold">{s}</span>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest text-rose-400 mb-2">Missing</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {(fitData.missing_skills || []).map(s => (
-                                <span key={s} className="px-2.5 py-1 rounded-lg bg-rose-400/10 border border-rose-400/20 text-rose-400 text-[10px] font-bold">{s}</span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                )}
 
                 {/* Skills */}
                 {((data?.structured_skills || data?.skills || []).length > 0) && (
@@ -930,10 +823,10 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
                   </section>
                 )}
 
-                {/* Send invite - inline form */}
+                {/* Invite to role - inline form */}
                 {showInviteForm && (
                   <section>
-                    <SectionLabel icon={<Send size={13} />} label="Invite to Assessment" />
+                    <SectionLabel icon={<Send size={13} />} label="Invite to Role" />
                     <form onSubmit={handleInvite} className="glass-panel p-5 flex gap-3">
                       <select
                         required
@@ -941,11 +834,11 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
                         value={inviteRoleId}
                         onChange={e => setInviteRoleId(e.target.value)}
                       >
-                        <option value="">Select role...</option>
+                        <option value="">Select role to invite for...</option>
                         {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
                       </select>
-                      <button type="submit" disabled={inviting} className="px-5 py-2.5 rounded-xl bg-indigo text-white text-xs font-black uppercase tracking-widest hover:bg-indigo/80 transition-colors disabled:opacity-50">
-                        {inviting ? <Loader2 size={14} className="animate-spin" /> : 'Invite'}
+                      <button type="submit" disabled={inviting} className="px-5 py-2.5 rounded-xl bg-indigo text-white text-xs font-black uppercase tracking-widest hover:bg-indigo-400 transition-colors disabled:opacity-50">
+                        {inviting ? <Loader2 size={14} className="animate-spin" /> : 'Send Invite'}
                       </button>
                       <button type="button" onClick={() => setShowInviteForm(false)} className="px-4 py-2.5 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-colors">
                         <X size={16} />
@@ -966,16 +859,6 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
                   </a>
                 )}
               </>
-            )}
-            {data?.resume_path && (
-              <a
-                href={`/api/source/candidates/${data.id}/resume`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-xs text-white/40 hover:text-primary transition-colors font-bold uppercase tracking-widest"
-              >
-                <ExternalLink size={13} /> View Resume
-              </a>
             )}
           </div>
         </div>
@@ -1048,19 +931,55 @@ export default function CandidateDrawer({ candidate, jobRoles, onClose, onRefres
               </form>
             ) : (
               <div className="space-y-6">
-                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-                  <textarea 
-                    value={offerPreview} 
-                    onChange={e => setOfferPreview(e.target.value)} 
-                    className="w-full h-[400px] bg-transparent text-sm text-white/90 outline-none resize-none font-mono"
-                  />
+                <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 overflow-y-auto max-h-[50vh] custom-scrollbar">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-4">Preview & Edit Offer Letter — Once submitted, this goes to Admin for approval</p>
+                  
+                  {(() => {
+                    // Helper to unwrap content since it can be deeply nested
+                    let c = offerPreview;
+                    if (c && c.offer_content) c = c.offer_content;
+                    if (c && c.content && c.content.offer_content) c = c.content.offer_content;
+                    
+                    return c ? (
+                      <div className="flex flex-col gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">Subject</label>
+                          <input 
+                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-black outline-none focus:border-emerald-500"
+                            value={c.subject || ''}
+                            onChange={e => {
+                              const newC = { ...c, subject: e.target.value };
+                              setOfferPreview({ offer_content: newC });
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">Body Paragraphs (Separated by double newlines)</label>
+                          <textarea 
+                            className="w-full bg-white border border-gray-200 rounded-lg px-4 py-3 text-sm text-black outline-none focus:border-emerald-500 resize-y min-h-[250px] font-mono leading-relaxed"
+                            value={(c.body_paragraphs || []).join('\n\n')}
+                            onChange={e => {
+                              const newC = { ...c, body_paragraphs: e.target.value.split('\n\n') };
+                              setOfferPreview({ offer_content: newC });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <textarea 
+                        value={typeof offerPreview === 'string' ? offerPreview : JSON.stringify(offerPreview, null, 2)} 
+                        onChange={e => setOfferPreview(e.target.value)} 
+                        className="w-full h-[400px] bg-transparent text-sm text-black outline-none resize-none font-mono"
+                      />
+                    );
+                  })()}
                 </div>
                 <div className="flex justify-end gap-3">
                   <button onClick={() => setOfferPreview(null)} className="px-4 py-3 rounded-xl bg-white/5 text-white/70 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors">
-                    Edit Details
+                    ← Back to Details
                   </button>
                   <button onClick={handleCreateOffer} disabled={creatingOffer} className="px-6 py-3 rounded-xl bg-emerald-400 text-black text-xs font-black uppercase tracking-widest hover:bg-emerald-300 transition-colors flex items-center gap-2">
-                    {creatingOffer ? <Loader2 size={16} className="animate-spin"/> : 'Send to HR for Approval'}
+                    {creatingOffer ? <Loader2 size={16} className="animate-spin"/> : '✓ Submit for Admin Approval'}
                   </button>
                 </div>
               </div>

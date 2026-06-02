@@ -55,12 +55,12 @@ class AdminService:
         return {"success": True}
 
     def create_user(self, username: str, password: str, role: str, actor: str, actor_role: str, employee_code: str = None):
-        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'candidate']
+        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee']
         if role not in valid_roles:
              raise ValueError(f"Invalid role. Must be one of {valid_roles}")
              
-        if actor_role == 'manager' and role not in ['employee', 'candidate']:
-             raise ValueError("Manager can only assign employee or candidate roles.")
+        if actor_role == 'manager' and role not in ['employee', 'trainee']:
+             raise ValueError("Manager can only assign employee or trainee roles.")
              
         # Use auth service to create user (handles password hashing)
         try:

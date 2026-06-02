@@ -48,11 +48,15 @@ class ScoreRequest(BaseModel):
 
 class InviteRequest(BaseModel):
     candidate_ids: List[int]
-    job_role_id: int
-    deadline: Optional[str] = None
     email_addresses: Optional[List[str]] = None
+    job_role_id: Optional[int] = None
+    deadline: Optional[str] = None
     subject: Optional[str] = None
     custom_body: Optional[str] = None
+
+
+class CancelInviteRequest(BaseModel):
+    candidate_ids: List[int]
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +229,26 @@ def send_invites(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/cancel-invite", dependencies=[Depends(require_permission("source.jobs.manage"))])
+def cancel_invites(
+    body: CancelInviteRequest,
+    service: JobService = Depends(get_job_service)
+):
+    """
+    Cancel an invite for candidates. Deletes the trainee user account and converts them back to active candidate.
+    """
+    try:
+        result = service.cancel_invites(candidate_ids=body.candidate_ids)
+        return {
+            "success": True,
+            "message": f"Cancelled invites for {result['cancelled']} candidate(s)",
+            "data": result,
+        }
+    except Exception as exc:
+        logger.error(f"cancel_invites failed: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 

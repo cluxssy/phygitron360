@@ -69,10 +69,25 @@ class EmployeeService:
         except ValueError:
              raise ValueError("Invalid date format.")
 
-        if self.repo.get_employee_by_code(data['code'], self.tenant_id):
+        existing_emp_by_code = self.repo.get_employee_by_code(data['code'], self.tenant_id)
+        if existing_emp_by_code:
             raise ValueError("Employee Code already exists.")
+            
+        existing_emp_by_email = self.repo.get_employee_by_email(data['email'], self.tenant_id)
+        is_rehire = False
+        old_employee_code = None
+        
+        if existing_emp_by_email:
+            if existing_emp_by_email.get('employment_status') == 'Exited':
+                is_rehire = True
+                old_employee_code = existing_emp_by_email['employee_code']
+            else:
+                raise ValueError("An active employee with this email already exists.")
 
-        self.repo.create_employee(data, self.tenant_id)
+        if is_rehire:
+            self.repo.update_employee_rehire(old_employee_code, data, self.tenant_id)
+        else:
+            self.repo.create_employee(data, self.tenant_id)
         
         # --- ATOMIC INITIALIZATION ---
         # 1. Initialize Asset Checklist (Empty/Default)
@@ -162,6 +177,92 @@ class EmployeeService:
             result["message"] += " An existing user account was found and linked."
 
         return result
+
+    def onboard_candidate_from_offer(self, offer: Dict[str, Any]) -> int:
+        from backend.core.database import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f'SET search_path TO "{self.tenant_id}", public')
+                
+                # Check for Rehire
+                cur.execute("SELECT id, employee_code, employment_status FROM employees WHERE email_id = %s", (offer["candidate_email"],))
+                existing = cur.fetchone()
+                
+                start_dt_str = None
+                if offer.get("start_date"):
+                    try:
+                        dt = datetime.fromisoformat(str(offer["start_date"]))
+                        start_dt_str = dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        start_dt_str = str(offer["start_date"])
+
+                if existing:
+                    if existing["employment_status"] != 'Exited':
+                        raise ValueError("An active employee with this email already exists.")
+                    
+                    emp_id = existing["id"]
+                    emp_code = existing["employee_code"]
+                    
+                    cur.execute("""
+                        UPDATE employees
+                        SET name = %s, team = %s, designation = %s, doj = %s, location = %s,
+                            employment_status = 'Active', exit_date = NULL, exit_reason = NULL, clearance_status = NULL
+                        WHERE id = %s
+                    """, (
+                        offer["candidate_name"], offer.get("department"), offer["role_title"], start_dt_str, offer.get("location"), emp_id
+                    ))
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO employees
+                            (name, email_id, team, designation, doj, location, employment_status)
+                        VALUES (%s, %s, %s, %s, %s, %s, 'Active')
+                        RETURNING id
+                        """,
+                        (
+                            offer["candidate_name"],
+                            offer["candidate_email"],
+                            offer.get("department"),
+                            offer["role_title"],
+                            start_dt_str,
+                            offer.get("location"),
+                        ),
+                    )
+                    emp_id = cur.fetchone()["id"]
+                    emp_code = f"EMP{emp_id:04d}"
+                    cur.execute("UPDATE employees SET employee_code = %s WHERE id = %s", (emp_code, emp_id))
+                    
+                conn.commit()
+                
+        finally:
+            conn.close()
+            
+        # Create User Account and send email
+        username = offer["candidate_email"]
+        temp_password = secrets.token_urlsafe(8)
+        password_hash = pbkdf2_sha256.hash(temp_password)
+        try:
+            self.user_repo.create_user(
+                username=username,
+                password_hash=password_hash,
+                role='employee',
+                employee_code=emp_code,
+                tenant_id=self.tenant_id,
+                is_active=1
+            )
+            if self.email_service.is_configured():
+                self.email_service.send_new_employee_credentials(
+                    recipient_email=username,
+                    recipient_name=offer["candidate_name"],
+                    employee_code=emp_code,
+                    temporary_password=temp_password
+                )
+        except Exception as e:
+            print("Failed to create user or send credentials during offer onboarding:", e)
+            
+        return emp_id
 
     def update_employee(self, employee_code: str, data: dict):
         print("UPDATE_EMPLOYEE_DATA:", data)

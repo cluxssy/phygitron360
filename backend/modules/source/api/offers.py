@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/source/offers", tags=["Source - Offers"])
 # ---------------------------------------------------------------------------
 
 class OfferFeedback(BaseModel):
-    feedback: str
+    feedback: Optional[str] = ''
 
 
 class OfferUpdate(BaseModel):

@@ -115,7 +115,7 @@ const ChartCard = ({ title, children, className = '' }) => (
       {title}
     </h3>
 
-    <div className="w-full h-[320px]">
+    <div className="w-full" style={{ height: 320, minHeight: 0 }}>
       {children}
     </div>
   </div>
@@ -139,7 +139,6 @@ export default function DeployAnalytics() {
       }
 
       const data = await res.json();
-      console.log("ANALYTICS RESPONSE:", data);
 
       setStats(data);
       setLastRefresh(new Date());
@@ -298,7 +297,7 @@ export default function DeployAnalytics() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         <ChartCard title="Employment Status">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={320}>
             <PieChart>
 
               <Pie
@@ -335,7 +334,7 @@ export default function DeployAnalytics() {
           title="Hiring Trend"
           className="xl:col-span-2"
         >
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={320}>
             <AreaChart data={hiringTrend}>
 
               <defs>
@@ -393,7 +392,7 @@ export default function DeployAnalytics() {
           title="Department Distribution"
           className="xl:col-span-2"
         >
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={320}>
             <BarChart
               data={departmentData}
               layout="vertical"
@@ -443,7 +442,7 @@ export default function DeployAnalytics() {
         </ChartCard>
 
         <ChartCard title="Location Distribution">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={320}>
             <PieChart>
 
               <Pie
@@ -480,7 +479,7 @@ export default function DeployAnalytics() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         <ChartCard title="Top Skills">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={320}>
             <BarChart data={skillsData}>
 
               <CartesianGrid
@@ -523,7 +522,7 @@ export default function DeployAnalytics() {
         </ChartCard>
 
         <ChartCard title="Experience">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={320}>
             <BarChart data={experienceData}>
 
               <CartesianGrid
@@ -563,7 +562,7 @@ export default function DeployAnalytics() {
         </ChartCard>
 
         <ChartCard title="Tenure">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={320}>
             <BarChart data={tenureData}>
 
               <CartesianGrid

@@ -95,12 +95,16 @@ setEmployees(employeeList);
 
     const employeeCode =
       e.employee_code || '';
+      
+    const employeeEmail = 
+      e.email_id || e.email || '';
 
     const s = search.toLowerCase();
 
     const matchSearch =
       employeeName.toLowerCase().includes(s) ||
-      employeeCode.toLowerCase().includes(s);
+      employeeCode.toLowerCase().includes(s) ||
+      employeeEmail.toLowerCase().includes(s);
 
     const matchStatus =
       filterStatus === 'All' ||

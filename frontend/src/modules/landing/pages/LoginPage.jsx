@@ -62,6 +62,8 @@ export default function LoginPage() {
           navigate('/deploy?tab=team');
         } else if (uRoles.includes('candidate')) {
           navigate('/source?tab=my-application');
+        } else if (uRoles.includes('trainee')) {
+          navigate('/trainee');
         } else {
           navigate('/deploy');
         }

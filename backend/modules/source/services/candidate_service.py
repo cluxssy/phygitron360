@@ -163,8 +163,8 @@ class CandidateService:
     def get_candidate(self, candidate_id: int) -> Optional[Dict[str, Any]]:
         return self.repo.get_candidate_by_id(candidate_id)
 
-    def update_status(self, candidate_id: int, new_status: str) -> bool:
-        return self.repo.update_candidate_status(candidate_id, new_status)
+    def update_status(self, candidate_id: int, new_status: str, role_id: Optional[int] = None) -> bool:
+        return self.repo.update_candidate_status(candidate_id, new_status, role_id=role_id)
 
     def add_note(self, candidate_id: int, author_name: str, content: str) -> Dict[str, Any]:
         return self.repo.add_candidate_note(candidate_id, author_name, content)
@@ -195,7 +195,7 @@ class CandidateService:
     ) -> List[Dict[str, Any]]:
         candidates = self.repo.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
-            search=search, sort_by=sort_by, limit=limit
+            search=search, sort_by=sort_by, limit=limit, role_id=role_id
         )
 
         req_skills = []
@@ -224,18 +224,57 @@ class CandidateService:
                     exp_years=int(cand.get("total_experience_years") or 0),
                     min_exp=role_min_exp
                 )
-                cand["ats_score"] = fit["score"]
+                cand["fit_score"] = fit["score"]
                 cand["ats_detail"] = fit
             else:
-                cand["ats_score"] = compute_resume_ats_score(cand)
+                cand["fit_score"] = compute_resume_ats_score(cand)
+
+        if sort_by == "fit_score":
+            candidates.sort(key=lambda c: c.get("fit_score", 0), reverse=True)
 
         return candidates
 
     def get_active_candidates(self) -> List[Dict[str, Any]]:
-        return self.repo.get_active_candidates()
+        rows = self.repo.get_active_candidates()
+        
+        # Dynamically calculate fit score if missing or 0, just like directory search does
+        for row in rows:
+            role_id = row.get("job_role_id")
+            if role_id and (not row.get("insights") or not row["insights"].get("final_score")):
+                try:
+                    cand_skills = self.repo.get_candidate_skills(row["id"])
+                    
+                    from backend.modules.source.repositories.job_role_repo import JobRoleRepository
+                    from backend.modules.source.services.ats_engine import normalise_required_skills, calculate_role_fit
+                    
+                    role_repo = JobRoleRepository(tenant_id=self.tenant_id)
+                    role = role_repo.get_job_role_by_id(role_id)
+                    
+                    if role:
+                        req_skills = normalise_required_skills(
+                            role.get("required_skills"),
+                            title=role.get("title") or "",
+                            description=role.get("description") or ""
+                        )
+                        role_min_exp = role.get("min_experience") or 0
+                        
+                        flat_skills = [{"name": s.get("skill_name") or s.get("name"), "level": s.get("level", "intermediate")} for s in cand_skills]
+                        fit = calculate_role_fit(
+                            flat_skills,
+                            req_skills,
+                            exp_years=int(row.get("total_experience_years") or 0),
+                            min_exp=role_min_exp
+                        )
+                        if "insights" not in row:
+                            row["insights"] = {}
+                        row["insights"]["final_score"] = fit["score"]
+                except Exception as e:
+                    logger.error(f"Failed to dynamically calculate fit score for candidate {row['id']}: {e}")
+                    
+        return rows
 
     def get_full_candidate_profile(self, candidate_id: int, role_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        cand = self.repo.get_candidate_by_id(candidate_id)
+        cand = self.repo.get_candidate_by_id(candidate_id, role_id=role_id)
         if not cand:
             return None
             
