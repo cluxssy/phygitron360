@@ -247,15 +247,16 @@ def get_my_applications(
                 results = [dict(zip(columns, row)) for row in cur.fetchall()]
                 
                 for r in results:
-                    if r["created_at"]:
+                    if r["created_at"] and hasattr(r["created_at"], "isoformat"):
                         r["created_at"] = r["created_at"].isoformat()
-                    if r["email_sent_at"]:
+                    if r["email_sent_at"] and hasattr(r["email_sent_at"], "isoformat"):
                         r["email_sent_at"] = r["email_sent_at"].isoformat()
                 return results
         finally:
             conn.close()
     except Exception as exc:
-        logger.error(f"get_my_applications failed: {exc}")
+        import traceback
+        logger.error(f"get_my_applications failed: {exc}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
