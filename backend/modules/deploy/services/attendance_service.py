@@ -26,9 +26,9 @@ class AttendanceService:
         else:
              return AttendanceStatus(status="clocked_in", data=record)
 
-    def clock_in(self, employee_code: str, ip_address: str):
-        today = datetime.now().strftime('%Y-%m-%d')
-        now = datetime.now().strftime('%H:%M:%S')
+    def clock_in(self, employee_code: str, ip_address: str, local_date: Optional[str] = None, local_time: Optional[str] = None):
+        today = local_date if local_date else datetime.now().strftime('%Y-%m-%d')
+        now = local_time if local_time else datetime.now().strftime('%H:%M:%S')
         
         existing = self.repo.get_todays_attendance(employee_code, today, self.tenant_id)
         if existing:
@@ -38,8 +38,8 @@ class AttendanceService:
         return {"success": True, "message": "Clocked in successfully", "time": now}
 
     def clock_out(self, employee_code: str, data: ClockOutRequest):
-        today = datetime.now().strftime('%Y-%m-%d')
-        now = datetime.now().strftime('%H:%M:%S')
+        today = data.local_date if data.local_date else datetime.now().strftime('%Y-%m-%d')
+        now = data.local_time if data.local_time else datetime.now().strftime('%H:%M:%S')
         
         record = self.repo.get_todays_attendance(employee_code, today, self.tenant_id)
         if not record:

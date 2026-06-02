@@ -4,7 +4,7 @@ from backend.core.database import get_db_connection
 from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.deploy.services.attendance_service import AttendanceService
 from backend.modules.deploy.schemas.attendance import (
-    ClockOutRequest, LeaveRequest, AttendanceStatus, 
+    ClockInRequest, ClockOutRequest, LeaveRequest, AttendanceStatus, 
     LeaveBalance, LeaveRecord, AttendanceRecord, EditAttendanceRequest
 )
 
@@ -32,10 +32,12 @@ def get_attendance_status(user=Depends(get_current_user), service: AttendanceSer
     return service.get_status(emp_code)
 
 @router.post("/clock-in")
-def clock_in(request: Request, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+def clock_in(request: Request, user=Depends(get_current_user), service: AttendanceService = Depends(get_service), data: Optional[ClockInRequest] = None):
     emp_code = _require_employee_code(user)
     try:
-        return service.clock_in(emp_code, request.client.host)
+        local_date = data.local_date if data else None
+        local_time = data.local_time if data else None
+        return service.clock_in(emp_code, request.client.host, local_date, local_time)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

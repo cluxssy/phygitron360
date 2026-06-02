@@ -3,8 +3,14 @@ from typing import Optional, List
 
 # --- Request Schemas ---
 
+class ClockInRequest(BaseModel):
+    local_date: Optional[str] = None
+    local_time: Optional[str] = None
+
 class ClockOutRequest(BaseModel):
     work_log: str
+    local_date: Optional[str] = None
+    local_time: Optional[str] = None
 
 class LeaveRequest(BaseModel):
     start_date: str

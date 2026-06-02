@@ -103,7 +103,16 @@ const tableHeader =
 
   const clockIn = async () => {
     try {
-      const res = await fetch('/api/attendance/clock-in', { method: 'POST', credentials: 'include' });
+      const now = new Date();
+      const local_date = now.toLocaleDateString('en-CA'); // YYYY-MM-DD
+      const local_time = now.toTimeString().split(' ')[0]; // HH:MM:SS
+      
+      const res = await fetch('/api/attendance/clock-in', { 
+          method: 'POST', 
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ local_date, local_time })
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Clock in failed');
       toast.success('Clocked in!');
@@ -113,10 +122,18 @@ const tableHeader =
 
   const clockOut = async () => {
     try {
+      const now = new Date();
+      const local_date = now.toLocaleDateString('en-CA');
+      const local_time = now.toTimeString().split(' ')[0];
+
       const res = await fetch('/api/attendance/clock-out', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ work_log: workLog || 'No log provided' })
+        body: JSON.stringify({ 
+            work_log: workLog || 'No log provided',
+            local_date,
+            local_time
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Clock out failed');
