@@ -1,151 +1,100 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Users, Loader2, RefreshCw, ChevronDown,
-  Clock, Activity, CheckCircle, Mail, MapPin, ChevronUp
+  Users, Loader2, RefreshCw, UserCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import ActiveTraineeModal from './ActiveTraineeModal';
 
-const STATUS_STYLE = {
-  active:      'bg-emerald-400/10 text-emerald-400 border-emerald-400/20',
-  shortlisted: 'bg-primary/10 text-primary border-primary/20',
-  invited:     'bg-indigo/10 text-indigo border-indigo/20',
-  hired:       'bg-secondary/10 text-secondary border-secondary/20',
-  rejected:    'bg-rose-400/10 text-rose-400 border-rose-400/20',
-};
-
-const ASSESSMENT_STYLE = {
-  pending:     'bg-white/5 text-white/40 border-white/10',
-  in_progress: 'bg-amber-400/10 text-amber-400 border-amber-400/20',
-  completed:   'bg-emerald-400/10 text-emerald-400 border-emerald-400/20',
-  failed:      'bg-rose-400/10 text-rose-400 border-rose-400/20',
-};
-
-function StatusBadge({ status, styleMap }) {
-  const s = (status || '').toLowerCase();
-  const cls = styleMap[s] || 'bg-white/5 text-white/40 border-white/10';
+function CandidateRow({ c, onSelect }) {
+  const insights = c.insights || { total_tests: 0, avg_score: 0, has_malpractice: false, resume_score: c.fit_score || 0, final_score: c.fit_score || 0, signals: [], job_title: '' };
+  const scoreColor = insights.avg_score >= 70 ? 'bg-emerald-400' : insights.avg_score >= 40 ? 'bg-amber-400' : 'bg-rose-400';
+  const textColor = insights.avg_score >= 70 ? 'text-emerald-400' : insights.avg_score >= 40 ? 'text-amber-400' : 'text-rose-400';
+  
+  const finalScoreColor = (insights.final_score || 0) >= 70 ? '#34d399' : (insights.final_score || 0) >= 40 ? '#fbbf24' : '#fb7185';
+  
   return (
-    <span className={`px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest ${cls}`}>
-      {s.replace('_', ' ') || 'Unknown'}
-    </span>
-  );
-}
-
-function formatRelative(d) {
-  if (!d) return '—';
-  try {
-    const diff = Date.now() - new Date(d).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
-  } catch { return d; }
-}
-
-function CandidateRow({ c, expanded, onToggle }) {
-  return (
-    <>
-      <div
-        onClick={onToggle}
-        className={`grid grid-cols-[1fr_1fr_120px_120px_120px_100px_40px] gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${expanded ? 'bg-primary/5' : 'hover:bg-white/[0.02]'}`}
+    <div className="border-b border-white/5 last:border-0 flex flex-col transition-colors duration-150">
+      <div 
+        onClick={() => onSelect()}
+        className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1.5fr_1fr_1fr_1fr] gap-4 px-6 py-4 items-center cursor-pointer hover:bg-white/[0.04]"
       >
-        {/* Name */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-display font-black text-xs text-white group-hover:border-primary/30 transition-colors shrink-0">
-            {(c.full_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
+        {/* Name & Email */}
+        <div className="min-w-0">
+          <div className="font-bold text-white text-sm truncate">{c.full_name || c.name || '—'}</div>
+          <div className="text-xs text-white/40 truncate">{c.email || '—'}</div>
+        </div>
+
+        {/* Job */}
+        <div className="min-w-0">
+          <div className="font-medium text-white/80 text-xs truncate bg-white/5 px-2 py-1 rounded inline-block">{insights.job_title || 'General'}</div>
+        </div>
+
+        {/* Tests Taken */}
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-white/80">{insights.total_tests || 0}</span>
+          {insights.has_malpractice && <span title="Malpractice flagged" className="text-sm">⚠️</span>}
+        </div>
+
+        {/* Resume Profile */}
+        <div className="font-bold text-white/80">{Math.round(insights.resume_score || 0)}</div>
+
+        {/* Assessment Avg */}
+        <div>
+          {insights.total_tests > 0 ? (
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div className={`h-full ${scoreColor}`} style={{ width: `${insights.avg_score}%` }} />
+              </div>
+              <span className={`font-bold text-xs ${textColor}`}>{Math.round(insights.avg_score)}%</span>
+            </div>
+          ) : (
+            <span className="text-[10px] font-black uppercase tracking-widest text-white/30">No Data</span>
+          )}
+        </div>
+
+        {/* Fit Score */}
+        <div>
+          <div 
+            className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-black"
+            style={{ borderColor: finalScoreColor, color: finalScoreColor }}
+          >
+            {Math.round(insights.final_score || 0)}
           </div>
-          <div className="min-w-0">
-            <p className="font-bold text-white text-sm truncate">{c.full_name || '—'}</p>
-          </div>
         </div>
 
-        {/* Email */}
-        <p className="text-xs text-white/40 truncate">{c.email || '—'}</p>
-
-        {/* Role */}
-        <p className="text-xs font-bold text-white/70 truncate">{c.role_title || c.current_designation || '—'}</p>
-
-        {/* Status */}
-        <div className="flex justify-center">
-          <StatusBadge status={c.status || 'active'} styleMap={STATUS_STYLE} />
+        {/* Joined */}
+        <div className="text-xs text-white/40">
+          {new Date(c.created_at || c.updated_at || Date.now()).toLocaleDateString()}
         </div>
 
-        {/* Assessment status */}
-        <div className="flex justify-center">
-          <StatusBadge status={c.assessment_status || 'pending'} styleMap={ASSESSMENT_STYLE} />
-        </div>
-
-        {/* Last active */}
-        <span className="text-xs text-white/40 flex items-center gap-1.5">
-          <Clock size={11} className="shrink-0" />
-          {formatRelative(c.last_active || c.updated_at)}
-        </span>
-
-        {/* Expand toggle */}
-        <div className="flex justify-center text-white/20 group-hover:text-white/50 transition-colors">
-          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        {/* Actions */}
+        <div>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onSelect(); }} 
+            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-colors inline-block text-center"
+          >
+            Manage
+          </button>
         </div>
       </div>
-
-      {/* Expanded detail row */}
-      {expanded && (
-        <div className="bg-primary/[0.03] border-t border-primary/10 px-6 py-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {c.email && (
-              <div className="flex items-center gap-2 text-xs text-white/50">
-                <Mail size={12} className="text-primary/60 shrink-0" />
-                <a href={`mailto:${c.email}`} className="hover:text-primary transition-colors truncate">{c.email}</a>
-              </div>
-            )}
-            {c.location && (
-              <div className="flex items-center gap-2 text-xs text-white/50">
-                <MapPin size={12} className="text-primary/60 shrink-0" />
-                <span className="truncate">{c.location}</span>
-              </div>
-            )}
-            {c.total_experience_years != null && (
-              <div className="flex items-center gap-2 text-xs text-white/50">
-                <Activity size={12} className="text-primary/60 shrink-0" />
-                <span>{c.total_experience_years} yrs experience</span>
-              </div>
-            )}
-            {c.fit_score != null && (
-              <div className="flex items-center gap-2 text-xs">
-                <CheckCircle size={12} className="text-primary/60 shrink-0" />
-                <span className={`font-black ${c.fit_score >= 80 ? 'text-emerald-400' : c.fit_score >= 60 ? 'text-primary' : 'text-rose-400'}`}>
-                  AI Fit: {Math.round(c.fit_score)}%
-                </span>
-              </div>
-            )}
-            {c.ai_summary && (
-              <div className="col-span-full mt-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-primary/60 mb-1.5">AI Summary</p>
-                <p className="text-xs text-white/50 leading-relaxed">{c.ai_summary}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }
 
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: 'All Statuses' },
-  { value: 'active', label: 'Active' },
-  { value: 'shortlisted', label: 'Shortlisted' },
+  { value: 'favourite', label: 'Favourite' },
   { value: 'invited', label: 'Invited' },
   { value: 'hired', label: 'Hired' },
   { value: 'rejected', label: 'Rejected' },
 ];
 
-export default function ActiveCandidates() {
+export default function ActiveCandidates({ onViewProfile }) {
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
+  const [jobFilter, setJobFilter] = useState('');
+  const [selectedTrainee, setSelectedTrainee] = useState(null);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -165,84 +114,90 @@ export default function ActiveCandidates() {
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 
-  const toggleExpand = (id) => setExpandedId(prev => (prev === id ? null : id));
+  const uniqueJobs = [...new Set(candidates.map(c => c.insights?.job_title).filter(Boolean))];
+  const filteredCandidates = candidates.filter(c => !jobFilter || c.insights?.job_title === jobFilter);
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6 h-full animate-fade-in">
 
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 shrink-0">
-        <div>
-          <h1 className="text-4xl font-display font-black text-white tracking-tighter uppercase italic">
-            Active <span className="text-primary">Candidates</span>
-          </h1>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mt-1">
-            {candidates.length} record{candidates.length !== 1 ? 's' : ''} · Phygitron 360 Source
-          </p>
-        </div>
+      <div className="flex items-center justify-end gap-3 shrink-0">
+        {/* Job filter */}
+        <select
+          className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors max-w-[200px]"
+          value={jobFilter}
+          onChange={e => setJobFilter(e.target.value)}
+        >
+          <option value="">All Jobs</option>
+          {uniqueJobs.map(job => (
+            <option key={job} value={job}>{job}</option>
+          ))}
+        </select>
 
-        <div className="flex items-center gap-3">
-          {/* Status filter */}
-          <select
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-          >
-            {STATUS_FILTER_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+        {/* Status filter */}
+        <select
+          className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+        >
+          {STATUS_FILTER_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
 
-          <button
-            onClick={fetchCandidates}
-            disabled={loading}
-            className="p-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-colors duration-150 disabled:opacity-50"
-          >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-          </button>
-        </div>
+        <button
+          onClick={fetchCandidates}
+          disabled={loading}
+          className="p-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-primary/20 hover:text-primary transition-colors duration-150 disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+        </button>
       </div>
 
       {/* Table */}
-      <div className="glass-panel flex-1 flex flex-col overflow-hidden min-h-0">
+      <div className="glass-panel flex-1 flex flex-col overflow-hidden min-h-0 animate-scale-in">
         {/* Table header */}
-        <div className="grid grid-cols-[1fr_1fr_120px_120px_120px_100px_40px] gap-4 px-6 py-4 border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/30 shrink-0">
-          <div>Candidate</div>
-          <div>Email</div>
-          <div>Role</div>
-          <div className="text-center">Status</div>
-          <div className="text-center">Assessment</div>
-          <div>Last Active</div>
-          <div />
+        <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1.5fr_1fr_1fr_1fr] gap-4 px-6 py-4 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-white/40 shrink-0 bg-white/5">
+          <div>Name</div>
+          <div>Job Role</div>
+          <div>Tests Taken</div>
+          <div>Resume Profile</div>
+          <div>Assessment Avg</div>
+          <div>Fit Score</div>
+          <div>Joined</div>
+          <div>Actions</div>
         </div>
 
         {/* Rows */}
-        <div className="flex-1 overflow-y-auto divide-y divide-white/5 custom-scrollbar" style={{ overscrollBehavior: 'contain' }}>
+        <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ overscrollBehavior: 'contain' }}>
           {loading ? (
             <div className="flex items-center justify-center gap-3 py-24 text-white/40">
               <Loader2 size={24} className="animate-spin text-primary" />
               <span className="text-xs font-bold uppercase tracking-widest">Loading active candidates...</span>
             </div>
-          ) : candidates.length === 0 ? (
+          ) : filteredCandidates.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-              <Users size={48} className="text-white/10" />
+              <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-2">
+                <UserCheck size={32} />
+              </div>
               <div>
-                <p className="text-base font-bold text-white mb-1">No active candidates</p>
-                <p className="text-xs text-white/30">Candidates who have logged in will appear here.</p>
+                <p className="text-base font-bold text-white mb-1">No active trainees found.</p>
+                <p className="text-xs text-white/40">Candidates taking assessments will appear here.</p>
               </div>
             </div>
           ) : (
-            candidates.map(c => (
-              <CandidateRow
-                key={c.id}
-                c={c}
-                expanded={expandedId === c.id}
-                onToggle={() => toggleExpand(c.id)}
-              />
+            filteredCandidates.map(c => (
+              <CandidateRow key={c.id} c={c} onSelect={() => setSelectedTrainee(c)} />
             ))
           )}
         </div>
       </div>
+      
+      {/* Action Modal */}
+      <ActiveTraineeModal 
+        trainee={selectedTrainee} 
+        onClose={() => setSelectedTrainee(null)} 
+        onRefresh={fetchCandidates}
+      />
     </div>
   );
 }

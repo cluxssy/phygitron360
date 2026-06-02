@@ -47,7 +47,18 @@ class UserRepository:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute(
-                    "INSERT INTO users (username, password_hash, role, roles, employee_code, password_must_change, is_active) VALUES (%s, %s, %s, %s, %s, 1, %s)",
+                    """
+                    INSERT INTO users (username, password_hash, role, roles, employee_code, password_must_change, is_active) 
+                    VALUES (%s, %s, %s, %s, %s, 1, %s)
+                    ON CONFLICT (username) 
+                    DO UPDATE SET 
+                        password_hash = EXCLUDED.password_hash,
+                        role = EXCLUDED.role,
+                        roles = EXCLUDED.roles,
+                        employee_code = EXCLUDED.employee_code,
+                        password_must_change = EXCLUDED.password_must_change,
+                        is_active = EXCLUDED.is_active
+                    """,
                     (username, password_hash, role[0] if isinstance(role, list) else role, role if isinstance(role, list) else [role], employee_code, is_active)
                 )
                 conn.commit()

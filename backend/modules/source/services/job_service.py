@@ -151,11 +151,12 @@ class JobService:
         subject: Optional[str] = None,
         custom_body: Optional[str] = None
     ) -> Dict[str, Any]:
-        role = self.repo.get_job_role_by_id(role_id)
-        if not role:
-            raise ValueError("Job role not found")
-        
-        role_name = role["title"]
+        role_name = "Trainee Pipeline"
+        if role_id is not None:
+            role = self.repo.get_job_role_by_id(role_id)
+            if not role:
+                raise ValueError("Job role not found")
+            role_name = role["title"]
         sent_count = 0
         errors = []
         
@@ -174,12 +175,19 @@ class JobService:
                 temp_password = secrets.token_urlsafe(10)
                 to_email = email_addresses[i] if email_addresses and i < len(email_addresses) else cand["email"]
 
+                is_internal = False
+                user_id = None
                 try:
-                    self.repo.upsert_user_password_by_candidate(cid, hash_password(temp_password))
-                except Exception:
-                    pass
+                    res = self.repo.upsert_user_password_by_candidate(cid, hash_password(temp_password))
+                    if res and res.get("success"):
+                        is_internal = res.get("is_internal")
+                        user_id = res.get("user_id")
+                except Exception as ex:
+                    logger.error(f"Failed to upsert user password for candidate {cid}: {ex}")
 
-                self.repo.create_invite_if_not_exists(cid, role_id, hr_id)
+                if role_id is not None:
+                    self.repo.create_invite_if_not_exists(cid, role_id, hr_id)
+                self.candidate_repo.update_candidate_status(cid, "Invited", role_id=role_id)
 
                 # Format custom templates candidate-by-candidate
                 cand_subject = subject
@@ -197,19 +205,53 @@ class JobService:
                                          .replace("{assessment_link}", portal_link)\
                                          .replace("{temp_password}", temp_password)
 
-                try:
-                    send_invite_email(
-                        to_email=to_email,
-                        candidate_name=cand["full_name"],
-                        role_name=role_name,
-                        company_name="Phygitron 360",
-                        temp_password=temp_password,
-                        deadline=deadline,
-                        custom_subject=cand_subject,
-                        custom_body=cand_body
-                    )
-                except Exception as exc:
-                    logger.warning(f"Invite email failed for {to_email}: {exc}")
+                if is_internal:
+                    # Internal employee notification
+                    from backend.core.email_service_extended import send_email
+                    try:
+                        send_email(
+                            to_email=to_email,
+                            subject=f"Internal Application Update: {role_name}",
+                            body_html=f"""
+                                <h2>Internal Application Update</h2>
+                                <p>Hi {cand['full_name']},</p>
+                                <p>Your application for <strong>{role_name}</strong> has advanced to the next stage.</p>
+                                <p>Please log in to your Employee Central dashboard and check the "My Opportunities" tab for any pending assessments or updates.</p>
+                                <p>{cand_body or ''}</p>
+                            """
+                        )
+                    except Exception as exc:
+                        logger.warning(f"Internal invite email failed for {to_email}: {exc}")
+                        
+                    # System notification
+                    try:
+                        from backend.modules.admin.repositories.notification_repo import NotificationRepository
+                        if user_id:
+                            notif_repo = NotificationRepository()
+                            notif_repo.create_notification(
+                                user_id=user_id,
+                                tenant_id=cand.get("tenant_id") or "public",
+                                title=f"Application Update: {role_name}",
+                                message=f"You have been invited to the next stage for the {role_name} role. Check your My Opportunities tab.",
+                                type="alert"
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to create system notification: {e}")
+                else:
+                    # External Candidate email
+                    try:
+                        send_invite_email(
+                            to_email=to_email,
+                            candidate_name=cand["full_name"],
+                            role_name=role_name,
+                            company_name="Phygitron 360",
+                            temp_password=temp_password,
+                            deadline=deadline,
+                            custom_subject=cand_subject,
+                            custom_body=cand_body
+                        )
+                    except Exception as exc:
+                        logger.warning(f"Invite email failed for {to_email}: {exc}")
 
                 # Log activity in candidate timeline
                 self.candidate_repo.log_activity(cid, 'HR', 'invite_sent', f"Invited to apply for {role_name}")
@@ -220,6 +262,23 @@ class JobService:
                 errors.append({"candidate_id": cid, "error": str(exc)})
                 
         return {"sent": sent_count, "errors": errors}
+
+    def cancel_invites(self, candidate_ids: List[int]) -> Dict[str, Any]:
+        cancelled_count = 0
+        errors = []
+        for cid in candidate_ids:
+            try:
+                res = self.repo.cancel_invite(cid)
+                if res.get("success"):
+                    self.candidate_repo.log_activity(cid, 'HR', 'invite_cancelled', "Invite cancelled and account unlinked")
+                    cancelled_count += 1
+                else:
+                    errors.append({"candidate_id": cid, "error": res.get("error", "Failed")})
+            except Exception as exc:
+                logger.error(f"Cancel invite failed for candidate {cid}: {exc}")
+                errors.append({"candidate_id": cid, "error": str(exc)})
+                
+        return {"cancelled": cancelled_count, "errors": errors}
 
     def get_invite_status(self, job_role_id: int) -> List[Dict[str, Any]]:
         return self.repo.get_invite_status(job_role_id)

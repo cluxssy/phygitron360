@@ -42,6 +42,22 @@ class EmployeeRepository:
         finally:
             conn.close()
 
+    def get_employee_by_email(self, email_id: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute("""
+                SELECT e.*, u.role
+                FROM employees e
+                LEFT JOIN users u ON e.employee_code = u.employee_code
+                WHERE e.email_id = %s
+            """, (email_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
     def get_skill_matrix(self, employee_code: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
@@ -149,6 +165,65 @@ class EmployeeRepository:
                 data['experience_years'], data['cv_path']
             ))
             
+            conn.commit()
+        finally:
+            conn.close()
+
+    def update_employee_rehire(self, old_employee_code: str, data: Dict[str, Any], tenant_id: str = 'public'):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            self._set_path(cur, tenant_id)
+            cur.execute('''
+                UPDATE employees
+                SET employee_code = %s,
+                    name = %s,
+                    dob = %s,
+                    contact_number = %s,
+                    emergency_contact = %s,
+                    doj = %s,
+                    team = %s,
+                    designation = %s,
+                    employment_type = %s,
+                    reporting_manager = %s,
+                    location = %s,
+                    current_address = %s,
+                    permanent_address = %s,
+                    education_details = %s,
+                    pf_included = %s,
+                    mediclaim_included = %s,
+                    photo_path = %s,
+                    cv_path = %s,
+                    id_proofs = %s,
+                    notes = %s,
+                    bank_name = %s,
+                    bank_account_no = %s,
+                    pan_no = %s,
+                    employment_status = %s,
+                    exit_date = NULL,
+                    exit_reason = NULL,
+                    clearance_status = NULL
+                WHERE employee_code = %s
+            ''', (
+                data['code'], data['name'], data['dob'], data['phone'], data['emergency'], 
+                data['doj'], data['team'], data.get('designation', ''), data['type'], 
+                data['manager'], data['location'], data['current_address'], data['permanent_address'],
+                json.dumps(data.get('education_details', [])),
+                data['pf'], data['mediclaim'], 
+                data['photo_path'], data['cv_path'], data['id_proofs'], data['notes'],
+                data.get('bank_name'), data.get('bank_account_no'), data.get('pan_no'),
+                data.get('employment_status', 'Active'),
+                old_employee_code
+            ))
+            
+            cur.execute('''
+                UPDATE skill_matrix
+                SET candidate_name = %s, primary_skillset = %s, secondary_skillset = %s, experience_years = %s, cv_upload = %s
+                WHERE employee_code = %s
+            ''', (
+                data['name'], data['primary_skillset'], data['secondary_skillset'],
+                data['experience_years'], data['cv_path'], data['code']
+            ))
             conn.commit()
         finally:
             conn.close()
@@ -281,7 +356,7 @@ class EmployeeRepository:
             """, (status, exit_date, exit_reason, employee_code))
             
             if deactivate:
-                cur.execute("UPDATE users SET is_active = 0 WHERE employee_code = %s", (employee_code,))
+                cur.execute("DELETE FROM users WHERE employee_code = %s", (employee_code,))
             
             conn.commit()
         finally:

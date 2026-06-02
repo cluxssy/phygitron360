@@ -61,6 +61,21 @@ class OfferService:
         if offer["status"] != "approved":
             raise ValueError(f"Only approved offers can be sent. Current status: {offer['status']}")
 
+        # Fetch the company name for this tenant
+        company_name = self.tenant_id
+        try:
+            from backend.core.database import get_db_connection
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute("SET search_path TO public")
+                cur.execute("SELECT company_name FROM tenants WHERE id = %s", (self.tenant_id,))
+                row = cur.fetchone()
+                if row:
+                    company_name = row[0]
+            conn.close()
+        except Exception:
+            pass
+
         emp_id = self.repo.convert_candidate_to_employee(offer)
         emp_code = f"EMP{emp_id:04d}"
 
@@ -69,7 +84,7 @@ class OfferService:
                 send_offer_letter_email(
                     to_email=offer["candidate_email"],
                     candidate_name=offer["candidate_name"],
-                    company_name="Phygitron 360",
+                    company_name=company_name,
                     role_title=offer["role_title"],
                     department=offer.get("department", ""),
                     salary=offer["salary"],

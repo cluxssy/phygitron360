@@ -65,7 +65,12 @@ class OfferRepository:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 set_clause = ", ".join(f"{k} = %s" for k in updates)
-                params = list(updates.values()) + [offer_id]
+                # Serialize any dict/list values to JSON strings so psycopg2 can adapt them
+                serialized = [
+                    json.dumps(v) if isinstance(v, (dict, list)) else v
+                    for v in updates.values()
+                ]
+                params = serialized + [offer_id]
                 cur.execute(
                     f"UPDATE offer_letters SET {set_clause} WHERE id = %s",
                     params,
@@ -100,55 +105,27 @@ class OfferRepository:
             conn.close()
             
     def convert_candidate_to_employee(self, offer: Dict[str, Any]) -> int:
+        from backend.modules.deploy.services.employee_service import EmployeeService
+        emp_service = EmployeeService(tenant_id=self.tenant_id)
+        
+        # Onboard the candidate (handles Rehire logic and User Creation)
+        emp_id = emp_service.onboard_candidate_from_offer(offer)
+        
+        # Update Source Module statuses
         conn = get_db_connection()
         try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor() as cur:
                 self._set_search_path(cur)
-                
-                # Create employee record
-                start_dt_str = None
-                if offer.get("start_date"):
-                    from datetime import datetime
-                    try:
-                        dt = datetime.fromisoformat(str(offer["start_date"]))
-                        start_dt_str = dt.strftime("%Y-%m-%d")
-                    except Exception:
-                        start_dt_str = str(offer["start_date"])
-
-                cur.execute(
-                    """
-                    INSERT INTO employees
-                        (name, email_id, team, designation, doj, location, employment_status)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'Active')
-                    RETURNING id
-                    """,
-                    (
-                        offer["candidate_name"],
-                        offer["candidate_email"],
-                        offer.get("department"),
-                        offer["role_title"],
-                        start_dt_str,
-                        offer.get("location"),
-                    ),
-                )
-                emp_id = cur.fetchone()["id"]
-                emp_code = f"EMP{emp_id:04d}"
-
-                cur.execute(
-                    "UPDATE employees SET employee_code = %s WHERE id = %s",
-                    (emp_code, emp_id),
-                )
-
                 cur.execute(
                     "UPDATE candidates SET status = 'Archived', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                     (offer["candidate_id"],),
                 )
-
                 cur.execute(
                     "UPDATE offer_letters SET status = 'sent', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                     (offer["id"],),
                 )
                 conn.commit()
-                return emp_id
         finally:
             conn.close()
+            
+        return emp_id

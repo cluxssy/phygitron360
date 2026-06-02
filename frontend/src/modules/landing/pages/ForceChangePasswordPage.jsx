@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import '../styles/login.css';
@@ -13,8 +13,15 @@ export default function ForceChangePasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+
+  
+  useEffect(() => {
+    if (!user || !user.password_must_change) {
+      navigate('/login');
+    }
+  }, [user, navigate]);
+
   if (!user || !user.password_must_change) {
-    navigate('/login');
     return null;
   }
 

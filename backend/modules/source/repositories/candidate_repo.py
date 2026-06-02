@@ -183,17 +183,27 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def get_candidate_by_id(self, candidate_id: int) -> Optional[Dict[str, Any]]:
+    def get_candidate_by_id(self, candidate_id: int, role_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                cur.execute("SELECT * FROM candidates WHERE id = %s", (candidate_id,))
+                if role_id:
+                    cur.execute("""
+                        SELECT c.*, ca.status as job_status 
+                        FROM candidates c
+                        LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s
+                        WHERE c.id = %s
+                    """, (role_id, candidate_id))
+                else:
+                    cur.execute("SELECT * FROM candidates WHERE id = %s", (candidate_id,))
                 row = cur.fetchone()
                 if not row:
                     return None
                 
                 result = dict(row)
+                if role_id:
+                    result['status'] = result.get('job_status') or result['status']
                 
                 # Fetch related data
                 cur.execute("SELECT * FROM candidate_experience WHERE candidate_id = %s", (candidate_id,))
@@ -254,14 +264,39 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def update_candidate_status(self, candidate_id: int, new_status: str) -> bool:
+    def update_candidate_status(self, candidate_id: int, new_status: str, role_id: Optional[int] = None) -> bool:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                cur.execute("UPDATE candidates SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", (new_status, candidate_id))
+                if role_id:
+                    cur.execute('''
+                        INSERT INTO candidate_applications (candidate_id, job_role_id, status)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (candidate_id, job_role_id) 
+                        DO UPDATE SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP
+                    ''', (candidate_id, role_id, new_status))
+                # Always update the candidates table status too
+                cur.execute(
+                    "UPDATE candidates SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (new_status, candidate_id)
+                )
                 conn.commit()
-                return cur.rowcount > 0
+                return True
+        finally:
+            conn.close()
+
+    def create_candidate_application(self, candidate_id: int, role_id: int, status: str = "New"):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    INSERT INTO candidate_applications (candidate_id, job_role_id, status)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (candidate_id, job_role_id) DO NOTHING
+                ''', (candidate_id, role_id, status))
+                conn.commit()
         finally:
             conn.close()
 
@@ -324,7 +359,7 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20) -> List[Dict[str, Any]]:
+    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -333,9 +368,15 @@ class CandidateRepository:
                 conditions = []
                 params = []
 
-                if pool and pool != "all":
-                    conditions.append("c.status = %s")
-                    params.append(pool.capitalize())
+                if role_id:
+                    # When searching by role_id, check the job-specific status or fallback to global
+                    if pool and pool != "all":
+                        conditions.append("COALESCE(ca.status, c.status) = %s")
+                        params.append(pool.capitalize())
+                else:
+                    if pool and pool != "all":
+                        conditions.append("c.status = %s")
+                        params.append(pool.capitalize())
 
                 if location:
                     conditions.append("c.location ILIKE %s")
@@ -363,15 +404,33 @@ class CandidateRepository:
                 order_clause = "ORDER BY c.created_at DESC" if sort_by == "newest" else "ORDER BY c.total_experience_years DESC"
                 params.append(limit)
 
-                sql = f"""
-                    SELECT c.*
-                    FROM candidates c
-                    {where_clause}
-                    {order_clause}
-                    LIMIT %s
-                """
+                if role_id:
+                    sql = f"""
+                        SELECT c.*, ca.status as job_status
+                        FROM candidates c
+                        LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s
+                        {where_clause}
+                        {order_clause}
+                        LIMIT %s
+                    """
+                    params.insert(0, role_id)
+                else:
+                    sql = f"""
+                        SELECT c.*, c.status as job_status
+                        FROM candidates c
+                        {where_clause}
+                        {order_clause}
+                        LIMIT %s
+                    """
                 cur.execute(sql, params)
-                return [dict(r) for r in cur.fetchall()]
+                
+                # Normalize job_status to status so frontend works seamlessly
+                results = []
+                for r in cur.fetchall():
+                    row = dict(r)
+                    row['status'] = row.get('job_status') or row['status']
+                    results.append(row)
+                return results
         finally:
             conn.close()
 
@@ -381,13 +440,44 @@ class CandidateRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """SELECT c.*, u.last_login
+                    """SELECT 
+                           c.*, 
+                           u.last_login,
+                           ci.job_role_id,
+                           j.title as job_title,
+                           fit.score as ai_fit_score,
+                           conf.reasoning as confidence_signals
                        FROM candidates c
                        LEFT JOIN users u ON c.user_id = u.id
-                       WHERE c.status NOT IN ('Archived', 'Rejected')
+                       LEFT JOIN candidate_invites ci ON ci.candidate_id = c.id
+                       LEFT JOIN job_roles j ON j.id = ci.job_role_id
+                       LEFT JOIN ai_scores fit ON fit.entity_id = c.id AND fit.entity_type = 'candidate' AND fit.score_type = 'role_fit' AND fit.job_role_id = ci.job_role_id
+                       LEFT JOIN ai_scores conf ON conf.entity_id = c.id AND conf.entity_type = 'candidate' AND conf.score_type = 'confidence_signals'
+                       WHERE c.status = 'Invited'
                        ORDER BY c.created_at DESC"""
                 )
-                return [dict(r) for r in cur.fetchall()]
+                rows = []
+                import json
+                for r in cur.fetchall():
+                    row = dict(r)
+                    has_flags = False
+                    signals_data = []
+                    if row.get("confidence_signals"):
+                        try:
+                            signals = json.loads(row["confidence_signals"])
+                            if isinstance(signals, list):
+                                has_flags = any(s.get("flag", False) for s in signals)
+                                signals_data = signals
+                        except:
+                            pass
+                    row["insights"] = {
+                        "final_score": float(row.get("ai_fit_score") or 0),
+                        "has_malpractice": has_flags,
+                        "signals": signals_data,
+                        "job_title": row.get("job_title")
+                    }
+                    rows.append(row)
+                return rows
         finally:
             conn.close()
 

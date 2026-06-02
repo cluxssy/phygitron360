@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { Shield, Users, Activity, Plus, Trash2, Link, Lock, Key } from 'lucide-react';
+import { Shield, Users, Activity, Plus, Trash2, Link, Lock, Unlock, Key } from 'lucide-react';
 import ClearanceMatrix from './ClearanceMatrix';
 import UserClearanceOverrides from './UserClearanceOverrides';
 import ModuleControl from './ModuleControl';
@@ -34,8 +34,11 @@ export default function AdminPanel() {
 
     try {
       if (activeTab === 'users') {
-        const res = await fetch('/api/admin/users', {
-          credentials: 'include'
+        const res = await fetch(`/api/admin/users?t=${Date.now()}`, {
+          credentials: 'include',
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
         });
 
         const data = await res.json();
@@ -130,23 +133,35 @@ export default function AdminPanel() {
   };
 
   const toggleActive = async (id, currentStatus) => {
+    // currentStatus = true means user is currently active; we want to lock them
+    // currentStatus = false means user is currently locked; we want to restore them
+    const newActiveValue = currentStatus ? 0 : 1;
     try {
+      // Optimistic update first so UI is instant
+      setUsers(prev =>
+        prev.map(user =>
+          user.id === id ? { ...user, is_active: newActiveValue } : user
+        )
+      );
+
       const res = await fetch(`/api/admin/users/${id}/toggle`, {
         method: 'PATCH',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          is_active: !currentStatus
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !currentStatus })
       });
 
-      if (!res.ok) throw new Error('Lock sequence failed');
+      if (!res.ok) {
+        // Revert on failure
+        setUsers(prev =>
+          prev.map(user =>
+            user.id === id ? { ...user, is_active: currentStatus ? 1 : 0 } : user
+          )
+        );
+        throw new Error('Lock sequence failed');
+      }
 
       toast.success(currentStatus ? 'Node Locked' : 'Node Restored');
-
-      loadData();
 
     } catch (e) {
       toast.error(e.message);
@@ -428,7 +443,7 @@ export default function AdminPanel() {
                             className="bg-[#ece8f8] border border-primary/15 text-black text-[10px] font-black uppercase tracking-[0.15em] px-5 py-3 rounded-2xl focus:outline-none hover:border-primary/40 hover:shadow-[0_0_20px_rgba(180,140,255,0.12)] transition-all cursor-pointer"
                           >
 
-                            {['super_admin', 'org_admin', 'manager', 'employee', 'candidate'].map(r => (
+                            {['org_admin', 'manager', 'employee', 'trainee'].map(r => (
 
                               <option
                                 key={r}
@@ -485,12 +500,12 @@ export default function AdminPanel() {
                               onClick={() => toggleActive(u.id, u.is_active !== 0)}
                               className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all border active:scale-95 ${
                                 u.is_active !== 0
-                                  ? 'bg-white border-primary/10 text-black hover:text-primary hover:border-primary/30 hover:shadow-[0_0_20px_rgba(180,140,255,0.12)]'
-                                  : 'bg-red-500/10 text-red-500 border-red-500/20'
+                                  ? 'bg-white border-primary/10 text-black hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5'
+                                  : 'bg-red-500/10 text-red-500 border-red-500/20 hover:text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/30'
                               }`}
-                              title="Lock/Restore Node"
+                              title={u.is_active !== 0 ? "Lock Node" : "Restore Node"}
                             >
-                              <Lock size={16} strokeWidth={2.5} />
+                              {u.is_active !== 0 ? <Lock size={16} strokeWidth={2.5} /> : <Unlock size={16} strokeWidth={2.5} />}
                             </button>
 
                             <button

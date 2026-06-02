@@ -1,7 +1,7 @@
 import { MODULE_CONFIG } from "../config/modules";
 
 export const canViewDashboardTab = (hasRole) =>
-  hasRole?.(["org_admin", "super_admin", "manager"]) === true;
+  hasRole?.(["org_admin", "super_admin"]) === true;
 
 export const getHubTabs = ({ hasPermission, hasRole }) => {
   const moduleTabs = Object.entries(MODULE_CONFIG)

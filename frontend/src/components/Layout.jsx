@@ -145,18 +145,16 @@ export default function Layout({ children }) {
   ];
 
   const modules = [
-    {
+    ...(hasPermission('admin.users.manage') ? [{
       id: 'dashboard',
       name: 'Dashboard',
       path: '/admin',
       icon: LayoutDashboard,
-    },
+      options: allModules.find(m => m.id === 'dashboard').options,
+    }] : []),
 
     ...allModules
-      .filter(m =>
-        m.id !== 'dashboard' &&
-        hasPermission(m.perm)
-      )
+      .filter(m => m.id !== 'dashboard' && hasPermission(m.perm))
       .map(m => ({
         id: m.id,
 
@@ -176,7 +174,6 @@ export default function Layout({ children }) {
         // THIS WAS MISSING
         icon: m.icon,
 
-        // KEEP OPTIONS
         options: m.options,
       })),
   ];

@@ -4,7 +4,7 @@ import {
   CheckSquare, Loader2, Download, X, AlertTriangle, Mail,
   ArrowUpRight, Plus, Send, Star, Filter, Users, ChevronDown,
   RefreshCw, Briefcase, Clock, CheckCircle, UserCheck,
-  TrendingUp, PieChart, Activity
+  TrendingUp, PieChart, Activity, Edit, XCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -29,7 +29,7 @@ const SCORE_COLOR = (s) => {
 
 const STATUS_STYLE = {
   active:      'bg-emerald-400/10 text-emerald-400 border-emerald-400/20',
-  shortlisted: 'bg-primary/10 text-primary border-primary/20',
+  favourite: 'bg-primary/10 text-primary border-primary/20',
   invited:     'bg-indigo/10 text-indigo border-indigo/20',
   hired:       'bg-secondary/10 text-secondary border-secondary/20',
   rejected:    'bg-rose-400/10 text-rose-400 border-rose-400/20',
@@ -163,10 +163,6 @@ export default function SourceDashboard() {
   const [showNewRole, setShowNewRole] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showScore, setShowScore] = useState(false);
-  const [showRankings, setShowRankings] = useState(false);
-  const [rankings, setRankings] = useState([]);
-  const [rankingRoleId, setRankingRoleId] = useState(null);
-  const [loadingRankings, setLoadingRankings] = useState(false);
   const [autoRanking, setAutoRanking] = useState(false);
 
   // Invite-status tab: role selector
@@ -300,22 +296,36 @@ export default function SourceDashboard() {
     finally { setUploading(false); fileRef.current.value = ''; }
   };
 
-  // ── Create job role ────────────────────────────────────────────────────────
-  const handleCreateRole = async (e) => {
+  // ── Create / Edit job role ────────────────────────────────────────────────────────
+  const handleSaveRole = async (e) => {
     e.preventDefault();
+    const isEdit = !!newRole.id;
+    const url = isEdit ? `/api/source/job-roles/${newRole.id}` : '/api/source/job-roles';
+    const method = isEdit ? 'PUT' : 'POST';
+    
     try {
-      const r = await fetch('/api/source/job-roles', {
-        method: 'POST',
+      const r = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRole),
       });
       if (r.ok) {
-        toast.success('Role created');
+        toast.success(isEdit ? 'Role updated' : 'Role created');
         setShowNewRole(false);
         setNewRole({ title: '', description: '', min_experience: 0 });
         fetchJobRoles();
-      } else { toast.error('Failed to create role'); }
-    } catch { toast.error('Error'); }
+      } else { toast.error(`Failed to ${isEdit ? 'update' : 'create'} role`); }
+    } catch { toast.error('Error saving role'); }
+  };
+
+  const openEditRole = (role) => {
+    setNewRole({
+      id: role.id,
+      title: role.title,
+      description: role.description || '',
+      min_experience: role.min_experience || 0
+    });
+    setShowNewRole(true);
   };
 
   // ── Bulk AI score ──────────────────────────────────────────────────────────
@@ -375,40 +385,47 @@ export default function SourceDashboard() {
       }
     } catch {
       toast.error('Invitation error', { id: tid });
+
     }
   };
 
+  const handleCancelInvite = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    
+    if (!window.confirm(`Are you sure you want to cancel the invite for ${ids.length} candidate(s)? This will unlink their user account if they are a trainee and convert them back to an active candidate.`)) return;
 
-  const fetchRankings = async (roleId) => {
-    setRankingRoleId(roleId);
-    setLoadingRankings(true);
-    setShowRankings(true);
+    const tid = toast.loading('Cancelling invites...');
     try {
-      const r = await fetch(`/api/source/job-roles/${roleId}/rankings`);
+      const r = await fetch('/api/source/cancel-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate_ids: ids }),
+      });
       const d = await r.json();
       if (r.ok) {
-        setRankings(d.data || []);
+        toast.success(d.message || `Cancelled invites for ${ids.length} candidate(s)!`, { id: tid });
+        clearSel();
+        fetchCandidates();
+        fetchActivities();
       } else {
-        toast.error('Failed to load rankings');
-        setShowRankings(false);
+        toast.error(d.detail || 'Cancel failed', { id: tid });
       }
     } catch {
-      toast.error('Network error');
-      setShowRankings(false);
-    } finally {
-      setLoadingRankings(false);
+      toast.error('Cancel error', { id: tid });
     }
   };
 
-  const handleAutoRank = async () => {
-    if (!rankingRoleId) return;
+
+  const handleAutoRank = async (roleId) => {
+    if (!roleId) return;
     setAutoRanking(true);
     const tid = toast.loading('AI is scanning all resumes for this role...');
     try {
-      const r = await fetch(`/api/source/job-roles/${rankingRoleId}/auto-rank`, { method: 'POST' });
+      const r = await fetch(`/api/source/job-roles/${roleId}/auto-rank`, { method: 'POST' });
       if (r.ok) {
         toast.success('Auto-ranking complete!', { id: tid });
-        fetchRankings(rankingRoleId);
+        if (filters.role_id === roleId) fetchCandidates();
       } else {
         toast.error('Auto-ranking failed', { id: tid });
       }
@@ -481,7 +498,6 @@ export default function SourceDashboard() {
           <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>
           <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>
           <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Pipeline</button>
-          <button className={currentTab === 'invite-status' ? 'active' : ''} onClick={() => setTab('invite-status')}>Invite Status</button>
         </div>
         
         <div className="content">
@@ -513,8 +529,8 @@ export default function SourceDashboard() {
               : currentTab === 'jobs'
               ? `${jobRoles.length} active roles`
               : currentTab === 'offers' || currentTab === 'active' || currentTab === 'invite-status'
-              ? 'Phygitron 360 Source'
-              : `${searchTerm ? `${filteredCandidates.length} of ` : ''}${candidates.length} records`} · Phygitron 360 Source
+              ? `${user?.company_name || 'Source'} · Talent Acquisition`
+              : `${searchTerm ? `${filteredCandidates.length} of ` : ''}${candidates.length} records · ${user?.company_name || 'Source'}`}
           </p>
         </div>
 
@@ -564,7 +580,7 @@ export default function SourceDashboard() {
 
           {currentTab === 'jobs' && (
             <button
-              onClick={() => setShowNewRole(true)}
+              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0 }); setShowNewRole(true); }}
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo text-white text-[11px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-colors duration-150 shadow-lg"
             >
               <Plus size={15} /> Add Job Role
@@ -607,8 +623,8 @@ export default function SourceDashboard() {
             </div>
             <div className="section-card p-6 border-l-2 border-indigo/50 relative overflow-hidden group">
                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Zap size={64}/></div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Shortlisted</p>
-               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'shortlisted').length}</h2>
+               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Favourite</p>
+               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'favourite').length}</h2>
                <div className="flex items-center gap-1 mt-4 text-[10px] text-indigo font-bold"><Activity size={12}/> Pipeline</div>
             </div>
             <div className="section-card p-6 border-l-2 border-secondary/50 relative overflow-hidden group">
@@ -633,13 +649,13 @@ export default function SourceDashboard() {
                 <div>
                   <h3 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 mb-6"><PieChart size={14}/> Talent Pipeline Status</h3>
                   <div className="flex gap-2 h-12 rounded-xl overflow-hidden shadow-inner">
-                     {['New', 'Shortlisted', 'Invited', 'Hired', 'Rejected', 'Archived'].map(status => {
+                     {['New', 'Favourite', 'Invited', 'Hired', 'Rejected', 'Archived'].map(status => {
                        const count = candidates.filter(c => (c.status || 'New').toLowerCase() === status.toLowerCase()).length;
                        const percent = candidates.length > 0 ? (count / candidates.length) * 100 : 0;
                        if (count === 0) return null;
                        const colors = {
                           'new': 'bg-white/10',
-                          'shortlisted': 'bg-primary/50',
+                          'favourite': 'bg-primary/50',
                           'invited': 'bg-indigo/50',
                           'hired': 'bg-secondary/50',
                           'rejected': 'bg-error/50',
@@ -660,7 +676,7 @@ export default function SourceDashboard() {
                 <div className="flex flex-wrap items-center gap-6 mt-6">
                    {[
                      { label: 'New', color: 'bg-white/20' },
-                     { label: 'Shortlisted', color: 'bg-primary/50' },
+                     { label: 'Favourite', color: 'bg-primary/50' },
                      { label: 'Invited', color: 'bg-indigo/50' },
                      { label: 'Hired', color: 'bg-secondary/50' },
                      { label: 'Rejected', color: 'bg-error/50' },
@@ -754,15 +770,14 @@ export default function SourceDashboard() {
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
               {jobRoles.map(r => (
                 <div key={r.id} className="section-card p-6 border-white/5 hover:border-primary/30 transition-colors flex flex-col items-start text-left">
-                  <h3 className="text-lg font-bold text-white">{r.title}</h3>
+                  <div className="flex w-full items-start justify-between mb-1">
+                    <h3 className="text-lg font-bold text-white pr-2">{r.title}</h3>
+                    <button onClick={() => openEditRole(r)} className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 transition-colors shrink-0">
+                      <Edit size={14} />
+                    </button>
+                  </div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-primary/80 mt-1 mb-4">Min Exp: {r.min_experience} yrs</p>
                    <p className="text-xs text-white/40 leading-relaxed line-clamp-3 mb-4">{r.description || 'No description provided.'}</p>
-                  <button 
-                    onClick={() => fetchRankings(r.id)}
-                    className="mt-auto flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary/60 hover:text-primary transition-colors"
-                  >
-                    View Ranking Leaderboard <ArrowUpRight size={13} />
-                  </button>
                 </div>
               ))}
             </div>
@@ -789,7 +804,7 @@ export default function SourceDashboard() {
         </div>
       ) : currentTab === 'active' ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <ActiveCandidates />
+          <ActiveCandidates onViewProfile={(c) => setDrawerCandidate(c)} />
         </div>
       ) : currentTab === 'invite-status' ? (
         <div className="flex-1 flex items-center justify-center">
@@ -842,16 +857,19 @@ export default function SourceDashboard() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Pool</label>
+            <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Status</label>
             <select
               className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
               value={filters.pool}
               onChange={e => setFilters(f => ({ ...f, pool: e.target.value }))}
             >
               <option value="all">All</option>
-              <option value="candidate">Candidates</option>
-              <option value="trainee">Trainees</option>
-              <option value="employee">Employees</option>
+              <option value="new">New</option>
+              <option value="favourite">Favourite</option>
+              <option value="invited">Invited</option>
+              <option value="hired">Hired</option>
+              <option value="archived">Archived</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
 
@@ -911,13 +929,23 @@ export default function SourceDashboard() {
           >
             Reset
           </button>
+          {filters.role_id && (
+            <button
+              onClick={() => handleAutoRank(filters.role_id)}
+              disabled={autoRanking}
+              className="px-6 py-2.5 ml-auto bg-indigo text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-colors duration-150 flex items-center gap-2"
+            >
+              {autoRanking ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+              Auto Score All
+            </button>
+          )}
         </div>
       )}
 
       {/* ── Candidate Table ── */}
       <div className="section-card flex-1 flex flex-col overflow-hidden min-h-0">
         {/* Table header */}
-        <div className="grid grid-cols-[40px_1fr_110px_100px_120px_110px_56px] gap-4 px-6 py-4 border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/30 shrink-0">
+        <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/30 shrink-0`}>
           <div className="flex items-center justify-center">
             <button
               onClick={toggleAll}
@@ -927,7 +955,7 @@ export default function SourceDashboard() {
             </button>
           </div>
           <div>Candidate</div>
-          <div className="text-center">AI Fit Score</div>
+          {filters.role_id && <div className="text-center">AI Fit Score</div>}
           <div className="text-center">Experience</div>
           <div className="text-center">Status</div>
           <div>Location</div>
@@ -962,7 +990,7 @@ export default function SourceDashboard() {
               <div
                 key={c.id}
                 onClick={() => setDrawerCandidate(c)}
-                className={`grid grid-cols-[40px_1fr_110px_100px_120px_110px_56px] gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-primary/5' : 'hover:bg-white/[0.02]'}`}
+                className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-primary/5' : 'hover:bg-white/[0.02]'}`}
               >
                 {/* Checkbox */}
                 <div className="flex items-center justify-center" onClick={e => { e.stopPropagation(); toggle(c.id); }}>
@@ -983,11 +1011,13 @@ export default function SourceDashboard() {
                 </div>
 
                 {/* Score */}
-                <div className="flex justify-center">
-                  <span className={`px-3 py-1 rounded-lg border text-sm font-black ${SCORE_COLOR(c.fit_score)}`}>
-                    {c.fit_score != null ? `${Math.round(c.fit_score)}%` : '—'}
-                  </span>
-                </div>
+                {filters.role_id && (
+                  <div className="flex justify-center">
+                    <span className={`px-3 py-1 rounded-lg border text-sm font-black ${SCORE_COLOR(c.fit_score)}`}>
+                      {c.fit_score != null ? `${Math.round(c.fit_score)}%` : '—'}
+                    </span>
+                  </div>
+                )}
 
                 {/* Exp */}
                 <div className="text-center">
@@ -1049,6 +1079,7 @@ export default function SourceDashboard() {
       <CandidateDrawer
         candidate={drawerCandidate}
         jobRoles={jobRoles}
+        roleId={filters.role_id}
         onClose={() => setDrawerCandidate(null)}
         onRefresh={fetchCandidates}
       />
@@ -1071,10 +1102,10 @@ export default function SourceDashboard() {
         </Modal>
       )}
 
-      {/* ── New Role Modal ── */}
+      {/* ── New / Edit Role Modal ── */}
       {showNewRole && (
-        <Modal onClose={() => setShowNewRole(false)} title="Create Job Role">
-          <form onSubmit={handleCreateRole} className="flex flex-col gap-5">
+        <Modal onClose={() => setShowNewRole(false)} title={newRole.id ? "Edit Job Role" : "Create Job Role"}>
+          <form onSubmit={handleSaveRole} className="flex flex-col gap-5">
             <Field label="Role Title *">
               <input required className="form-input" placeholder="e.g. Senior Backend Engineer" value={newRole.title} onChange={e => setNewRole(r => ({ ...r, title: e.target.value }))} />
             </Field>
@@ -1086,7 +1117,9 @@ export default function SourceDashboard() {
             </Field>
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setShowNewRole(false)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
-              <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors">Create Role</button>
+              <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors">
+                {newRole.id ? "Save Changes" : "Create Role"}
+              </button>
             </div>
           </form>
         </Modal>
@@ -1178,85 +1211,7 @@ export default function SourceDashboard() {
 
 
 
-      {showRankings && (
-        <Modal onClose={() => setShowRankings(false)} title={`Leaderboard: ${jobRoles.find(r => r.id === rankingRoleId)?.title}`}>
-          <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-            <div className="flex items-center justify-between mb-2">
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40">AI-Powered Fitment Ranking</p>
-               <button 
-                 disabled={autoRanking || loadingRankings}
-                 onClick={handleAutoRank}
-                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all disabled:opacity-50"
-               >
-                 {autoRanking ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-                 {autoRanking ? 'Ranking All...' : 'Auto-Rank All'}
-               </button>
-            </div>
 
-            {loadingRankings ? (
-              <div className="flex items-center justify-center py-24 text-white/40 gap-3">
-                <Loader2 size={24} className="animate-spin text-primary" />
-                <span className="text-xs font-bold uppercase tracking-widest text-white/60">Retrieving Rankings...</span>
-              </div>
-            ) : rankings.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 section-card border-white/5 bg-white/[0.02]">
-                <Shield size={48} className="text-white/10 mb-6" />
-                <div className="text-center max-w-xs">
-                  <p className="text-sm font-bold text-white mb-2 uppercase italic">No Rankings Data</p>
-                  <p className="text-[10px] text-white/30 uppercase font-black tracking-widest mb-8 leading-relaxed">
-                    AI hasn't processed your candidate pool for this specific role yet.
-                  </p>
-                  <button 
-                    onClick={handleAutoRank}
-                    disabled={autoRanking}
-                    className="w-full py-4 rounded-xl bg-primary text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg flex items-center justify-center gap-3"
-                  >
-                    {autoRanking ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
-                    Initialize AI Auto-Rank
-                  </button>
-                </div>
-              </div>
-            ) : (
-              rankings.map((cand, idx) => (
-                <div key={cand.candidate_id} className="section-card p-4 flex items-center justify-between border-white/5 hover:border-primary/20 transition-all group relative overflow-hidden">
-                  {idx < 3 && <div className="absolute top-0 left-0 w-1 h-full bg-primary/40" />}
-                  <div className="flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-display font-black text-xs transition-colors ${idx === 0 ? 'bg-primary text-black' : idx < 3 ? 'bg-white/10 text-primary' : 'bg-white/5 text-white/40 group-hover:text-primary'}`}>
-                      #{idx + 1}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">{cand.full_name}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                         <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest">{cand.current_designation || 'Position Unknown'}</p>
-                         <div className="w-1 h-1 rounded-full bg-white/10" />
-                         <p className="text-[10px] text-primary/60 font-black uppercase tracking-widest">{cand.total_experience_years} Years Exp</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className={`px-4 py-2 rounded-xl border font-display font-black text-sm shadow-xl ${SCORE_COLOR(cand.score)}`}>
-                      {Math.round(cand.score)}
-                    </div>
-                    <button 
-                      onClick={() => {
-                        setShowRankings(false);
-                        const fullCand = candidates.find(c => c.id === cand.candidate_id);
-                        setDrawerCandidate(fullCand || { id: cand.candidate_id, full_name: cand.full_name });
-                      }}
-                      className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all"
-                    >
-                      <ArrowUpRight size={18} />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
-             <button onClick={() => setShowRankings(false)} className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Close Intelligence Portal</button>
-          </div>
-        </Modal>
-      )}
     </div>
         </div>
       </div>

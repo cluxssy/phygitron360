@@ -12,6 +12,7 @@ import MyProfile from '../components/MyProfile';
 import EmployeeProfileFull from '../components/EmployeeProfileFull';
 import PayrollPanel from '../components/PayrollPanel';
 import MyPayrollPanel from '../components/MyPayrollPanel';
+import InternalOpportunitiesPanel from '../components/InternalOpportunitiesPanel';
 import "../styles/deploy.css";
 
 import logo from "../../../assets/phy360.png";
@@ -372,6 +373,13 @@ export default function DeployDashboard() {
               >
                 My Performance
               </button>
+              
+              <button
+                className={currentTab === 'opportunities' ? 'active' : ''}
+                onClick={() => setTab('opportunities')}
+              >
+                My Opportunities
+              </button>
 
               {canViewPayroll && (
                 <button
@@ -545,6 +553,14 @@ export default function DeployDashboard() {
           {currentTab === 'payroll' && deployView === 'employee' && canViewPayroll && (
             <MyPayrollPanel
               key="employee-payroll"
+              user={user}
+            />
+          )}
+
+          {/* OPPORTUNITIES — EMPLOYEE */}
+          {currentTab === 'opportunities' && deployView === 'employee' && (
+            <InternalOpportunitiesPanel
+              key="employee-opportunities"
               user={user}
             />
           )}

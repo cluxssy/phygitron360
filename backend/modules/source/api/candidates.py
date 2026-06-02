@@ -19,6 +19,8 @@ import os
 from backend.core.database import DATA_DIR
 from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.source.services.candidate_service import CandidateService
+from backend.core.email_service_extended import send_generic_notification_email
+from backend.modules.deploy.repositories.notification_repo import NotificationRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/source/candidates", tags=["Source - Candidates"])
@@ -65,6 +67,7 @@ class CandidateUpdate(BaseModel):
 
 class StatusUpdate(BaseModel):
     status: str
+    role_id: Optional[int] = None
 
 
 class NoteCreate(BaseModel):
@@ -86,6 +89,10 @@ class ConvertRequest(BaseModel):
     location: Optional[str] = None
     start_date: Optional[str] = None
     offer_content: Optional[dict] = None
+
+class NotificationRequest(BaseModel):
+    subject: str
+    message: str
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +213,51 @@ def get_global_activity(
         logger.error(f"Failed to get global activity: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/my-applications")
+def get_my_applications(
+    current_user: dict = Depends(get_current_user),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Fetch all candidate applications linked to the logged-in employee."""
+    try:
+        user_id = current_user.get("id")
+        if not user_id:
+            return []
+            
+        repo = service.repo
+        from backend.core.database import get_db_connection
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                repo._set_search_path(cur)
+                cur.execute("""
+                    SELECT c.id, c.full_name, c.email, c.status, c.created_at,
+                           ci.status as invite_status, ci.email_sent_at,
+                           COALESCE(jr_inv.title, jr_app.title) as job_title,
+                           COALESCE(jr_inv.id, jr_app.id) as job_id
+                    FROM candidates c
+                    LEFT JOIN candidate_invites ci ON ci.candidate_id = c.id
+                    LEFT JOIN job_roles jr_inv ON ci.job_role_id = jr_inv.id
+                    LEFT JOIN candidate_applications ca ON ca.candidate_id = c.id
+                    LEFT JOIN job_roles jr_app ON ca.job_role_id = jr_app.id
+                    WHERE c.user_id = %s
+                    ORDER BY c.created_at DESC
+                """, (user_id,))
+                columns = [desc[0] for desc in cur.description]
+                results = [dict(zip(columns, row)) for row in cur.fetchall()]
+                
+                for r in results:
+                    if r["created_at"]:
+                        r["created_at"] = r["created_at"].isoformat()
+                    if r["email_sent_at"]:
+                        r["email_sent_at"] = r["email_sent_at"].isoformat()
+                return results
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.error(f"get_my_applications failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 @router.get("/{candidate_id}")
 def get_candidate(
@@ -277,7 +329,7 @@ def update_status(
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Update a candidate's pipeline status."""
-    updated = service.update_status(candidate_id, body.status)
+    updated = service.update_status(candidate_id, body.status, role_id=body.role_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -303,6 +355,7 @@ def add_note(
 async def offer_preview(
     candidate_id: int,
     body: OfferPreviewRequest,
+    user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """
@@ -315,7 +368,7 @@ async def offer_preview(
         "department": body.department,
         "location": body.location,
         "start_date": body.start_date,
-        "company": "Phygitron 360",
+        "company": user.get("company_name", "Phygitron 360"),
     }
     
     preview = await service.generate_offer_preview(candidate_id, hiring_details)
@@ -370,6 +423,59 @@ def delete_candidate(
     except Exception as exc:
         logger.error(f"delete_candidate({candidate_id}) failed: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
+
+@router.post("/{candidate_id}/notify")
+def notify_candidate(
+    candidate_id: int,
+    payload: NotificationRequest,
+    current_user: dict = Depends(require_permission("source.candidates.manage")),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Send a custom HR notification to a candidate/trainee."""
+    try:
+        candidate = service.get_candidate(candidate_id)
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        
+        user_id = candidate.get("user_id")
+        email = candidate.get("email")
+        full_name = candidate.get("full_name") or "Candidate"
+        company_name = current_user.get("company_name", "Phygitron 360")
+        tenant_id = current_user.get("tenant_id", "public")
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Candidate does not have an email address.")
+        
+        # 1. Send Email
+        sent = send_generic_notification_email(
+            to_email=email,
+            candidate_name=full_name,
+            notification_subject=payload.subject,
+            notification_message=payload.message,
+            company_name=company_name
+        )
+        if not sent:
+            raise HTTPException(status_code=500, detail="Failed to dispatch email.")
+
+        # 2. Save Notification to Database
+        if user_id:
+            repo = NotificationRepository()
+            repo.create_notification(
+                employee_code=None,
+                user_id=user_id,
+                title=payload.subject,
+                message=payload.message,
+                n_type="CandidateUpdate",
+                tenant_id=tenant_id
+            )
+
+        return {"success": True, "message": "Notification sent and logged."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"notify_candidate({candidate_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 
 # ---------------------------------------------------------------------------
