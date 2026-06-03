@@ -40,9 +40,22 @@ app = FastAPI(
 )
 
 # Automated Schema Sync
-from backend.core.database import create_tables
+from backend.core.database import create_tables, get_db_connection
 try:
-    create_tables()
+    create_tables() # Sync public schema first
+    
+    # Sync all tenant schemas so new tables propagate
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute('SET search_path TO "public"')
+            cur.execute("SELECT id FROM tenants")
+            tenant_ids = [row[0] for row in cur.fetchall()]
+            
+        for t_id in tenant_ids:
+            create_tables(t_id)
+    finally:
+        conn.close()
 except Exception as e:
     print(f"Schema sync warning: {e}")
 
