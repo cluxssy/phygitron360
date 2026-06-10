@@ -135,7 +135,7 @@ async def bulk_upload_resumes(
     user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
-    """Process multiple resume files at once. Returns per-file status."""
+    """Process multiple resume files at once. Returns a job ID to track progress."""
     files_data = []
     for f in files:
         files_data.append((f.filename, await f.read()))
@@ -144,7 +144,22 @@ async def bulk_upload_resumes(
     return {
         "success": True,
         "data": result,
-        "message": f"Bulk upload complete: {len(result['succeeded'])} of {len(files)} processed"
+        "message": result.get("message", "Bulk upload queued.")
+    }
+
+@router.get("/bulk-upload/{job_id}")
+async def get_bulk_upload_status(
+    job_id: int,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Get the progress of a bulk upload job."""
+    progress = service.repo.get_bulk_upload_job_progress(job_id)
+    if not progress["job"]:
+        raise HTTPException(status_code=404, detail="Bulk upload job not found")
+        
+    return {
+        "success": True,
+        "data": progress
     }
 
 
@@ -366,13 +381,16 @@ async def offer_preview(
     Generate an AI offer letter preview for a candidate.
     Does NOT persist — returns content only.
     """
+    tenant_id = user.get("tenant_id", "public")
+    company = tenant_id.replace("tenant_", "").upper() if tenant_id != "public" else "Phygitron 360"
+    
     hiring_details = {
         "role_title": body.role_title,
         "salary": body.salary,
         "department": body.department,
         "location": body.location,
         "start_date": body.start_date,
-        "company": user.get("company_name", "Phygitron 360"),
+        "company": company,
     }
     
     preview = await service.generate_offer_preview(candidate_id, hiring_details)
@@ -386,18 +404,23 @@ async def offer_preview(
 async def convert_to_offer(
     candidate_id: int,
     body: ConvertRequest,
+    user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """
     Create an offer letter (starts in 'pending' status).
     Moves candidate to 'Offered' status.
     """
+    tenant_id = user.get("tenant_id", "public")
+    company = tenant_id.replace("tenant_", "").upper() if tenant_id != "public" else "Phygitron 360"
+    
     hiring_details = {
         "role_title": body.role_title,
         "salary": body.salary,
         "department": body.department,
         "location": body.location,
-        "start_date": body.start_date
+        "start_date": body.start_date,
+        "company": company
     }
     
     try:

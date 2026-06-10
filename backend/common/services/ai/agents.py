@@ -64,8 +64,8 @@ Return this exact structure:
   "weak_skill_ids": []
 }"""
 
-GENERATE_OFFER_LETTER_SYSTEM = """You are a professional HR assistant at PHYGITRON 360.
-Write a warm, personalized internship or job offer letter.
+GENERATE_OFFER_LETTER_SYSTEM = """You are a professional HR assistant.
+Write a warm, personalized internship or job offer letter for the company specified in the details (e.g. ACER, Phygitron 360).
 The letter should be professional yet human-like, unique for each candidate.
 Respond ONLY with valid JSON.
 Return this structure:

@@ -82,6 +82,17 @@ if not os.path.exists(uploads_dir):
     os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
+# Background Workers
+import asyncio
+from backend.modules.source.services.candidate_service import CandidateService
+
+@app.on_event("startup")
+async def start_background_workers():
+    # Start the bulk upload queue processor
+    # For now it uses the public tenant, in a full multi-tenant system it would process across schemas
+    service = CandidateService(tenant_id="public")
+    asyncio.create_task(service.process_bulk_upload_queue())
+
 # Include Modules
 app.include_router(auth_router)
 app.include_router(dashboard_router)

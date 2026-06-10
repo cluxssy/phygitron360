@@ -527,6 +527,95 @@ class CandidateRepository:
         finally:
             conn.close()
 
+    def create_bulk_upload_job_items(self, job_id: int, items: List[Dict[str, str]]):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                from psycopg2.extras import execute_values
+                query = """
+                    INSERT INTO bulk_upload_job_items (job_id, filename, file_path, file_hash)
+                    VALUES %s
+                """
+                values = [(job_id, i["filename"], i["file_path"], i["file_hash"]) for i in items]
+                execute_values(cur, query, values)
+                conn.commit()
+        finally:
+            conn.close()
+
+    def update_bulk_upload_job_item(self, item_id: int, status: str, candidate_id: Optional[int] = None, error_message: Optional[str] = None):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """UPDATE bulk_upload_job_items
+                       SET status = %s, candidate_id = %s, error_message = %s, updated_at = CURRENT_TIMESTAMP
+                       WHERE id = %s""",
+                    (status, candidate_id, error_message, item_id)
+                )
+                conn.commit()
+        finally:
+            conn.close()
+
+    def get_pending_bulk_upload_job_items(self, limit: int = 10) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """SELECT * FROM bulk_upload_job_items 
+                       WHERE status = 'pending' 
+                       ORDER BY created_at ASC 
+                       LIMIT %s FOR UPDATE SKIP LOCKED""",
+                    (limit,)
+                )
+                rows = cur.fetchall()
+                if rows:
+                    item_ids = [r["id"] for r in rows]
+                    cur.execute(
+                        "UPDATE bulk_upload_job_items SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ANY(%s)",
+                        (item_ids,)
+                    )
+                    conn.commit()
+                return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_bulk_upload_job_progress(self, job_id: int) -> Dict[str, Any]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """SELECT status, COUNT(*) as count 
+                       FROM bulk_upload_job_items 
+                       WHERE job_id = %s 
+                       GROUP BY status""",
+                    (job_id,)
+                )
+                rows = cur.fetchall()
+                
+                cur.execute("SELECT * FROM bulk_upload_jobs WHERE id = %s", (job_id,))
+                job = cur.fetchone()
+                
+                return {
+                    "job": dict(job) if job else None,
+                    "items_stats": [dict(r) for r in rows]
+                }
+        finally:
+            conn.close()
+
+    def check_file_hash_exists(self, file_hash: str) -> bool:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute("SELECT 1 FROM bulk_upload_job_items WHERE file_hash = %s AND status = 'success' LIMIT 1", (file_hash,))
+                return cur.fetchone() is not None
+        finally:
+            conn.close()
+
     def create_offer(self, candidate_id: int, details: Dict[str, Any], content: Dict[str, Any]) -> int:
         conn = get_db_connection()
         try:

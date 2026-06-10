@@ -85,9 +85,7 @@ class CandidateService:
             existing = self.repo.get_candidate_by_email(candidate_data["email"])
             
         if existing:
-            candidate_id = existing["id"]
-            self.repo.update_candidate(candidate_id, candidate_data)
-            self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via AI re-parsing')
+            raise ValueError(f"Duplicate email: A candidate with email {candidate_data['email']} already exists.")
         else:
             candidate_id = self.repo.create_candidate(candidate_data)
             self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI')
@@ -371,15 +369,17 @@ class CandidateService:
 
     async def bulk_upload_resumes(self, files: List[tuple], user_id: int) -> Dict[str, Any]:
         """files is a list of tuples: (filename, content_bytes)"""
-        succeeded = []
-        failed = []
-        skipped = []
         allowed_exts = (".pdf", ".docx", ".doc", ".txt")
-
         import zipfile
         import io
+        import hashlib
 
-        queue = []
+        queue_items = []
+        job_id = self.repo.create_bulk_upload_job(user_id, 0) # Create job first
+        job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
+        os.makedirs(job_dir, exist_ok=True)
+
+        total_files = 0
         for fn, content in files:
             if fn.lower().endswith(".zip"):
                 try:
@@ -387,45 +387,110 @@ class CandidateService:
                         for name in z.namelist():
                             if name.endswith("/") or name.split("/")[-1].startswith(".") or "__MACOSX" in name:
                                 continue
+                            if not name.lower().endswith(allowed_exts):
+                                continue
+                            
                             file_bytes = z.read(name)
-                            # Clean the path to get only the filename
                             clean_fn = name.split("/")[-1]
-                            queue.append((clean_fn, file_bytes))
+                            
+                            # Calculate Hash
+                            file_hash = hashlib.sha256(file_bytes).hexdigest()
+                            
+                            # Save to disk
+                            file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
+                            with open(file_path, "wb") as f:
+                                f.write(file_bytes)
+                                
+                            queue_items.append({
+                                "filename": clean_fn,
+                                "file_path": file_path,
+                                "file_hash": file_hash
+                            })
+                            total_files += 1
                 except Exception as zip_err:
                     logger.error(f"Failed to extract zip file {fn}: {zip_err}")
-                    failed.append({"filename": fn, "error": f"Invalid zip format: {zip_err}"})
             else:
-                queue.append((fn, content))
-
-        job_id = self.repo.create_bulk_upload_job(user_id, len(queue))
-
-        for fn, content in queue:
-            if not fn.lower().endswith(allowed_exts):
-                skipped.append(fn)
-                continue
-            try:
-                result = await self.process_and_save_resume(content, fn)
-                succeeded.append({
-                    "filename": fn,
-                    "candidate_id": result["candidate_id"],
-                    "full_name": result["parsed_data"].get("name")
+                if not fn.lower().endswith(allowed_exts):
+                    continue
+                clean_fn = fn.split("/")[-1]
+                file_hash = hashlib.sha256(content).hexdigest()
+                file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
+                with open(file_path, "wb") as f:
+                    f.write(content)
+                queue_items.append({
+                    "filename": clean_fn,
+                    "file_path": file_path,
+                    "file_hash": file_hash
                 })
-            except Exception as e:
-                logger.error(f"Bulk upload failed for {fn}: {e}")
-                failed.append({"filename": fn, "error": str(e)})
+                total_files += 1
 
-        self.repo.update_bulk_upload_job(
-            job_id,
-            processed=len(succeeded),
-            details=json.dumps(succeeded + failed),
-            status="completed"
-        )
+        # Update total files
+        self.repo.update_bulk_upload_job(job_id, 0, "[]", "processing")
+        
+        # Batch insert to DB
+        if queue_items:
+            # We can insert in batches if it's too large, but 10,000 should be fine for a single execute_values
+            self.repo.create_bulk_upload_job_items(job_id, queue_items)
+            
+            # Update job total
+            conn = get_db_connection()
+            try:
+                with conn.cursor() as cur:
+                    self.repo._set_search_path(cur)
+                    cur.execute("UPDATE bulk_upload_jobs SET total_files = %s WHERE id = %s", (total_files, job_id))
+                    conn.commit()
+            finally:
+                conn.close()
+
         return {
             "job_id": job_id,
-            "succeeded": succeeded,
-            "failed": failed,
-            "skipped": skipped
+            "status": "processing",
+            "message": f"Successfully queued {total_files} files for processing."
         }
+
+    async def process_bulk_upload_queue(self):
+        """Background worker loop to process pending resumes safely."""
+        import asyncio
+        semaphore = asyncio.Semaphore(5) # Max 5 concurrent AI parsing requests
+        
+        while True:
+            try:
+                pending_items = self.repo.get_pending_bulk_upload_job_items(limit=10)
+                if not pending_items:
+                    await asyncio.sleep(5)
+                    continue
+
+                async def process_item(item):
+                    async with semaphore:
+                        try:
+                            # 1. Strict Duplicate Check
+                            if self.repo.check_file_hash_exists(item["file_hash"]):
+                                self.repo.update_bulk_upload_job_item(
+                                    item["id"], status="duplicate", error_message="Exact file already exists."
+                                )
+                                return
+
+                            # 2. Read file from disk
+                            with open(item["file_path"], "rb") as f:
+                                file_content = f.read()
+
+                            # 3. Process
+                            result = await self.process_and_save_resume(file_content, item["filename"])
+                            
+                            self.repo.update_bulk_upload_job_item(
+                                item["id"], status="success", candidate_id=result["candidate_id"]
+                            )
+                        except Exception as e:
+                            logger.error(f"Error processing item {item['id']}: {e}")
+                            self.repo.update_bulk_upload_job_item(
+                                item["id"], status="failed", error_message=str(e)
+                            )
+                
+                await asyncio.gather(*(process_item(item) for item in pending_items))
+                
+            except Exception as e:
+                logger.error(f"Bulk upload queue error: {e}")
+                await asyncio.sleep(10)
 
     async def generate_offer_preview(self, candidate_id: int, details: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         cand = self.repo.get_candidate_by_id(candidate_id)
