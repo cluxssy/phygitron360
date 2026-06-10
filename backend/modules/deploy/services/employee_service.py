@@ -50,8 +50,8 @@ class EmployeeService:
 
     def create_employee(self, data: Dict[str, Any]):
         # Validations
-        if not data['code'].startswith("EMP"):
-             raise ValueError("Employee code must start with 'EMP'.")
+        if not data['code']:
+             raise ValueError("Employee code cannot be empty.")
         
         import re
         phone_cleaned = re.sub(r'[\s\-()]', '', data['phone'])
