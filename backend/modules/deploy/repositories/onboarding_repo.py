@@ -11,7 +11,7 @@ class OnboardingRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur, tenant_id)
-                cur.execute("SELECT 1 FROM users WHERE username = %s", (email,))
+                cur.execute("SELECT * FROM users WHERE username = %s", (email,))
                 row = cur.fetchone()
                 return dict(row) if row else None
         finally:
@@ -116,17 +116,27 @@ class OnboardingRepository:
                 
                 # If code changed, handle potential FK violations via a clone-and-swap strategy
                 if final_code != employee_code:
+                    cur.execute("SELECT email_id FROM employees WHERE employee_code = %s", (employee_code,))
+                    email_row = cur.fetchone()
+                    real_email = email_row[0] if email_row else ""
+                    
+                    cur.execute("UPDATE employees SET email_id = %s WHERE employee_code = %s", (f"tmp-{employee_code}", employee_code))
+                    
                     # 1. Clone the employee record with the new code
                     cur.execute('''
                         INSERT INTO employees (
                             employee_code, name, dob, contact_number, emergency_contact, email_id, 
                             team, designation, employment_status, current_address, permanent_address,
-                            education_details, photo_path, cv_path, id_proofs
-                        ) SELECT %s, name, dob, contact_number, emergency_contact, email_id, 
+                            education_details, photo_path, cv_path, id_proofs, doj, employment_type, reporting_manager,
+                            location, pf_included, mediclaim_included, notes, exit_date, exit_reason, clearance_status,
+                            bank_name, bank_account_no, pan_no
+                        ) SELECT %s, name, dob, contact_number, emergency_contact, %s, 
                             team, designation, employment_status, current_address, permanent_address,
-                            education_details, photo_path, cv_path, id_proofs
+                            education_details, photo_path, cv_path, id_proofs, doj, employment_type, reporting_manager,
+                            location, pf_included, mediclaim_included, notes, exit_date, exit_reason, clearance_status,
+                            bank_name, bank_account_no, pan_no
                         FROM employees WHERE employee_code = %s
-                    ''', (final_code, employee_code))
+                    ''', (final_code, real_email, employee_code))
                     
                     # 2. Update child records to the new code
                     cur.execute("UPDATE users SET employee_code = %s WHERE employee_code = %s", (final_code, employee_code))
@@ -192,45 +202,93 @@ class OnboardingRepository:
         finally:
             conn.close()
 
-    def complete_onboarding_transaction(self, user_data: dict, employee_data: dict, skill_data: dict, tenant_id: str = 'public'):
+    def complete_onboarding_transaction(self, user_data: dict, employee_data: dict, skill_data: dict, is_rehire: bool = False, tenant_id: str = 'public'):
         # Execute all as one transaction
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_path(cur, tenant_id)
                 
-                # 1. Employee
-                cur.execute('''
-                    INSERT INTO employees (
-                        employee_code, name, email_id, contact_number, emergency_contact, dob, 
-                        current_address, permanent_address, education_details,
-                        team, designation, employment_status, doj, location,
-                        photo_path, cv_path, id_proofs, bank_name, bank_account_no, pan_no
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ''', (
-                    employee_data['code'], employee_data['name'], employee_data['email'], 
-                    employee_data['phone'], employee_data['emergency'], employee_data['dob'],
-                    employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
-                    employee_data['team'], employee_data['designation'], 'Pending Approval', 
-                    employee_data['doj'], employee_data.get('location', ''),
-                    employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'],
-                    employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no')
-                ))
+                if is_rehire:
+                    # 1. Employee UPDATE
+                    cur.execute('''
+                        UPDATE employees SET 
+                            name = %s, contact_number = %s, emergency_contact = %s, dob = %s, 
+                            current_address = %s, permanent_address = %s, education_details = %s,
+                            team = %s, designation = %s, employment_status = 'Pending Approval', doj = %s, location = %s,
+                            photo_path = %s, cv_path = %s, id_proofs = %s, bank_name = %s, bank_account_no = %s, pan_no = %s
+                        WHERE employee_code = %s
+                    ''', (
+                        employee_data['name'], employee_data['phone'], employee_data['emergency'], employee_data['dob'],
+                        employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
+                        employee_data['team'], employee_data['designation'], employee_data['doj'], employee_data.get('location', ''),
+                        employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'],
+                        employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no'),
+                        employee_data['code']
+                    ))
 
-                # 2. User
-                cur.execute("INSERT INTO users (username, password_hash, role, employee_code, is_active) VALUES (%s, %s, %s, %s, 0)", 
-                        (user_data['email'], user_data['password_hash'], user_data['role'], user_data['employee_code']))
-                
-                # 3. Skills
-                cur.execute('''
-                    INSERT INTO skill_matrix (
-                        employee_code, candidate_name, primary_skillset,
-                        secondary_skillset, cv_upload
-                    ) VALUES (%s, %s, %s, %s, %s)
-                ''', (
-                    skill_data['code'], skill_data['name'], skill_data['primary'], 
-                    skill_data['secondary'], skill_data['cv_path']
-                ))
+                    # 2. User UPDATE or INSERT
+                    cur.execute("UPDATE users SET password_hash = %s, role = %s, roles = ARRAY[%s]::varchar[], is_active = 0, employee_code = %s, password_must_change = 0 WHERE username = %s", 
+                            (user_data['password_hash'], user_data['role'], user_data['role'], user_data['employee_code'], user_data['email']))
+                    if cur.rowcount == 0:
+                        cur.execute("INSERT INTO users (username, password_hash, role, roles, employee_code, is_active, password_must_change) VALUES (%s, %s, %s, ARRAY[%s]::varchar[], %s, 0, 0)", 
+                            (user_data['email'], user_data['password_hash'], user_data['role'], user_data['role'], user_data['employee_code']))
+                    
+                    # 3. Skills UPDATE or INSERT
+                    cur.execute('''
+                        UPDATE skill_matrix SET 
+                            primary_skillset = %s, secondary_skillset = %s, cv_upload = %s
+                        WHERE employee_code = %s
+                    ''', (
+                        skill_data['primary'], skill_data['secondary'], skill_data['cv_path'], skill_data['code']
+                    ))
+                    if cur.rowcount == 0:
+                        cur.execute('''
+                            INSERT INTO skill_matrix (employee_code, primary_skillset, secondary_skillset, cv_upload)
+                            VALUES (%s, %s, %s, %s)
+                        ''', (skill_data['code'], skill_data['primary'], skill_data['secondary'], skill_data['cv_path']))
+                else:
+                    # 1. Employee INSERT
+                    cur.execute('''
+                        INSERT INTO employees (
+                            employee_code, name, email_id, contact_number, emergency_contact, dob, 
+                            current_address, permanent_address, education_details,
+                            team, designation, employment_status, doj, location,
+                            photo_path, cv_path, id_proofs, bank_name, bank_account_no, pan_no
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ''', (
+                        employee_data['code'], employee_data['name'], employee_data['email'], 
+                        employee_data['phone'], employee_data['emergency'], employee_data['dob'],
+                        employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
+                        employee_data['team'], employee_data['designation'], 'Pending Approval', 
+                        employee_data['doj'], employee_data.get('location', ''),
+                        employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'],
+                        employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no')
+                    ))
+
+                    # 2. User INSERT or UPDATE
+                    cur.execute('''
+                        INSERT INTO users (username, password_hash, role, roles, employee_code, is_active, password_must_change) 
+                        VALUES (%s, %s, %s, ARRAY[%s]::varchar[], %s, 0, 0)
+                        ON CONFLICT (username) 
+                        DO UPDATE SET password_hash = EXCLUDED.password_hash, 
+                                      role = EXCLUDED.role, 
+                                      roles = EXCLUDED.roles,
+                                      employee_code = EXCLUDED.employee_code, 
+                                      is_active = EXCLUDED.is_active, 
+                                      password_must_change = EXCLUDED.password_must_change
+                    ''', (user_data['email'], user_data['password_hash'], user_data['role'], user_data['role'], user_data['employee_code']))
+                    
+                    # 3. Skills INSERT
+                    cur.execute('''
+                        INSERT INTO skill_matrix (
+                            employee_code, candidate_name, primary_skillset,
+                            secondary_skillset, cv_upload
+                        ) VALUES (%s, %s, %s, %s, %s)
+                    ''', (
+                        skill_data['code'], skill_data['name'], skill_data['primary'], 
+                        skill_data['secondary'], skill_data['cv_path']
+                    ))
                 
                 conn.commit()
         except:

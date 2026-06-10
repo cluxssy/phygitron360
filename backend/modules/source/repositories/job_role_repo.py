@@ -204,33 +204,59 @@ class JobRoleRepository:
                 user_id, email, full_name = row
                 
                 if user_id:
+                    # Candidate is already linked to a user account
+                    cur.execute("SELECT employment_status FROM employees WHERE email_id = %s", (email,))
+                    emp_row = cur.fetchone()
+                    
+                    is_exited = emp_row and emp_row[0] == 'Exited'
+                    
                     cur.execute("SELECT role FROM users WHERE id = %s", (user_id,))
                     u_row = cur.fetchone()
                     
-                    if u_row and u_row[0] != 'trainee':
-                        # Internal employee who is already linked - do NOT overwrite password
+                    if u_row and u_row[0] != 'trainee' and not is_exited:
+                        # Active Internal employee who is already linked - do NOT overwrite password
                         return {"is_internal": True, "user_id": user_id, "success": True}
                         
-                    # Update password for existing linked account (external trainee)
-                    # We assume an external trainee needs a fresh password for the new invite.
+                    # Update password for existing linked account (external trainee or exited employee)
+                    # We assume they need a fresh password for the new invite.
+                    # If they are exited, we also make sure their account is active.
                     cur.execute(
                         """UPDATE users 
-                           SET password_hash = %s, password_must_change = 1
+                           SET password_hash = %s, password_must_change = 1, is_active = 1
                            WHERE id = %s""",
                         (password_hash, user_id),
                     )
                     conn.commit()
                     return {"is_internal": False, "user_id": user_id, "success": True}
                 else:
-                    # Candidate is not linked. Check if an account exists with this email (Internal Employee).
+                    # Candidate is not linked. Check if an account exists with this email.
                     cur.execute("SELECT id FROM users WHERE username = %s", (email,))
                     existing_user = cur.fetchone()
                     if existing_user:
                         existing_user_id = existing_user[0]
-                        # Link candidate to existing internal employee, do NOT change their password or role
-                        cur.execute("UPDATE candidates SET user_id = %s WHERE id = %s", (existing_user_id, candidate_id))
-                        conn.commit()
-                        return {"is_internal": True, "user_id": existing_user_id, "success": True}
+                        
+                        cur.execute("SELECT employment_status FROM employees WHERE email_id = %s", (email,))
+                        emp_row = cur.fetchone()
+                        
+                        is_exited = emp_row and emp_row[0] == 'Exited'
+                        
+                        if is_exited:
+                            # Exited employee. Treat as external candidate.
+                            cur.execute(
+                                """UPDATE users 
+                                   SET password_hash = %s, password_must_change = 1, is_active = 1
+                                   WHERE id = %s""",
+                                (password_hash, existing_user_id),
+                            )
+                            cur.execute("UPDATE candidates SET user_id = %s WHERE id = %s", (existing_user_id, candidate_id))
+                            conn.commit()
+                            return {"is_internal": False, "user_id": existing_user_id, "success": True}
+                        else:
+                            # Active Internal Employee
+                            # Link candidate to existing internal employee, do NOT change their password or role
+                            cur.execute("UPDATE candidates SET user_id = %s WHERE id = %s", (existing_user_id, candidate_id))
+                            conn.commit()
+                            return {"is_internal": True, "user_id": existing_user_id, "success": True}
                         
                     # Otherwise, create a brand new external trainee account
                     cur.execute(

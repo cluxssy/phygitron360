@@ -76,9 +76,21 @@ class OfferService:
         except Exception:
             pass
 
-        emp_id = self.repo.convert_candidate_to_employee(offer)
-        emp_code = f"EMP{emp_id:04d}"
+        # Check for Rehire / Internal Hire
+        from backend.modules.deploy.repositories.employee_repo import EmployeeRepository
+        emp_repo = EmployeeRepository()
+        existing_emp = emp_repo.get_employee_by_email(offer["candidate_email"], tenant_id=self.tenant_id)
+        
+        is_active_internal = False
+        is_rehire = False
 
+        if existing_emp:
+            if existing_emp["employment_status"] != 'Exited':
+                is_active_internal = True
+            else:
+                is_rehire = True
+
+        # Send Offer Letter Email
         if send_offer_letter_email:
             try:
                 send_offer_letter_email(
@@ -93,4 +105,43 @@ class OfferService:
             except Exception as email_exc:
                 logger.warning(f"Offer email send failed (non-blocking): {email_exc}")
                 
-        return {"employee_id": emp_id, "employee_code": emp_code}
+        if is_active_internal:
+            # Bypass Onboarding entirely for Active Employees
+            try:
+                emp_repo.update_employee(existing_emp["employee_code"], {
+                    "designation": offer["role_title"],
+                    "team": offer.get("department", ""),
+                    "location": offer.get("location", ""),
+                }, tenant_id=self.tenant_id)
+                logger.info(f"Internal hire processed: Employee {existing_emp['employee_code']} updated.")
+            except Exception as e:
+                logger.error(f"Failed to update internal hire details: {e}")
+                
+            self.repo.mark_offer_sent(offer_id, offer["candidate_id"])
+            return {"success": True, "message": "Internal hire offer sent and profile updated instantly."}
+
+        else:
+            # Send Onboarding Invite for New or Rehired candidates
+            from backend.modules.deploy.services.onboarding_service import OnboardingService
+            onboarding_service = OnboardingService()
+            
+            invite_data = {
+                "email": offer["candidate_email"],
+                "name": offer["candidate_name"],
+                "role": "employee",
+                "department": offer.get("department", ""),
+                "designation": offer["role_title"],
+                "is_rehire": is_rehire
+            }
+            
+            try:
+                invite_result = onboarding_service.create_invite(invite_data, tenant_id=self.tenant_id)
+                logger.info(f"Onboarding invite sent: {invite_result}")
+            except Exception as e:
+                logger.error(f"Failed to send onboarding invite: {e}")
+                pass
+
+            # Update statuses in the repo
+            self.repo.mark_offer_sent(offer_id, offer["candidate_id"])
+            
+            return {"success": True, "message": "Offer and Onboarding Invite sent successfully."}

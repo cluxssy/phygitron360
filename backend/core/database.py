@@ -891,6 +891,22 @@ def create_tables(schema_name='public'):
             )
         ''')
 
+        # Bulk Upload Job Items table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS bulk_upload_job_items (
+                id SERIAL PRIMARY KEY,
+                job_id INTEGER NOT NULL REFERENCES bulk_upload_jobs(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_hash TEXT,
+                status TEXT DEFAULT 'pending',
+                candidate_id INTEGER REFERENCES candidates(id),
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # Add status/tracking columns to candidate_invites if not exists
         cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent'")
         cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS opened_at TIMESTAMP")

@@ -104,28 +104,20 @@ class OfferRepository:
         finally:
             conn.close()
             
-    def convert_candidate_to_employee(self, offer: Dict[str, Any]) -> int:
-        from backend.modules.deploy.services.employee_service import EmployeeService
-        emp_service = EmployeeService(tenant_id=self.tenant_id)
-        
-        # Onboard the candidate (handles Rehire logic and User Creation)
-        emp_id = emp_service.onboard_candidate_from_offer(offer)
-        
-        # Update Source Module statuses
+    def mark_offer_sent(self, offer_id: int, candidate_id: int) -> bool:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 cur.execute(
                     "UPDATE candidates SET status = 'Archived', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                    (offer["candidate_id"],),
+                    (candidate_id,),
                 )
                 cur.execute(
                     "UPDATE offer_letters SET status = 'sent', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                    (offer["id"],),
+                    (offer_id,),
                 )
                 conn.commit()
+                return True
         finally:
             conn.close()
-            
-        return emp_id

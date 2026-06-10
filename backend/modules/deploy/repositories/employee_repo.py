@@ -356,7 +356,7 @@ class EmployeeRepository:
             """, (status, exit_date, exit_reason, employee_code))
             
             if deactivate:
-                cur.execute("DELETE FROM users WHERE employee_code = %s", (employee_code,))
+                cur.execute("UPDATE users SET is_active = 0, role = 'trainee', roles = ARRAY['trainee']::varchar[] WHERE employee_code = %s", (employee_code,))
             
             conn.commit()
         finally:

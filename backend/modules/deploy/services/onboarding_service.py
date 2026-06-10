@@ -14,7 +14,8 @@ class OnboardingService:
         self.email_service = EmailService()
 
     def create_invite(self, data: Dict[str, Any], tenant_id: str = 'public'):
-        if self.repo.get_user_by_email(data['email'], tenant_id=tenant_id):
+        existing_user = self.repo.get_user_by_email(data['email'], tenant_id=tenant_id)
+        if not data.get("is_rehire") and existing_user and existing_user.get('role') != 'trainee':
             raise ValueError("User with this email already exists.")
             
         if self.repo.get_pending_invite_by_email(data['email']):
@@ -121,18 +122,29 @@ class OnboardingService:
         if len(password) < 8:
             raise ValueError("Access Key must be at least 8 segments (characters)")
 
-        # 1. Generate Employee Code
-        count = self.repo.generate_employee_code(tenant_id=tenant_id)
-        emp_code = ""
-        for i in range(100):
-            candidate = f"EMP{str(count + i).zfill(4)}"
-            if not self.repo.check_employee_code_exists(candidate, tenant_id=tenant_id):
-                emp_code = candidate
-                break
+        # 1. Check for rehire and determine Employee Code
+        from backend.modules.deploy.repositories.employee_repo import EmployeeRepository
+        existing_emp = EmployeeRepository().get_employee_by_email(invite['email'], tenant_id)
         
-        if not emp_code:
-            import random
-            emp_code = f"EMP{str(random.randint(1000, 9999))}"
+        is_rehire = False
+        emp_code = ""
+        
+        if existing_emp:
+            # If the employee record already exists (Exited, Pending Approval, or even Active),
+            # we must UPDATE their profile rather than INSERT to avoid unique_email_id constraint violation.
+            is_rehire = True
+            emp_code = existing_emp['employee_code']
+        else:
+            count = self.repo.generate_employee_code(tenant_id=tenant_id)
+            for i in range(100):
+                candidate = f"EMP{str(count + i).zfill(4)}"
+                if not self.repo.check_employee_code_exists(candidate, tenant_id=tenant_id):
+                    emp_code = candidate
+                    break
+            
+            if not emp_code:
+                import random
+                emp_code = f"EMP{str(random.randint(1000, 9999))}"
 
         # 2. Prepare Data
         password_hash = pbkdf2_sha256.hash(password)
@@ -175,7 +187,7 @@ class OnboardingService:
         }
         
         # 3. Transaction
-        self.repo.complete_onboarding_transaction(user_data, emp_record, skill_record, tenant_id=tenant_id)
+        self.repo.complete_onboarding_transaction(user_data, emp_record, skill_record, is_rehire=is_rehire, tenant_id=tenant_id)
         
         # 4. Close Invite
         self.repo.update_invite_status(token, 'Completed')
