@@ -183,7 +183,7 @@ export default function OnboardingPanel() {
   const handleApprove = async (e) => {
     e.preventDefault();
     if (!approveForm.manager || !approveForm.location || !approveForm.code) {
-        toast.error("Please complete parameters assignment");
+        toast.error("Please fill in all required information");
         return;
     }
     setSubmitting(true);
@@ -226,7 +226,7 @@ export default function OnboardingPanel() {
       {/* Header & Tabs */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
         <div>
-          <p className={`text-[10px] font-black uppercase tracking-[0.4em] mb-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>Neural Acquisition Node</p>
+          <p className={`text-[10px] font-black uppercase tracking-[0.4em] mb-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>Onboarding Management</p>
           <h2 className={`text-3xl font-display font-black uppercase tracking-tighter italic ${isLightMode ? 'text-black' : 'text-white'}`}>Onboarding Hub</h2>
         </div>
         
@@ -355,7 +355,7 @@ export default function OnboardingPanel() {
                             <>
                             <button 
                               onClick={() => copyInviteLink(inv.token)} 
-                              title="Copy Neural Link"
+                              title="Copy Invite Link"
                               className={`p-2 rounded-lg border transition-all ${
                                 isLightMode 
                                   ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]' 
@@ -396,7 +396,7 @@ export default function OnboardingPanel() {
              <table className="w-full text-left">
                <thead className={`border-b ${isLightMode ? 'bg-[#faf7ff] border-[#f1ebff]' : 'bg-white/5 border-white/10'}`}>
                  <tr>
-                   {['Candidate', 'Sector / Designation', 'Neural Code', 'Compliance', 'Action'].map(h => (
+                   {['Candidate', 'Role', 'Invite Code', 'Status', 'Action'].map(h => (
                      <th key={h} className={`px-6 py-5 text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>{h}</th>
                    ))}
                  </tr>
@@ -596,7 +596,7 @@ export default function OnboardingPanel() {
                         <div>
                            <div className="flex items-center gap-3">
                               <h2 className={`text-3xl font-display font-black uppercase tracking-tighter italic ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.name}</h2>
-                              <span className="px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">Awaiting Neural Link</span>
+                              <span className="px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">Pending Invite</span>
                            </div>
                            <p className={`font-black text-xs uppercase tracking-[0.3em] mt-2 italic ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{selectedApproval.designation} // {selectedApproval.team}</p>
                         </div>
@@ -625,7 +625,7 @@ export default function OnboardingPanel() {
                             <InfoCard label="Emergency Contact" value={selectedApproval.emergency_contact} icon={ShieldAlert} />
                         </div>
 
-                        <SectionHeader icon={Briefcase} label="Neural Capabilities" />
+                        <SectionHeader icon={Briefcase} label="Skills & Experience" />
                         <div className={`space-y-4 p-6 rounded-3xl border ${isLightMode ? 'bg-[#faf7ff] border-[#ebe4ff]' : 'bg-white/5 border-white/5'}`}>
                             <div className="space-y-1">
                                 <p className={`text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>Primary Skill Assets</p>
@@ -682,7 +682,7 @@ export default function OnboardingPanel() {
                     <SectionHeader icon={Eye} label="Identity Artifacts" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {[
-                           { label: 'Neural Resume (CV)', path: selectedApproval.cv_path },
+                           { label: 'Resume (CV)', path: selectedApproval.cv_path },
                            { label: 'Identity Visual', path: selectedApproval.photo_path },
                            { label: 'Official Credential', path: selectedApproval.id_proofs }
                         ].map((d, i) => (
@@ -728,7 +728,7 @@ export default function OnboardingPanel() {
                         </div>
                         <div>
                            <h3 className={`text-xl font-display font-black uppercase tracking-tighter ${isLightMode ? 'text-emerald-900' : 'text-white'}`}>Initiate Activation Protocol</h3>
-                           <p className={`text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'text-emerald-700' : 'text-emerald-400'}`}>Assign parameters to finalize personnel matrix</p>
+                           <p className={`text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'text-emerald-700' : 'text-emerald-400'}`}>Fill in employee information to complete setup</p>
                         </div>
                     </div>
 

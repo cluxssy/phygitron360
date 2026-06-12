@@ -202,7 +202,7 @@ export default function OnboardPage() {
               // Mock population
               setForm(prev => ({
                   ...prev,
-                  primary_skills: prev.primary_skills || 'Extracted Skills: React, Node.js, AWS',
+                  primary_skills: prev.primary_skills || 'Skills: React, Node.js, AWS',
                   secondary_skills: prev.secondary_skills || 'Python, Docker, SQL'
               }));
           });

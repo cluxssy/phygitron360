@@ -336,7 +336,7 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-96 gap-4 animate-pulse">
       <div className="w-12 h-12 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
-      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7C3AED]">Synchronizing Dashboard</p>
+      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7C3AED]">Loading Dashboard</p>
     </div>
   );
 

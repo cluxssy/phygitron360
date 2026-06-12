@@ -263,7 +263,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
             {
               mode === 'employee'
                 ? 'My Assets'
-                : 'Assets & Clearance'
+                : 'Assets & Permissions'
             }
           </h2>
 
@@ -486,7 +486,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
             </div>
 
             {/* =========================
-                CLEARANCE
+                PERMISSIONS
             ========================= */}
 
             <div
@@ -529,7 +529,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                     text-[#7c3aed]
                   "
                 >
-                  Exit Clearance
+                  Exit Process
                 </h3>
 
               </div>

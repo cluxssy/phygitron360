@@ -39,7 +39,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 mediclaim_included: ['Yes', 'yes', 'true', '1', true].includes(data.mediclaim_included),
             });
         } catch {
-            toast.error('Failed to load personnel dossier');
+            toast.error('Failed to load employee profile');
         } finally {
             setLoading(false);
         }
@@ -57,7 +57,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         return (
             <div className="flex flex-col items-center justify-center h-96">
                 <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-black/80">Decrypting Neural Dossier...</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-black/80">Loading employee profile...</p>
             </div>
         );
     }
@@ -102,7 +102,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             const result = await res.json();
             if (!res.ok) throw new Error(result.detail || 'Update failed');
             
-            toast.success('Dossier updated successfully');
+            toast.success('Profile updated successfully');
             setEditMode(false);
             fetchDetails(details.employee_code);
         } catch (e) {
@@ -120,7 +120,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         if (type === 'id') fd.append('id_proof_file', file);
 
         try {
-            toast.loading('Uploading artifact...', { id: 'upload' });
+            toast.loading('Uploading file...', { id: 'upload' });
             const res = await fetch(`/api/employee/${details.employee_code}/documents`, {
                 method: 'POST',
                 credentials: 'include',
@@ -206,7 +206,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 onClick={() => setEditMode(true)}
                                 className="flex items-center gap-2 px-8 py-2 bg-white border border-[#ece4ff] shadow-sm border-[#e9defd] text-primary text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#7c3aed] hover:text-white transition-all"
                             >
-                                <Edit3 size={14} /> Modify Dossier
+                                <Edit3 size={14} /> Edit Profile
                             </button>
                         </HasPermission>
                     )}
@@ -479,13 +479,13 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editMode} onChange={v => setFormData({...formData, doj: v})} />
                         <EditStatCard label="Contract" value={formData.employment_type} sub="Engagement Mode" editMode={editMode} onChange={v => setFormData({...formData, employment_type: v})} />
-                        <EditStatCard label="Experience" value={formData.experience_years} sub="Neural Depth" type="number" editMode={editMode} onChange={v => setFormData({...formData, experience_years: v})} />
+                        <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editMode} onChange={v => setFormData({...formData, experience_years: v})} />
                         <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Hub" editMode={editMode} onChange={v => setFormData({...formData, reporting_manager: v})} />
                     </div>
 
                     {/* Skill Synergy */}
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={TrendingUp} title="Neural Skill Matrix" />
+                        <SectionHeader icon={TrendingUp} title="Skills & Expertise" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                             <div>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 italic">Primary Vector Nodes</p>
@@ -658,7 +658,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             <div className="space-y-1 pt-4">
                                 <div className="px-4 py-2 bg-[#f4ecff] rounded-lg mb-2 border border-[#e9ddff]">
                                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-600 italic">
-                                        II. Clearance Protocol
+                                        II. Access Permissions
                                     </p>
                                 </div>
                                 {[

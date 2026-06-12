@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import '../styles/login.css';
+import hideIcon from "../../../assets/hide.png";
+import viewIcon from "../../../assets/view.png";
 
 export default function ForceChangePasswordPage() {
   const navigate = useNavigate();
@@ -12,6 +14,9 @@ export default function ForceChangePasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
 
   
@@ -80,34 +85,98 @@ export default function ForceChangePasswordPage() {
           {error && <div className="error-box">{error}</div>}
 
           <form onSubmit={handleSubmit}>
-            <label>Current/Temporary Password</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-            />
+  <label>Current/Temporary Password</label>
+  <div style={{ position: 'relative' }}>
+    <input
+      type={showCurrentPassword ? 'text' : 'password'}
+      value={currentPassword}
+      onChange={(e) => setCurrentPassword(e.target.value)}
+      required
+      style={{ paddingRight: '50px' }}
+    />
 
-            <label>New Password</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-            />
-            
-            <label>Confirm New Password</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
+    <img
+      src={showCurrentPassword ? hideIcon : viewIcon}
+      alt="toggle password"
+      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+      style={{
+        position: 'absolute',
+        right: '14px',
+        top: '42%',
+        transform: 'translateY(-50%)',
+        width: '18px',
+        height: '18px',
+        cursor: 'pointer',
+        opacity: 0.7,
+        transition: 'opacity 0.2s ease'
+      }}
+    />
+  </div>
 
-            <button type="submit" disabled={loading} style={{ marginTop: '20px' }}>
-              {loading ? "Updating..." : "Update Password"}
-            </button>
-          </form>
+  <label>New Password</label>
+  <div style={{ position: 'relative' }}>
+    <input
+      type={showNewPassword ? 'text' : 'password'}
+      value={newPassword}
+      onChange={(e) => setNewPassword(e.target.value)}
+      required
+      style={{ paddingRight: '50px' }}
+    />
+
+    <img
+      src={showNewPassword ? hideIcon : viewIcon}
+      alt="toggle password"
+      onClick={() => setShowNewPassword(!showNewPassword)}
+      style={{
+        position: 'absolute',
+        right: '14px',
+        top: '42%',
+        transform: 'translateY(-50%)',
+        width: '18px',
+        height: '18px',
+        cursor: 'pointer',
+        opacity: 0.7,
+        transition: 'opacity 0.2s ease'
+      }}
+    />
+  </div>
+
+  <label>Confirm New Password</label>
+  <div style={{ position: 'relative' }}>
+    <input
+      type={showConfirmPassword ? 'text' : 'password'}
+      value={confirmPassword}
+      onChange={(e) => setConfirmPassword(e.target.value)}
+      required
+      style={{ paddingRight: '50px' }}
+    />
+
+    <img
+      src={showConfirmPassword ? hideIcon : viewIcon}
+      alt="toggle password"
+      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+      style={{
+        position: 'absolute',
+        right: '14px',
+        top: '42%',
+        transform: 'translateY(-50%)',
+        width: '18px',
+        height: '18px',
+        cursor: 'pointer',
+        opacity: 0.7,
+        transition: 'opacity 0.2s ease'
+      }}
+    />
+  </div>
+
+  <button
+    type="submit"
+    disabled={loading}
+    style={{ marginTop: '20px' }}
+  >
+    {loading ? 'Updating...' : 'Update Password'}
+  </button>
+</form>
         </div>
       </div>
     </div>

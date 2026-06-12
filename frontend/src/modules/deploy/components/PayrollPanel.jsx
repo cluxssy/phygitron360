@@ -180,7 +180,7 @@ export default function PayrollPanel() {
 
   const previewPDF = async (record) => {
     try {
-      toast.loading('Generating preview...', { id: 'pdf-preview' });
+      toast.loading('Creating preview...', { id: 'pdf-preview' });
       const payload = {
         ...record,
         pay_month: payMonth,

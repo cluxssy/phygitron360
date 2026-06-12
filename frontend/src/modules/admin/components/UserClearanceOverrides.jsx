@@ -12,9 +12,7 @@ export default function UserClearanceOverrides({
   if (!user) return null;
 
   return (
-
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-6">
-
       <div
         className="
           w-full
@@ -31,9 +29,7 @@ export default function UserClearanceOverrides({
           flex-col
         "
       >
-
         {/* HEADER */}
-
         <div
           className="
             px-10
@@ -49,11 +45,8 @@ export default function UserClearanceOverrides({
             gap-6
           "
         >
-
           <div>
-
             <div className="flex items-center gap-3 mb-4">
-
               <div
                 className="
                   w-10
@@ -71,11 +64,10 @@ export default function UserClearanceOverrides({
               >
                 <Shield size={18} />
               </div>
-
               <p
                 className="
                   text-[10px]
-                  font-black
+                  font-semibold
                   uppercase
                   tracking-[0.35em]
                   text-[#8b5cf6]
@@ -83,13 +75,12 @@ export default function UserClearanceOverrides({
               >
                 Permission Override Center
               </p>
-
             </div>
 
             <h3
               className="
                 text-4xl
-                font-black
+                font-bold
                 tracking-tight
                 text-black
               "
@@ -101,16 +92,16 @@ export default function UserClearanceOverrides({
               className="
                 mt-3
                 text-[15px]
-                text-[#6b7280]
+                text-gray-500
+                font-normal
                 leading-relaxed
               "
             >
               Adjust permissions specifically for
-              <span className="font-bold text-black">
+              <span className="font-semibold text-black">
                 {' '}@{user.username}
               </span>
             </p>
-
           </div>
 
           <button
@@ -122,7 +113,7 @@ export default function UserClearanceOverrides({
               bg-black
               text-white
               text-[10px]
-              font-black
+              font-semibold
               uppercase
               tracking-[0.25em]
               hover:bg-[#8b5cf6]
@@ -133,25 +124,18 @@ export default function UserClearanceOverrides({
           >
             Close
           </button>
-
         </div>
 
         {/* CONTENT */}
-
         <div className="flex-1 overflow-y-auto px-10 py-10 space-y-12">
-
           {PERMISSIONS_CATEGORIES.map(cat => (
-
             <div key={cat.group} className="space-y-6">
-
               {/* SECTION HEADER */}
-
               <div className="flex items-center gap-5">
-
                 <h4
                   className="
                     text-[11px]
-                    font-black
+                    font-semibold
                     uppercase
                     tracking-[0.35em]
                     text-[#8b5cf6]
@@ -160,25 +144,18 @@ export default function UserClearanceOverrides({
                 >
                   {cat.group}
                 </h4>
-
                 <div className="h-px bg-[#e8e2f7] flex-1" />
-
               </div>
 
               {/* GRID */}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
                 {cat.perms.map(p => {
-
                   const overrideValue = overrides[p.key];
-
                   const isOverridden =
                     overrideValue !== undefined &&
                     overrideValue !== null;
 
                   return (
-
                     <div
                       key={p.key}
                       className={`
@@ -198,15 +175,12 @@ export default function UserClearanceOverrides({
                         }
                       `}
                     >
-
                       {/* LEFT */}
-
                       <div className="space-y-2">
-
                         <p
                           className={`
                             text-[15px]
-                            font-black
+                            font-semibold
                             tracking-tight
                             ${
                               isOverridden
@@ -217,23 +191,21 @@ export default function UserClearanceOverrides({
                         >
                           {p.label}
                         </p>
-
                         <p
                           className="
                             text-[10px]
                             uppercase
                             tracking-[0.15em]
-                            text-[#9ca3af]
+                            text-slate-500
+                            font-normal
                             font-mono
                           "
                         >
                           {p.key}
                         </p>
-
                       </div>
 
                       {/* BUTTONS */}
-
                       <div
                         className="
                           flex
@@ -245,9 +217,7 @@ export default function UserClearanceOverrides({
                           border-[#ebe5fa]
                         "
                       >
-
                         {/* ALLOW */}
-
                         <button
                           onClick={() =>
                             onUpdate(user.id, p.key, true)
@@ -285,7 +255,6 @@ export default function UserClearanceOverrides({
                         </button>
 
                         {/* BLOCK */}
-
                         <button
                           onClick={() =>
                             onUpdate(user.id, p.key, false)
@@ -321,7 +290,6 @@ export default function UserClearanceOverrides({
                         </button>
 
                         {/* DEFAULT */}
-
                         <button
                           onClick={() =>
                             onUpdate(user.id, p.key, null)
@@ -346,7 +314,7 @@ export default function UserClearanceOverrides({
                                   bg-white
                                   border
                                   border-[#ebe5fa]
-                                  text-[#6b7280]
+                                  text-gray-500
                                   hover:bg-[#f3f4f6]
                                 `
                             }
@@ -355,24 +323,16 @@ export default function UserClearanceOverrides({
                         >
                           <Activity size={16} strokeWidth={2.5} />
                         </button>
-
                       </div>
-
                     </div>
-
                   );
                 })}
-
               </div>
-
             </div>
-
           ))}
-
         </div>
 
         {/* FOOTER */}
-
         <div
           className="
             px-10
@@ -389,26 +349,19 @@ export default function UserClearanceOverrides({
             flex-wrap
           "
         >
-
           <div className="flex items-center gap-3">
-
-            <Shield
-              className="text-[#8b5cf6]"
-              size={18}
-            />
-
+            <Shield className="text-[#8b5cf6]" size={18} />
             <p
               className="
                 text-[11px]
                 uppercase
                 tracking-[0.2em]
-                font-black
-                text-[#6b7280]
+                font-semibold
+                text-gray-500
               "
             >
               Custom user permissions override role defaults
             </p>
-
           </div>
 
           <p
@@ -416,18 +369,14 @@ export default function UserClearanceOverrides({
               text-[10px]
               uppercase
               tracking-[0.3em]
-              font-black
+              font-semibold
               text-[#8b5cf6]
             "
           >
             Security Layer Active
           </p>
-
         </div>
-
       </div>
-
     </div>
-
   );
 }
