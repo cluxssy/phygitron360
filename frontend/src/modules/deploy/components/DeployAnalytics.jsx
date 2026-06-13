@@ -215,7 +215,7 @@ export default function DeployAnalytics() {
             </p>
 
             <h1 className="text-5xl font-black text-black tracking-tight leading-none">
-              Workforce Intelligence
+              Workforce Analytics
             </h1>
 
             <p className="text-black/40 mt-5 text-lg">

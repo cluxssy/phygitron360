@@ -39,19 +39,16 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
       label: 'Source',
       desc: 'Hiring & candidate management'
     },
-
     {
       id: 'forge',
       label: 'Forge',
       desc: 'Training & skill development'
     },
-
     {
       id: 'verify',
       label: 'Verify',
       desc: 'Assessments & validation tools'
     },
-
     {
       id: 'deploy',
       label: 'Deploy',
@@ -60,20 +57,15 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
   ];
 
   return (
-
     <div className="space-y-10 animate-fade-in-up">
 
       {/* MODULE GRID */}
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7">
 
         {MODULES.map(m => {
-
-          const isActive =
-            tenantOps.modules_enabled.includes(m.id);
+          const isActive = tenantOps.modules_enabled.includes(m.id);
 
           return (
-
             <div
               key={m.id}
               className={`
@@ -92,9 +84,7 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
             >
 
               {/* TOP */}
-
               <div className="p-8 flex flex-col gap-8">
-
                 <div
                   className={`
                     w-14 h-14 rounded-2xl flex items-center justify-center transition-all
@@ -112,54 +102,29 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
                 </div>
 
                 <div>
-
-                  <h4
-                    className="
-                      text-[1.4rem]
-                      font-black
-                      uppercase
-                      tracking-tight
-                      text-black
-                    "
-                  >
+                  {/* Title changed from font-black to font-bold */}
+                  <h4 className="text-[1.4rem] font-bold uppercase tracking-tight text-black">
                     {m.label}
                   </h4>
 
-                  <p
-                    className="
-                      mt-3
-                      text-[11px]
-                      uppercase
-                      tracking-[0.18em]
-                      leading-relaxed
-                      font-bold
-                      text-[#7e7890]
-                    "
-                  >
+                  {/* Secondary text changed to neutral text-slate-500 and font-medium */}
+                  <p className="mt-3 text-[11px] uppercase tracking-[0.18em] leading-relaxed font-medium text-slate-500">
                     {m.desc}
                   </p>
-
                 </div>
-
               </div>
 
               {/* STATUS */}
-
               <div className="px-8 pb-8 flex flex-col gap-5">
-
                 <div className="flex items-center justify-between">
-
+                  {/* Sub-status tag adjusted to font-semibold */}
                   <span
                     className={`
                       text-[10px]
-                      font-black
+                      font-semibold
                       uppercase
                       tracking-[0.25em]
-                      ${
-                        isActive
-                          ? 'text-[#8b5cf6]'
-                          : 'text-[#9ca3af]'
-                      }
+                      ${isActive ? 'text-[#8b5cf6]' : 'text-gray-500'}
                     `}
                   >
                     {isActive ? 'ACTIVE' : 'DISABLED'}
@@ -175,9 +140,9 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
                       }
                     `}
                   />
-
                 </div>
 
+                {/* Primary Button text weight changed from font-black to font-semibold */}
                 <button
                   onClick={() => toggleModule(m.id)}
                   className={`
@@ -185,7 +150,7 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
                     py-4
                     rounded-2xl
                     text-[10px]
-                    font-black
+                    font-semibold
                     uppercase
                     tracking-[0.28em]
                     transition-all
@@ -211,18 +176,15 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
                 >
                   {isActive ? 'Disable Module' : 'Enable Module'}
                 </button>
-
               </div>
 
             </div>
-
           );
         })}
 
       </div>
 
       {/* BOTTOM PANEL */}
-
       <div
         className="
           relative
@@ -237,7 +199,6 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
           shadow-[0_25px_80px_rgba(180,140,255,0.08)]
         "
       >
-
         <div
           className="
             absolute
@@ -255,43 +216,25 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
         </div>
 
         <div className="relative z-10 flex items-center justify-between gap-10 flex-wrap">
-
           <div className="space-y-5 max-w-3xl">
-
             <div className="flex items-center gap-3">
-
               <Zap
                 size={18}
                 className="text-[#8b5cf6]"
               />
 
-              <h3
-                className="
-                  text-2xl
-                  font-black
-                  uppercase
-                  tracking-tight
-                  text-[#8b5cf6]
-                  italic
-                "
-              >
+              {/* Title adjusted to font-bold */}
+              <h3 className="text-2xl font-bold uppercase tracking-tight text-[#8b5cf6] italic">
                 Workspace Controls
               </h3>
-
             </div>
 
-            <p
-              className="
-                text-[15px]
-                leading-[1.9]
-                text-[#5d6475]
-              "
-            >
+            {/* Description converted to font-normal neutral text-slate-500 */}
+            <p className="text-[15px] leading-[1.9] font-normal text-slate-500">
               Turning modules on or off updates access instantly across the workspace.
               Disabled modules become unavailable to standard users while administrator
               access remains protected.
             </p>
-
           </div>
 
           <div
@@ -303,19 +246,11 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
               shadow-[0_15px_40px_rgba(0,0,0,0.15)]
             "
           >
-            <p
-              className="
-                text-[10px]
-                font-black
-                uppercase
-                tracking-[0.35em]
-                text-[#c084fc]
-              "
-            >
+            {/* Tag adjusted to font-semibold and crisp branding color alignment */}
+            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#c084fc]">
               Workspace Mode : Enterprise
             </p>
           </div>
-
         </div>
 
       </div>

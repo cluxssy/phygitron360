@@ -176,7 +176,7 @@ export default function MyProfile() {
     <div className="w-full space-y-6 animate-fade-in-up pb-10">
       {/* Action Bar */}
       <div className="flex justify-between items-center bg-white p-4 rounded-[1.5rem] border border-[#ece4ff] shadow-sm">
-        <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#6b7280] italic">Personnel Dossier // Self Management</h2>
+        <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#6b7280] italic">My Profile // Self Management</h2>
         <div className="flex gap-3">
 
     <button
@@ -630,7 +630,7 @@ export default function MyProfile() {
           <div className="lg:col-span-2 space-y-8">
               {/* Skill Matrix */}
               <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8">
-                <SectionHeader icon={TrendingUp} title="Neural Capability Matrix" />
+                <SectionHeader icon={TrendingUp} title="Skills & Expertise" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                     <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-[#000000] mb-3">Primary Skills</p>
@@ -715,7 +715,7 @@ export default function MyProfile() {
                     {/* Clearance Section */}
                     <div className="space-y-1 pt-4">
                         <div className="px-4 py-2 bg-black/5 rounded-lg mb-2">
-                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-black italic">II. Clearance Protocol</p>
+                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-black italic">II. Access Permissions</p>
                         </div>
                         {[
                             { key: 'cl_laptop', label: 'Laptop Returned' },

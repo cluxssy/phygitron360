@@ -19,7 +19,7 @@ export default function ForgeDashboard() {
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-secondary mb-3 flex items-center gap-2">
                 <Zap size={12} />
-                Neural Skill Synthesis // Forge Hub
+                Learning Path Creation // Learning Hub
               </p>
               <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic leading-none">
                 The <span className="text-secondary italic">Learning</span> Forge
@@ -52,8 +52,8 @@ export default function ForgeDashboard() {
                <div>
                   <h2 className="text-2xl font-display font-black text-white uppercase tracking-widest mb-2">Knowledge Matrix</h2>
                   <p className="text-xs text-white/30 uppercase tracking-[0.2em] max-w-md mx-auto leading-loose">
-                    Your assigned learning paths are being synthesized in the neural forge. 
-                    Check back soon for new training protocols.
+                    Your assigned learning paths are ready in the learning hub. 
+                    Check back soon for new training content.
                   </p>
                </div>
                <div className="flex gap-4">

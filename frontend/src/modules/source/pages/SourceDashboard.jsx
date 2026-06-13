@@ -66,7 +66,7 @@ export default function SourceDashboard() {
         <Shield size={48} className="text-secondary/20" />
         <div>
           <h2 className="text-xl font-display font-black text-white uppercase italic">Security Clearance Required</h2>
-          <p className="text-xs text-white/30 uppercase tracking-widest mt-1">You do not have 'Elevated' clearance for this node.</p>
+          <p className="text-xs text-white/30 uppercase tracking-widest mt-1">You do not have access to this module.</p>
         </div>
       </div>
     );
@@ -126,12 +126,12 @@ export default function SourceDashboard() {
                <Database size={16} className="text-primary" /> My Profile
             </h3>
             <p className="text-xs text-white/40 leading-relaxed mb-6">
-              Your profile is currently being reviewed by our neural matching engine. Ensure your skills are up to date for maximum compatibility.
+              Your profile is being reviewed to find matching opportunities. Ensure your skills are current for the best matches.
             </p>
             <div className="space-y-3">
                <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-white/60">
                   <span>Compatibility Score</span>
-                  <span className="text-primary">Scanning...</span>
+                  <span className="text-primary">Searching...</span>
                </div>
                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                   <div className="h-full bg-primary/30 w-1/3 animate-shimmer"></div>
@@ -452,7 +452,7 @@ export default function SourceDashboard() {
   const handleAutoRank = async (roleId) => {
     if (!roleId) return;
     setAutoRanking(true);
-    const tid = toast.loading('AI is scanning all resumes for this role...');
+    const tid = toast.loading('Searching through resumes for matches...');
     try {
       const r = await fetch(`/api/source/job-roles/${roleId}/auto-rank`, { method: 'POST' });
       if (r.ok) {
@@ -841,7 +841,7 @@ export default function SourceDashboard() {
                     )}
                  </div>
                  <h3 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 mb-4">
-                    <Loader2 size={14} className="animate-spin text-primary" /> Processing Bulk Upload
+                    <Loader2 size={14} className="animate-spin text-primary" /> Uploading Candidates
                  </h3>
                  <div className="flex gap-4">
                     {bulkJobProgress?.items_stats?.map(st => (

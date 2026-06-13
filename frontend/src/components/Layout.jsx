@@ -28,7 +28,8 @@ export default function Layout({ children }) {
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/deploy') ||
     location.pathname.startsWith('/source') ||
-    location.pathname.startsWith('/verify');
+    location.pathname.startsWith('/verify') ||
+    location.pathname.startsWith('/superadmin');
   const canSwitchView = hasRole(['org_admin', 'manager', 'super_admin']);
   const hasAdminClearance = hasPermission('deploy.dashboard.view_admin');
 

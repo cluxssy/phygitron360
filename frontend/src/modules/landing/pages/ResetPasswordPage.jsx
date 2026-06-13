@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Command, ArrowRight, Zap, CheckCircle } from 'lucide-react';
+import hideIcon from "../../../assets/hide.png";
+import viewIcon from "../../../assets/view.png";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -12,7 +14,8 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [tokenValid, setTokenValid] = useState(false);
   const [tokenChecking, setTokenChecking] = useState(true);
-
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const queryParams = new URLSearchParams(location.search);
   const token = queryParams.get('token');
 
@@ -87,7 +90,7 @@ export default function ResetPasswordPage() {
             {tokenChecking ? (
                  <div className="text-center py-8">
                      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                     <p className="text-[10px] text-white/50 uppercase tracking-widest">Validating Token...</p>
+                     <p className="text-[10px] text-white/50 uppercase tracking-widest">Verifying Link...</p>
                  </div>
             ) : !tokenValid && !success ? (
                <div className="text-center space-y-4">
@@ -134,13 +137,28 @@ export default function ResetPasswordPage() {
                      <div className="relative">
                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant opacity-40" size={18} />
                        <input
-                         type="password"
+                         type={showPassword ? 'text' : 'password'}
                          value={password}
                          onChange={(e) => setPassword(e.target.value)}
                          className="w-full rounded-2xl border border-white/5 bg-white/5 py-4 pl-12 pr-4 text-white placeholder-white/20 transition-all focus:border-primary/40 focus:bg-white/10 outline-none font-medium text-sm"
                          placeholder="••••••••"
                          required
                        />
+                       <img
+  src={showPassword ? hideIcon : viewIcon}
+  alt=""
+  onClick={() => setShowPassword(!showPassword)}
+  style={{
+    position: 'absolute',
+    right: '16px',
+    top: '45%',
+    transform: 'translateY(-50%)',
+    width: '18px',
+    height: '18px',
+    cursor: 'pointer',
+    opacity: 0.7
+  }}
+/>
                      </div>
                    </div>
 
@@ -149,13 +167,28 @@ export default function ResetPasswordPage() {
                      <div className="relative">
                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant opacity-40" size={18} />
                        <input
-                         type="password"
+                         type={showConfirmPassword ? 'text' : 'password'}
                          value={confirmPassword}
                          onChange={(e) => setConfirmPassword(e.target.value)}
                          className="w-full rounded-2xl border border-white/5 bg-white/5 py-4 pl-12 pr-4 text-white placeholder-white/20 transition-all focus:border-primary/40 focus:bg-white/10 outline-none font-medium text-sm"
                          placeholder="••••••••"
                          required
                        />
+                       <img
+  src={showConfirmPassword ? hideIcon : viewIcon}
+  alt=""
+  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+  style={{
+    position: 'absolute',
+    right: '16px',
+    top: '45%',
+    transform: 'translateY(-50%)',
+    width: '18px',
+    height: '18px',
+    cursor: 'pointer',
+    opacity: 0.7
+  }}
+/>
                      </div>
                    </div>
 
@@ -164,7 +197,7 @@ export default function ResetPasswordPage() {
                      disabled={loading}
                      className="w-full bg-primary text-black font-extrabold text-[11px] uppercase tracking-[0.2em] py-5 rounded-2xl shadow-[0_10px_30px_rgba(204,151,255,0.3)] hover:bg-white hover:shadow-white/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 group"
                    >
-                     {loading ? 'Processing...' : 'Secure Node'}
+                     {loading ? 'Processing...' : 'Reset Password'}
                      <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                    </button>
                  </form>

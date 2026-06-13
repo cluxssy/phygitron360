@@ -20,7 +20,7 @@ export default function MasterConsole() {
         const data = await res.json();
         setStats(data);
       } catch (err) {
-        toast.error("Failed to synchronize intelligence telemetry.");
+        toast.error("Failed to load system data.");
       } finally {
         setLoading(false);
       }
@@ -32,7 +32,7 @@ export default function MasterConsole() {
     {
       name: 'Source',
       path: '/source',
-      desc: 'AI Talent Intelligence & Vector Sourcing Engine',
+      desc: 'Candidate Sourcing Hub',
       icon: <Database size={24} />,
       color: '#CC97FF', // Luminous Purple
       stats: `${stats?.counts?.candidates || 0} Candidates Active`
@@ -40,7 +40,7 @@ export default function MasterConsole() {
     {
       name: 'Forge',
       path: '/forge',
-      desc: 'LXP: Neural Content Synthesis & Mastery Vault',
+      desc: 'Learning Platform',
       icon: <School size={24} />,
       color: '#10B981', // Emerald
       stats: `89 Learning Paths`
@@ -48,7 +48,7 @@ export default function MasterConsole() {
     {
       name: 'Verify',
       path: '/verify',
-      desc: 'Cognitive Assessment & Skill Validation Lab',
+      desc: 'Assessment Hub',
       icon: <ShieldCheck size={24} />,
       color: '#F59E0B', // Amber
       stats: `${stats?.counts?.jobs || 0} Open Requisitions`
@@ -56,7 +56,7 @@ export default function MasterConsole() {
     {
       name: 'Deploy',
       path: '/deploy',
-      desc: 'Enterprise Personnel Matrix & HRMS Core',
+      desc: 'Employee Management System',
       icon: <Rocket size={24} />,
       color: '#6366F1', // Indigo
       stats: `${stats?.counts?.active || 0} Deployed Users`
@@ -76,7 +76,7 @@ export default function MasterConsole() {
               Intelligence <span className="text-primary">Console</span>
             </h1>
             <p className="text-lg text-on-surface-variant font-medium max-w-2xl leading-relaxed opacity-80">
-              Phygitron 360 is operating within optimal parameters. All 4 node clusters are synchronized across the {user?.username} domain.
+              Phygitron 360 is operating normally. All systems are active across the {user?.username} domain.
             </p>
           </div>
           <div className="flex gap-4">
@@ -91,9 +91,9 @@ export default function MasterConsole() {
       {/* Cross-Platform Telemetry */}
       <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { label: 'Global Sourcing', value: stats?.counts?.candidates || 0, sub: 'Total Records', icon: Users, color: '#CC97FF' },
-          { label: 'Platform Load', value: stats?.counts?.active || 0, sub: 'Active Personnel', icon: Zap, color: '#10B981' },
-          { label: 'Skill Sets', value: stats?.counts?.designations || 0, sub: 'Designations', icon: ShieldCheck, color: '#F59E0B' },
+          { label: 'Candidates', value: stats?.counts?.candidates || 0, sub: 'Total Records', icon: Users, color: '#CC97FF' },
+          { label: 'Active Users', value: stats?.counts?.active || 0, sub: 'Active Personnel', icon: Zap, color: '#10B981' },
+          { label: 'Positions', value: stats?.counts?.designations || 0, sub: 'Designations', icon: ShieldCheck, color: '#F59E0B' },
           { label: 'Uptime', value: '99.9%', sub: 'SLA Active', icon: Clock, color: '#6366F1' },
         ].map((m, i) => (
           <div key={i} className="glass-panel p-8 flex flex-col justify-between h-40 group hover:border-white/20 transition-all">
@@ -113,7 +113,7 @@ export default function MasterConsole() {
       <section>
         <div className="flex items-center gap-3 mb-8">
            <LayoutDashboard className="text-primary" size={24} />
-           <h2 className="text-2xl font-display font-bold text-white uppercase tracking-tight">Intelligence Nodes</h2>
+           <h2 className="text-2xl font-display font-bold text-white uppercase tracking-tight">Workspaces</h2>
         </div>
         
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
