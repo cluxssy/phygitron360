@@ -534,10 +534,13 @@ class CandidateRepository:
                 self._set_search_path(cur)
                 from psycopg2.extras import execute_values
                 query = """
-                    INSERT INTO bulk_upload_job_items (job_id, filename, file_path, file_hash)
+                    INSERT INTO bulk_upload_job_items (job_id, filename, file_path, file_hash, extracted_text)
                     VALUES %s
                 """
-                values = [(job_id, i["filename"], i["file_path"], i["file_hash"]) for i in items]
+                values = [
+                    (job_id, i["filename"], i["file_path"], i["file_hash"], i.get("extracted_text"))
+                    for i in items
+                ]
                 execute_values(cur, query, values)
                 conn.commit()
         finally:
@@ -558,15 +561,16 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def get_pending_bulk_upload_job_items(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_pending_bulk_upload_job_items(self, limit: int = 1) -> List[Dict[str, Any]]:
+        """Fetch one pending item at a time and mark as processing. Called by each parallel worker."""
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """SELECT * FROM bulk_upload_job_items 
-                       WHERE status = 'pending' 
-                       ORDER BY created_at ASC 
+                    """SELECT * FROM bulk_upload_job_items
+                       WHERE status = 'pending'
+                       ORDER BY created_at ASC
                        LIMIT %s FOR UPDATE SKIP LOCKED""",
                     (limit,)
                 )
@@ -579,6 +583,25 @@ class CandidateRepository:
                     )
                     conn.commit()
                 return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_active_bulk_upload_job(self) -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                # Find a job that has pending or processing items
+                cur.execute(
+                    """SELECT j.* 
+                       FROM bulk_upload_jobs j
+                       JOIN bulk_upload_job_items i ON j.id = i.job_id
+                       WHERE i.status IN ('pending', 'processing')
+                       ORDER BY j.created_at DESC
+                       LIMIT 1"""
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
         finally:
             conn.close()
 
@@ -603,6 +626,30 @@ class CandidateRepository:
                     "job": dict(job) if job else None,
                     "items_stats": [dict(r) for r in rows]
                 }
+        finally:
+            conn.close()
+
+    def cancel_bulk_upload_job(self, job_id: int):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                # Mark pending and processing items as cancelled
+                cur.execute("""
+                    UPDATE bulk_upload_job_items 
+                    SET status = 'cancelled' 
+                    WHERE job_id = %s AND status IN ('pending', 'processing')
+                """, (job_id,))
+                # Mark job as cancelled
+                cur.execute("""
+                    UPDATE bulk_upload_jobs 
+                    SET status = 'cancelled' 
+                    WHERE id = %s
+                """, (job_id,))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
         finally:
             conn.close()
 
@@ -685,11 +732,31 @@ class CandidateRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
+                # Remove reference from bulk_upload_job_items to prevent FK violations
+                cur.execute("UPDATE bulk_upload_job_items SET candidate_id = NULL WHERE candidate_id = %s", (candidate_id,))
+                
                 # Dependencies (experience, education, notes, skills) should cascade delete 
                 # based on the FK constraint ON DELETE CASCADE in schema.
                 cur.execute("DELETE FROM candidates WHERE id = %s", (candidate_id,))
                 conn.commit()
                 return cur.rowcount > 0
+        finally:
+            conn.close()
+
+    def bulk_delete_candidates(self, candidate_ids: List[int]) -> int:
+        if not candidate_ids:
+            return 0
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                # Remove reference from bulk_upload_job_items to prevent FK violations
+                cur.execute("UPDATE bulk_upload_job_items SET candidate_id = NULL WHERE candidate_id = ANY(%s)", (candidate_ids,))
+                
+                # Delete candidates
+                cur.execute("DELETE FROM candidates WHERE id = ANY(%s)", (candidate_ids,))
+                conn.commit()
+                return cur.rowcount
         finally:
             conn.close()
 

@@ -150,6 +150,9 @@ export default function SourceDashboard() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [drawerCandidate, setDrawerCandidate] = useState(null);
+  
+  const fileRef = useRef(null);
+  const folderRef = useRef(null);
 
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
@@ -171,6 +174,7 @@ export default function SourceDashboard() {
 
   // Form states
   const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
   const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0 });
@@ -183,7 +187,7 @@ export default function SourceDashboard() {
   const [scoreRoleId, setScoreRoleId] = useState('');
   const [scoring, setScoring] = useState(false);
 
-  const fileRef = useRef();
+  // fileRef moved up
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchJobRoles = useCallback(async () => {
@@ -202,8 +206,12 @@ export default function SourceDashboard() {
       if (filters.location) params.set('location', filters.location);
       if (filters.min_exp > 0) params.set('min_exp', filters.min_exp);
       params.set('sort_by', filters.sort_by);
-      params.set('limit', filters.limit);
-      if (filters.role_id) params.set('role_id', filters.role_id);
+      if (filters.role_id) {
+        params.set('role_id', filters.role_id);
+        params.set('limit', filters.limit);
+      } else {
+        params.set('limit', 1000); // Main directory shows everyone
+      }
 
       const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
       const d = await r.json();
@@ -235,6 +243,25 @@ export default function SourceDashboard() {
     }
   }, [currentTab, fetchActivities]);
 
+  // Resume tracking an active bulk upload job if we refresh the page
+  useEffect(() => {
+    const fetchActiveJob = async () => {
+      try {
+        const r = await fetch('/api/source/candidates/bulk-upload/active');
+        if (r.ok) {
+          const d = await r.json();
+          if (d.success && d.data && d.data.job) {
+            setBulkJobId(d.data.job.id);
+            setBulkJobProgress(d.data);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch active bulk upload job', err);
+      }
+    };
+    fetchActiveJob();
+  }, []);
+
   // Poll bulk upload progress
   useEffect(() => {
     if (!bulkJobId) return;
@@ -246,7 +273,9 @@ export default function SourceDashboard() {
           setBulkJobProgress(d.data);
           // If all items are processed, stop polling
           const stats = d.data.items_stats || [];
-          const totalProcessed = stats.reduce((acc, curr) => acc + curr.count, 0);
+          const totalProcessed = stats
+            .filter(s => s.status !== 'pending' && s.status !== 'processing')
+            .reduce((acc, curr) => acc + curr.count, 0);
           const job = d.data.job;
           if (job && job.total_files > 0 && totalProcessed >= job.total_files) {
              setBulkJobId(null);
@@ -304,28 +333,87 @@ export default function SourceDashboard() {
 
   // ── Upload ─────────────────────────────────────────────────────────────────
   const handleUpload = async (e) => {
-    const files = e.target.files;
+    e.preventDefault();
+    const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
     if (!files || files.length === 0) return;
     setUploading(true);
     const fd = new FormData();
+    const validExtensions = ['.pdf', '.doc', '.docx', '.txt', '.zip'];
+    let validCount = 0;
     for (let i = 0; i < files.length; i++) {
-        fd.append('files', files[i]);
+        const name = files[i].name.toLowerCase();
+        if (validExtensions.some(ext => name.endsWith(ext))) {
+            const cleanFile = new File([files[i]], files[i].name, { type: files[i].type });
+            fd.append('files', cleanFile);
+            validCount++;
+        }
+    }
+    if (validCount === 0) {
+        toast.error('No supported files found (PDF, DOCX, TXT, ZIP)');
+        setUploading(false);
+        if (e.target) e.target.value = '';
+        return;
     }
     try {
-      const r = await fetch('/api/source/candidates/bulk-upload', { method: 'POST', body: fd });
-      const d = await r.json();
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/source/candidates/bulk-upload');
+        xhr.withCredentials = true;
+        xhr.onload = () => {
+          try {
+            const d = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300) {
+              toast.success(d.message || `Queued ${validCount} file(s) for AI processing!`);
+              if (d.data?.job_id) {
+                setBulkJobId(d.data.job_id);
+                setBulkJobProgress(null);
+              }
+              setShowUpload(false);
+              resolve();
+            } else {
+              toast.error(d.detail || 'Upload failed');
+              reject(new Error(d.detail || 'Upload failed'));
+            }
+          } catch { reject(new Error('Invalid server response')); }
+        };
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(fd);
+      });
+    } catch (err) { toast.error('Upload error: ' + (err?.message || 'Unknown')); }
+    finally { setUploading(false); if (e.target) e.target.value = ''; }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    await handleUpload(e);
+  };
+
+  const handleCancelQueue = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/cancel`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
       if (r.ok) {
-        toast.success(d.message || 'Bulk upload queued');
-        if (d.data?.job_id) {
-            setBulkJobId(d.data.job_id);
-            setBulkJobProgress(null);
-        }
-        setShowUpload(false);
+        toast.success('Queue cancelled successfully');
+        setBulkJobId(null);
+        setBulkJobProgress(null);
       } else {
-        toast.error(d.detail || 'Upload failed');
+        toast.error('Failed to cancel queue');
       }
-    } catch { toast.error('Upload interrupted'); }
-    finally { setUploading(false); fileRef.current.value = ''; }
+    } catch {
+      toast.error('Error cancelling queue');
+    }
   };
 
   // ── Create / Edit job role ────────────────────────────────────────────────────────
@@ -819,39 +907,64 @@ export default function SourceDashboard() {
         <div className="flex-1 flex items-center justify-center flex-col gap-6">
             <div className="section-card w-full max-w-xl p-10 relative">
               <h2 className="text-2xl font-display font-black text-white mb-8 uppercase tracking-widest flex items-center gap-2"><Upload size={24} className="text-primary"/> Inject Resume</h2>
-              <div className="border-2 border-dashed border-white/20 rounded-xl p-12 text-center bg-white/5 hover:bg-white/10 hover:border-primary/50 transition-all group flex flex-col items-center cursor-pointer" onClick={() => !uploading && fileRef.current.click()}>
+              <div 
+                className={`border-2 border-dashed rounded-xl p-12 text-center transition-all group flex flex-col items-center ${isDragging ? 'border-primary bg-primary/10' : 'border-white/20 bg-white/5 hover:bg-white/10 hover:border-primary/50'}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <input type="file" ref={fileRef} onChange={handleUpload} className="hidden" accept=".pdf,.doc,.docx,.txt,.zip" multiple />
-                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <input type="file" ref={folderRef} onChange={handleUpload} className="hidden" webkitdirectory="true" directory="true" />
+                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform cursor-pointer" onClick={() => !uploading && fileRef.current.click()}>
                   {uploading ? <Loader2 size={32} className="text-primary animate-spin" /> : <Upload size={32} className="text-primary" />}
                 </div>
-                <p className="text-white font-bold text-lg mb-2">{uploading ? 'Queueing Files...' : 'Drop files / zip here or click'}</p>
-                <p className="text-sm text-white/40">Supported formats: PDF, DOCX, TXT, ZIP (up to 10k files)</p>
-                <button disabled={uploading} className="mt-8 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold uppercase tracking-widest text-white transition-colors">Select Local Files</button>
+                <p className="text-white font-bold text-lg mb-2">{uploading ? 'Queueing Files...' : 'Select files or an entire folder'}</p>
+                <p className="text-sm text-white/40">Supported formats: PDF, DOCX, TXT, ZIP</p>
+                <div className="flex gap-4 mt-8">
+                  <button disabled={uploading} onClick={() => !uploading && fileRef.current.click()} className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold uppercase tracking-widest text-white transition-colors">Select Files</button>
+                  <button disabled={uploading} onClick={() => !uploading && folderRef.current.click()} className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold uppercase tracking-widest text-white transition-colors">Select Folder</button>
+                </div>
               </div>
             </div>
             
             {bulkJobId && (
               <div className="section-card w-full max-w-xl p-6 border-primary/30 relative overflow-hidden">
-                 <div className="absolute top-0 left-0 h-1 bg-primary/20 w-full">
+                 <div className="absolute top-0 left-0 h-2 bg-primary/20 w-full">
                     {bulkJobProgress?.job?.total_files > 0 && (
                       <div 
                         className="h-full bg-primary transition-all duration-500" 
-                        style={{ width: `${((bulkJobProgress.items_stats?.reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+                        style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
                       ></div>
                     )}
                  </div>
-                 <h3 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 mb-4">
-                    <Loader2 size={14} className="animate-spin text-primary" /> Uploading Candidates
-                 </h3>
-                 <div className="flex gap-4">
+                 <div className="flex justify-between items-center mb-4 mt-2">
+                   <h3 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                      <Loader2 size={14} className="animate-spin text-primary" /> AI Processing Candidates
+                   </h3>
+                   {bulkJobProgress?.job?.total_files > 0 && (
+                     <span className="text-xs font-bold text-primary">
+                       {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+                     </span>
+                   )}
+                 </div>
+                 <div className="flex flex-wrap gap-3">
                     {bulkJobProgress?.items_stats?.map(st => (
-                       <div key={st.status} className="bg-white/5 px-4 py-2 rounded-lg text-xs">
+                       <div key={st.status} className="bg-white/5 px-4 py-2 rounded-lg text-xs border border-white/5 flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${st.status === 'success' ? 'bg-green-500' : st.status === 'failed' ? 'bg-red-500' : st.status === 'pending' ? 'bg-white/30' : 'bg-orange-500'}`}></div>
                           <span className="text-white/40 uppercase font-bold mr-2">{st.status}:</span>
                           <span className="text-white font-black">{st.count}</span>
                        </div>
                     ))}
                  </div>
-                 <p className="text-[10px] text-white/30 uppercase mt-4">Total Files: {bulkJobProgress?.job?.total_files || '...'}</p>
+                 <div className="flex justify-between items-center mt-6">
+                   <p className="text-[10px] text-white/30 uppercase">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
+                   <div className="flex gap-4 items-center">
+                     <p className="text-[10px] text-white/30 uppercase">Safe to leave this page, it runs in background</p>
+                     <button onClick={handleCancelQueue} className="px-4 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors">
+                       Cancel Queue
+                     </button>
+                   </div>
+                 </div>
               </div>
             )}
         </div>
@@ -963,16 +1076,18 @@ export default function SourceDashboard() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Show</label>
-            <select
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
-              value={filters.limit}
-              onChange={e => setFilters(f => ({ ...f, limit: parseInt(e.target.value) }))}
-            >
-              {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
+          {filters.role_id && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Show</label>
+              <select
+                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+                value={filters.limit}
+                onChange={e => setFilters(f => ({ ...f, limit: parseInt(e.target.value) }))}
+              >
+                {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          )}
 
           <button
             onClick={fetchCandidates}
@@ -1125,6 +1240,31 @@ export default function SourceDashboard() {
           >
             <Send size={14} /> Send Invite
           </button>
+          <button
+            onClick={async () => {
+              if(!confirm('Are you sure you want to delete these candidates?')) return;
+              try {
+                const r = await fetch('/api/source/candidates/bulk-delete', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ candidate_ids: Array.from(selectedIds) }),
+                  credentials: 'include'
+                });
+                if(r.ok) {
+                  toast.success('Candidates deleted successfully');
+                  setSelectedIds(new Set());
+                  fetchCandidates();
+                } else {
+                  toast.error('Failed to delete candidates');
+                }
+              } catch(e) {
+                toast.error('Error deleting candidates');
+              }
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] font-black uppercase tracking-widest hover:bg-red-500/20 hover:border-red-500/30 transition-colors duration-150"
+          >
+            <Trash2 size={14} /> Delete
+          </button>
 
           <button onClick={clearSel} className="p-2.5 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-colors duration-150">
             <X size={16} />
@@ -1144,7 +1284,7 @@ export default function SourceDashboard() {
       {/* ── Upload Modal ── */}
       {showUpload && (
         <Modal onClose={() => setShowUpload(false)} title="Upload Resume">
-          <input ref={fileRef} type="file" accept=".pdf,.docx,.txt" className="hidden" onChange={handleUpload} />
+          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip" className="hidden" onChange={handleUpload} multiple />
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
@@ -1153,7 +1293,7 @@ export default function SourceDashboard() {
             {uploading ? (
               <><Loader2 size={40} className="text-primary animate-spin" /><p className="text-sm font-bold text-white">AI parsing resume...</p></>
             ) : (
-              <><Upload size={40} className="text-primary/60" /><div><p className="text-base font-bold text-white mb-1">Click to select file</p><p className="text-xs text-white/30">PDF, DOCX, or TXT</p></div></>
+              <><Upload size={40} className="text-primary/60" /><div><p className="text-base font-bold text-white mb-1">Click to select file(s)</p><p className="text-xs text-white/30">PDF, DOC, DOCX, TXT, ZIP</p></div></>
             )}
           </button>
         </Modal>

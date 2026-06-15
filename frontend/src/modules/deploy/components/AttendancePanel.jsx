@@ -18,7 +18,7 @@ export default function AttendancePanel({ mode }) {
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [adminTab, setAdminTab] = useState('today');
   
-  const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '', leave_type: 'Leave', reason: '' });
+  const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '', leave_type: 'Leave', reason: '', start_day_type: 'Full Day', end_day_type: 'Full Day' });
   const [attendanceSummary, setAttendanceSummary] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -149,10 +149,11 @@ export default function AttendancePanel({ mode }) {
   const applyLeave = async (e) => {
     e.preventDefault();
     try {
+      const payload = { ...leaveForm, duration_days: durationDays };
       const res = await fetch('/api/attendance/leave/apply', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(leaveForm)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Application failed');
@@ -217,16 +218,40 @@ export default function AttendancePanel({ mode }) {
   let totalHalfDay = 0;
   let totalAbsent = 0;
 
+  const localTodayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  
   attendanceSummary.forEach(emp => {
     if (emp && Array.isArray(emp.days)) {
       emp.days.forEach(d => {
-        if (d.status === 'Present' || d.status === 'Active') totalPresent++;
-        else if (d.status === 'Leave') totalLeave++;
-        else if (d.status === 'Half Day') totalHalfDay++;
-        else if (d.status === 'Absent') totalAbsent++;
+        if (d.date === localTodayStr) {
+          if (d.status === 'Present' || d.status === 'Active') totalPresent++;
+          else if (d.status === 'Leave') totalLeave++;
+          else if (d.status.startsWith('Half Day Leave')) totalLeave += 0.5;
+          else if (d.status.startsWith('Half Day')) totalHalfDay++;
+          else if (d.status === 'Absent') totalAbsent++;
+        }
       });
     }
   });
+
+  const isSingleDay = !leaveForm.end_date || leaveForm.start_date === leaveForm.end_date;
+  let durationDays = 0;
+  if (leaveForm.start_date && leaveForm.end_date) {
+    const s = new Date(leaveForm.start_date);
+    const e = new Date(leaveForm.end_date);
+    if (e >= s) {
+      let days = Math.ceil(Math.abs(e - s) / (1000 * 60 * 60 * 24)) + 1;
+      if (isSingleDay) {
+         if (leaveForm.start_day_type === 'First Half' || leaveForm.start_day_type === 'Second Half') {
+            days = 0.5;
+         }
+      } else {
+         if (leaveForm.start_day_type === 'Second Half') days -= 0.5;
+         if (leaveForm.end_day_type === 'First Half') days -= 0.5;
+      }
+      durationDays = days;
+    }
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-48">
@@ -300,7 +325,7 @@ export default function AttendancePanel({ mode }) {
                       </div>
                       <div className="flex justify-between items-start mb-4 relative z-10">
                           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b8ba3]">{lb.label}</span>
-                          <span className="text-xl font-black font-display italic text-black">{lb.value} {lb.suffix}</span>
+                          <span className="text-xl font-black font-display italic text-black">{Number(lb.value).toString()} {lb.suffix}</span>
                       </div>
                       <div className="w-full bg-white/5 rounded-full h-1.5 mb-2 relative z-10">
                           <div className="h-1.5 rounded-full transition-all duration-700" style={{ width: lb.total > 0 ? `${(lb.value / lb.total) * 100}%` : '0%', background: lb.color }} />
@@ -432,8 +457,13 @@ export default function AttendancePanel({ mode }) {
                           <p className="text-xs font-bold text-black uppercase italic">{l.employee_name || l.employee_code}</p>
                           <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">Level {l.applicant_role || '4'}</p>
                       </td>
-                      <td className="px-6 py-4 text-xs text-[#8b5cf6] font-black uppercase italic">{l.leave_type}</td>
-                      <td className="px-6 py-4 text-xs font-mono text-[#6b7280]">{l.start_date} → {l.end_date}</td>
+                      <td className="px-6 py-4 text-xs text-[#8b5cf6] font-black uppercase italic">{l.leave_type} {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</td>
+                      <td className="px-6 py-4 text-xs font-mono text-[#6b7280]">
+                          <div className="flex flex-col">
+                              <span>{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''}</span>
+                              {l.start_date !== l.end_date ? <span>↓ {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</span> : null}
+                          </div>
+                      </td>
                       <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-xs truncate">{l.reason}</td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
@@ -514,7 +544,9 @@ export default function AttendancePanel({ mode }) {
                                                   boxShadow: '0 0 12px rgba(34,197,94,0.6)'
                                               };
                                               extraClass = "animate-pulse";
-                                          } else if (d.status === 'Half Day') {
+                                          } else if (d.status.startsWith('Half Day Leave')) {
+                                              cellStyle = { backgroundColor: '#8B5CF6' }; // Purple for clear UX contrast
+                                          } else if (d.status.startsWith('Half Day')) {
                                               cellStyle = { backgroundColor: '#F59E0B' };
                                           } else if (d.status === 'Absent') {
                                               cellStyle = { backgroundColor: '#EF4444' };
@@ -546,9 +578,10 @@ export default function AttendancePanel({ mode }) {
                           {[
                               { label: 'Present', dotColor: '#22C55E', bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
                               { label: 'Active', dotColor: '#22C55E', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', pulse: true },
-                              { label: 'Half Day', dotColor: '#F59E0B', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+                              { label: 'Half Day (Attendance)', dotColor: '#F59E0B', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
                               { label: 'Absent', dotColor: '#EF4444', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
                               { label: 'Leave', dotColor: '#3B82F6', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                              { label: 'Half Day (Leave)', dotColor: '#8B5CF6', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
                               { label: 'Weekend / No Data', dotColor: '#E5E7EB', bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' },
                           ].map(l => (
                               <div key={l.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${l.bg} ${l.text} border ${l.border}`}>
@@ -635,8 +668,8 @@ export default function AttendancePanel({ mode }) {
                                               <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
                                                   <div className="flex justify-between items-center">
                                                       <div>
-                                                          <p className="text-[11px] font-bold text-black">{l.leave_type}</p>
-                                                          <p className="text-[9px] text-[#8b8ba3] font-mono">{l.start_date} to {l.end_date}</p>
+                                                          <p className="text-[11px] font-bold text-black">{l.leave_type} {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
+                                                          <p className="text-[9px] text-[#8b8ba3] font-mono">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
                                                       </div>
                                                       <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500' : l.status === 'Rejected' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>{l.status || 'Pending'}</span>
                                                   </div>
@@ -699,8 +732,8 @@ export default function AttendancePanel({ mode }) {
             ) : myLeaves.map((l, i) => (
               <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
                 <div>
-                  <p className="text-xs font-black text-black italic">{l.leave_type} Protocol</p>
-                  <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} to {l.end_date}</p>
+                  <p className="text-xs font-black text-black italic">{l.leave_type} Protocol {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
+                  <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
                 </div>
                 <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
                   l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400' :
@@ -755,6 +788,55 @@ export default function AttendancePanel({ mode }) {
                             />
                         </div>
                     </div>
+
+                    {leaveForm.start_date && leaveForm.end_date && isSingleDay && (
+                        <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Duration Type</label>
+                            <select
+                                value={leaveForm.start_day_type}
+                                onChange={e => setLeaveForm({...leaveForm, start_day_type: e.target.value, end_day_type: e.target.value})}
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                            >
+                                <option value="Full Day">Full Day</option>
+                                <option value="First Half">First Half</option>
+                                <option value="Second Half">Second Half</option>
+                            </select>
+                        </div>
+                    )}
+                    
+                    {leaveForm.start_date && leaveForm.end_date && !isSingleDay && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Start Day Type</label>
+                                <select
+                                    value={leaveForm.start_day_type}
+                                    onChange={e => setLeaveForm({...leaveForm, start_day_type: e.target.value})}
+                                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                                >
+                                    <option value="Full Day">Full Day</option>
+                                    <option value="Second Half">Second Half</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">End Day Type</label>
+                                <select
+                                    value={leaveForm.end_day_type}
+                                    onChange={e => setLeaveForm({...leaveForm, end_day_type: e.target.value})}
+                                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                                >
+                                    <option value="Full Day">Full Day</option>
+                                    <option value="First Half">First Half</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {leaveForm.start_date && leaveForm.end_date && durationDays > 0 && (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Total Deduction:</span>
+                            <span className="text-sm font-black text-emerald-700">{durationDays} Day{durationDays !== 1 && 's'}</span>
+                        </div>
+                    )}
 
                     <div>
                         <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Protocol Rationale</label>

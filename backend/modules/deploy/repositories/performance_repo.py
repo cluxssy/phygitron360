@@ -7,6 +7,17 @@ class PerformanceRepository:
     def _set_path(self, cur, tenant_id='public'):
         cur.execute(f'SET search_path TO "{tenant_id}", public')
 
+    def get_employee_reporting_manager(self, employee_code: str, tenant_id: str = 'public') -> Optional[str]:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute("SELECT reporting_manager FROM employees WHERE employee_code = %s", (employee_code,))
+            row = cur.fetchone()
+            return row['reporting_manager'] if row else None
+        finally:
+            conn.close()
+
     def save_assessment(self, data: Dict[str, Any], tenant_id: str = 'public') -> Dict[str, Any]:
         conn = get_db_connection()
         try:

@@ -82,17 +82,17 @@ class OfferService:
         existing_emp = emp_repo.get_employee_by_email(offer["candidate_email"], tenant_id=self.tenant_id)
         
         is_active_internal = False
-        is_rehire = False
 
         if existing_emp:
             if existing_emp["employment_status"] != 'Exited':
                 is_active_internal = True
-            else:
-                is_rehire = True
 
         # Send Offer Letter Email
         if send_offer_letter_email:
             try:
+                from backend.common.utils.pdf_utils import generate_ewandz_offer_pdf
+                pdf_bytes = generate_ewandz_offer_pdf(offer)
+                
                 send_offer_letter_email(
                     to_email=offer["candidate_email"],
                     candidate_name=offer["candidate_name"],
@@ -101,6 +101,7 @@ class OfferService:
                     department=offer.get("department", ""),
                     salary=offer["salary"],
                     location=offer.get("location", ""),
+                    attachment_bytes=pdf_bytes,
                 )
             except Exception as email_exc:
                 logger.warning(f"Offer email send failed (non-blocking): {email_exc}")
@@ -121,27 +122,7 @@ class OfferService:
             return {"success": True, "message": "Internal hire offer sent and profile updated instantly."}
 
         else:
-            # Send Onboarding Invite for New or Rehired candidates
-            from backend.modules.deploy.services.onboarding_service import OnboardingService
-            onboarding_service = OnboardingService()
-            
-            invite_data = {
-                "email": offer["candidate_email"],
-                "name": offer["candidate_name"],
-                "role": "employee",
-                "department": offer.get("department", ""),
-                "designation": offer["role_title"],
-                "is_rehire": is_rehire
-            }
-            
-            try:
-                invite_result = onboarding_service.create_invite(invite_data, tenant_id=self.tenant_id)
-                logger.info(f"Onboarding invite sent: {invite_result}")
-            except Exception as e:
-                logger.error(f"Failed to send onboarding invite: {e}")
-                pass
-
             # Update statuses in the repo
             self.repo.mark_offer_sent(offer_id, offer["candidate_id"])
             
-            return {"success": True, "message": "Offer and Onboarding Invite sent successfully."}
+            return {"success": True, "message": "Offer sent successfully. Onboarding will be initiated separately."}

@@ -32,6 +32,10 @@ def get_invites(current_user: dict = Depends(require_permission("deploy.onboardi
 def revoke_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
     return service.revoke_invite(invite_id)
 
+@router.delete("/invite/{invite_id}/delete", dependencies=[Depends(require_permission("deploy.onboarding.manage")), Depends(require_module("deploy"))])
+def delete_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
+    return service.delete_invite(invite_id)
+
 @router.post("/verify-token")
 def verify_token(data: dict = Body(...), service: OnboardingService = Depends(get_service)):
     token = data.get("token")

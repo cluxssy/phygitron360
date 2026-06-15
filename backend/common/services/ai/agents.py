@@ -41,7 +41,9 @@ Return this exact structure:
   "confidence_signals": [{"skill": "", "claimed_years": 0, "supported_years": 0, "flag": false, "reason": ""}]
 }"""
 
-ROLE_FIT_SYSTEM = """You are a talent assessment AI. Score a candidate's fit for a job role.
+ROLE_FIT_SYSTEM = """You are an expert technical recruiter and talent assessment AI. Your goal is to rigorously score a candidate's fit for a specific job role based on their skills, experience, and background.
+Be highly objective and strict. A score of 90-100 means a flawless match across all required skills and experience levels. Penalize heavily for missing core required skills.
+Provide a detailed 'summary' explaining exactly why the candidate received their score, highlighting their strongest matching attributes and their most glaring weaknesses or missing requirements.
 Respond ONLY with valid JSON.
 Return this exact structure:
 {
@@ -85,7 +87,7 @@ class AIAgents:
     async def parse_resume(self, resume_text: str) -> Dict[str, Any]:
         """Parse resume text with AI and store skills."""
         return await self.ai.generate_json(
-            prompt=f"Parse this resume:\n\n{resume_text[:8000]}",
+            prompt=f"Parse this resume:\n\n{resume_text[:6000]}",
             system_prompt=PARSE_RESUME_SYSTEM
         )
 
@@ -107,7 +109,7 @@ class AIAgents:
             }
         })
         return await self.ai.generate_json(
-            prompt=f"Analyze and score this candidate's fit for the job role. Be rigorous and objective. Ranking should be 1-100.\n\n{prompt}",
+            prompt=f"Act as an expert technical recruiter. Thoroughly analyze and score this candidate's fit for the job role based on the data provided. Be rigorous and objective. Rank the candidate from 1 to 100, where 100 is a perfect unicorn match.\n\n{prompt}",
             system_prompt=ROLE_FIT_SYSTEM
         )
 

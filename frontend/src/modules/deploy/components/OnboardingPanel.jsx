@@ -4,7 +4,7 @@ import {
   UserPlus, Mail, CheckCircle, Clock, Trash2, Plus, 
   FileText, Briefcase, GraduationCap, MapPin, Phone, 
   ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink,
-  Copy, Link
+  Copy, Link, Ban
 } from 'lucide-react';
 import ComboBox from '../../../core/components/ComboBox';
 
@@ -128,7 +128,7 @@ export default function OnboardingPanel() {
     toast.success('Sequence link copied to clipboards');
   };
 
-  const deleteInvite = async (id) => {
+  const revokeInvite = async (id) => {
     if (!confirm('Are you sure you want to revoke this invite?')) return;
     try {
       const res = await fetch(`/api/onboarding/invite/${id}`, {
@@ -140,6 +140,21 @@ export default function OnboardingPanel() {
       loadInvites();
     } catch {
       toast.error('Failed to abort invitation sequence');
+    }
+  };
+
+  const hardDeleteInvite = async (id) => {
+    if (!confirm('Are you sure you want to completely delete this invite log? This action cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/onboarding/invite/${id}/delete`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Invite log permanently deleted');
+      loadInvites();
+    } catch {
+      toast.error('Failed to delete invite log');
     }
   };
 
@@ -365,7 +380,7 @@ export default function OnboardingPanel() {
                                <Link size={14} />
                             </button>
                             <button 
-                              onClick={() => deleteInvite(inv.id)} 
+                              onClick={() => revokeInvite(inv.id)} 
                               title="Revoke Invite"
                               className={`p-2 rounded-lg border transition-all ${
                                 isLightMode 
@@ -373,10 +388,21 @@ export default function OnboardingPanel() {
                                   : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
                               }`}
                             >
-                               <Trash2 size={14} />
+                               <Ban size={14} />
                             </button>
                             </>
                           )}
+                          <button 
+                            onClick={() => hardDeleteInvite(inv.id)} 
+                            title="Delete Log"
+                            className={`p-2 rounded-lg border transition-all ${
+                              isLightMode 
+                                ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
+                                : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
+                            }`}
+                          >
+                             <Trash2 size={14} />
+                          </button>
                         </div>
                       </td>
                    </tr>

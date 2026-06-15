@@ -703,6 +703,9 @@ def create_tables(schema_name='public'):
                 employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
+                duration_days REAL,
+                start_day_type TEXT,
+                end_day_type TEXT,
                 leave_type TEXT NOT NULL,
                 reason TEXT,
                 status TEXT DEFAULT 'Pending',
@@ -717,9 +720,9 @@ def create_tables(schema_name='public'):
                 id SERIAL PRIMARY KEY,
                 employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 year INTEGER NOT NULL,
-                total_leaves INTEGER DEFAULT 15,
-                used_leaves INTEGER DEFAULT 0,
-                extended_leaves INTEGER DEFAULT 0,
+                total_leaves REAL DEFAULT 15,
+                used_leaves REAL DEFAULT 0,
+                extended_leaves REAL DEFAULT 0,
                 UNIQUE(employee_code, year)
             )
         ''')
@@ -911,6 +914,21 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent'")
         cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS opened_at TIMESTAMP")
         cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS logged_in_at TIMESTAMP")
+
+        # Employee table schema updates (added for onboarding/verification)
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS pf_included TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS mediclaim_included TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS notes TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_account_no TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS pan_no TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS exit_date TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS exit_reason TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS clearance_status TEXT")
+
+        # Add extracted_text column to bulk_upload_job_items for pre-extracted resume text
+        # This decouples text extraction (fast, CPU) from AI parsing (slow, API)
+        cur.execute("ALTER TABLE bulk_upload_job_items ADD COLUMN IF NOT EXISTS extracted_text TEXT")
 
         # --- Verify Module Extensions ---
 

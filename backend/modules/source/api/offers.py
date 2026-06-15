@@ -9,7 +9,9 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import io
 
 from backend.core.dependencies import get_current_user
 from backend.modules.source.services.offer_service import OfferService
@@ -147,7 +149,7 @@ async def send_offer(
         result = service.send_offer(offer_id)
         return {
             "success": True,
-            "message": "Offer sent successfully. Candidate converted to employee.",
+            "message": "Offer sent successfully. Onboarding will be initiated separately.",
             "data": result,
         }
     except ValueError as e:
@@ -155,3 +157,26 @@ async def send_offer(
     except Exception as exc:
         logger.error(f"send_offer({offer_id}) failed: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
+
+@router.get("/{offer_id}/preview")
+async def preview_offer(
+    offer_id: int,
+    service: OfferService = Depends(get_offer_service),
+):
+    """Generate a PDF preview of the offer letter."""
+    offer = service.get_offer_by_id(offer_id)
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+        
+    try:
+        from backend.common.utils.pdf_utils import generate_ewandz_offer_pdf
+        pdf_bytes = generate_ewandz_offer_pdf(offer)
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes), 
+            media_type="application/pdf", 
+            headers={"Content-Disposition": f"inline; filename=offer_{offer_id}.pdf"}
+        )
+    except Exception as exc:
+        logger.error(f"preview_offer({offer_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {exc}")
+

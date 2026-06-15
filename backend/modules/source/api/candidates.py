@@ -147,6 +147,21 @@ async def bulk_upload_resumes(
         "message": result.get("message", "Bulk upload queued.")
     }
 
+@router.get("/bulk-upload/active")
+async def get_active_bulk_upload(
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Get the currently active bulk upload job, if any."""
+    job = service.repo.get_active_bulk_upload_job()
+    if not job:
+        return {"success": True, "data": None}
+    
+    progress = service.repo.get_bulk_upload_job_progress(job["id"])
+    return {
+        "success": True,
+        "data": progress
+    }
+
 @router.get("/bulk-upload/{job_id}")
 async def get_bulk_upload_status(
     job_id: int,
@@ -160,6 +175,18 @@ async def get_bulk_upload_status(
     return {
         "success": True,
         "data": progress
+    }
+
+@router.post("/bulk-upload/{job_id}/cancel")
+async def cancel_bulk_upload(
+    job_id: int,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Cancel a bulk upload job and stop further processing."""
+    success = service.cancel_bulk_upload_job(job_id)
+    return {
+        "success": success,
+        "message": "Job cancelled successfully."
     }
 
 
@@ -188,7 +215,7 @@ def search_candidates(
     search: Optional[str] = Query(None),
     sort_by: Optional[str] = Query("newest"),   # newest, experience
     role_id: Optional[int] = Query(None),
-    limit: int = Query(20, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=5000),
     current_user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
@@ -449,6 +476,23 @@ def delete_candidate(
         raise
     except Exception as exc:
         logger.error(f"delete_candidate({candidate_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+class BulkDeleteRequest(BaseModel):
+    candidate_ids: List[int]
+
+@router.post("/bulk-delete")
+def bulk_delete_candidates(
+    req: BulkDeleteRequest,
+    current_user: dict = Depends(require_permission("source.candidates.manage")),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Delete multiple candidates at once."""
+    try:
+        deleted_count = service.bulk_delete_candidates(req.candidate_ids)
+        return {"success": True, "message": f"{deleted_count} candidates deleted", "deleted_count": deleted_count}
+    except Exception as exc:
+        logger.error(f"bulk_delete_candidates failed: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 @router.post("/{candidate_id}/notify")

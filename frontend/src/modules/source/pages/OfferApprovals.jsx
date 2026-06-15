@@ -358,10 +358,21 @@ export default function OfferApprovals() {
 
                     {/* Right Panel: Content Review & Actions */}
                     <div className="w-full xl:w-[500px] bg-gray-50 p-8 flex flex-col h-full border-t xl:border-t-0 xl:border-l border-gray-100">
-                      <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4 flex items-center gap-2">
-                        <FileText size={14} /> Offer Letter Document
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                          <FileText size={14} /> Offer Letter Document
+                        </div>
+                        {!isEditing && (
+                          <a 
+                            href={`/api/source/offers/${offer.id}/preview`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-[10px] font-black uppercase tracking-widest"
+                          >
+                            <ExternalLink size={12} /> Preview PDF
+                          </a>
+                        )}
                       </div>
-                      
                       <div className="flex-1 bg-white border border-gray-100 rounded-2xl p-6 overflow-y-auto shadow-inner text-sm text-gray-700">
                         {isEditing ? (
                           <div className="flex flex-col gap-4">

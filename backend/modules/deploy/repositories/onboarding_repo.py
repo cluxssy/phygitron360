@@ -68,6 +68,16 @@ class OnboardingRepository:
                 conn.commit()
         finally:
             conn.close()
+
+    def delete_invite(self, invite_id: int):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_path(cur, 'public')
+                cur.execute("DELETE FROM onboarding_invites WHERE id = %s", (invite_id,))
+                conn.commit()
+        finally:
+            conn.close()
             
     def get_invite_by_token(self, token: str) -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
