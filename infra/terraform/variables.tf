@@ -75,3 +75,28 @@ variable "ai_provider" {
   description = "The AI Provider (mock, gemini, openai, groq)"
   default     = "mock"
 }
+
+variable "bulk_ai_provider" {
+  description = "Fallback/Bulk AI Provider for heavy tasks"
+  default     = "groq"
+}
+
+variable "bulk_parse_workers" {
+  description = "Number of background workers"
+  default     = "8"
+}
+
+variable "groq_model" {
+  description = "Groq Model"
+  default     = "llama-3.1-8b-instant"
+}
+
+variable "sender_name" {
+  description = "Email sender name"
+  default     = "EWANDZ Digital HR"
+}
+
+variable "company_name" {
+  description = "Company Name"
+  default     = "EWANDZ Digital"
+}
