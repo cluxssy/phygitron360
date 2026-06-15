@@ -18,7 +18,7 @@ export default function AttendancePanel({ mode }) {
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [adminTab, setAdminTab] = useState('today');
   
-  const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '', leave_type: 'Leave', reason: '' });
+  const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '', leave_type: 'Leave', reason: '', start_day_type: 'Full Day', end_day_type: 'Full Day' });
   const [attendanceSummary, setAttendanceSummary] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -34,20 +34,22 @@ export default function AttendancePanel({ mode }) {
   const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  
   const panelStyle =
   "bg-white border border-[#ebe4ff] rounded-[2.5rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)]";
 
-const inputStyle =
+  const inputStyle =
   "w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#c084fc] transition-all";
 
-const buttonPrimary =
+  const buttonPrimary =
   "bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-[0_12px_30px_rgba(180,140,255,0.28)]";
 
-const buttonSecondary =
+  const buttonSecondary =
   "bg-white border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff]";
 
-const tableHeader =
+  const tableHeader =
   "bg-[#f5efff] border-b border-[#ece2ff]";
+
   useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
@@ -147,10 +149,11 @@ const tableHeader =
   const applyLeave = async (e) => {
     e.preventDefault();
     try {
+      const payload = { ...leaveForm, duration_days: durationDays };
       const res = await fetch('/api/attendance/leave/apply', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(leaveForm)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Application failed');
@@ -185,7 +188,6 @@ const tableHeader =
         if (!res.ok) throw new Error();
         toast.success("Matrix Synchronized");
         setEditingRecord(null);
-        setEditingRecord(null); // Close modal
         setEditForm({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
         loadData();
     } catch {
@@ -209,6 +211,47 @@ const tableHeader =
       setIsSearching(false);
     }
   };
+
+  // Compute frontend matrix dashboard stats from existing data safely
+  let totalPresent = 0;
+  let totalLeave = 0;
+  let totalHalfDay = 0;
+  let totalAbsent = 0;
+
+  const localTodayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  
+  attendanceSummary.forEach(emp => {
+    if (emp && Array.isArray(emp.days)) {
+      emp.days.forEach(d => {
+        if (d.date === localTodayStr) {
+          if (d.status === 'Present' || d.status === 'Active') totalPresent++;
+          else if (d.status === 'Leave') totalLeave++;
+          else if (d.status.startsWith('Half Day Leave')) totalLeave += 0.5;
+          else if (d.status.startsWith('Half Day')) totalHalfDay++;
+          else if (d.status === 'Absent') totalAbsent++;
+        }
+      });
+    }
+  });
+
+  const isSingleDay = !leaveForm.end_date || leaveForm.start_date === leaveForm.end_date;
+  let durationDays = 0;
+  if (leaveForm.start_date && leaveForm.end_date) {
+    const s = new Date(leaveForm.start_date);
+    const e = new Date(leaveForm.end_date);
+    if (e >= s) {
+      let days = Math.ceil(Math.abs(e - s) / (1000 * 60 * 60 * 24)) + 1;
+      if (isSingleDay) {
+         if (leaveForm.start_day_type === 'First Half' || leaveForm.start_day_type === 'Second Half') {
+            days = 0.5;
+         }
+      } else {
+         if (leaveForm.start_day_type === 'Second Half') days -= 0.5;
+         if (leaveForm.end_day_type === 'First Half') days -= 0.5;
+      }
+      durationDays = days;
+    }
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-48">
@@ -282,7 +325,7 @@ const tableHeader =
                       </div>
                       <div className="flex justify-between items-start mb-4 relative z-10">
                           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b8ba3]">{lb.label}</span>
-                          <span className="text-xl font-black font-display italic text-black">{lb.value} {lb.suffix}</span>
+                          <span className="text-xl font-black font-display italic text-black">{Number(lb.value).toString()} {lb.suffix}</span>
                       </div>
                       <div className="w-full bg-white/5 rounded-full h-1.5 mb-2 relative z-10">
                           <div className="h-1.5 rounded-full transition-all duration-700" style={{ width: lb.total > 0 ? `${(lb.value / lb.total) * 100}%` : '0%', background: lb.color }} />
@@ -342,18 +385,6 @@ const tableHeader =
                     />
                 </div>
             )}
-
-            {/* {adminTab === 'today' && (
-                <button 
-                    onClick={() => {
-                        setEditingRecord({ isNew: true });
-                        setEditForm({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
-                    }}
-                    className="flex items-center gap-2 px-6 py-3 bg-primary text-black rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-primary/20"
-                >
-                    <Plus size={14} /> Manual Sync
-                </button>
-            )} */}
           </div>
 
           {adminTab === 'today' && (
@@ -426,8 +457,13 @@ const tableHeader =
                           <p className="text-xs font-bold text-black uppercase italic">{l.employee_name || l.employee_code}</p>
                           <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">Level {l.applicant_role || '4'}</p>
                       </td>
-                      <td className="px-6 py-4 text-xs text-[#8b5cf6] font-black uppercase italic">{l.leave_type}</td>
-                      <td className="px-6 py-4 text-xs font-mono text-[#6b7280]">{l.start_date} → {l.end_date}</td>
+                      <td className="px-6 py-4 text-xs text-[#8b5cf6] font-black uppercase italic">{l.leave_type} {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</td>
+                      <td className="px-6 py-4 text-xs font-mono text-[#6b7280]">
+                          <div className="flex flex-col">
+                              <span>{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''}</span>
+                              {l.start_date !== l.end_date ? <span>↓ {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</span> : null}
+                          </div>
+                      </td>
                       <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-xs truncate">{l.reason}</td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
@@ -448,114 +484,118 @@ const tableHeader =
             </div>
           )}
 
+          {/* TEAM MATRIX HEATMAP TAB */}
           {adminTab === 'heatmap' && (
-              <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-x-auto animate-fade-in-up">
-                  <table className="w-full text-left border-collapse min-w-[1400px]">
-                      <thead>
-                          <tr className="bg-[#f5efff]">
-                              <th className="sticky left-0 bg-[#f5efff] px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3] border-r border-[#ece2ff]">Personnel Matrix</th>
-                              {Array.from({length: new Date(selectedYear, selectedMonth, 0).getDate()}, (_, i) => (
-                                  <th
-                    key={i + 1}
-                    className="
-  h-[58px]
-  min-w-[44px]
-  text-[11px]
-  font-black
-  text-center
-  text-[#6b7280]
-  border-r
-  border-[#ebe7f5]
-  bg-[#f5f1ff]
-"
->{i+1}</th>
-                              ))}
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#ece2ff]">
-                          {attendanceSummary.map((emp, i) => (
-                              <tr key={i} className="hover:bg-[#faf7ff]">
-                                  <td className="sticky left-0 bg-[#f5efff] px-6 py-3 border-r border-[#ece2ff] z-10">
-                                      <p className="text-[10px] font-bold text-black uppercase italic truncate max-w-[220px]">{emp.name}</p>
-                                      <p className="text-[8px] text-[#8b8ba3] font-mono">{emp.code}</p>
-                                  </td>
-                                  {emp.days.map((d, di) => {
-                                      let color =
-  'bg-[#ece8f4] border border-[#e0dbea]';
-
-if (d.status === 'Present')
-  color =
-    'bg-[#22c55e] border border-[#16a34a]';
-
-if (d.status === 'Active')
-  color =
-    'bg-[#06b6d4] border border-[#0891b2]';
-
-if (d.status === 'Half Day')
-  color =
-    'bg-[#facc15] border border-[#eab308]';
-
-if (d.status === 'Absent')
-  color =
-    'bg-[#ff5c7c] border border-[#ff4268]';
-
-if (d.status === 'Leave')
-  color =
-    'bg-[#b784ff] border border-[#9f67ff]';
-
-if (
-  d.status === 'Weekend' ||
-  d.status === 'No Data'
-)
-  color =
-    'bg-[#ece8f4] border border-[#e0dbea]';
-                                      
-  return (
-  <td
-  className="
-    h-[58px]
-    w-[44px]
-    border-r
-    border-[#ebe7f5]
-    bg-[#faf8ff]
-    text-center
-    align-middle
-  "
->
-  <div className="flex items-center justify-center w-full h-full">
-    <div
-      title={`${d.date}: ${d.status}`}
-      className={`
-        w-[50px]
-        h-[42px]
-        rounded-[10px]
-        transition-all
-        duration-200
-        hover:scale-[1.05]
-        ${color}
-      `}
-    />
-  </div>
-</td>
-                                      );
-                                  })}
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
-                  <div className="px-6 py-4 border-t border-[#ece2ff] flex gap-6">
+              <div className="space-y-4 animate-fade-in-up">
+                  {/* Dashboard Statistics Above Heatmap - Updated Alignment to Matrix Colors */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {[
-                          { label: 'Present', color: 'bg-emerald-500' },
-                          { label: 'Active', color: 'bg-emerald-400 animate-pulse' },
-                          { label: 'Half Day', color: 'bg-amber-500' },
-                          { label: 'Absent', color: 'bg-red-500' },
-                          { label: 'Leave', color: 'bg-primary' },
-                      ].map(l => (
-                          <div key={l.label} className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${l.color}`} />
-                              <span className="text-[8px] font-black uppercase tracking-widest text-[#8b8ba3]">{l.label}</span>
+                          { label: 'Present Today', count: totalPresent, bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+                          { label: 'On Leave', count: totalLeave, bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                          { label: 'Half Day', count: totalHalfDay, bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+                          { label: 'Absent Today', count: totalAbsent, bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+                      ].map((card) => (
+                          <div key={card.label} className="bg-white border border-[#ebe4ff] rounded-2xl p-4 flex justify-between items-center shadow-sm">
+                              <div>
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280] flex items-center gap-1.5">
+                                      {card.label}
+                                  </p>
+                                  <p className="text-2xl font-black text-black mt-1">{card.count}</p>
+                              </div>
+                              <span className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-full ${card.bg} ${card.text} border ${card.border}`}>
+                                  Total
+                              </span>
                           </div>
                       ))}
+                  </div>
+
+                  {/* Heatmap Grid Layout */}
+                  <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-[1200px]">
+                          <thead>
+                              <tr className="bg-[#f8f5ff]">
+                                  <th className="sticky left-0 bg-[#f8f5ff] px-6 py-3 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3] border-r border-[#ece2ff] z-20">Personnel Matrix</th>
+                                  {Array.from({length: new Date(selectedYear, selectedMonth, 0).getDate()}, (_, i) => (
+                                      <th
+                                          key={i + 1}
+                                          className="h-[40px] min-w-[32px] text-[11px] font-semibold text-center text-[#6b7280] border-r border-[#ebe7f5]"
+                                      >
+                                          {i+1}
+                                      </th>
+                                  ))}
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#ece2ff]">
+                              {attendanceSummary.map((emp, i) => (
+                                  <tr key={i} className="hover:bg-[#faf7ff]">
+                                      <td className="sticky left-0 bg-white px-6 py-2 border-r border-[#ece2ff] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.01)]">
+                                          <p className="text-[11px] font-bold text-black uppercase italic truncate max-w-[180px]">{emp.name}</p>
+                                          <p className="text-[9px] text-[#9ca3af] font-mono">{emp.code}</p>
+                                      </td>
+                                      {emp.days.map((d, di) => {
+                                          let cellStyle = { backgroundColor: '#E5E7EB' };
+                                          let extraClass = "";
+
+                                          if (d.status === 'Present') {
+                                              cellStyle = { backgroundColor: '#22C55E' };
+                                          } else if (d.status === 'Active') {
+                                              cellStyle = { 
+                                                  backgroundColor: '#22C55E',
+                                                  boxShadow: '0 0 12px rgba(34,197,94,0.6)'
+                                              };
+                                              extraClass = "animate-pulse";
+                                          } else if (d.status.startsWith('Half Day Leave')) {
+                                              cellStyle = { backgroundColor: '#8B5CF6' }; // Purple for clear UX contrast
+                                          } else if (d.status.startsWith('Half Day')) {
+                                              cellStyle = { backgroundColor: '#F59E0B' };
+                                          } else if (d.status === 'Absent') {
+                                              cellStyle = { backgroundColor: '#EF4444' };
+                                          } else if (d.status === 'Leave') {
+                                              cellStyle = { backgroundColor: '#3B82F6' };
+                                          } else if (d.status === 'Weekend' || d.status === 'No Data') {
+                                              cellStyle = { backgroundColor: '#E5E7EB' };
+                                          }
+                                                                            
+                                          return (
+                                              <td key={di} className="h-[40px] w-[32px] border-r border-[#ebe7f5] text-center align-middle">
+                                                  <div className="flex items-center justify-center w-full h-full">
+                                                      <div
+                                                          title={`${d.date}: ${d.status}`}
+                                                          className={`w-[24px] h-[24px] rounded-[6px] hover:scale-110 transition-all duration-200 cursor-pointer ${extraClass}`}
+                                                          style={cellStyle}
+                                                      />
+                                                  </div>
+                                              </td>
+                                          );
+                                      })}
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+
+                      {/* Legend with Chip Format */}
+                      <div className="px-6 py-4 border-t border-[#ece2ff] flex flex-wrap gap-3 bg-[#faf9ff]">
+                          {[
+                              { label: 'Present', dotColor: '#22C55E', bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+                              { label: 'Active', dotColor: '#22C55E', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', pulse: true },
+                              { label: 'Half Day (Attendance)', dotColor: '#F59E0B', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+                              { label: 'Absent', dotColor: '#EF4444', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+                              { label: 'Leave', dotColor: '#3B82F6', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                              { label: 'Half Day (Leave)', dotColor: '#8B5CF6', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+                              { label: 'Weekend / No Data', dotColor: '#E5E7EB', bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' },
+                          ].map(l => (
+                              <div key={l.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${l.bg} ${l.text} border ${l.border}`}>
+                                  <div 
+                                      className={`w-2.5 h-2.5 rounded-full ${l.pulse ? 'animate-pulse' : ''}`} 
+                                      style={{ 
+                                          backgroundColor: l.dotColor,
+                                          boxShadow: l.pulse ? '0 0 8px rgba(34,197,94,0.6)' : 'none'
+                                      }} 
+                                  />
+                                  <span>{l.label}</span>
+                              </div>
+                          ))}
+                      </div>
                   </div>
               </div>
           )}
@@ -628,8 +668,8 @@ if (
                                               <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
                                                   <div className="flex justify-between items-center">
                                                       <div>
-                                                          <p className="text-[11px] font-bold text-black">{l.leave_type}</p>
-                                                          <p className="text-[9px] text-[#8b8ba3] font-mono">{l.start_date} to {l.end_date}</p>
+                                                          <p className="text-[11px] font-bold text-black">{l.leave_type} {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
+                                                          <p className="text-[9px] text-[#8b8ba3] font-mono">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
                                                       </div>
                                                       <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500' : l.status === 'Rejected' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>{l.status || 'Pending'}</span>
                                                   </div>
@@ -656,7 +696,7 @@ if (
       {!isAdmin && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Attendance History */}
-        <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
+        <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
             <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff] flex justify-between items-center">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
                     <BarChart3 size={14} className="text-[#8b5cf6]" /> Log History
@@ -692,8 +732,8 @@ if (
             ) : myLeaves.map((l, i) => (
               <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
                 <div>
-                  <p className="text-xs font-black text-black italic">{l.leave_type} Protocol</p>
-                  <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} to {l.end_date}</p>
+                  <p className="text-xs font-black text-black italic">{l.leave_type} Protocol {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
+                  <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
                 </div>
                 <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
                   l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400' :
@@ -749,6 +789,55 @@ if (
                         </div>
                     </div>
 
+                    {leaveForm.start_date && leaveForm.end_date && isSingleDay && (
+                        <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Duration Type</label>
+                            <select
+                                value={leaveForm.start_day_type}
+                                onChange={e => setLeaveForm({...leaveForm, start_day_type: e.target.value, end_day_type: e.target.value})}
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                            >
+                                <option value="Full Day">Full Day</option>
+                                <option value="First Half">First Half</option>
+                                <option value="Second Half">Second Half</option>
+                            </select>
+                        </div>
+                    )}
+                    
+                    {leaveForm.start_date && leaveForm.end_date && !isSingleDay && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Start Day Type</label>
+                                <select
+                                    value={leaveForm.start_day_type}
+                                    onChange={e => setLeaveForm({...leaveForm, start_day_type: e.target.value})}
+                                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                                >
+                                    <option value="Full Day">Full Day</option>
+                                    <option value="Second Half">Second Half</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">End Day Type</label>
+                                <select
+                                    value={leaveForm.end_day_type}
+                                    onChange={e => setLeaveForm({...leaveForm, end_day_type: e.target.value})}
+                                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                                >
+                                    <option value="Full Day">Full Day</option>
+                                    <option value="First Half">First Half</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {leaveForm.start_date && leaveForm.end_date && durationDays > 0 && (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Total Deduction:</span>
+                            <span className="text-sm font-black text-emerald-700">{durationDays} Day{durationDays !== 1 && 's'}</span>
+                        </div>
+                    )}
+
                     <div>
                         <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Protocol Rationale</label>
                         <textarea 
@@ -788,7 +877,7 @@ if (
              <div className="absolute top-0 right-0 p-8 opacity-5 text-red-500"><LogOut size={120} /></div>
              
              <div className="relative z-10 text-center">
-<h3 className="text-2xl font-display font-black text-black uppercase italic tracking-widest mb-2">Finalize <span className="text-red-500">Session</span></h3>
+                    <h3 className="text-2xl font-display font-black text-black uppercase italic tracking-widest mb-2">Finalize <span className="text-red-500">Session</span></h3>
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/30 mb-8">Debrief Protocol Required</p>
                  
                  <div className="space-y-6 text-left">
@@ -813,7 +902,7 @@ if (
                         </button>
                         <button 
                             onClick={clockOut}
-                            className="flex-[2] px-10 py-5 bg-red-500 text-black text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-red-400 transition-all shadow-xl shadow-red-500/20 font-display italic flex items-center justify-center gap-3"
+                            className="flex-[2] px-10 py-5 bg-red-50 text-black text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-red-400 transition-all shadow-xl shadow-red-500/20 font-display italic flex items-center justify-center gap-3"
                         >
                             Sync & Terminate <CheckCircle size={16} />
                         </button>
@@ -965,4 +1054,3 @@ if (
     </div>
   );
 }
-

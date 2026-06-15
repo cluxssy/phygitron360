@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import '../styles/login.css';
 import loginImg from "../../../assets/login.png";
-
+import hideIcon from "../../../assets/hide.png";
+import viewIcon from "../../../assets/view.png";
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -118,13 +120,40 @@ export default function LoginPage() {
               </span>
             </div>
 
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              
-              required
-            />
+            <div
+  style={{
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center'
+  }}
+>
+  <input
+    type={showPassword ? 'text' : 'password'}
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    required
+    style={{
+      width: '100%',
+      paddingRight: '45px'
+    }}
+  />
+
+  <img
+    src={showPassword ? hideIcon : viewIcon}
+    alt="toggle password"
+    onClick={() => setShowPassword(!showPassword)}
+    style={{
+      position: 'absolute',
+      top: '24%',
+      right: '14px',
+      width: '20px',
+      height: '20px',
+      cursor: 'pointer',
+      
+      transition: '0.2s'
+    }}
+  />
+</div>
 
             <button type="submit" disabled={loading}>
               {loading ? "Logging in..." : "Log in"}

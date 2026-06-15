@@ -88,10 +88,19 @@ from backend.modules.source.services.candidate_service import CandidateService
 
 @app.on_event("startup")
 async def start_background_workers():
-    # Start the bulk upload queue processor
-    # For now it uses the public tenant, in a full multi-tenant system it would process across schemas
-    service = CandidateService(tenant_id="public")
-    asyncio.create_task(service.process_bulk_upload_queue())
+    from backend.core.database import get_db_connection
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute('SET search_path TO public')
+            cur.execute("SELECT id FROM tenants")
+            tenant_ids = [row[0] for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+    for t_id in tenant_ids:
+        svc = CandidateService(tenant_id=t_id)
+        asyncio.create_task(svc.process_bulk_upload_queue())
 
 # Include Modules
 app.include_router(auth_router)

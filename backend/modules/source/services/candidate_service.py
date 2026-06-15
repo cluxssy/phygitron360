@@ -23,7 +23,7 @@ class CandidateService:
         
         # Define upload directory
         self.BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-        self.UPLOAD_DIR = os.path.join(self.BASE_DIR, "data", "resumes")
+        self.UPLOAD_DIR = os.path.join(self.BASE_DIR, "data", self.tenant_id, "source", "resumes")
         os.makedirs(self.UPLOAD_DIR, exist_ok=True)
 
     async def process_and_save_resume(self, file_content: bytes, filename: str) -> Dict[str, Any]:
@@ -85,7 +85,10 @@ class CandidateService:
             existing = self.repo.get_candidate_by_email(candidate_data["email"])
             
         if existing:
-            raise ValueError(f"Duplicate email: A candidate with email {candidate_data['email']} already exists.")
+            # Update existing candidate with freshly parsed data instead of failing
+            candidate_id = existing["id"]
+            self.repo.update_candidate(candidate_id, candidate_data)
+            self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via bulk resume re-upload')
         else:
             candidate_id = self.repo.create_candidate(candidate_data)
             self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI')
@@ -129,6 +132,7 @@ class CandidateService:
         }
 
     def _extract_text(self, file_path: str, ext: str) -> str:
+        """Extract plain text from a resume file. Always returns a clean string safe for DB storage."""
         extracted_text = ""
         try:
             if ext == ".pdf":
@@ -137,15 +141,73 @@ class CandidateService:
                     for page in pdf:
                         extracted_text += page.get_text() + "\n"
             elif ext == ".txt":
-                with open(file_path, "r", encoding="utf-8") as f:
-                    extracted_text = f.read()
-            elif ext == ".docx":
-                from docx import Document
-                doc = Document(file_path)
-                extracted_text = '\n'.join([para.text for para in doc.paragraphs if para.text.strip()])
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                        extracted_text = f.read()
+                except Exception as e:
+                    logger.warning(f"TXT read failed for {file_path}: {e}")
+            elif ext in (".docx", ".doc"):
+                try:
+                    from docx import Document
+                    doc = Document(file_path)
+                    extracted_text = '\n'.join([para.text for para in doc.paragraphs if para.text.strip()])
+                except Exception as e:
+                    # Common case: Naukri exports HTML files but names them .doc
+                    try:
+                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read()
+                        if "<html" in content.lower() or "<table" in content.lower():
+                            from bs4 import BeautifulSoup
+                            soup = BeautifulSoup(content, "html.parser")
+                            extracted_text = soup.get_text(separator="\n", strip=True)
+                        else:
+                            # If it's a binary .doc and not HTML, try using system tools
+                            import subprocess
+                            import shutil
+                            
+                            cmd = None
+                            if shutil.which("antiword"):
+                                cmd = ["antiword", file_path]
+                            elif shutil.which("catdoc"):
+                                cmd = ["catdoc", file_path]
+                            elif shutil.which("textutil"):
+                                cmd = ["textutil", "-convert", "txt", "-stdout", file_path]
+                                
+                            if cmd:
+                                result = subprocess.run(
+                                    cmd, 
+                                    capture_output=True, 
+                                    text=True
+                                )
+                                if result.returncode == 0 and result.stdout.strip():
+                                    extracted_text = result.stdout
+                                else:
+                                    logger.warning(f"System extraction tool failed for {file_path}")
+                                    extracted_text = ""
+                            else:
+                                logger.warning(f"DOC extraction failed. Please install 'antiword' or 'catdoc' on your production server to parse legacy .doc files: {file_path}")
+                                extracted_text = ""
+                    except Exception as fallback_err:
+                        logger.warning(f"DOCX/HTML extraction failed for {file_path}: {e}")
+                        extracted_text = ""
         except Exception as e:
-            logger.error(f"Text extraction failed: {e}")
-        return extracted_text
+            logger.error(f"Text extraction failed for {file_path}: {e}")
+            extracted_text = ""
+
+        # Sanitize: strip NUL bytes and other control chars PostgreSQL rejects
+        return self._sanitize_text(extracted_text)
+
+    @staticmethod
+    def _sanitize_text(text: str) -> str:
+        """Remove NUL bytes and non-UTF8-safe characters before storing in PostgreSQL."""
+        if not text:
+            return ""
+        # Remove NUL bytes (PostgreSQL TEXT columns reject \x00 entirely)
+        text = text.replace('\x00', '')
+        # Replace other non-printable control chars (except tab, newline, carriage return)
+        import re
+        text = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+        return text.strip()
 
     def get_all_candidates(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
         candidates = self.repo.get_all_candidates(page=page, page_size=page_size)
@@ -174,6 +236,9 @@ class CandidateService:
 
     def delete_candidate(self, candidate_id: int) -> bool:
         return self.repo.delete_candidate(candidate_id)
+
+    def bulk_delete_candidates(self, candidate_ids: List[int]) -> int:
+        return self.repo.bulk_delete_candidates(candidate_ids)
 
     def revert_employee(self, employee_id: int) -> bool:
         return self.repo.revert_employee(employee_id)
@@ -368,14 +433,17 @@ class CandidateService:
         return True
 
     async def bulk_upload_resumes(self, files: List[tuple], user_id: int) -> Dict[str, Any]:
-        """files is a list of tuples: (filename, content_bytes)"""
+        """files is a list of tuples: (filename, content_bytes).
+        Phase 1: extract text immediately at upload time, save to disk, batch-insert queue items.
+        Phase 2: parallel workers pick up items and call AI asynchronously.
+        """
         allowed_exts = (".pdf", ".docx", ".doc", ".txt")
         import zipfile
         import io
         import hashlib
 
         queue_items = []
-        job_id = self.repo.create_bulk_upload_job(user_id, 0) # Create job first
+        job_id = self.repo.create_bulk_upload_job(user_id, 0)
         job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
         os.makedirs(job_dir, exist_ok=True)
 
@@ -389,22 +457,23 @@ class CandidateService:
                                 continue
                             if not name.lower().endswith(allowed_exts):
                                 continue
-                            
+
                             file_bytes = z.read(name)
                             clean_fn = name.split("/")[-1]
-                            
-                            # Calculate Hash
                             file_hash = hashlib.sha256(file_bytes).hexdigest()
-                            
-                            # Save to disk
                             file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
                             with open(file_path, "wb") as f:
                                 f.write(file_bytes)
-                                
+
+                            # Extract text at upload time — no AI needed yet
+                            ext = os.path.splitext(clean_fn)[1].lower()
+                            extracted_text = self._extract_text(file_path, ext)
+
                             queue_items.append({
                                 "filename": clean_fn,
                                 "file_path": file_path,
-                                "file_hash": file_hash
+                                "file_hash": file_hash,
+                                "extracted_text": extracted_text[:12000] if extracted_text else "",
                             })
                             total_files += 1
                 except Exception as zip_err:
@@ -417,22 +486,23 @@ class CandidateService:
                 file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
                 with open(file_path, "wb") as f:
                     f.write(content)
+
+                ext = os.path.splitext(clean_fn)[1].lower()
+                extracted_text = self._extract_text(file_path, ext)
+
                 queue_items.append({
                     "filename": clean_fn,
                     "file_path": file_path,
-                    "file_hash": file_hash
+                    "file_hash": file_hash,
+                    "extracted_text": extracted_text[:12000] if extracted_text else "",
                 })
                 total_files += 1
 
-        # Update total files
         self.repo.update_bulk_upload_job(job_id, 0, "[]", "processing")
-        
-        # Batch insert to DB
+
         if queue_items:
-            # We can insert in batches if it's too large, but 10,000 should be fine for a single execute_values
             self.repo.create_bulk_upload_job_items(job_id, queue_items)
-            
-            # Update job total
+            from backend.core.database import get_db_connection
             conn = get_db_connection()
             try:
                 with conn.cursor() as cur:
@@ -445,52 +515,206 @@ class CandidateService:
         return {
             "job_id": job_id,
             "status": "processing",
-            "message": f"Successfully queued {total_files} files for processing."
+            "message": f"Successfully queued {total_files} files for AI processing.",
         }
 
     async def process_bulk_upload_queue(self):
-        """Background worker loop to process pending resumes safely."""
+        """
+        Parallel worker pool for AI resume parsing.
+
+        - Spawns BULK_PARSE_WORKERS (default 8) independent async workers.
+        - Each worker fetches ONE item at a time via SKIP LOCKED (no contention).
+        - AI call runs in a thread executor (sync Groq/Gemini SDK, never blocks event loop).
+        - 429 / 503 errors pause only that single worker; others keep running.
+        - Cancel events per job allow instant stop without DB polling overhead.
+        """
         import asyncio
-        semaphore = asyncio.Semaphore(5) # Max 5 concurrent AI parsing requests
-        
-        while True:
-            try:
-                pending_items = self.repo.get_pending_bulk_upload_job_items(limit=10)
-                if not pending_items:
-                    await asyncio.sleep(5)
-                    continue
+        import re
 
-                async def process_item(item):
-                    async with semaphore:
-                        try:
-                            # 1. Strict Duplicate Check
-                            if self.repo.check_file_hash_exists(item["file_hash"]):
-                                self.repo.update_bulk_upload_job_item(
-                                    item["id"], status="duplicate", error_message="Exact file already exists."
-                                )
-                                return
+        num_workers = int(os.getenv("BULK_PARSE_WORKERS", "8"))
+        logger.info(f"[BulkWorker] Starting {num_workers} parallel AI parse workers for tenant {self.tenant_id}")
 
-                            # 2. Read file from disk
+        # Per-job cancel registry: job_id -> asyncio.Event
+        cancel_events: Dict[int, asyncio.Event] = {}
+
+        def _get_cancel_event(job_id: int) -> asyncio.Event:
+            if job_id not in cancel_events:
+                cancel_events[job_id] = asyncio.Event()
+            return cancel_events[job_id]
+
+        async def _single_worker(worker_id: int):
+            """One independent worker loop — fetches and processes items one at a time."""
+            backoff = 0  # seconds to sleep before next attempt (per-worker)
+            loop = asyncio.get_event_loop()
+
+            while True:
+                try:
+                    if backoff > 0:
+                        logger.info(f"[Worker-{worker_id}] API backoff: sleeping {backoff}s")
+                        await asyncio.sleep(backoff)
+                        backoff = 0
+
+                    # Fetch exactly 1 pending item (SKIP LOCKED — no deadlocks between workers)
+                    items = self.repo.get_pending_bulk_upload_job_items(limit=1)
+                    if not items:
+                        await asyncio.sleep(5)
+                        continue
+
+                    item = items[0]
+                    job_id = item.get("job_id")
+
+                    # Check for job cancellation
+                    if job_id and _get_cancel_event(job_id).is_set():
+                        self.repo.update_bulk_upload_job_item(
+                            item["id"], status="cancelled", error_message="Job was cancelled."
+                        )
+                        continue
+
+                    try:
+                        # 1. Duplicate hash check
+                        if self.repo.check_file_hash_exists(item["file_hash"]):
+                            self.repo.update_bulk_upload_job_item(
+                                item["id"], status="duplicate", error_message="Exact file already uploaded before."
+                            )
+                            continue
+
+                        # 2. Use pre-extracted text (stored at upload time) — avoids re-reading disk
+                        extracted_text = item.get("extracted_text") or ""
+
+                        # Fallback: if text is empty (old queue items), re-extract from disk
+                        if not extracted_text and item.get("file_path") and os.path.exists(item["file_path"]):
+                            ext = os.path.splitext(item["filename"])[1].lower()
+                            extracted_text = self._extract_text(item["file_path"], ext)
+
+                        if not extracted_text.strip():
+                            self.repo.update_bulk_upload_job_item(
+                                item["id"], status="failed", error_message="Could not extract text from file."
+                            )
+                            continue
+
+                        # 3. Run AI parse in thread executor — sync SDK, never blocks event loop
+                        from backend.common.services.ai.agents import PARSE_RESUME_SYSTEM
+                        ai_service = self.ai_agents.ai
+                        prompt = f"Parse this resume:\n\n{extracted_text[:6000]}"
+
+                        ai_result = await loop.run_in_executor(
+                            None,
+                            lambda p=prompt: ai_service.generate_json_sync(p, PARSE_RESUME_SYSTEM)
+                        )
+
+                        if not ai_result or not ai_result.get("name"):
+                            self.repo.update_bulk_upload_job_item(
+                                item["id"], status="failed", error_message="AI returned empty or invalid parse result."
+                            )
+                            continue
+
+                        # 4. Save candidate to DB (reuse existing logic)
+                        file_content = b""
+                        if item.get("file_path") and os.path.exists(item["file_path"]):
                             with open(item["file_path"], "rb") as f:
                                 file_content = f.read()
 
-                            # 3. Process
-                            result = await self.process_and_save_resume(file_content, item["filename"])
-                            
+                        result = await self._save_ai_parsed_candidate(ai_result, item["file_path"], file_content)
+                        self.repo.update_bulk_upload_job_item(
+                            item["id"], status="success", candidate_id=result["candidate_id"]
+                        )
+                        logger.info(f"[Worker-{worker_id}] Processed item {item['id']} → candidate {result['candidate_id']}")
+
+                    except Exception as e:
+                        err_str = str(e)
+                        if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout']):
+                            match = re.search(r'(?:retry in|try again in) (\d+\.?\d*)', err_str)
+                            wait = int(float(match.group(1))) + 2 if match else 15
+                            logger.warning(f"[Worker-{worker_id}] API busy or network error, backing off {wait}s. Re-queuing item {item['id']}")
+                            self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None)
+                            backoff = wait
+                        else:
+                            logger.error(f"[Worker-{worker_id}] Error on item {item['id']}: {e}")
                             self.repo.update_bulk_upload_job_item(
-                                item["id"], status="success", candidate_id=result["candidate_id"]
+                                item["id"], status="failed", error_message=err_str[:500]
                             )
-                        except Exception as e:
-                            logger.error(f"Error processing item {item['id']}: {e}")
-                            self.repo.update_bulk_upload_job_item(
-                                item["id"], status="failed", error_message=str(e)
-                            )
-                
-                await asyncio.gather(*(process_item(item) for item in pending_items))
-                
-            except Exception as e:
-                logger.error(f"Bulk upload queue error: {e}")
-                await asyncio.sleep(10)
+
+                except Exception as outer_e:
+                    logger.error(f"[Worker-{worker_id}] Outer loop error: {outer_e}")
+                    await asyncio.sleep(15)
+
+        # Launch all workers as concurrent tasks
+        await asyncio.gather(*[_single_worker(i) for i in range(num_workers)])
+
+    async def _save_ai_parsed_candidate(self, ai_result: Dict[str, Any], file_path: str, file_content: bytes) -> Dict[str, Any]:
+        """Save AI-parsed resume data to the database. Extracted from process_and_save_resume for reuse by bulk workers."""
+        email = ai_result.get("email")
+        if not email:
+            email = f"unknown_{uuid.uuid4().hex[:8]}@phygitron.local"
+
+        candidate_data = {
+            "full_name": ai_result.get("name") or "Unknown Candidate",
+            "email": email,
+            "phone": ai_result.get("phone"),
+            "location": ai_result.get("location"),
+            "total_experience_years": ai_result.get("experience_years_total") or 0,
+            "current_designation": ai_result.get("current_designation"),
+            "current_company": ai_result.get("current_company"),
+            "expected_salary": ai_result.get("expected_salary"),
+            "notice_period": ai_result.get("notice_period"),
+            "linkedin_url": ai_result.get("linkedin_url"),
+            "portfolio_url": ai_result.get("portfolio_url"),
+            "availability": ai_result.get("availability"),
+            "ai_summary": ai_result.get("ai_summary"),
+            "certifications": ai_result.get("certifications"),
+            "languages": ai_result.get("languages"),
+            "achievements": ai_result.get("achievements"),
+            "resume_path": file_path,
+            "source": "AI Resume Parse",
+            "status": "New",
+            "experience": ai_result.get("experience", []),
+            "education": ai_result.get("education", []),
+        }
+
+        existing = None
+        if "unknown_" not in candidate_data["email"]:
+            existing = self.repo.get_candidate_by_email(candidate_data["email"])
+
+        if existing:
+            candidate_id = existing["id"]
+            self.repo.update_candidate(candidate_id, candidate_data)
+            self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via bulk resume re-upload')
+        else:
+            candidate_id = self.repo.create_candidate(candidate_data)
+            self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI')
+
+        # Process skills
+        for skill_data in ai_result.get("skills", []):
+            name = skill_data.get("name")
+            if not name:
+                continue
+            skill_record = self.skill_repo.get_skill_by_name(name)
+            if not skill_record:
+                skill_id = self.skill_repo.create_skill(name=name, category="extracted", aliases=[name])
+            else:
+                skill_id = skill_record['id']
+            self.repo.upsert_candidate_skill(candidate_id, skill_id, {
+                "level": skill_data.get("level", "beginner"),
+                "source": "resume",
+                "years_of_use": skill_data.get("years_of_use"),
+                "evidence": skill_data.get("evidence"),
+            })
+
+        # Store confidence signals
+        confidence_signals = ai_result.get("confidence_signals", [])
+        if confidence_signals:
+            self.ai_score_repo.create_ai_score({
+                "entity_type": "candidate",
+                "entity_id": candidate_id,
+                "job_role_id": None,
+                "score_type": "confidence_signals",
+                "score": 0,
+                "reasoning": json.dumps(confidence_signals),
+            })
+
+        return {"candidate_id": candidate_id, "parsed_data": ai_result}
+
+
 
     async def generate_offer_preview(self, candidate_id: int, details: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         cand = self.repo.get_candidate_by_id(candidate_id)
@@ -529,6 +753,13 @@ class CandidateService:
         # This will be handled properly by OfferService, but for now we put it in CandidateRepo
         self.repo.create_offer(candidate_id, details, offer_content)
         self.repo.update_candidate_status(candidate_id, "Offered")
+        return True
+
+    def get_bulk_upload_job_progress(self, job_id: int) -> Dict[str, Any]:
+        return self.repo.get_bulk_upload_job_progress(job_id)
+
+    def cancel_bulk_upload_job(self, job_id: int) -> bool:
+        self.repo.cancel_bulk_upload_job(job_id)
         return True
 
     def get_global_activity(self, limit: int = 10) -> List[Dict[str, Any]]:

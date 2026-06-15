@@ -24,6 +24,9 @@ class AssessmentService:
         # Rule: If the user is editing their OWN assessment, they are act as an employee (L4)
         is_self = (user.get('employee_code') == data['employee_code'] and user.get('employee_code') is not None)
         
+        reporting_manager = self.repo.get_employee_reporting_manager(data['employee_code'], self.tenant_id)
+        is_reporting_manager = (user.get('employee_code') == reporting_manager and reporting_manager is not None)
+        
         if existing:
             # Rule 1: L4 (employee) cannot edit after submission
             if not is_self or user_role not in ['Admin', 'HR', 'Management', 'org_admin', 'manager', 'super_admin']:
@@ -44,8 +47,8 @@ class AssessmentService:
                     old_entry['self_score'] = new_entry.get('self_score')
                     old_entry['employee_comment'] = new_entry.get('employee_comment')
                 
-                # 2. Update Manager perspective if user has manager privileges
-                if user_role in ['Admin', 'HR', 'Management', 'org_admin', 'manager', 'super_admin']:
+                # 2. Update Manager perspective if user is reporting manager or global admin
+                if is_reporting_manager or user_role in ['Admin', 'HR', 'Management', 'org_admin', 'super_admin']:
                     # Note: If it's a manager's own assessment, they can still update 
                     # their manager review part from the management panel.
                     old_entry['manager_score'] = new_entry.get('manager_score')

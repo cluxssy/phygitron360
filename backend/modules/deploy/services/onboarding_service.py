@@ -75,6 +75,10 @@ class OnboardingService:
         self.repo.revoke_invite(invite_id)
         return {"success": True, "message": "Invite revoked"}
 
+    def delete_invite(self, invite_id: int):
+        self.repo.delete_invite(invite_id)
+        return {"success": True, "message": "Invite permanently deleted"}
+
     def verify_token(self, token: str):
         invite = self.repo.get_invite_by_token(token)
         if not invite:

@@ -5,6 +5,21 @@ import * as XLSX from 'xlsx';
 
 const ROLES = ['org_admin', 'manager', 'employee', 'candidate'];
 
+const Field = ({ label, k, type = 'text', options, form, set }) => (
+  <div>
+    <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">
+      {label}
+    </label>
+    {options ? (
+      <select value={form[k]} onChange={e => set(k, e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-[#f8f5ff] text-black text-[13px] font-semibold px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all">
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    ) : (
+      <input type={type} value={form[k]} onChange={e => set(k, e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all placeholder:text-[#b0a8c5]" />
+    )}
+  </div>
+);
+
 export default function AddEmployeeModal({ onClose, onSuccess }) {
   const [activeTab, setActiveTab] = useState('single'); // 'single' or 'bulk'
   
@@ -110,21 +125,6 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     }
   };
 
-  const Field = ({ label, k, type = 'text', options }) => (
-    <div>
-      <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">
-        {label}
-      </label>
-      {options ? (
-        <select value={form[k]} onChange={e => set(k, e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-[#f8f5ff] text-black text-[13px] font-semibold px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all">
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-      ) : (
-        <input type={type} value={form[k]} onChange={e => set(k, e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all placeholder:text-[#b0a8c5]" />
-      )}
-    </div>
-  );
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-5" onClick={onClose}>
       <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-[2.8rem] border border-[#ece3ff] bg-[#fcfbff] shadow-[0_30px_100px_rgba(180,140,255,0.18)] p-12 custom-scrollbar animate-fade-in-up" onClick={e => e.stopPropagation()}>
@@ -167,34 +167,34 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
             <div className="space-y-6">
               {step === 1 && (
                 <div className="grid grid-cols-2 gap-6">
-                  <Field label="Employee ID *" k="code" />
-                  <Field label="Full Name *" k="name" />
-                  <Field label="Email Address *" k="email" type="email" />
-                  <Field label="Phone Number *" k="phone" />
-                  <Field label="Date of Birth *" k="dob" type="date" />
-                  <Field label="Emergency Contact" k="emergency" />
+                  <Field label="Employee ID *" k="code" form={form} set={set} />
+                  <Field label="Full Name *" k="name" form={form} set={set} />
+                  <Field label="Email Address *" k="email" type="email" form={form} set={set} />
+                  <Field label="Phone Number *" k="phone" form={form} set={set} />
+                  <Field label="Date of Birth *" k="dob" type="date" form={form} set={set} />
+                  <Field label="Emergency Contact" k="emergency" form={form} set={set} />
                 </div>
               )}
 
               {step === 2 && (
                 <div className="grid grid-cols-2 gap-6">
-                  <Field label="Joining Date *" k="doj" type="date" />
-                  <Field label="Department *" k="team" />
-                  <Field label="Job Title *" k="designation" />
-                  <Field label="Reporting Manager" k="manager" />
-                  <Field label="Work Location *" k="location" />
-                  <Field label="Employment Type" k="type" options={['Full-time', 'Part-time', 'Contract', 'Intern']} />
-                  <Field label="System Access Role" k="role" options={ROLES} />
+                  <Field label="Joining Date *" k="doj" type="date" form={form} set={set} />
+                  <Field label="Department *" k="team" form={form} set={set} />
+                  <Field label="Job Title *" k="designation" form={form} set={set} />
+                  <Field label="Reporting Manager" k="manager" form={form} set={set} />
+                  <Field label="Work Location *" k="location" form={form} set={set} />
+                  <Field label="Employment Type" k="type" options={['Full-time', 'Part-time', 'Contract', 'Intern']} form={form} set={set} />
+                  <Field label="System Access Role" k="role" options={ROLES} form={form} set={set} />
                 </div>
               )}
 
               {step === 3 && (
                 <div className="grid grid-cols-2 gap-6">
-                  <Field label="Primary Skills" k="primary_skillset" />
-                  <Field label="Secondary Skills" k="secondary_skillset" />
-                  <Field label="Experience (Years)" k="experience_years" type="number" />
-                  <Field label="PF Enabled" k="pf" options={['No', 'Yes']} />
-                  <Field label="Mediclaim Enabled" k="mediclaim" options={['No', 'Yes']} />
+                  <Field label="Primary Skills" k="primary_skillset" form={form} set={set} />
+                  <Field label="Secondary Skills" k="secondary_skillset" form={form} set={set} />
+                  <Field label="Experience (Years)" k="experience_years" type="number" form={form} set={set} />
+                  <Field label="PF Enabled" k="pf" options={['No', 'Yes']} form={form} set={set} />
+                  <Field label="Mediclaim Enabled" k="mediclaim" options={['No', 'Yes']} form={form} set={set} />
                   <div className="col-span-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">Additional Notes</label>
                     <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={4} className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] resize-none" />

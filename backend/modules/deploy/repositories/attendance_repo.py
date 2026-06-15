@@ -107,7 +107,7 @@ class AttendanceRepository:
         finally:
             conn.close()
     
-    def update_leave_balance(self, employee_code: str, used_delta: int, extended_delta: int, tenant_id: str = 'public'):
+    def update_leave_balance(self, employee_code: str, used_delta: float, extended_delta: float, tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
@@ -122,15 +122,15 @@ class AttendanceRepository:
         finally:
             conn.close()
 
-    def create_leave_request(self, employee_code: str, start: str, end: str, l_type: str, reason: str, status: str = 'Pending', tenant_id: str = 'public'):
+    def create_leave_request(self, employee_code: str, start: str, end: str, duration_days: float, start_day_type: str, end_day_type: str, l_type: str, reason: str, status: str = 'Pending', tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
             cur.execute('''
-                INSERT INTO leaves (employee_code, start_date, end_date, leave_type, reason, status)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            ''', (employee_code, start, end, l_type, reason, status))
+                INSERT INTO leaves (employee_code, start_date, end_date, duration_days, start_day_type, end_day_type, leave_type, reason, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (employee_code, start, end, duration_days, start_day_type, end_day_type, l_type, reason, status))
             conn.commit()
         finally:
             conn.close()
@@ -163,9 +163,10 @@ class AttendanceRepository:
             '''
             params = []
             
-            # HR equivalent (manager) should not approve Admin or other manager's leaves
-            if admin_role == 'manager':
-                query += " AND COALESCE(u.role, 'employee') NOT IN ('org_admin', 'manager', 'super_admin')"
+            # Manager should only see pending leaves for their direct reports
+            if admin_role == 'manager' and admin_code:
+                query += " AND e.reporting_manager = %s"
+                params.append(admin_code)
             
             # Approvers should not see their own leave in the approval queue
             if admin_code:
@@ -238,7 +239,7 @@ class AttendanceRepository:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             self._set_path(cur, tenant_id)
             cur.execute("""
-                SELECT employee_code, start_date, end_date, leave_type
+                SELECT employee_code, start_date, end_date, leave_type, duration_days, start_day_type, end_day_type
                 FROM leaves 
                 WHERE status = 'Approved' 
                 AND NOT (end_date < %s OR start_date > %s)

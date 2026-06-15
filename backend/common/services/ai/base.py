@@ -16,20 +16,32 @@ class AIService:
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         self.groq_api_key = os.getenv("GROQ_API_KEY")
+        self.groq_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-        if self.provider == "gemini" and self.gemini_api_key:
-            from google import genai
-            self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+        if self.gemini_api_key:
+            try:
+                from google import genai
+                self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+            except Exception:
+                self.gemini_client = None
 
-        if self.provider == "openai" and self.openai_api_key:
-            from openai import AsyncOpenAI
-            self.openai_client = AsyncOpenAI(api_key=self.openai_api_key)
-            self.openai_model = "gpt-4o-mini"
+        if self.openai_api_key:
+            try:
+                from openai import AsyncOpenAI
+                self.openai_client = AsyncOpenAI(api_key=self.openai_api_key)
+                self.openai_model = "gpt-4o-mini"
+            except Exception:
+                self.openai_client = None
 
-        if self.provider == "groq" and self.groq_api_key:
-            from groq import Groq
-            self.groq_client = Groq(api_key=self.groq_api_key)
-            self.groq_model = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
+        # Always initialise Groq if key present — used by bulk workers even when AI_PROVIDER=gemini
+        if self.groq_api_key:
+            try:
+                from groq import Groq
+                self.groq_client = Groq(api_key=self.groq_api_key)
+            except Exception:
+                self.groq_client = None
+        else:
+            self.groq_client = None
 
 
     async def generate_json(self, prompt: str, system_prompt: str = "", provider_override: str = None) -> dict:
@@ -95,18 +107,78 @@ class AIService:
             
             try:
                 response = self.gemini_client.models.generate_content(
-                    model='gemini-3-flash-preview', # Correct model ID based on API Key scan
+                    model='gemini-3-flash-preview',
                     contents=full_prompt,
                 )
                 clean_text = response.text.replace('```json', '').replace('```', '').strip()
                 return json.loads(clean_text)
             except Exception as e:
                 print(f"Gemini failed: {e}")
-                return self._mock_json_response(prompt)
+                raise  # Re-raise so worker can handle 429 vs other errors correctly
         
         return {}
-        
-        return {}
+
+    def generate_json_sync(self, prompt: str, system_prompt: str = "", provider_override: str = None) -> dict:
+        """
+        Synchronous version of generate_json — for use inside asyncio.run_in_executor()
+        during bulk upload parallel workers. Never call this directly from async code.
+
+        Provider resolution order:
+          1. provider_override argument
+          2. BULK_AI_PROVIDER env var
+          3. AI_PROVIDER env var
+        """
+        import re
+        provider = provider_override or os.getenv("BULK_AI_PROVIDER", self.provider)
+
+        # ── Groq (sync, thread-safe) ─────────────────────────────────────────
+        if provider == "groq":
+            if self.groq_client:
+                try:
+                    response = self.groq_client.chat.completions.create(
+                        model=self.groq_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt},
+                        ],
+                        temperature=0.1,
+                        max_tokens=4096,
+                        response_format={"type": "json_object"},
+                    )
+                    content = response.choices[0].message.content.strip()
+                    # Strip markdown fences if model ignores the format hint
+                    match = re.search(r'(\{.*\}|\[.*\])', content, re.DOTALL)
+                    return json.loads(match.group(1) if match else content)
+                except Exception as e:
+                    err_str = str(e)
+                    print(f"Groq error ({err_str[:60]}). Falling back to Gemini to use its tokens...")
+                    return self.generate_json_sync(prompt, system_prompt, provider_override="gemini")
+            else:
+                print("Groq not configured — falling back to Gemini for bulk parse")
+                return self.generate_json_sync(prompt, system_prompt, provider_override="gemini")
+
+        # ── Gemini (sync call — their SDK supports sync) ─────────────────────
+        elif provider == "gemini":
+            if getattr(self, "gemini_client", None):
+                full_prompt = f"{system_prompt}\n\n{prompt}\n\nIMPORTANT: Return ONLY valid JSON and NOTHING ELSE. Do not use markdown backticks."
+                try:
+                    response = self.gemini_client.models.generate_content(
+                        model='gemini-3-flash-preview',
+                        contents=full_prompt,
+                    )
+                    clean_text = response.text.replace('```json', '').replace('```', '').strip()
+                    return json.loads(clean_text)
+                except Exception as e:
+                    print(f"Gemini sync failed: {e}")
+                    raise
+            return {}
+
+        # ── OpenAI — not easily sync, raise helpful error ────────────────────
+        elif provider == "openai":
+            raise RuntimeError("OpenAI async client cannot be used in sync workers. Set BULK_AI_PROVIDER=groq or gemini.")
+
+        # ── Mock fallback ────────────────────────────────────────────────────
+        return self._mock_json_response(prompt)
 
     def _mock_json_response(self, prompt: str) -> dict:
         """

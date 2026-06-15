@@ -925,7 +925,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                 </div>
                 <div className="pt-4 mt-4 border-t border-white/10 flex justify-end">
                   <button type="submit" disabled={generatingOffer} className="px-6 py-3 rounded-xl bg-emerald-400 text-black text-xs font-black uppercase tracking-widest hover:bg-emerald-300 transition-colors flex items-center gap-2">
-                    {generatingOffer ? <Loader2 size={16} className="animate-spin"/> : 'Generate Preview'}
+                    {generatingOffer ? <Loader2 size={16} className="animate-spin"/> : 'Create Preview'}
                   </button>
                 </div>
               </form>

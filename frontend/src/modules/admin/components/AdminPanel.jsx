@@ -73,7 +73,7 @@ export default function AdminPanel() {
       }
 
     } catch {
-      toast.error('Neural Link Error');
+      toast.error('Connection Error');
     } finally {
       setLoading(false);
     }
@@ -95,7 +95,7 @@ export default function AdminPanel() {
         throw new Error(data.detail || 'Identity Creation failed');
       }
 
-      toast.success('Identity Provisioned');
+      toast.success('User Created');
 
       setShowAddForm(false);
 
@@ -114,7 +114,7 @@ export default function AdminPanel() {
   };
 
   const deleteUser = async (id) => {
-    if (!confirm('Decommission this identity permanentely?')) return;
+    if (!confirm('Delete this user permanently?')) return;
 
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
@@ -122,9 +122,9 @@ export default function AdminPanel() {
         credentials: 'include'
       });
 
-      if (!res.ok) throw new Error('Decommissioning failed');
+      if (!res.ok) throw new Error('User deletion failed');
 
-      toast.success('Identity Purged');
+      toast.success('User Deleted');
       loadData();
 
     } catch (e) {
@@ -161,7 +161,7 @@ export default function AdminPanel() {
         throw new Error('Lock sequence failed');
       }
 
-      toast.success(currentStatus ? 'Node Locked' : 'Node Restored');
+      toast.success(currentStatus ? 'User Locked' : 'User Restored');
 
     } catch (e) {
       toast.error(e.message);
@@ -181,9 +181,9 @@ export default function AdminPanel() {
         })
       });
 
-      if (!res.ok) throw new Error('Identity update failed');
+      if (!res.ok) throw new Error('User role update failed');
 
-      toast.success('Clearance Level Updated');
+      toast.success('Role Updated');
 
       loadData();
 
@@ -205,9 +205,9 @@ export default function AdminPanel() {
         })
       });
 
-      if (!res.ok) throw new Error('Mapping failed');
+      if (!res.ok) throw new Error('Update failed');
 
-      toast.success('Personnel Link Synchronized');
+      toast.success('Employee Code Updated');
 
       loadData();
 
@@ -227,7 +227,7 @@ export default function AdminPanel() {
       setUserOverrides(data || {});
 
     } catch {
-      toast.error('Failed to resolve clearances');
+      toast.error('Failed to load user permissions');
     }
   };
 
@@ -248,7 +248,7 @@ export default function AdminPanel() {
 
       if (!res.ok) throw new Error();
 
-      toast.success('Neural Clearance Adjusted');
+      toast.success('User Permissions Updated');
 
       loadUserOverrides(userId);
 
@@ -258,10 +258,10 @@ export default function AdminPanel() {
   };
 
   const TABS = [
-    { id: 'users', label: 'Identity Matrix', icon: Users },
-    { id: 'permissions', label: 'Clearance Matrix', icon: Shield },
-    { id: 'modules', label: 'Ecosystem Hub', icon: Activity },
-    { id: 'logs', label: 'Audit Stream', icon: Activity },
+    { id: 'users', label: 'User Management', icon: Users },
+    { id: 'permissions', label: 'Permissions', icon: Shield },
+    { id: 'modules', label: 'Modules', icon: Activity },
+    { id: 'logs', label: 'Activity Log', icon: Activity },
   ];
 
   return (
@@ -271,15 +271,15 @@ export default function AdminPanel() {
 
         <div>
           <p className="admin-kicker">
-            Neural Command Center
+            Administration
           </p>
 
           <h1 className="admin-title text-black">
-            Workspace Administration
+            Workspace Settings
           </h1>
 
           <p className="admin-subtitle">
-            Platform governance & security layer
+            Platform management & security
           </p>
         </div>
 
@@ -354,14 +354,6 @@ export default function AdminPanel() {
 
                 </div>
 
-                {/* <button
-                  onClick={() => setShowAddForm(true)}
-                  className="group flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-violet-400 text-black text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all rounded-2xl shadow-[0_0_40px_rgba(180,140,255,0.22)] active:scale-95"
-                >
-                  <Plus size={16} strokeWidth={3} />
-                  Provision New Identity
-                </button> */}
-
               </div>
 
               {/* TABLE */}
@@ -374,19 +366,20 @@ export default function AdminPanel() {
 
                     <tr className="bg-gradient-to-r from-primary/[0.08] to-transparent border-b border-primary/10">
 
-                      <th className="px-10 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-black/50">
+                      <th className="px-10 py-6 text-[10px] font-normal uppercase tracking-[0.2em] text-black">
+
                         Identity Context
                       </th>
 
-                      <th className="px-10 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-black/50">
+                      <th className="px-10 py-6 text-[10px] font-normal uppercase tracking-[0.2em] text-black">
                         Clearance Level
                       </th>
 
-                      <th className="px-10 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-black/50">
+                      <th className="px-10 py-6 text-[10px] font-normal uppercase tracking-[0.2em] text-black">
                         Personnel Link
                       </th>
 
-                      <th className="px-10 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-black/50 text-right">
+                      <th className="px-10 py-6 text-[10px] font-normal uppercase tracking-[0.2em] text-black text-right">
                         Node Controls
                       </th>
 
@@ -409,7 +402,7 @@ export default function AdminPanel() {
 
                           <div className="flex items-center gap-5">
 
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black uppercase tracking-tighter shadow-inner ${
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-normal uppercase tracking-tighter shadow-inner ${
                               u.is_active !== 0
                                 ? 'bg-gradient-to-br from-primary/20 to-primary/5 text-primary border border-primary/20 shadow-[0_0_20px_rgba(180,140,255,0.12)]'
                                 : 'bg-red-500/10 text-red-500 border border-red-500/10'
@@ -419,11 +412,11 @@ export default function AdminPanel() {
 
                             <div>
 
-                              <p className="text-base font-black text-black group-hover:text-violet-700 transition-colors">
+                              <p className="text-base font-medium text-black group-hover:text-violet-700 transition-colors">
                                 {u.username}
                               </p>
 
-                              <p className="text-[9px] text-primary/70 font-mono mt-1 tracking-widest uppercase">
+                              <p className="text-[9px] text-black font-mono mt-1 tracking-widest uppercase">
                                 ID: NODE_{u.id.toString().padStart(4, '0')}
                               </p>
 
@@ -440,7 +433,7 @@ export default function AdminPanel() {
                           <select
                             value={u.role}
                             onChange={e => updateRole(u.id, e.target.value)}
-                            className="bg-[#ece8f8] border border-primary/15 text-black text-[10px] font-black uppercase tracking-[0.15em] px-5 py-3 rounded-2xl focus:outline-none hover:border-primary/40 hover:shadow-[0_0_20px_rgba(180,140,255,0.12)] transition-all cursor-pointer"
+                            className="bg-[#ece8f8] border border-primary/15 text-black text-[10px] font-normal uppercase tracking-[0.15em] px-5 py-3 rounded-2xl focus:outline-none hover:border-primary/40 hover:shadow-[0_0_20px_rgba(180,140,255,0.12)] transition-all cursor-pointer"
                           >
 
                             {['org_admin', 'manager', 'employee', 'trainee'].map(r => (
@@ -448,7 +441,7 @@ export default function AdminPanel() {
                               <option
                                 key={r}
                                 value={r}
-                                className="bg-white text-black font-black"
+                                className="bg-white text-black font-normal"
                               >
                                 {r.replace('_', ' ')}
                               </option>
@@ -578,9 +571,9 @@ export default function AdminPanel() {
 
           {[
             'Timeline',
-            'Clearance Subject',
-            'Operational Vector',
-            'Telemetry Details'
+            'User',
+            'Action',
+            'Details'
           ].map(h => (
 
             <th
@@ -589,10 +582,10 @@ export default function AdminPanel() {
                 px-10
                 py-7
                 text-[11px]
-                font-black
+                font-normal
                 uppercase
                 tracking-[0.2em]
-                text-[#6b7280]
+                text-black
                 border-b
                 border-[#ece7fa]
               "
@@ -625,11 +618,11 @@ export default function AdminPanel() {
 
             <td className="px-10 py-8">
 
-              <p className="text-[12px] font-bold text-black">
+              <p className="text-[12px] font-normal text-black">
                 {new Date(l.timestamp).toLocaleDateString()}
               </p>
 
-              <p className="text-[10px] text-[#8b5cf6] font-semibold mt-1">
+              <p className="text-[10px] text-[#8b5cf6] font-normal mt-1">
                 {new Date(l.timestamp).toLocaleTimeString()}
               </p>
 
@@ -651,7 +644,7 @@ export default function AdminPanel() {
                   border-[#ddd0ff]
                   text-[#8b5cf6]
                   text-[10px]
-                  font-black
+                  font-normal
                   uppercase
                   tracking-[0.15em]
                 "
@@ -668,7 +661,7 @@ export default function AdminPanel() {
               <span
                 className="
                   text-[11px]
-                  font-black
+                  font-normal
                   uppercase
                   tracking-[0.18em]
                   text-[#8b5cf6]

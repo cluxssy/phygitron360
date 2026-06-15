@@ -128,7 +128,7 @@ export default function MyPayrollPanel() {
     <div className="w-full space-y-6 animate-fade-in-up pb-10">
       {/* Header */}
       <div className={`${panelBase} p-6`}>
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8b5cf6] mb-1">Personnel Dossier // Compensation</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8b5cf6] mb-1">Compensation Details // Payroll</p>
         <h2 className="text-2xl font-display font-black text-black uppercase tracking-tighter italic">
           My <span className="text-[#8b5cf6]">Payroll</span>
         </h2>

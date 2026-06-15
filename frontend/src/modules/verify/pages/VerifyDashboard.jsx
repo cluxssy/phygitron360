@@ -110,7 +110,7 @@ export default function VerifyDashboard() {
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-3 flex items-center gap-2">
                 <Shield size={12} />
-                Cognitive Assessment Matrix // Verify Node
+                Skills Assessment // Verification Module
               </p>
               <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic leading-none">
                 Performance <span className="text-primary italic">Verification</span>
@@ -123,7 +123,7 @@ export default function VerifyDashboard() {
                   <p className="text-xl font-display font-black text-emerald-400">100%</p>
                </div>
                <div className="px-6 py-3 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center">
-                  <p className="text-xs font-black text-white/40 uppercase tracking-widest text-[9px] mb-1">Calibration</p>
+                  <p className="text-xs font-black text-white/40 uppercase tracking-widest text-[9px] mb-1">Status</p>
                   <p className="text-xl font-display font-black text-primary">Active</p>
                </div>
             </div>
@@ -140,7 +140,7 @@ export default function VerifyDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 opacity-60">
         <div className="section-card p-6 border-white/5 flex gap-4 items-center">
           <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-primary shrink-0"><Activity size={20}/></div>
-          <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest leading-relaxed">Neural markers are analyzed against career benchmarks.</p>
+          <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest leading-relaxed">Assessment results are analyzed against performance benchmarks.</p>
         </div>
         <div className="glass-panel p-6 border-white/5 flex gap-4 items-center">
           <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-indigo-400 shrink-0"><Shield size={20}/></div>

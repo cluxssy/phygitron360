@@ -17,6 +17,8 @@ class LeaveRequest(BaseModel):
     end_date: str
     leave_type: str
     reason: str
+    start_day_type: str = "Full Day"
+    end_day_type: str = "Full Day"
 
 class EditAttendanceRequest(BaseModel):
     employee_code: str
@@ -46,6 +48,9 @@ class LeaveRecord(BaseModel):
     employee_code: str
     start_date: str
     end_date: str
+    duration_days: Optional[float] = None
+    start_day_type: Optional[str] = None
+    end_day_type: Optional[str] = None
     leave_type: str
     reason: str
     status: str
@@ -58,6 +63,6 @@ class AttendanceStatus(BaseModel):
     data: Optional[AttendanceRecord] = None
 
 class LeaveBalance(BaseModel):
-    total_leaves: int
-    used_leaves: int
-    extended_leaves: int
+    total_leaves: float
+    used_leaves: float
+    extended_leaves: float

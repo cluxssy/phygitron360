@@ -65,10 +65,13 @@ class AttendanceService:
                     t_out = datetime.strptime(clock_out, fmt)
                     duration_hours = (t_out - t_in).total_seconds() / 3600.0
                     
-                    if duration_hours >= 9.0:
+                    if duration_hours >= 8.0:
                         log['status'] = 'Present'
-                    elif duration_hours >= 4.5:
-                        log['status'] = 'Half Day'
+                    elif duration_hours >= 4.0:
+                        if t_in.hour < 13:
+                            log['status'] = 'Half Day (First Half)'
+                        else:
+                            log['status'] = 'Half Day (Second Half)'
                     else:
                         log['status'] = 'Absent'
                 except:
@@ -124,14 +127,24 @@ class AttendanceService:
         if d1.date() < datetime.now().date() and user_role not in ['org_admin', 'super_admin']:
              raise ValueError("You cannot apply for leaves in the past.")
 
-        days = (d2 - d1).days + 1
+        days = float((d2 - d1).days + 1)
+        if d1 == d2:
+            if req.start_day_type in ["First Half", "Second Half"]:
+                days = 0.5
+        else:
+            if req.start_day_type == "Second Half":
+                days -= 0.5
+            if req.end_day_type == "First Half":
+                days -= 0.5
+        if days < 0:
+            days = 0.0
         
         # 2. Status Determination
         status = 'Approved' if user_role in ['org_admin', 'super_admin'] else 'Pending'
         msg = "Leave auto-approved (Admin override)" if status == 'Approved' else "Leave application submitted successfully"
         
         # 3. Create Request
-        self.repo.create_leave_request(employee_code, req.start_date, req.end_date, "Leave", req.reason, status, self.tenant_id)
+        self.repo.create_leave_request(employee_code, req.start_date, req.end_date, days, req.start_day_type, req.end_day_type, req.leave_type, req.reason, status, self.tenant_id)
         
         # 4. Immediate Balance Update for Admin
         if status == 'Approved':
@@ -177,13 +190,8 @@ class AttendanceService:
         self.repo.update_leave_status(leave_id, action, reason, self.tenant_id)
         
         if action == 'Approved':
-            # Calculate days
-            try:
-                d1 = datetime.strptime(leave['start_date'], '%Y-%m-%d')
-                d2 = datetime.strptime(leave['end_date'], '%Y-%m-%d')
-                days = (d2 - d1).days + 1
-            except:
-                days = 0
+            # Use duration_days directly
+            days = float(leave.get('duration_days') or 0.0)
 
             # Calculate and Apply Balance Logic
             balance = self.get_leave_balance(leave['employee_code'])
@@ -241,10 +249,13 @@ class AttendanceService:
                     
                     duration_hours = (t_out - t_in).total_seconds() / 3600.0
                     
-                    if duration_hours >= 9.0:
+                    if duration_hours >= 8.0:
                         att_map[e_code][d_str] = 'Present'
-                    elif duration_hours >= 4.5:
-                        att_map[e_code][d_str] = 'Half Day'
+                    elif duration_hours >= 4.0:
+                        if t_in.hour < 13:
+                            att_map[e_code][d_str] = 'Half Day (First Half)'
+                        else:
+                            att_map[e_code][d_str] = 'Half Day (Second Half)'
                     else:
                         att_map[e_code][d_str] = 'Absent'
                 except:
@@ -276,7 +287,13 @@ class AttendanceService:
                 
                 while curr <= end:
                     d_str = curr.strftime('%Y-%m-%d')
-                    leave_map[code][d_str] = 'Leave'
+                    l_status = 'Leave'
+                    if curr == d1 and row.get('start_day_type') in ['First Half', 'Second Half']:
+                        l_status = f"Half Day Leave ({row.get('start_day_type')})"
+                    if curr == d2 and row.get('end_day_type') in ['First Half', 'Second Half']:
+                        l_status = f"Half Day Leave ({row.get('end_day_type')})"
+                    
+                    leave_map[code][d_str] = l_status
                     curr += timedelta(days=1)
             except:
                 pass
@@ -295,13 +312,16 @@ class AttendanceService:
                 status = 'Absent'
                 
                 if code in leave_map and date_str in leave_map[code]:
-                    status = 'Leave'
-                    leave_count += 1
+                    status = leave_map[code][date_str]
+                    if status == 'Leave':
+                        leave_count += 1
+                    else:
+                        leave_count += 0.5
                 elif code in att_map and date_str in att_map[code]:
                     status = att_map[code][date_str]
                     if status == 'Present' or status == 'Active':
                         present_count += 1
-                    elif status == 'Half Day':
+                    elif status.startswith('Half Day'):
                         half_day_count += 1
                     elif status == 'Absent':
                         absent_count += 1
@@ -356,10 +376,13 @@ class AttendanceService:
                 t_out = datetime.strptime(req.clock_out, fmt)
                 duration_hours = (t_out - t_in).total_seconds() / 3600.0
                 
-                if duration_hours >= 9.0:
+                if duration_hours >= 8.0:
                     status = 'Present'
-                elif duration_hours >= 4.5:
-                    status = 'Half Day'
+                elif duration_hours >= 4.0:
+                    if t_in.hour < 13:
+                        status = 'Half Day (First Half)'
+                    else:
+                        status = 'Half Day (Second Half)'
                 else:
                     status = 'Absent'
             except:
