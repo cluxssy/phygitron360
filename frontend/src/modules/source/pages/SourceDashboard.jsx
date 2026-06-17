@@ -4,7 +4,12 @@ import {
   CheckSquare, Loader2, Download, X, AlertTriangle, Mail,
   ArrowUpRight, Plus, Send, Star, Filter, Users, ChevronDown,
   RefreshCw, Briefcase, Clock, CheckCircle, UserCheck,
-  TrendingUp, PieChart, Activity, Edit, XCircle
+  TrendingUp, PieChart, Activity, Edit, XCircle, UserPlus,
+  FileText, Award, User, Calendar, Building, MapPin as MapPinIcon,
+  Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
+  ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
+  Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
+  Archive  // <-- Add this line
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -21,18 +26,20 @@ import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
 
 const SCORE_COLOR = (s) => {
-  if (!s && s !== 0) return 'text-white/30 bg-white/5 border-white/5';
-  if (s >= 80) return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
-  if (s >= 60) return 'text-primary bg-primary/10 border-primary/20';
-  return 'text-rose-400 bg-rose-400/10 border-rose-400/20';
+  if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
+  if (s >= 80) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+  if (s >= 60) return 'text-purple-600 bg-purple-50 border-purple-200';
+  return 'text-rose-600 bg-rose-50 border-rose-200';
 };
 
 const STATUS_STYLE = {
-  active:      'bg-emerald-400/10 text-emerald-400 border-emerald-400/20',
-  favourite: 'bg-primary/10 text-primary border-primary/20',
-  invited:     'bg-indigo/10 text-indigo border-indigo/20',
-  hired:       'bg-secondary/10 text-secondary border-secondary/20',
-  rejected:    'bg-rose-400/10 text-rose-400 border-rose-400/20',
+  active:      'bg-emerald-50 text-emerald-700 border-emerald-200',
+  favourite:   'bg-purple-50 text-purple-700 border-purple-200',
+  invited:     'bg-indigo-50 text-indigo-700 border-indigo-200',
+  hired:       'bg-blue-50 text-blue-700 border-blue-200',
+  rejected:    'bg-rose-50 text-rose-700 border-rose-200',
+  new:         'bg-gray-50 text-gray-700 border-gray-200',
+  archived:    'bg-gray-100 text-gray-600 border-gray-200',
 };
 
 const initFilters = { pool: 'all', location: '', min_exp: 0, sort_by: 'newest', role_id: '', limit: 20 };
@@ -62,11 +69,11 @@ export default function SourceDashboard() {
 
   if (!hasRole(['super_admin', 'org_admin', 'manager']) && !isCandidate) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-        <Shield size={48} className="text-secondary/20" />
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-center bg-gray-50">
+        <Shield size={48} className="text-gray-300" />
         <div>
-          <h2 className="text-xl font-display font-black text-white uppercase italic">Security Clearance Required</h2>
-          <p className="text-xs text-white/30 uppercase tracking-widest mt-1">You do not have access to this module.</p>
+          <h2 className="text-xl font-bold text-gray-800">Access Restricted</h2>
+          <p className="text-sm text-gray-500 mt-1">You do not have access to this module.</p>
         </div>
       </div>
     );
@@ -74,67 +81,69 @@ export default function SourceDashboard() {
 
   if (isCandidate) {
     return (
-      <div className="max-w-4xl mx-auto space-y-8 animate-fade-in-up">
-        <div className="section-card p-10 border-white/5 relative overflow-hidden bg-[#060E20]/50">
-          <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-primary/10 rounded-full blur-[80px]"></div>
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary mb-4">Candidate Portal // Phygitron Source</p>
-          <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic">Application <span className="text-primary">Status</span></h1>
+      <div className="max-w-4xl mx-auto space-y-6 p-6 bg-gray-50 min-h-screen">
+        <div className="bg-white rounded-2xl p-8 border border-purple-100 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-full blur-2xl opacity-50"></div>
+          <p className="text-xs font-medium text-purple-600 mb-2">CANDIDATE PORTAL</p>
+          <h1 className="text-3xl font-bold text-gray-800">Application Status</h1>
           
-          <div className="mt-10 flex items-center gap-6">
-            <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary/20 flex items-center justify-center text-primary font-display font-black text-2xl">
+          <div className="mt-6 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-700 font-bold text-xl">
               {user?.name?.[0] || 'C'}
             </div>
             <div>
-              <p className="text-lg font-bold text-white uppercase tracking-tight">{user?.name}</p>
-              <p className="text-xs text-white/40 uppercase tracking-widest mt-1">Identity Verified • Application Processing</p>
+              <p className="text-lg font-semibold text-gray-800">{user?.name}</p>
+              <p className="text-sm text-gray-500 mt-0.5">Identity Verified • Application Processing</p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="section-card p-8 border-white/5">
-            <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40 mb-6 flex items-center gap-3">
-               <Activity size={16} className="text-primary" /> Active Pipeline
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+               <Activity size={16} className="text-purple-600" /> Active Pipeline
             </h3>
-            <div className="space-y-4">
-               <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex justify-between items-center">
+            <div className="space-y-3">
+               <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 flex justify-between items-center">
                   <div>
-                    <p className="text-xs font-bold text-white mb-1">Resume Screening</p>
-                    <p className="text-[10px] uppercase text-white/30">Stage 1</p>
+                    <p className="text-sm font-medium text-gray-800">Resume Screening</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Stage 1</p>
                   </div>
-                  <CheckCircle className="text-emerald-400" size={20} />
+                  <CheckCircleIcon className="text-emerald-500" size={18} />
                </div>
-               <div className="p-5 rounded-2xl bg-primary/5 border border-primary/20 flex justify-between items-center">
+               <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 flex justify-between items-center">
                   <div>
-                    <p className="text-xs font-bold text-white mb-1 text-primary">Pre-Employment Assessment</p>
-                    <p className="text-[10px] uppercase text-primary/60">Stage 2 • Action Required</p>
+                    <p className="text-sm font-medium text-purple-700">Pre-Employment Assessment</p>
+                    <p className="text-xs text-purple-600 mt-0.5">Stage 2 • Action Required</p>
                   </div>
-                  <button onClick={() => navigate('/verify')} className="px-4 py-2 bg-primary text-black text-[9px] font-black uppercase tracking-widest rounded-lg">Start</button>
+                  <button onClick={() => navigate('/verify')} className="px-4 py-2 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 transition-colors">
+                    Start
+                  </button>
                </div>
-               <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex justify-between items-center opacity-40">
+               <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 flex justify-between items-center opacity-50">
                   <div>
-                    <p className="text-xs font-bold text-white mb-1">Technical Interview</p>
-                    <p className="text-[10px] uppercase text-white/30">Stage 3</p>
+                    <p className="text-sm font-medium text-gray-600">Technical Interview</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Stage 3</p>
                   </div>
-                  <div className="w-5 h-5 rounded-full border border-white/20" />
+                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
                </div>
             </div>
           </div>
 
-          <div className="section-card p-8 border-white/5">
-            <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40 mb-6 flex items-center gap-3">
-               <Database size={16} className="text-primary" /> My Profile
+          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+               <Database size={16} className="text-purple-600" /> My Profile
             </h3>
-            <p className="text-xs text-white/40 leading-relaxed mb-6">
+            <p className="text-sm text-gray-500 leading-relaxed mb-4">
               Your profile is being reviewed to find matching opportunities. Ensure your skills are current for the best matches.
             </p>
             <div className="space-y-3">
-               <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-white/60">
+               <div className="flex justify-between text-sm font-medium text-gray-600">
                   <span>Compatibility Score</span>
-                  <span className="text-primary">Searching...</span>
+                  <span className="text-purple-600">Searching...</span>
                </div>
-               <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary/30 w-1/3 animate-shimmer"></div>
+               <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-purple-300 w-1/3 animate-pulse"></div>
                </div>
             </div>
           </div>
@@ -187,8 +196,6 @@ export default function SourceDashboard() {
   const [scoreRoleId, setScoreRoleId] = useState('');
   const [scoring, setScoring] = useState(false);
 
-  // fileRef moved up
-
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchJobRoles = useCallback(async () => {
     try {
@@ -210,7 +217,7 @@ export default function SourceDashboard() {
         params.set('role_id', filters.role_id);
         params.set('limit', filters.limit);
       } else {
-        params.set('limit', 1000); // Main directory shows everyone
+        params.set('limit', 1000);
       }
 
       const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
@@ -271,7 +278,6 @@ export default function SourceDashboard() {
         const d = await r.json();
         if (r.ok && d.success) {
           setBulkJobProgress(d.data);
-          // If all items are processed, stop polling
           const stats = d.data.items_stats || [];
           const totalProcessed = stats
             .filter(s => s.status !== 'pending' && s.status !== 'processing')
@@ -505,7 +511,6 @@ export default function SourceDashboard() {
       }
     } catch {
       toast.error('Invitation error', { id: tid });
-
     }
   };
 
@@ -535,7 +540,6 @@ export default function SourceDashboard() {
       toast.error('Cancel error', { id: tid });
     }
   };
-
 
   const handleAutoRank = async (roleId) => {
     if (!roleId) return;
@@ -573,8 +577,17 @@ export default function SourceDashboard() {
   const anySelected = selectedIds.size > 0;
   const setTab = (tab) => navigate(`/source?tab=${tab}`);
 
+  // Calculate stats for home dashboard
+  const totalCandidates = candidates.length;
+  const favouriteCount = candidates.filter(c => c.status?.toLowerCase() === 'favourite').length;
+  const invitedCount = candidates.filter(c => c.status?.toLowerCase() === 'invited').length;
+  const archivedCount = candidates.filter(c => c.status?.toLowerCase() === 'archived').length;
+  const hiredCount = candidates.filter(c => c.status?.toLowerCase() === 'hired').length;
+  const newCount = candidates.filter(c => !c.status || c.status?.toLowerCase() === 'new').length;
+  const rejectedCount = candidates.filter(c => c.status?.toLowerCase() === 'rejected').length;
+
   return (
-    <div className="dashboard-page light-theme-override">
+    <div className="dashboard-page light-theme-override" style={{ backgroundColor: '#FAF8FF' }}>
       <div className="topbar">
         <div className="top-left">
           <img src={logo} className="logo" alt="logo" />
@@ -620,32 +633,42 @@ export default function SourceDashboard() {
           <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Pipeline</button>
         </div>
         
-        <div className="content">
+        <div className="content" style={{ backgroundColor: '#FAF8FF', padding: '24px' }}>
           <div className="flex flex-col gap-6 h-full">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 shrink-0">
         <div>
-          <h1 className="text-4xl font-display font-black text-white tracking-tighter uppercase italic">
+          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">
+            {currentTab === 'upload' ? 'RESUME PROCESSING' :
+             currentTab === 'jobs' ? 'JOB MANAGEMENT' :
+             currentTab === 'home' ? 'RECRUITMENT ANALYTICS' :
+             currentTab === 'offers' ? 'OFFER MANAGEMENT' :
+             currentTab === 'active' ? 'HIRING PIPELINE' :
+             currentTab === 'invite-status' ? 'CANDIDATE INVITATIONS' :
+             currentTab === 'archive' ? 'CANDIDATE ARCHIVE' :
+             'CANDIDATE DATABASE'}
+          </p>
+          <h1 className="text-4xl font-black text-black tracking-tight leading-none">
             {currentTab === 'upload' ? (
-              <>AI Ingest <span className="text-primary">Engine</span></>
+              <>Resume Processing Center</>
             ) : currentTab === 'jobs' ? (
-              <>Job <span className="text-primary">Roles</span></>
+              <>Job Roles</>
             ) : currentTab === 'home' ? (
-              <>Source <span className="text-primary">Hub</span></>
+              <>Talent Acquisition Dashboard</>
             ) : currentTab === 'offers' ? (
-              <>Offer <span className="text-primary">Approvals</span></>
+              <>Offer Management</>
             ) : currentTab === 'active' ? (
-              <>Active <span className="text-primary">Candidates</span></>
+              <>Hiring Pipeline</>
             ) : currentTab === 'invite-status' ? (
-              <>Invite <span className="text-primary">Status</span></>
+              <>Candidate Invitations</>
             ) : (
-              <>Candidate <span className="text-primary">Directory</span></>
+              <>Candidate Database</>
             )}
           </h1>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             {currentTab === 'upload'
-              ? 'Quantum Resume Parsing'
+              ? 'Upload and process resumes for AI-powered candidate matching'
               : currentTab === 'jobs'
               ? `${jobRoles.length} active roles`
               : currentTab === 'offers' || currentTab === 'active' || currentTab === 'invite-status'
@@ -658,7 +681,7 @@ export default function SourceDashboard() {
           {(currentTab === 'directory' || currentTab === 'home' || currentTab === 'jobs') && (
             <button
               onClick={() => { fetchCandidates(); fetchJobRoles(); }}
-              className="p-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-colors duration-150"
+              className="p-2.5 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors duration-150"
             >
               <RefreshCw size={16} />
             </button>
@@ -667,7 +690,7 @@ export default function SourceDashboard() {
           {currentTab === 'directory' && (
             <>
               <div className="relative w-64 md:w-80">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-white/40">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
                   <Search size={15} />
                 </span>
                 <input
@@ -675,23 +698,43 @@ export default function SourceDashboard() {
                   placeholder="Search name, email, role, skills..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white outline-none focus:border-primary/40 focus:bg-white/[0.08] transition-all"
+                  className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
                 />
                 {searchTerm && (
-                  <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-0 flex items-center pr-3 text-white/40 hover:text-white">
+                  <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600">
                     <X size={14} />
                   </button>
                 )}
               </div>
               <button
                 onClick={() => setShowFilters(f => !f)}
-                className={`flex items-center gap-2 px-5 py-3 rounded-xl border text-[11px] font-bold uppercase tracking-widest transition-colors duration-150 ${showFilters ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors duration-150 ${
+                  showFilters 
+                    ? 'bg-purple-50 border-purple-300 text-purple-700' 
+                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
               >
                 <Filter size={15} /> Filters
               </button>
               <button
                 onClick={() => setShowUpload(true)}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors duration-150 shadow-lg"
+                className="
+              px-7
+              py-4
+              rounded-2xl
+              bg-gradient-to-r
+              from-[#8b5cf6]
+              to-[#c084fc]
+              text-white
+              text-sm
+              font-black
+              tracking-wide
+              flex
+              items-center
+              gap-3
+              shadow-lg
+              shadow-purple-200
+            "
               >
                 <Upload size={15} /> Upload Resume
               </button>
@@ -701,7 +744,23 @@ export default function SourceDashboard() {
           {currentTab === 'jobs' && (
             <button
               onClick={() => { setNewRole({ title: '', description: '', min_experience: 0 }); setShowNewRole(true); }}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo text-white text-[11px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-colors duration-150 shadow-lg"
+              className="
+              px-7
+              py-4
+              rounded-2xl
+              bg-gradient-to-r
+              from-[#8b5cf6]
+              to-[#c084fc]
+              text-white
+              text-sm
+              font-black
+              tracking-wide
+              flex
+              items-center
+              gap-3
+              shadow-lg
+              shadow-purple-200
+            "
             >
               <Plus size={15} /> Add Job Role
             </button>
@@ -710,7 +769,7 @@ export default function SourceDashboard() {
           {currentTab === 'invite-status' && jobRoles.length > 0 && (
             <div className="flex items-center gap-3">
               <select
-                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+                className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
                 value={inviteStatusRoleId}
                 onChange={e => { setInviteStatusRoleId(e.target.value); setShowInviteStatus(false); }}
               >
@@ -720,7 +779,23 @@ export default function SourceDashboard() {
               {inviteStatusRoleId && (
                 <button
                   onClick={() => setShowInviteStatus(true)}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors duration-150"
+                  className="
+              px-7
+              py-4
+              rounded-2xl
+              bg-gradient-to-r
+              from-[#8b5cf6]
+              to-[#c084fc]
+              text-white
+              text-sm
+              font-black
+              tracking-wide
+              flex
+              items-center
+              gap-3
+              shadow-lg
+              shadow-purple-200
+            "
                 >
                   View Invites
                 </button>
@@ -734,137 +809,128 @@ export default function SourceDashboard() {
       {currentTab === 'home' ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
           {/* Top Metrics Row */}
-          <div className="grid grid-cols-4 gap-6">
-            <div className="section-card p-6 border-l-2 border-primary/50 relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Users size={64}/></div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Total Candidates</p>
-               <h2 className="text-4xl font-display font-black text-white">{candidates.length}</h2>
-               <div className="flex items-center gap-1 mt-4 text-[10px] text-emerald-400 font-bold"><TrendingUp size={12}/> Live Database</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 overflow-visible pt-2">
+            {/* Total Candidates - Purple */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border-t-4 border-t-purple-600 max-w-xs">
+              <div className="flex items-center justify-between mb-2">
+                <UsersIcon size={20} className="text-purple-600" />
+                <span className="text-xs font-medium text-purple-600">Total</span>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800">{totalCandidates}</h2>
+              <p className="text-sm text-gray-500 mt-1">Total Candidates</p>
             </div>
-            <div className="section-card p-6 border-l-2 border-indigo/50 relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Zap size={64}/></div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Favourite</p>
-               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'favourite').length}</h2>
-               <div className="flex items-center gap-1 mt-4 text-[10px] text-indigo font-bold"><Activity size={12}/> Pipeline</div>
+
+            {/* Favourite - Amber/Orange */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border-t-4 border-t-amber-500 max-w-xs">
+              <div className="flex items-center justify-between mb-2">
+                <Star size={20} className="text-amber-500" />
+                <span className="text-xs font-medium text-amber-500">Favourite</span>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800">{favouriteCount}</h2>
+              <p className="text-sm text-gray-500 mt-1">Shortlisted Candidates</p>
             </div>
-            <div className="section-card p-6 border-l-2 border-secondary/50 relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Mail size={64}/></div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Invited</p>
-               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'invited').length}</h2>
-               <div className="flex items-center gap-1 mt-4 text-[10px] text-secondary font-bold"><TrendingUp size={12}/> Active Invites</div>
+
+            {/* Invited - Indigo */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border-t-4 border-t-indigo-500 max-w-xs">
+              <div className="flex items-center justify-between mb-2">
+                <MailIcon size={20} className="text-indigo-500" />
+                <span className="text-xs font-medium text-indigo-500">Invited</span>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800">{invitedCount}</h2>
+              <p className="text-sm text-gray-500 mt-1">Active Invites</p>
             </div>
-            <div className="section-card p-6 border-l-2 border-rose-400/50 relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Trash2 size={64}/></div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Archived</p>
-               <h2 className="text-4xl font-display font-black text-white">{candidates.filter(c => c.status?.toLowerCase() === 'archived').length}</h2>
-               <div className="flex items-center gap-1 mt-4 text-[10px] text-rose-400 font-bold"><Clock size={12}/> Inactive Pool</div>
+
+            {/* Archived - Gray */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border-t-4 border-t-[#e731ad] max-w-xs">
+              <div className="flex items-center justify-between mb-2">
+                <Archive size={20} className="text-[#e731ad]" />
+                <span className="text-xs font-medium text-[#e731ad]">Archived</span>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800">{archivedCount}</h2>
+              <p className="text-sm text-gray-500 mt-1">Inactive Pool</p>
             </div>
           </div>
 
-          {/* Grid for Funnel and Recent Activity Feed */}
+          {/* Row 2: Pipeline and Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 flex flex-col">
-              {/* Pipeline Funnel */}
-              <div className="section-card p-6 flex-1 flex flex-col justify-between">
-                <div>
-                  <h3 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 mb-6"><PieChart size={14}/> Talent Pipeline Status</h3>
-                  <div className="flex gap-2 h-12 rounded-xl overflow-hidden shadow-inner">
-                     {['New', 'Favourite', 'Invited', 'Hired', 'Rejected', 'Archived'].map(status => {
-                       const count = candidates.filter(c => (c.status || 'New').toLowerCase() === status.toLowerCase()).length;
-                       const percent = candidates.length > 0 ? (count / candidates.length) * 100 : 0;
-                       if (count === 0) return null;
-                       const colors = {
-                          'new': 'bg-white/10',
-                          'favourite': 'bg-primary/50',
-                          'invited': 'bg-indigo/50',
-                          'hired': 'bg-secondary/50',
-                          'rejected': 'bg-error/50',
-                          'archived': 'bg-rose-400/20'
-                       };
-                       return (
-                         <div key={status} style={{ width: `${percent}%` }} className={`${colors[status.toLowerCase()]} h-full transition-all duration-500 relative group flex items-center justify-center`}>
-                            {percent > 5 && <span className="text-[10px] font-black mix-blend-overlay text-white">{count}</span>}
-                            <div className="opacity-0 group-hover:opacity-100 absolute -top-8 bg-black border border-white/10 px-3 py-1.5 rounded-lg text-[10px] font-bold text-white whitespace-nowrap z-10 transition-opacity pointer-events-none">
-                              {status}: {count} ({Math.round(percent)}%)
-                            </div>
-                         </div>
-                       );
-                     })}
-                     {candidates.length === 0 && <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs text-white/30 font-bold uppercase tracking-widest">No Pipeline Data</div>}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">Hiring Pipeline Overview</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <p className="text-xs font-medium text-gray-500">Applied</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{newCount}</p>
                   </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-6 mt-6">
-                   {[
-                     { label: 'New', color: 'bg-white/20' },
-                     { label: 'Favourite', color: 'bg-primary/50' },
-                     { label: 'Invited', color: 'bg-indigo/50' },
-                     { label: 'Hired', color: 'bg-secondary/50' },
-                     { label: 'Rejected', color: 'bg-error/50' },
-                     { label: 'Archived', color: 'bg-rose-400/20' }
-                   ].map(s => (
-                      <div key={s.label} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/60">
-                        <div className={`w-3 h-3 rounded-sm ${s.color}`} /> {s.label}
-                      </div>
-                   ))}
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <p className="text-xs font-medium text-gray-500">Screened</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{favouriteCount}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <p className="text-xs font-medium text-gray-500">Interviewed</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{invitedCount}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <p className="text-xs font-medium text-gray-500">Selected</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{hiredCount}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <p className="text-xs font-medium text-gray-500">Rejected</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{rejectedCount}</p>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="lg:col-span-1">
-              {/* Recent Activity Feed */}
-              <div className="section-card p-6 flex flex-col h-[400px]">
-                <h3 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 mb-6">
-                  <Activity size={14} className="text-primary" /> Recent Candidate Activity
+              <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm h-full">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <Activity size={16} className="text-purple-600" /> Recent Activity
                 </h3>
                 
-                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+                <div className="space-y-4 max-h-[280px] overflow-y-auto">
                   {loadingActivities ? (
-                    <div className="flex items-center justify-center h-full text-white/40 gap-2">
-                      <Loader2 size={16} className="animate-spin text-primary" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest">Loading feed...</span>
+                    <div className="flex items-center justify-center h-32 text-gray-400 gap-2">
+                      <Loader2 size={16} className="animate-spin text-purple-600" />
+                      <span className="text-sm font-medium">Loading feed...</span>
                     </div>
                   ) : activities.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center text-white/30 gap-2">
-                      <Clock size={24} className="opacity-20" />
-                      <p className="text-xs uppercase font-bold tracking-widest">No activities logged</p>
+                    <div className="flex flex-col items-center justify-center h-32 text-center text-gray-400 gap-2">
+                      <Clock size={24} className="opacity-50" />
+                      <p className="text-sm font-medium">No activities logged</p>
                     </div>
                   ) : (
                     activities.map((act) => {
                       const dateStr = act.created_at ? new Date(act.created_at).toLocaleString() : 'Just now';
                       
                       let Icon = Activity;
-                      let iconColor = 'text-white/40 bg-white/5 border-white/10';
+                      let iconColor = 'bg-gray-100 text-gray-500';
                       const action = act.action?.toLowerCase();
                       if (action?.includes('invite')) {
-                        Icon = Mail;
-                        iconColor = 'text-indigo bg-indigo/10 border-indigo/20';
+                        Icon = MailIcon;
+                        iconColor = 'bg-indigo-50 text-indigo-600';
                       } else if (action?.includes('create') || action?.includes('upload')) {
-                        Icon = Plus;
-                        iconColor = 'text-primary bg-primary/10 border-primary/20';
+                        Icon = UserPlus;
+                        iconColor = 'bg-purple-50 text-purple-600';
                       } else if (action?.includes('status') || action?.includes('shortlist') || action?.includes('archive')) {
                         Icon = Zap;
-                        iconColor = 'text-secondary bg-secondary/10 border-secondary/20';
+                        iconColor = 'bg-amber-50 text-amber-600';
                       } else if (action?.includes('score') || action?.includes('rank')) {
                         Icon = Star;
-                        iconColor = 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
+                        iconColor = 'bg-emerald-50 text-emerald-600';
                       }
                       
                       return (
-                        <div key={act.id} className="flex gap-4 p-3 rounded-xl bg-white/[0.01] border border-white/5 hover:border-white/10 transition-colors">
-                          <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${iconColor}`}>
+                        <div key={act.id} className="flex gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconColor}`}>
                             <Icon size={14} />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-white leading-snug">
-                              {act.candidate_name}
-                            </p>
-                            <p className="text-[10px] text-white/50 mt-0.5 leading-relaxed">
-                              {act.detail || act.action}
-                            </p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">{act.actor_name || 'System'}</span>
-                              <span className="w-1 h-1 rounded-full bg-white/10" />
-                              <span className="text-[9px] text-white/30">{dateStr}</span>
+                            <p className="text-sm font-medium text-gray-800">{act.candidate_name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{act.detail || act.action}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-gray-400">{act.actor_name || 'System'}</span>
+                              <span className="w-1 h-1 rounded-full bg-gray-300" />
+                              <span className="text-xs text-gray-400">{dateStr}</span>
                             </div>
                           </div>
                         </div>
@@ -875,29 +941,87 @@ export default function SourceDashboard() {
               </div>
             </div>
           </div>
+
+          {/* Row 3: Job Openings and Recruitment Summary */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <BriefcaseIcon size={16} className="text-purple-600" /> Job Openings
+              </h3>
+              <div className="space-y-3">
+                {jobRoles.slice(0, 4).map(role => (
+                  <div key={role.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{role.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Min Exp: {role.min_experience} yrs</p>
+                    </div>
+                    <span className="text-sm font-medium text-purple-600">
+                      {candidates.filter(c => c.role_id === role.id).length} candidates
+                    </span>
+                  </div>
+                ))}
+                {jobRoles.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-8">No job roles created yet</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <BarChart size={16} className="text-purple-600" /> Recruitment Summary
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+                  <UserPlus size={20} className="text-purple-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-gray-800">{totalCandidates}</p>
+                  <p className="text-xs text-gray-500">Candidates Added</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+                  <MailIcon size={20} className="text-indigo-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-gray-800">{invitedCount}</p>
+                  <p className="text-xs text-gray-500">Invitations Sent</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+                  <FileText size={20} className="text-emerald-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-gray-800">{hiredCount}</p>
+                  <p className="text-xs text-gray-500">Offers Issued</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+                  <CheckCircleIcon size={20} className="text-blue-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-gray-800">{hiredCount}</p>
+                  <p className="text-xs text-gray-500">Hires Completed</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       ) : currentTab === 'jobs' ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {jobRoles.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center section-card">
-              <Briefcase size={48} className="text-white/10" />
+            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center bg-white rounded-2xl border border-gray-200 shadow-sm">
+              <Briefcase size={48} className="text-gray-300" />
               <div>
-                <p className="text-base font-bold text-white mb-1">No active roles</p>
-                <p className="text-xs text-white/30">Click Add Role to define a job requisition</p>
+                <p className="text-lg font-semibold text-gray-800 mb-1">No active roles</p>
+                <p className="text-sm text-gray-500">Click Add Role to define a job requisition</p>
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
               {jobRoles.map(r => (
-                <div key={r.id} className="section-card p-6 border-white/5 hover:border-primary/30 transition-colors flex flex-col items-start text-left">
-                  <div className="flex w-full items-start justify-between mb-1">
-                    <h3 className="text-lg font-bold text-white pr-2">{r.title}</h3>
-                    <button onClick={() => openEditRole(r)} className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 transition-colors shrink-0">
+                <div key={r.id} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 flex flex-col">
+                  <div className="flex w-full items-start justify-between mb-2">
+                    <h3 className="text-lg font-semibold text-gray-800 pr-2">{r.title}</h3>
+                    <button onClick={() => openEditRole(r)} className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0">
                       <Edit size={14} />
                     </button>
                   </div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-primary/80 mt-1 mb-4">Min Exp: {r.min_experience} yrs</p>
-                   <p className="text-xs text-white/40 leading-relaxed line-clamp-3 mb-4">{r.description || 'No description provided.'}</p>
+                  <p className="text-xs font-medium text-purple-600 mt-1 mb-3">Min Exp: {r.min_experience} yrs</p>
+                  <p className="text-sm text-gray-500 leading-relaxed line-clamp-3 mb-4">{r.description || 'No description provided.'}</p>
+                  <div className="mt-auto pt-4 border-t border-gray-100">
+                    <p className="text-sm text-gray-600">
+                      {candidates.filter(c => c.role_id === r.id).length} candidates
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -905,62 +1029,74 @@ export default function SourceDashboard() {
         </div>
       ) : currentTab === 'upload' ? (
         <div className="flex-1 flex items-center justify-center flex-col gap-6">
-            <div className="section-card w-full max-w-xl p-10 relative">
-              <h2 className="text-2xl font-display font-black text-white mb-8 uppercase tracking-widest flex items-center gap-2"><Upload size={24} className="text-primary"/> Inject Resume</h2>
+            <div className="bg-white w-full max-w-xl rounded-2xl p-8 border border-gray-200 shadow-sm relative">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <Upload size={24} className="text-purple-600"/> Resume Processing Center
+              </h2>
               <div 
-                className={`border-2 border-dashed rounded-xl p-12 text-center transition-all group flex flex-col items-center ${isDragging ? 'border-primary bg-primary/10' : 'border-white/20 bg-white/5 hover:bg-white/10 hover:border-primary/50'}`}
+                className={`border-2 border-dashed rounded-xl p-12 text-center transition-all group flex flex-col items-center ${
+                  isDragging ? 'border-purple-400 bg-purple-50' : 'border-gray-300 bg-gray-50 hover:border-purple-400 hover:bg-purple-50/50'
+                }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
                 <input type="file" ref={fileRef} onChange={handleUpload} className="hidden" accept=".pdf,.doc,.docx,.txt,.zip" multiple />
                 <input type="file" ref={folderRef} onChange={handleUpload} className="hidden" webkitdirectory="true" directory="true" />
-                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform cursor-pointer" onClick={() => !uploading && fileRef.current.click()}>
-                  {uploading ? <Loader2 size={32} className="text-primary animate-spin" /> : <Upload size={32} className="text-primary" />}
+                <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform cursor-pointer" onClick={() => !uploading && fileRef.current.click()}>
+                  {uploading ? <Loader2 size={28} className="text-purple-600 animate-spin" /> : <Upload size={28} className="text-purple-600" />}
                 </div>
-                <p className="text-white font-bold text-lg mb-2">{uploading ? 'Queueing Files...' : 'Select files or an entire folder'}</p>
-                <p className="text-sm text-white/40">Supported formats: PDF, DOCX, TXT, ZIP</p>
-                <div className="flex gap-4 mt-8">
-                  <button disabled={uploading} onClick={() => !uploading && fileRef.current.click()} className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold uppercase tracking-widest text-white transition-colors">Select Files</button>
-                  <button disabled={uploading} onClick={() => !uploading && folderRef.current.click()} className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold uppercase tracking-widest text-white transition-colors">Select Folder</button>
+                <p className="text-gray-800 font-semibold text-base mb-2">{uploading ? 'Queueing Files...' : 'Select files or an entire folder'}</p>
+                <p className="text-sm text-gray-500">Supported formats: PDF, DOCX, TXT, ZIP</p>
+                <div className="flex gap-4 mt-6">
+                  <button disabled={uploading} onClick={() => !uploading && fileRef.current.click()} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium text-gray-700 transition-colors">
+                    Select Files
+                  </button>
+                  <button disabled={uploading} onClick={() => !uploading && folderRef.current.click()} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium text-gray-700 transition-colors">
+                    Select Folder
+                  </button>
                 </div>
               </div>
             </div>
             
             {bulkJobId && (
-              <div className="section-card w-full max-w-xl p-6 border-primary/30 relative overflow-hidden">
-                 <div className="absolute top-0 left-0 h-2 bg-primary/20 w-full">
+              <div className="bg-white w-full max-w-xl rounded-2xl p-6 border border-purple-200 shadow-sm relative overflow-hidden">
+                 <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
                     {bulkJobProgress?.job?.total_files > 0 && (
                       <div 
-                        className="h-full bg-primary transition-all duration-500" 
+                        className="h-full bg-purple-600 transition-all duration-500" 
                         style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
                       ></div>
                     )}
                  </div>
-                 <div className="flex justify-between items-center mb-4 mt-2">
-                   <h3 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                      <Loader2 size={14} className="animate-spin text-primary" /> AI Processing Candidates
+                 <div className="flex justify-between items-center mb-4 mt-1">
+                   <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
                    </h3>
                    {bulkJobProgress?.job?.total_files > 0 && (
-                     <span className="text-xs font-bold text-primary">
+                     <span className="text-sm font-semibold text-purple-600">
                        {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
                      </span>
                    )}
                  </div>
                  <div className="flex flex-wrap gap-3">
                     {bulkJobProgress?.items_stats?.map(st => (
-                       <div key={st.status} className="bg-white/5 px-4 py-2 rounded-lg text-xs border border-white/5 flex items-center">
-                          <div className={`w-2 h-2 rounded-full mr-2 ${st.status === 'success' ? 'bg-green-500' : st.status === 'failed' ? 'bg-red-500' : st.status === 'pending' ? 'bg-white/30' : 'bg-orange-500'}`}></div>
-                          <span className="text-white/40 uppercase font-bold mr-2">{st.status}:</span>
-                          <span className="text-white font-black">{st.count}</span>
+                       <div key={st.status} className="bg-gray-50 px-4 py-2 rounded-lg text-sm border border-gray-100 flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${
+                            st.status === 'success' ? 'bg-emerald-500' : 
+                            st.status === 'failed' ? 'bg-rose-500' : 
+                            st.status === 'pending' ? 'bg-gray-300' : 'bg-amber-500'
+                          }`}></div>
+                          <span className="text-gray-500 font-medium mr-2">{st.status}:</span>
+                          <span className="text-gray-800 font-semibold">{st.count}</span>
                        </div>
                     ))}
                  </div>
                  <div className="flex justify-between items-center mt-6">
-                   <p className="text-[10px] text-white/30 uppercase">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
+                   <p className="text-xs text-gray-500">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
                    <div className="flex gap-4 items-center">
-                     <p className="text-[10px] text-white/30 uppercase">Safe to leave this page, it runs in background</p>
-                     <button onClick={handleCancelQueue} className="px-4 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors">
+                     <p className="text-xs text-gray-500">Runs in background</p>
+                     <button onClick={handleCancelQueue} className="px-4 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
                        Cancel Queue
                      </button>
                    </div>
@@ -979,14 +1115,14 @@ export default function SourceDashboard() {
       ) : currentTab === 'invite-status' ? (
         <div className="flex-1 flex items-center justify-center">
           {!inviteStatusRoleId ? (
-            <div className="section-card flex flex-col items-center justify-center gap-4 py-16 px-12 text-center border-white/5 max-w-md w-full">
-              <Briefcase size={40} className="text-white/10" />
+            <div className="bg-white rounded-2xl flex flex-col items-center justify-center gap-4 py-16 px-12 border border-gray-200 shadow-sm max-w-md w-full">
+              <Briefcase size={40} className="text-gray-300" />
               <div>
-                <p className="text-base font-bold text-white mb-1">Select a Job Role</p>
-                <p className="text-xs text-white/30">Choose a role from the dropdown above to view invite tracking.</p>
+                <p className="text-lg font-semibold text-gray-800 mb-1">Select a Job Role</p>
+                <p className="text-sm text-gray-500">Choose a role from the dropdown above to view invite tracking.</p>
               </div>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors mt-2"
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors mt-2"
                 value={inviteStatusRoleId}
                 onChange={e => { setInviteStatusRoleId(e.target.value); setShowInviteStatus(e.target.value !== ''); }}
               >
@@ -996,7 +1132,7 @@ export default function SourceDashboard() {
             </div>
           ) : (
             <div className="text-center">
-              <p className="text-xs text-white/30 uppercase tracking-widest font-bold">Role selected. Click <span className="text-primary">View Invites</span> in the header.</p>
+              <p className="text-sm text-gray-500">Role selected. Click <span className="text-purple-600 font-semibold">View Invites</span> in the header.</p>
             </div>
           )}
           {showInviteStatus && inviteStatusRoleId && (
@@ -1011,12 +1147,12 @@ export default function SourceDashboard() {
         <>
           {/* ── Filter Bar ── */}
           {showFilters && (
-        <div className="section-card p-5 flex flex-wrap gap-4 items-end shrink-0">
+        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex flex-wrap gap-4 items-end shrink-0">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Job Role</label>
+            <label className="text-xs font-medium text-gray-500">Job Role</label>
             <div className="flex items-center gap-2">
               <select
-                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+                className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
                 value={filters.role_id}
                 onChange={e => setFilters(f => ({ ...f, role_id: e.target.value }))}
               >
@@ -1027,9 +1163,9 @@ export default function SourceDashboard() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Status</label>
+            <label className="text-xs font-medium text-gray-500">Status</label>
             <select
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
               value={filters.pool}
               onChange={e => setFilters(f => ({ ...f, pool: e.target.value }))}
             >
@@ -1044,29 +1180,29 @@ export default function SourceDashboard() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Min. Experience (yrs)</label>
+            <label className="text-xs font-medium text-gray-500">Min. Experience (yrs)</label>
             <input
               type="number" min={0} max={30}
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors w-36"
+              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors w-36"
               value={filters.min_exp}
               onChange={e => setFilters(f => ({ ...f, min_exp: parseInt(e.target.value) || 0 }))}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Location</label>
+            <label className="text-xs font-medium text-gray-500">Location</label>
             <input
               type="text" placeholder="City or Remote"
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
               value={filters.location}
               onChange={e => setFilters(f => ({ ...f, location: e.target.value }))}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Sort By</label>
+            <label className="text-xs font-medium text-gray-500">Sort By</label>
             <select
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
               value={filters.sort_by}
               onChange={e => setFilters(f => ({ ...f, sort_by: e.target.value }))}
             >
@@ -1078,9 +1214,9 @@ export default function SourceDashboard() {
 
           {filters.role_id && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Show</label>
+              <label className="text-xs font-medium text-gray-500">Show</label>
               <select
-                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/40 transition-colors"
+                className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
                 value={filters.limit}
                 onChange={e => setFilters(f => ({ ...f, limit: parseInt(e.target.value) }))}
               >
@@ -1091,13 +1227,13 @@ export default function SourceDashboard() {
 
           <button
             onClick={fetchCandidates}
-            className="px-6 py-2.5 bg-primary text-black rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors duration-150"
+            className="px-6 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors duration-150 shadow-sm"
           >
             Apply
           </button>
           <button
             onClick={() => setFilters(initFilters)}
-            className="px-5 py-2.5 text-white/40 rounded-xl text-[11px] font-bold uppercase tracking-widest hover:text-white transition-colors duration-150"
+            className="px-5 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:text-gray-700 transition-colors duration-150"
           >
             Reset
           </button>
@@ -1105,9 +1241,9 @@ export default function SourceDashboard() {
             <button
               onClick={() => handleAutoRank(filters.role_id)}
               disabled={autoRanking}
-              className="px-6 py-2.5 ml-auto bg-indigo text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-colors duration-150 flex items-center gap-2"
+              className="px-6 py-2.5 ml-auto bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors duration-150 flex items-center gap-2 shadow-sm"
             >
-              {autoRanking ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+              {autoRanking ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
               Auto Score All
             </button>
           )}
@@ -1115,13 +1251,13 @@ export default function SourceDashboard() {
       )}
 
       {/* ── Candidate Table ── */}
-      <div className="section-card flex-1 flex flex-col overflow-hidden min-h-0">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col overflow-hidden min-h-0">
         {/* Table header */}
-        <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/30 shrink-0`}>
+        <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 border-b border-gray-100 text-xs font-medium text-gray-500 shrink-0`}>
           <div className="flex items-center justify-center">
             <button
               onClick={toggleAll}
-              className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${allSelected ? 'bg-primary border-primary text-black' : 'border-white/20 hover:border-primary/50'}`}
+              className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${allSelected ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 hover:border-purple-400'}`}
             >
               {allSelected && <CheckSquare size={12} />}
             </button>
@@ -1135,26 +1271,26 @@ export default function SourceDashboard() {
         </div>
 
         {/* Rows */}
-        <div className="flex-1 overflow-y-auto divide-y divide-white/5" style={{ overscrollBehavior: 'contain' }}>
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-100" style={{ overscrollBehavior: 'contain' }}>
           {loading ? (
-            <div className="flex items-center justify-center gap-3 py-24 text-white/40">
-              <Loader2 size={24} className="animate-spin text-primary" />
-              <span className="text-xs font-bold uppercase tracking-widest">Syncing directory...</span>
+            <div className="flex items-center justify-center gap-3 py-24 text-gray-500">
+              <Loader2 size={24} className="animate-spin text-purple-600" />
+              <span className="text-sm font-medium">Syncing directory...</span>
             </div>
           ) : candidates.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-              <Database size={48} className="text-white/10" />
+              <Database size={48} className="text-gray-300" />
               <div>
-                <p className="text-base font-bold text-white mb-1">Directory is empty</p>
-                <p className="text-xs text-white/30">Upload resumes to get started</p>
+                <p className="text-lg font-semibold text-gray-800 mb-1">Directory is empty</p>
+                <p className="text-sm text-gray-500">Upload resumes to get started</p>
               </div>
             </div>
           ) : filteredCandidates.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-              <Search size={48} className="text-white/10" />
+              <Search size={48} className="text-gray-300" />
               <div>
-                <p className="text-base font-bold text-white mb-1">No matches found</p>
-                <p className="text-xs text-white/30">Try adjusting your search query</p>
+                <p className="text-lg font-semibold text-gray-800 mb-1">No matches found</p>
+                <p className="text-sm text-gray-500">Try adjusting your search query</p>
               </div>
             </div>
           ) : (
@@ -1162,30 +1298,30 @@ export default function SourceDashboard() {
               <div
                 key={c.id}
                 onClick={() => setDrawerCandidate(c)}
-                className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-primary/5' : 'hover:bg-white/[0.02]'}`}
+                className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
               >
                 {/* Checkbox */}
                 <div className="flex items-center justify-center" onClick={e => { e.stopPropagation(); toggle(c.id); }}>
-                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selectedIds.has(c.id) ? 'bg-primary border-primary text-black' : 'border-white/20 hover:border-primary/50'}`}>
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selectedIds.has(c.id) ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 hover:border-purple-400'}`}>
                     {selectedIds.has(c.id) && <CheckSquare size={12} />}
                   </div>
                 </div>
 
                 {/* Identity */}
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-display font-black text-sm text-white group-hover:border-primary/30 transition-colors shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center font-semibold text-sm text-purple-700 group-hover:border-purple-300 transition-colors shrink-0">
                     {(c.full_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-bold text-white text-sm truncate">{c.full_name || '—'}</p>
-                    <p className="text-[10px] text-white/30 truncate">{c.email}</p>
+                    <p className="font-semibold text-gray-800 text-sm truncate">{c.full_name || '—'}</p>
+                    <p className="text-xs text-gray-500 truncate">{c.email}</p>
                   </div>
                 </div>
 
                 {/* Score */}
                 {filters.role_id && (
                   <div className="flex justify-center">
-                    <span className={`px-3 py-1 rounded-lg border text-sm font-black ${SCORE_COLOR(c.fit_score)}`}>
+                    <span className={`px-3 py-1 rounded-lg border text-sm font-semibold ${SCORE_COLOR(c.fit_score)}`}>
                       {c.fit_score != null ? `${Math.round(c.fit_score)}%` : '—'}
                     </span>
                   </div>
@@ -1193,25 +1329,25 @@ export default function SourceDashboard() {
 
                 {/* Exp */}
                 <div className="text-center">
-                  <span className="text-sm font-bold text-white">{c.total_experience_years ?? '—'} yrs</span>
+                  <span className="text-sm font-medium text-gray-700">{c.total_experience_years ?? '—'} yrs</span>
                 </div>
 
                 {/* Status */}
                 <div className="flex justify-center">
-                  <span className={`px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest ${STATUS_STYLE[c.status?.toLowerCase()] || 'bg-white/5 border-white/10 text-white/40'}`}>
+                  <span className={`px-3 py-1 rounded-lg border text-xs font-medium ${STATUS_STYLE[c.status?.toLowerCase()] || 'bg-gray-50 border-gray-200 text-gray-600'}`}>
                     {c.status || 'New'}
                   </span>
                 </div>
 
                 {/* Location */}
-                <div className="flex items-center gap-1.5 text-white/40 min-w-0">
+                <div className="flex items-center gap-1.5 text-gray-500 min-w-0">
                   <MapPin size={12} className="shrink-0" />
-                  <span className="text-[11px] truncate">{c.location || 'N/A'}</span>
+                  <span className="text-xs truncate">{c.location || 'N/A'}</span>
                 </div>
 
                 {/* Delete */}
                 <div className="flex justify-center" onClick={e => handleDelete(c.id, e)}>
-                  <button className="p-2 rounded-lg text-rose-400/30 hover:text-rose-400 hover:bg-rose-400/10 transition-colors duration-150 opacity-0 group-hover:opacity-100">
+                  <button className="p-2 rounded-lg text-gray-300 hover:text-rose-600 hover:bg-rose-50 transition-colors duration-150 opacity-0 group-hover:opacity-100">
                     <Trash2 size={15} />
                   </button>
                 </div>
@@ -1225,18 +1361,18 @@ export default function SourceDashboard() {
 
       {/* ── Bulk Action Bar ── */}
       {anySelected && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-8 py-4 section-card border-primary/20 shadow-2xl">
-          <span className="text-xs font-black text-primary uppercase tracking-widest">{selectedIds.size} selected</span>
-          <div className="w-px h-6 bg-white/10" />
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-8 py-4 bg-white rounded-2xl border border-purple-200 shadow-2xl">
+          <span className="text-sm font-semibold text-purple-600">{selectedIds.size} selected</span>
+          <div className="w-px h-6 bg-gray-200" />
           <button
             onClick={() => setShowScore(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-[11px] font-black uppercase tracking-widest hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors duration-150"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors duration-150"
           >
             <Star size={14} /> Score vs Role
           </button>
           <button
             onClick={() => setShowInvite(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-[11px] font-black uppercase tracking-widest hover:bg-indigo/10 hover:border-indigo/30 hover:text-indigo transition-colors duration-150"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors duration-150"
           >
             <Send size={14} /> Send Invite
           </button>
@@ -1261,12 +1397,12 @@ export default function SourceDashboard() {
                 toast.error('Error deleting candidates');
               }
             }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] font-black uppercase tracking-widest hover:bg-red-500/20 hover:border-red-500/30 transition-colors duration-150"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-sm font-medium hover:bg-rose-100 hover:border-rose-300 transition-colors duration-150"
           >
             <Trash2 size={14} /> Delete
           </button>
 
-          <button onClick={clearSel} className="p-2.5 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-colors duration-150">
+          <button onClick={clearSel} className="p-2.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors duration-150">
             <X size={16} />
           </button>
         </div>
@@ -1288,12 +1424,12 @@ export default function SourceDashboard() {
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="flex flex-col items-center gap-6 w-full border-2 border-dashed border-white/10 rounded-2xl p-16 hover:border-primary/40 hover:bg-primary/5 transition-colors duration-150 cursor-pointer"
+            className="flex flex-col items-center gap-6 w-full border-2 border-dashed border-gray-300 rounded-2xl p-16 hover:border-purple-400 hover:bg-purple-50/50 transition-colors duration-150 cursor-pointer"
           >
             {uploading ? (
-              <><Loader2 size={40} className="text-primary animate-spin" /><p className="text-sm font-bold text-white">AI parsing resume...</p></>
+              <><Loader2 size={40} className="text-purple-600 animate-spin" /><p className="text-sm font-medium text-gray-700">Processing resume...</p></>
             ) : (
-              <><Upload size={40} className="text-primary/60" /><div><p className="text-base font-bold text-white mb-1">Click to select file(s)</p><p className="text-xs text-white/30">PDF, DOC, DOCX, TXT, ZIP</p></div></>
+              <><Upload size={40} className="text-purple-400" /><div><p className="text-base font-semibold text-gray-800 mb-1">Click to select file(s)</p><p className="text-sm text-gray-500">PDF, DOC, DOCX, TXT, ZIP</p></div></>
             )}
           </button>
         </Modal>
@@ -1313,8 +1449,8 @@ export default function SourceDashboard() {
               <input type="number" min={0} className="form-input" value={newRole.min_experience} onChange={e => setNewRole(r => ({ ...r, min_experience: parseInt(e.target.value) || 0 }))} />
             </Field>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowNewRole(false)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
-              <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors">
+              <button type="button" onClick={() => setShowNewRole(false)} className="flex-1 py-3 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">Cancel</button>
+              <button type="submit" className="flex-1 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm">
                 {newRole.id ? "Save Changes" : "Create Role"}
               </button>
             </div>
@@ -1326,7 +1462,7 @@ export default function SourceDashboard() {
       {showScore && (
         <Modal onClose={() => setShowScore(false)} title={`Score ${selectedIds.size} candidate${selectedIds.size > 1 ? 's' : ''}`}>
           <form onSubmit={handleScore} className="flex flex-col gap-5">
-            <p className="text-xs text-white/40">Run AI fit analysis for selected candidates against a job role.</p>
+            <p className="text-sm text-gray-500">Run AI fit analysis for selected candidates against a job role.</p>
             <Field label="Job Role *">
               <select required className="form-input" value={scoreRoleId} onChange={e => setScoreRoleId(e.target.value)}>
                 <option value="">Select role...</option>
@@ -1334,8 +1470,8 @@ export default function SourceDashboard() {
               </select>
             </Field>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowScore(false)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
-              <button type="submit" disabled={scoring} className="flex-1 py-3 rounded-xl bg-primary text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-50">
+              <button type="button" onClick={() => setShowScore(false)} className="flex-1 py-3 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">Cancel</button>
+              <button type="submit" disabled={scoring} className="flex-1 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 shadow-sm">
                 {scoring ? 'Scoring...' : 'Run AI Score'}
               </button>
             </div>
@@ -1384,14 +1520,14 @@ export default function SourceDashboard() {
                     value={inviteForm.custom_body}
                     onChange={e => setInviteForm(f => ({ ...f, custom_body: e.target.value }))}
                   />
-                  <div className="text-[10px] text-white/40 leading-relaxed mt-1">
+                  <div className="text-xs text-gray-500 leading-relaxed mt-1">
                     <strong>Guidelines:</strong> You can use these tokens:
                     <ul className="list-disc list-inside mt-1 space-y-0.5">
-                      <li><code className="text-primary">{`{candidate_name}`}</code> - Full name</li>
-                      <li><code className="text-primary">{`{role}`}</code> - Job role title</li>
-                      <li><code className="text-primary">{`{org_name}`}</code> - Organisation name</li>
-                      <li><code className="text-primary">{`{assessment_link}`}</code> - URL to access the portal</li>
-                      <li><code className="text-primary">{`{temp_password}`}</code> - Temporary password</li>
+                      <li><code className="text-purple-600">{`{candidate_name}`}</code> - Full name</li>
+                      <li><code className="text-purple-600">{`{role}`}</code> - Job role title</li>
+                      <li><code className="text-purple-600">{`{org_name}`}</code> - Organisation name</li>
+                      <li><code className="text-purple-600">{`{assessment_link}`}</code> - URL to access the portal</li>
+                      <li><code className="text-purple-600">{`{temp_password}`}</code> - Temporary password</li>
                     </ul>
                   </div>
                 </Field>
@@ -1399,15 +1535,12 @@ export default function SourceDashboard() {
             )}
 
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowInvite(false)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
-              <button type="submit" className="flex-1 py-3 rounded-xl bg-indigo text-white text-xs font-black uppercase tracking-widest hover:bg-indigo/80 transition-colors">Send Invites</button>
+              <button type="button" onClick={() => setShowInvite(false)} className="flex-1 py-3 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">Cancel</button>
+              <button type="submit" className="flex-1 py-3 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm">Send Invites</button>
             </div>
           </form>
         </Modal>
       )}
-
-
-
 
     </div>
         </div>
@@ -1419,12 +1552,12 @@ export default function SourceDashboard() {
 // ── Reusable sub-components ───────────────────────────────────────────────────
 function Modal({ children, title, onClose }) {
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-lg section-card p-8 shadow-2xl">
+      <div className="relative w-full max-w-lg bg-white rounded-2xl p-8 shadow-2xl border border-gray-200">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
-          <button onClick={onClose} className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors"><X size={18} /></button>
+          <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+          <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X size={18} /></button>
         </div>
         {children}
       </div>
@@ -1435,7 +1568,7 @@ function Modal({ children, title, onClose }) {
 function Field({ label, children }) {
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-[9px] font-black uppercase tracking-widest text-white/40">{label}</label>
+      <label className="text-xs font-medium text-gray-500">{label}</label>
       {children}
     </div>
   );

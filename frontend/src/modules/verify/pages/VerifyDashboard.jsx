@@ -53,8 +53,11 @@ export default function VerifyDashboard() {
     }
   };
 
+  // Check if we should show the header (only for manage tab)
+  const showHeader = tab === 'manage' || (tab === 'candidate' && !isAdmin);
+
   return (
-    <div className="dashboard-page light-theme-override">
+    <div className="dashboard-page light-theme-override" style={{ backgroundColor: '#FFFFFF' }}>
       <div className="topbar">
         <div className="top-left">
           <img src={logo} className="logo" alt="logo" />
@@ -90,68 +93,68 @@ export default function VerifyDashboard() {
         </div>
       </div>
 
-      <div className="dashboard-body">
-        <div className="sidebar">
+      <div className="dashboard-body" style={{ position: 'relative' }}>
+        {/* Hide the old sidebar that appears from parent layout */}
+        <style>{`
+          .dashboard-body > .sidebar:not(:has(button)) {
+            display: none !important;
+          }
+          .old-sidebar, 
+          .sidebar-old,
+          .sidebar:not(.verify-sidebar) {
+            display: none !important;
+          }
+          .dashboard-body > .content {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+            padding-left: 24px !important;
+          }
+          .fixed.inset-0.pointer-events-none {
+            opacity: 0.15 !important;
+          }
+        `}</style>
+
+        {/* New Sidebar */}
+        <div className="sidebar verify-sidebar">
           {isAdmin && <button className={tab === 'manage' ? 'active' : ''} onClick={() => setTab('manage')}>Manage</button>}
           {isAdmin && <button className={tab === 'builder' ? 'active' : ''} onClick={() => setTab('builder')}>Builder</button>}
           {isAdmin && <button className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>Analytics</button>}
           {!isAdmin && <button className={tab === 'candidate' ? 'active' : ''} onClick={() => setTab('candidate')}>My Assessments</button>}
         </div>
         
-        <div className="content">
-          <div className="flex flex-col gap-8">
-      {/* 🚀 Verify Hero */}
-      <div className="relative group">
-        <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 to-primary/20 rounded-[40px] blur-xl opacity-50"></div>
-        <div className="section-card p-10 border-white/5 relative overflow-hidden bg-[#060E20]/50">
-          <div className="absolute top-[-100px] right-[-100px] w-96 h-96 bg-indigo-500/5 rounded-full blur-[120px]"></div>
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-3 flex items-center gap-2">
-                <Shield size={12} />
-                Skills Assessment // Verification Module
-              </p>
-              <h1 className="text-4xl font-display font-black text-white uppercase tracking-tighter italic leading-none">
-                Performance <span className="text-primary italic">Verification</span>
-              </h1>
-            </div>
-            
-            <div className="flex gap-4">
-               <div className="px-6 py-3 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center">
-                  <p className="text-xs font-black text-white/40 uppercase tracking-widest text-[9px] mb-1">Authenticity</p>
-                  <p className="text-xl font-display font-black text-emerald-400">100%</p>
-               </div>
-               <div className="px-6 py-3 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center">
-                  <p className="text-xs font-black text-white/40 uppercase tracking-widest text-[9px] mb-1">Status</p>
-                  <p className="text-xl font-display font-black text-primary">Active</p>
-               </div>
+        <div className="content" style={{ backgroundColor: '#FFFFFF', padding: '24px', flex: 1 }}>
+          <div className="flex flex-col gap-6">
+            {/* Header - Only shown in manage tab (or candidate tab for non-admin) */}
+            {showHeader && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">ASSESSMENT CENTRAL</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                      Skills Assessment
+                    </h1>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Create, manage, and evaluate skills assessments for candidates and employees.
+                    </p>
+                  </div>
+                  {isAdmin && (
+                    <button 
+                      onClick={() => setTab('builder')}
+                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors duration-150 shadow-sm"
+                    >
+                      <Shield size={16} /> New Assessment
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Main Content */}
+            <div className="animate-fade-in-up transition-all delay-200">
+              {renderContent()}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* 🚀 Main Assessment Area */}
-      <div className="animate-fade-in-up transition-all delay-200">
-        {renderContent()}
-      </div>
-
-      {/* 🚀 Guidance Strip */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 opacity-60">
-        <div className="section-card p-6 border-white/5 flex gap-4 items-center">
-          <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-primary shrink-0"><Activity size={20}/></div>
-          <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest leading-relaxed">Assessment results are analyzed against performance benchmarks.</p>
-        </div>
-        <div className="glass-panel p-6 border-white/5 flex gap-4 items-center">
-          <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-indigo-400 shrink-0"><Shield size={20}/></div>
-          <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest leading-relaxed">All evaluations are cryptographically signed by management.</p>
-        </div>
-        <div className="glass-panel p-6 border-white/5 flex gap-4 items-center">
-          <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-secondary shrink-0"><CheckCircle size={20}/></div>
-          <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest leading-relaxed">Quarterly syncs ensure continuous mission alignment.</p>
-        </div>
-      </div>
-      </div>
         </div>
       </div>
     </div>

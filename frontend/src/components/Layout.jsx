@@ -30,6 +30,10 @@ export default function Layout({ children }) {
     location.pathname.startsWith('/source') ||
     location.pathname.startsWith('/verify') ||
     location.pathname.startsWith('/superadmin');
+
+  // ✅ NEW: Check if we're on the Forge page - hide sidebar for Learning Central
+  const isForgePage = location.pathname.startsWith('/forge');
+
   const canSwitchView = hasRole(['org_admin', 'manager', 'super_admin']);
   const hasAdminClearance = hasPermission('deploy.dashboard.view_admin');
 
@@ -191,8 +195,8 @@ export default function Layout({ children }) {
       className={`flex h-screen w-full ${isAdminDashboard ? 'bg-white text-black' : 'bg-[#040812] text-white'
         }`}
     >
-      {/* ================= DARK SIDEBARS (DISABLED FOR ADMIN) ================= */}
-      {!isAdminDashboard && (
+      {/* ================= DARK SIDEBARS (DISABLED FOR ADMIN AND FORGE) ================= */}
+      {!isAdminDashboard && !isForgePage && (
         <>
           {/* PRIMARY SIDEBAR */}
           <aside className="w-[88px] flex flex-col items-center py-8 bg-[#060E20] border-r border-white/5">
@@ -238,7 +242,7 @@ export default function Layout({ children }) {
       )}
 
       {/* ================= MAIN CONTENT ================= */}
-      <main className="flex-1 overflow-auto">
+      <main className={`flex-1 overflow-auto ${isForgePage ? 'w-full' : ''}`}>
         {children}
       </main>
 

@@ -114,7 +114,7 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     stopCamera();
 
     const timeTaken = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
-    const isMalpractice = proctoringEvents.length > 5; // Simple heuristic
+    const isMalpractice = proctoringEvents.length > 5;
 
     try {
       const r = await fetch('/api/verify/submissions/submit', {
@@ -147,54 +147,54 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-primary" /></div>;
-  if (!assessment) return <div className="p-10 text-center text-white/50">Assessment not found</div>;
+  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
+  if (!assessment) return <div className="p-10 text-center text-gray-400">Assessment not found</div>;
 
   if (step === 'setup') {
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-6 pt-10">
         <div className="text-center mb-4">
-          <Shield size={40} className="text-primary mx-auto mb-4 opacity-80" />
-          <h1 className="text-3xl font-display font-black text-white uppercase tracking-tighter">{assessment.title}</h1>
-          <p className="text-white/60 mt-2">{assessment.description}</p>
+          <Shield size={40} className="text-purple-600 mx-auto mb-4 opacity-80" />
+          <h1 className="text-3xl font-bold text-gray-800">{assessment.title}</h1>
+          <p className="text-gray-500 mt-2">{assessment.description}</p>
         </div>
         
-        <div className="glass-panel p-8 space-y-6">
-          <h2 className="text-sm font-black uppercase tracking-widest text-primary border-b border-primary/20 pb-4">Proctoring Setup</h2>
+        <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-purple-600 border-b border-purple-200 pb-4">Proctoring Setup</h2>
           
-          <div className="bg-black/40 border border-white/5 rounded-xl aspect-video relative overflow-hidden flex items-center justify-center">
+          <div className="bg-gray-50 border border-gray-200 rounded-xl aspect-video relative overflow-hidden flex items-center justify-center">
             {stream ? (
               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
             ) : (
               <div className="text-center">
-                <Camera size={32} className="text-white/20 mx-auto mb-3" />
-                <p className="text-xs text-white/40 uppercase tracking-widest font-black">Camera Preview</p>
+                <Camera size={32} className="text-gray-300 mx-auto mb-3" />
+                <p className="text-xs font-medium text-gray-400">Camera Preview</p>
               </div>
             )}
             {!stream && (
-              <button onClick={requestCamera} className="absolute bottom-6 px-6 py-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors text-xs font-black uppercase tracking-widest">
+              <button onClick={requestCamera} className="absolute bottom-6 px-6 py-3 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-xs font-medium">
                 Enable Camera
               </button>
             )}
           </div>
           
           {cameraError && (
-            <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex gap-3 text-rose-400">
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex gap-3 text-rose-600">
               <AlertTriangle size={18} className="shrink-0" />
-              <p className="text-xs font-bold leading-relaxed">{cameraError}</p>
+              <p className="text-xs font-medium leading-relaxed">{cameraError}</p>
             </div>
           )}
 
-          <ul className="space-y-3 text-xs text-white/60 leading-relaxed bg-white/5 p-4 rounded-xl">
-            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-400 shrink-0"/> Ensure you are in a well-lit room.</li>
-            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-400 shrink-0"/> Do not switch tabs or minimize the window.</li>
-            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-400 shrink-0"/> Time limit: {assessment.time_limit_minutes} minutes.</li>
+          <ul className="space-y-3 text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-xl">
+            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Ensure you are in a well-lit room.</li>
+            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Do not switch tabs or minimize the window.</li>
+            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Time limit: {assessment.time_limit_minutes} minutes.</li>
           </ul>
 
           <button 
             onClick={startAssessment}
             disabled={!stream} 
-            className="w-full py-4 rounded-xl bg-primary text-black text-sm font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-50 disabled:hover:bg-primary"
+            className="w-full py-4 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-purple-600"
           >
             Start Assessment
           </button>
@@ -208,39 +208,39 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
   const secs = timeLeft % 60;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] -mx-6 -mt-6">
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Top Bar */}
-      <div className="bg-[#040812] border-b border-white/5 p-4 flex justify-between items-center shrink-0">
+      <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-8 rounded border border-white/10 overflow-hidden relative">
+          <div className="w-12 h-8 rounded border border-gray-200 overflow-hidden relative bg-gray-100">
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1] opacity-50" />
-            <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </div>
-          <h2 className="text-sm font-display font-black text-white uppercase tracking-wider truncate max-w-sm">{assessment.title}</h2>
+          <h2 className="text-sm font-semibold text-gray-800 truncate max-w-sm">{assessment.title}</h2>
         </div>
         
-        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${timeLeft < 300 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 animate-pulse' : 'bg-white/5 border-white/10 text-white'}`}>
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${timeLeft < 300 ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-gray-100 border-gray-200 text-gray-700'}`}>
           <Clock size={16} />
           {mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex flex-col md:flex-row">
         {/* Left Sidebar - Question List */}
-        <div className="w-64 bg-[#060E20]/50 border-r border-white/5 flex flex-col p-4 shrink-0 overflow-y-auto">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4">Questions</h3>
+        <div className="md:w-64 bg-gray-50 border-r border-gray-200 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Questions</h3>
           <div className="grid grid-cols-4 gap-2">
             {assessment.questions.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrentQ(i)}
-                className={`aspect-square rounded-lg flex items-center justify-center text-xs font-black transition-colors ${
+                className={`aspect-square rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${
                   currentQ === i 
-                    ? 'bg-primary text-black' 
+                    ? 'bg-purple-600 text-white' 
                     : answers[assessment.questions[i].id] 
-                      ? 'bg-white/20 text-white border border-white/30' 
-                      : 'bg-white/5 text-white/40 border border-transparent hover:bg-white/10'
+                      ? 'bg-gray-200 text-gray-700 border border-gray-300' 
+                      : 'bg-white text-gray-400 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 {i + 1}
@@ -250,67 +250,65 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
         </div>
 
         {/* Question Area */}
-        <div className="flex-1 overflow-y-auto p-8 flex flex-col">
-          <div className="flex-1 max-w-4xl mx-auto w-full">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
-                Question {currentQ + 1} of {assessment.questions.length}
-              </span>
-              <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                {q.marks} Points | {q.question_type}
-              </span>
-            </div>
-
-            <div className="prose prose-invert max-w-none mb-8">
-              <p className="text-lg text-white/90 leading-relaxed font-medium whitespace-pre-wrap">{q.question_text}</p>
-            </div>
-
-            {/* MCQ Answer Input */}
-            {q.question_type === 'mcq' && (
-              <div className="space-y-3">
-                {(q.options || []).map((opt, i) => (
-                  <label key={i} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${answers[q.id] === opt ? 'bg-primary/10 border-primary/50 text-white' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:border-white/20'}`}>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${answers[q.id] === opt ? 'border-primary' : 'border-white/30'}`}>
-                      {answers[q.id] === opt && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
-                    </div>
-                    <span className="text-sm font-medium">{opt}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-
-            {/* Written Answer Input */}
-            {q.question_type === 'written' && (
-              <textarea
-                value={answers[q.id] || ''}
-                onChange={e => setAnswers({ ...answers, [q.id]: e.target.value })}
-                placeholder="Type your answer here..."
-                className="w-full bg-black/40 border border-white/10 rounded-xl p-5 text-sm text-white outline-none focus:border-primary/50 min-h-[300px] resize-y"
-              />
-            )}
-
-            {/* Coding Challenge Input */}
-            {q.question_type === 'coding' && (
-              <div className="flex flex-col h-[500px] border border-white/10 rounded-xl overflow-hidden bg-black/40">
-                <div className="bg-white/5 px-4 py-2 flex justify-between items-center border-b border-white/5">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">{q.programming_language}</span>
-                </div>
-                <textarea
-                  value={answers[q.id] !== undefined ? answers[q.id] : (q.starter_code || '')}
-                  onChange={e => setAnswers({ ...answers, [q.id]: e.target.value })}
-                  className="flex-1 bg-transparent p-4 text-sm text-emerald-400 font-mono outline-none resize-none"
-                  spellCheck="false"
-                />
-              </div>
-            )}
+        <div className="flex-1 p-8">
+          <div className="flex justify-between items-center mb-6">
+            <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
+              Question {currentQ + 1} of {assessment.questions.length}
+            </span>
+            <span className="text-xs font-medium text-gray-500">
+              {q.marks} Points | {q.question_type}
+            </span>
           </div>
+
+          <div className="mb-8">
+            <p className="text-lg text-gray-800 leading-relaxed font-medium whitespace-pre-wrap">{q.question_text}</p>
+          </div>
+
+          {/* MCQ Answer Input */}
+          {q.question_type === 'mcq' && (
+            <div className="space-y-3">
+              {(q.options || []).map((opt, i) => (
+                <label key={i} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${answers[q.id] === opt ? 'bg-purple-50 border-purple-300 text-gray-800' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${answers[q.id] === opt ? 'border-purple-600' : 'border-gray-300'}`}>
+                    {answers[q.id] === opt && <div className="w-2.5 h-2.5 rounded-full bg-purple-600" />}
+                  </div>
+                  <span className="text-sm font-medium">{opt}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {/* Written Answer Input */}
+          {q.question_type === 'written' && (
+            <textarea
+              value={answers[q.id] || ''}
+              onChange={e => setAnswers({ ...answers, [q.id]: e.target.value })}
+              placeholder="Type your answer here..."
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all min-h-[300px] resize-y"
+            />
+          )}
+
+          {/* Coding Challenge Input */}
+          {q.question_type === 'coding' && (
+            <div className="flex flex-col h-[500px] border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
+              <div className="bg-gray-100 px-4 py-2 flex justify-between items-center border-b border-gray-200">
+                <span className="text-xs font-semibold text-purple-600">{q.programming_language}</span>
+              </div>
+              <textarea
+                value={answers[q.id] !== undefined ? answers[q.id] : (q.starter_code || '')}
+                onChange={e => setAnswers({ ...answers, [q.id]: e.target.value })}
+                className="flex-1 bg-white p-4 text-sm font-mono text-gray-700 outline-none resize-none"
+                spellCheck="false"
+              />
+            </div>
+          )}
           
           {/* Bottom Navigation */}
-          <div className="mt-8 pt-6 border-t border-white/5 flex justify-between max-w-4xl mx-auto w-full">
+          <div className="mt-8 pt-6 border-t border-gray-200 flex justify-between">
             <button
               onClick={() => setCurrentQ(q => Math.max(0, q - 1))}
               disabled={currentQ === 0}
-              className="px-6 py-3 rounded-xl bg-white/5 text-white/70 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors disabled:opacity-30 disabled:hover:bg-white/5 flex items-center gap-2"
+              className="px-6 py-3 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-30 disabled:hover:bg-gray-100 flex items-center gap-2"
             >
               <ChevronLeft size={16} /> Previous
             </button>
@@ -319,14 +317,14 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
               <button
                 onClick={() => handleSubmit()}
                 disabled={isSubmitting}
-                className="px-8 py-3 rounded-xl bg-primary text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors flex items-center gap-2"
+                className="px-8 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
               >
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16} /> Submit Assessment</>}
               </button>
             ) : (
               <button
                 onClick={() => setCurrentQ(q => Math.min(assessment.questions.length - 1, q + 1))}
-                className="px-6 py-3 rounded-xl bg-white/10 text-white text-xs font-black uppercase tracking-widest hover:bg-white/20 transition-colors flex items-center gap-2"
+                className="px-6 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
               >
                 Next <ChevronRight size={16} />
               </button>
