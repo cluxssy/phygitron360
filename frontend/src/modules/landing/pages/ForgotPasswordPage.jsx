@@ -9,6 +9,28 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const detectSubdomain = () => {
+    const hostname = window.location.hostname;
+    
+    // Ignore IP addresses
+    if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostname)) {
+      return 'public';
+    }
+
+    const parts = hostname.split('.');
+    
+    if (hostname.includes('localhost')) {
+      if (parts.length >= 2 && parts[0] !== 'www') {
+        return parts[0]; 
+      }
+      return 'public';
+    }
+
+    if (parts.length > 2 && parts[0] !== 'www') return parts[0];
+    return 'public';
+  };
+
+  const [workspaceId] = useState(detectSubdomain());
 
   const handleReset = async (e) => {
     e.preventDefault();
@@ -22,6 +44,7 @@ export default function ForgotPasswordPage() {
         credentials: 'include',
         body: JSON.stringify({
           email,
+          workspace_id: workspaceId,
           action: "Dispatch Reset" // ✅ backend requirement
         }),
       });

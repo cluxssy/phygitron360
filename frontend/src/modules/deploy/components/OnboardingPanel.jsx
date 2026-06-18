@@ -392,17 +392,19 @@ export default function OnboardingPanel() {
                             </button>
                             </>
                           )}
-                          <button 
-                            onClick={() => hardDeleteInvite(inv.id)} 
-                            title="Delete Log"
-                            className={`p-2 rounded-lg border transition-all ${
-                              isLightMode 
-                                ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
-                                : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
-                            }`}
-                          >
-                             <Trash2 size={14} />
-                          </button>
+                          {inv.status === 'Revoked' && (
+                            <button 
+                              onClick={() => hardDeleteInvite(inv.id)} 
+                              title="Delete Log"
+                              className={`p-2 rounded-lg border transition-all ${
+                                isLightMode 
+                                  ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
+                                  : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
+                              }`}
+                            >
+                               <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                    </tr>

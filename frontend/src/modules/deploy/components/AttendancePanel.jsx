@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
-import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle } from 'lucide-react';
 
 export default function AttendancePanel({ mode }) {
   const { user } = useAuth();
   const isAdmin = mode === 'admin';
   const isEmployee = mode === 'employee';
   const [status, setStatus] = useState(null);
+  const [showCorrectionForm, setShowCorrectionForm] = useState(false);
+  const [correctionForm, setCorrectionForm] = useState({ date: '', correction_type: 'both', clock_in: '', clock_out: '', reason: '' });
+  const [submittedCorrections, setSubmittedCorrections] = useState(new Set());
+  const [correctionQueue, setCorrectionQueue] = useState([]);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [selectedCorrectionId, setSelectedCorrectionId] = useState(null);
   const [history, setHistory] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [myLeaves, setMyLeaves] = useState([]);
@@ -87,14 +93,16 @@ export default function AttendancePanel({ mode }) {
       }
 
       if (isAdmin) {
-        const [al, dl, el] = await Promise.all([
+        const [al, dl, el, cq] = await Promise.all([
           fetch('/api/attendance/leave/all-requests', { credentials: 'include' }).then(r => r.json()),
           fetch('/api/attendance/admin/today', { credentials: 'include' }).then(r => r.json()),
           fetch('/api/attendance/admin/employees', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/attendance/correction/pending', { credentials: 'include' }).then(r => r.json()).catch(() => []),
         ]);
         setAllLeaves(Array.isArray(al) ? al : []);
         setDailyLog(Array.isArray(dl) ? dl : []);
         setEmployees(Array.isArray(el) ? el : []);
+        setCorrectionQueue(Array.isArray(cq) ? cq : []);
       }
     } catch (e) { 
         toast.error(e.message || 'Failed to load attendance data'); 
@@ -193,6 +201,51 @@ export default function AttendancePanel({ mode }) {
     } catch {
         toast.error("Synchronization Failed");
     }
+  };
+
+  const applyCorrection = async (e) => {
+      e.preventDefault();
+      try {
+          const res = await fetch('/api/attendance/correction/apply', {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(correctionForm)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Correction request failed');
+          toast.success('Correction request submitted');
+          setSubmittedCorrections(prev => new Set(prev).add(correctionForm.date));
+          setShowCorrectionForm(false);
+          loadData();
+      } catch (e) { toast.error(e.message); }
+  };
+
+  const actionCorrection = async (id, action, reason = '') => {
+      try {
+          const res = await fetch(`/api/attendance/correction/action/${id}`, {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action, rejection_reason: reason })
+          });
+          if (!res.ok) {
+              const data = await res.json();
+              throw new Error(data.detail || 'Action failed');
+          }
+          toast.success(`Correction ${action}`);
+          setSelectedCorrectionId(null);
+          setRejectionReason('');
+          loadData();
+      } catch (e) { toast.error(e.message); }
+  };
+
+  const isWithinLast7Days = (dateStr) => {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const d = new Date(dateStr);
+      d.setHours(0,0,0,0);
+      const diffTime = Math.abs(today - d);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 7;
   };
 
   const searchEmployeeRecords = async (code) => {
@@ -353,15 +406,19 @@ export default function AttendancePanel({ mode }) {
                 {[
                 { id: 'today', label: "Daily Log", icon: Users },
                 { id: 'leaves', label: 'Absence Queue', icon: Clock },
+                { id: 'corrections', label: 'Corrections Queue', icon: Edit },
                 { id: 'heatmap', label: 'Team Matrix', icon: BarChart3 },
                 { id: 'search', label: 'Personnel Search', icon: Search },
                 ].map(t => (
                 <button key={t.id} onClick={() => setAdminTab(t.id)}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    className={`relative flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                     adminTab === t.id ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg shadow-transparent' : 'bg-[#f5efff] border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] text-[#6b7280] hover:text-black'
                     }`}>
                     <t.icon size={14} />
                     {t.label}
+                    {t.id === 'corrections' && correctionQueue.length > 0 && (
+                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[8px] font-bold px-2 py-0.5 rounded-full">{correctionQueue.length}</span>
+                    )}
                 </button>
                 ))}
             </div>
@@ -472,6 +529,54 @@ export default function AttendancePanel({ mode }) {
                             <CheckCircle size={14} />
                           </button>
                           <button onClick={() => leaveAction(l.id, 'Rejected')}
+                            className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
+                            <XCircle size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {adminTab === 'corrections' && (
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden animate-fade-in-up">
+              <table className="w-full text-left">
+                <thead className="bg-[#f5efff] border-b border-[#ece2ff]">
+                  <tr>
+                    {['Personnel', 'Time Vector (Date)', 'Correction Type', 'Requested Signals', 'Rationale', 'Control'].map(h => (
+                      <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#ece2ff]">
+                  {correctionQueue.length === 0 ? (
+                    <tr><td colSpan={6} className="px-6 py-16 text-center text-[10px] text-[#b6b6c7] uppercase font-black tracking-widest italic animate-pulse">Correction Queue Clear</td></tr>
+                  ) : correctionQueue.map((c, i) => (
+                    <tr key={i} className="hover:bg-[#faf7ff]">
+                      <td className="px-6 py-4">
+                          <p className="text-xs font-bold text-black uppercase italic">{c.employee_name || c.employee_code}</p>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-mono text-[#6b7280]">{c.date}</td>
+                      <td className="px-6 py-4 text-[10px] font-black uppercase text-[#8b5cf6]">
+                          {c.correction_type ? c.correction_type.replace('_', ' ') : 'Correction'}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-mono text-[#6b7280]">
+                          <div className="flex flex-col">
+                              <span>In: {c.clock_in || 'N/A'}</span>
+                              <span>Out: {c.clock_out || 'N/A'}</span>
+                          </div>
+                      </td>
+                      <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-xs truncate">{c.reason}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2">
+                          <button onClick={() => actionCorrection(c.id, 'Approved')}
+                            className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
+                            <CheckCircle size={14} />
+                          </button>
+                          <button onClick={() => setSelectedCorrectionId(c.id)}
                             className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
                             <XCircle size={14} />
                           </button>
@@ -711,9 +816,27 @@ export default function AttendancePanel({ mode }) {
                             <p className="text-xs font-black text-black italic">{new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                             <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">Session: {h.clock_in} - {h.clock_out || '??'}</p>
                         </div>
-                        <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
-                            h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                        }`}>{h.status}</span>
+                        <div className="flex items-center gap-3">
+                            <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
+                                h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                            }`}>{h.status}</span>
+                            {h.status === 'Absent' && isWithinLast7Days(h.date) && (
+                                submittedCorrections.has(h.date) ? (
+                                    <span className="px-3 py-1 rounded text-[8px] font-black uppercase bg-amber-500/10 text-amber-500">Correction Pending</span>
+                                ) : (
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCorrectionForm({ ...correctionForm, date: h.date, clock_in: h.clock_in || '', clock_out: h.clock_out || '' });
+                                            setShowCorrectionForm(true);
+                                        }}
+                                        className="px-3 py-1 rounded text-[8px] font-black uppercase bg-[#f5efff] text-[#8b5cf6] border border-[#ebe4ff] hover:bg-[#8b5cf6] hover:text-white transition-all"
+                                    >
+                                        Request Correction
+                                    </button>
+                                )
+                            )}
+                        </div>
                     </div>
                 ))}
             </div>
@@ -746,6 +869,99 @@ export default function AttendancePanel({ mode }) {
       </div>
       )}
 
+      {/* Correction Request Modal */}
+      {showCorrectionForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
+          <form onSubmit={applyCorrection} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff]">
+            <div className="absolute top-0 right-0 p-8 opacity-5"><Edit size={100} /></div>
+            
+            <div className="relative z-10">
+                <h3 className="text-xl font-display font-black text-black uppercase italic tracking-widest mb-1">Fix <span className="text-[#8b5cf6]">Matrix Record</span></h3>
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#8b8ba3] mb-8">Correction Protocol</p>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time Vector (Date)</label>
+                        <input 
+                            disabled
+                            value={correctionForm.date}
+                            className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black/40 text-xs px-4 py-4 rounded-xl focus:outline-none font-bold"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Correction Type</label>
+                        <select
+                            value={correctionForm.correction_type}
+                            onChange={e => setCorrectionForm({...correctionForm, correction_type: e.target.value})}
+                            className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                        >
+                            <option value="missed_clockin">Missed Clock In</option>
+                            <option value="missed_clockout">Missed Clock Out</option>
+                            <option value="both">Both</option>
+                        </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Corrected Clock In</label>
+                            <input 
+                                type="time"
+                                step="1"
+                                required={correctionForm.correction_type === 'missed_clockin' || correctionForm.correction_type === 'both'}
+                                disabled={correctionForm.correction_type === 'missed_clockout'}
+                                value={correctionForm.clock_in}
+                                onChange={e => setCorrectionForm({...correctionForm, clock_in: e.target.value})}
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all font-mono"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Corrected Clock Out</label>
+                            <input 
+                                type="time"
+                                step="1"
+                                required={correctionForm.correction_type === 'missed_clockout' || correctionForm.correction_type === 'both'}
+                                disabled={correctionForm.correction_type === 'missed_clockin'}
+                                value={correctionForm.clock_out}
+                                onChange={e => setCorrectionForm({...correctionForm, clock_out: e.target.value})}
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all font-mono"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Correction Rationale</label>
+                        <textarea 
+                            required
+                            placeholder="Explain why correction is needed..."
+                            value={correctionForm.reason}
+                            onChange={e => setCorrectionForm({...correctionForm, reason: e.target.value})}
+                            rows={3}
+                            className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all resize-none placeholder:text-black/10"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-4 mt-10">
+                    <button 
+                        type="button"
+                        onClick={() => setShowCorrectionForm(false)}
+                        className="flex-1 py-4 rounded-2xl border border-[#ebe4ff] text-black/40 text-[10px] font-black uppercase tracking-widest hover:text-black hover:bg-white/5 transition-all"
+                    >
+                        Abort
+                    </button>
+                    <button 
+                        type="submit"
+                        className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-primary/10 font-display italic"
+                    >
+                        Submit Correction
+                    </button>
+                </div>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Absence Request Modal */}
       {showLeaveForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
@@ -766,27 +982,38 @@ export default function AttendancePanel({ mode }) {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Commencement</label>
-                            <input 
-                                type="date"
-                                required
-                                value={leaveForm.start_date}
-                                onChange={e => setLeaveForm({...leaveForm, start_date: e.target.value})}
-                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
-                            />
+                    <div className="space-y-1">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Commencement</label>
+                                <input 
+                                    type="date"
+                                    required
+                                    min={new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                                    value={leaveForm.start_date}
+                                    onChange={e => setLeaveForm({...leaveForm, start_date: e.target.value})}
+                                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Termination</label>
+                                <input 
+                                    type="date"
+                                    required
+                                    min={new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                                    value={leaveForm.end_date}
+                                    onChange={e => setLeaveForm({...leaveForm, end_date: e.target.value})}
+                                    className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all uppercase font-mono"
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Termination</label>
-                            <input 
-                                type="date"
-                                required
-                                value={leaveForm.end_date}
-                                onChange={e => setLeaveForm({...leaveForm, end_date: e.target.value})}
-                                className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all uppercase font-mono"
-                            />
-                        </div>
+                        <p className="text-[8px] font-bold text-[#8b8ba3] px-2">* You can apply for leaves up to 15 days in the past.</p>
+                        {leaveForm.start_date && new Date(leaveForm.start_date) < new Date(new Date().setHours(0,0,0,0)) && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded bg-amber-50 text-amber-600 border border-amber-200">
+                                <AlertCircle size={10} />
+                                <span className="text-[8px] font-black uppercase tracking-widest">This will be marked as a retroactive leave</span>
+                            </div>
+                        )}
                     </div>
 
                     {leaveForm.start_date && leaveForm.end_date && isSingleDay && (
@@ -911,6 +1138,40 @@ export default function AttendancePanel({ mode }) {
              </div>
           </div>
         </div>
+      )}
+
+      {/* Reject Correction Modal */}
+      {selectedCorrectionId && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-[#060b19]/80 backdrop-blur-sm" onClick={() => setSelectedCorrectionId(null)} />
+              <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] w-full max-w-md relative z-10 animate-fade-in-up overflow-hidden">
+                  <div className="p-6 border-b border-[#ece2ff] bg-[#faf7ff] flex justify-between items-center relative">
+                      <div className="relative z-10">
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black italic">Reject Correction</h3>
+                      </div>
+                      <button onClick={() => setSelectedCorrectionId(null)} className="p-2 text-[#8b8ba3] hover:text-black transition-colors relative z-10">
+                          <XCircle size={20} />
+                      </button>
+                  </div>
+                  <div className="p-8 space-y-6">
+                      <div>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-red-500 mb-2 block ml-1">Rejection Rationale (Optional)</label>
+                        <textarea 
+                            value={rejectionReason}
+                            onChange={e => setRejectionReason(e.target.value)}
+                            className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none h-24 resize-none"
+                            placeholder="State reason for rejection..."
+                        />
+                      </div>
+                      <button 
+                        onClick={() => actionCorrection(selectedCorrectionId, 'Rejected', rejectionReason)}
+                        className="w-full py-4 bg-red-500 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-600 transition-all shadow-xl shadow-transparent"
+                      >
+                        Confirm Rejection
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
 
       {/* Edit Attendance Modal */}

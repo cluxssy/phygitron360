@@ -54,10 +54,13 @@ def create_tables(schema_name='public'):
                     plan TEXT DEFAULT 'starter',
                     modules_enabled TEXT[] DEFAULT ARRAY['source','forge','verify','deploy'],
                     subscription_status TEXT DEFAULT 'trial',
+                    timezone TEXT DEFAULT 'Asia/Kolkata',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT TRUE
                 )
             ''')
+            
+            cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'Asia/Kolkata'")
             
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -690,11 +693,42 @@ def create_tables(schema_name='public'):
                 clock_in TEXT,
                 clock_out TEXT,
                 work_log TEXT,
-                status TEXT DEFAULT 'Present',
+                status TEXT DEFAULT 'Active',
                 ip_address TEXT,
                 UNIQUE(employee_code, date)
             )
         ''')
+
+        # 16.1) Attendance Reminders Table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS attendance_reminders (
+                id SERIAL PRIMARY KEY,
+                attendance_id INTEGER UNIQUE NOT NULL REFERENCES attendance(id) ON UPDATE CASCADE ON DELETE CASCADE,
+                employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE ON DELETE CASCADE,
+                last_reminder_sent TIMESTAMP NOT NULL,
+                reminder_count INTEGER DEFAULT 0
+            )
+        ''')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_attendance_reminders_attendance_id ON attendance_reminders(attendance_id)')
+
+        # 16.2) Attendance Corrections Table (Pre-designed for M2)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS attendance_corrections (
+                id SERIAL PRIMARY KEY,
+                attendance_id INTEGER REFERENCES attendance(id) ON UPDATE CASCADE ON DELETE SET NULL,
+                employee_code TEXT NOT NULL REFERENCES employees(employee_code) ON UPDATE CASCADE ON DELETE CASCADE,
+                date TEXT NOT NULL,
+                clock_in TEXT,
+                clock_out TEXT,
+                reason TEXT NOT NULL,
+                status TEXT DEFAULT 'Pending',
+                rejection_reason TEXT,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                approved_by TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE,
+                approved_at TIMESTAMP
+            )
+        ''')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_attendance_corrections_emp_date ON attendance_corrections(employee_code, date)')
 
         # 17) Leaves Table
         cur.execute('''
@@ -957,6 +991,27 @@ def create_tables(schema_name='public'):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        # --- New Bimonthly Report Log Table ---
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS bimonthly_report_log (
+                id SERIAL PRIMARY KEY,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                cycle TEXT NOT NULL CHECK (cycle IN ('mid', 'end')),
+                sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(year, month, cycle)
+            )
+        ''')
+
+        # --- Alterations and Indexes ---
+        cur.execute("ALTER TABLE leaves ADD COLUMN IF NOT EXISTS is_retroactive BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE attendance_corrections ADD COLUMN IF NOT EXISTS correction_type TEXT")
+        
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_corrections_unique_emp_date ON attendance_corrections(employee_code, date)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leaves_date ON leaves(employee_code, start_date, end_date)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leaves_status ON leaves(status, start_date)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_attendance_date_status ON attendance(date, status)")
 
         conn.commit()
     except Exception as e:

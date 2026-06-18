@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { X, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -22,6 +22,14 @@ const Field = ({ label, k, type = 'text', options, form, set }) => (
 
 export default function AddEmployeeModal({ onClose, onSuccess }) {
   const [activeTab, setActiveTab] = useState('single'); // 'single' or 'bulk'
+  const [managers, setManagers] = useState([]);
+  
+  useEffect(() => {
+    fetch('/api/options', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => setManagers(data.managers || []))
+      .catch(() => {});
+  }, []);
   
   // Single Add State
   const [step, setStep] = useState(1);
@@ -181,7 +189,13 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                   <Field label="Joining Date *" k="doj" type="date" form={form} set={set} />
                   <Field label="Department *" k="team" form={form} set={set} />
                   <Field label="Job Title *" k="designation" form={form} set={set} />
-                  <Field label="Reporting Manager" k="manager" form={form} set={set} />
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">Reporting Manager</label>
+                    <select value={form.manager} onChange={e => set('manager', e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-[#f8f5ff] text-black text-[13px] font-semibold px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all">
+                      <option value="">Select Manager</option>
+                      {managers.map(m => <option key={m.code} value={m.code}>{m.name} ({m.role})</option>)}
+                    </select>
+                  </div>
                   <Field label="Work Location *" k="location" form={form} set={set} />
                   <Field label="Employment Type" k="type" options={['Full-time', 'Part-time', 'Contract', 'Intern']} form={form} set={set} />
                   <Field label="System Access Role" k="role" options={ROLES} form={form} set={set} />
