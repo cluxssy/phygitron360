@@ -559,6 +559,7 @@ class CandidateService:
                     if not items:
                         await asyncio.sleep(5)
                         continue
+                    print(f"[Worker-{worker_id}][{self.tenant_id}] Picked up item {items[0].get('id')} filename={items[0].get('filename')}", flush=True)
 
                     item = items[0]
                     job_id = item.get("job_id")
@@ -587,6 +588,7 @@ class CandidateService:
                             extracted_text = self._extract_text(item["file_path"], ext)
 
                         if not extracted_text.strip():
+                            print(f"[Worker-{worker_id}][{self.tenant_id}] Item {item['id']} FAILED: no text extracted. file_path={item.get('file_path')} exists={os.path.exists(item.get('file_path',''))}", flush=True)
                             self.repo.update_bulk_upload_job_item(
                                 item["id"], status="failed", error_message="Could not extract text from file."
                             )
@@ -618,24 +620,24 @@ class CandidateService:
                         self.repo.update_bulk_upload_job_item(
                             item["id"], status="success", candidate_id=result["candidate_id"]
                         )
-                        logger.info(f"[Worker-{worker_id}] Processed item {item['id']} → candidate {result['candidate_id']}")
+                        print(f"[Worker-{worker_id}][{self.tenant_id}] SUCCESS item {item['id']} → candidate {result['candidate_id']}", flush=True)
 
                     except Exception as e:
                         err_str = str(e)
                         if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout']):
                             match = re.search(r'(?:retry in|try again in) (\d+\.?\d*)', err_str)
                             wait = int(float(match.group(1))) + 2 if match else 15
-                            logger.warning(f"[Worker-{worker_id}] API busy or network error, backing off {wait}s. Re-queuing item {item['id']}")
+                            print(f"[Worker-{worker_id}][{self.tenant_id}] API busy, backing off {wait}s, re-queuing item {item['id']}", flush=True)
                             self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None)
                             backoff = wait
                         else:
-                            logger.error(f"[Worker-{worker_id}] Error on item {item['id']}: {e}")
+                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: {err_str[:300]}", flush=True)
                             self.repo.update_bulk_upload_job_item(
                                 item["id"], status="failed", error_message=err_str[:500]
                             )
 
                 except Exception as outer_e:
-                    logger.error(f"[Worker-{worker_id}] Outer loop error: {outer_e}")
+                    print(f"[Worker-{worker_id}][{self.tenant_id}] Outer loop error: {outer_e}", flush=True)
                     await asyncio.sleep(15)
 
         # Launch all workers as concurrent tasks
