@@ -107,7 +107,7 @@ class AIService:
             
             try:
                 response = self.gemini_client.models.generate_content(
-                    model='gemini-3-flash-preview',
+                    model='gemini-1.5-flash',
                     contents=full_prompt,
                 )
                 clean_text = response.text.replace('```json', '').replace('```', '').strip()
@@ -163,7 +163,7 @@ class AIService:
                 full_prompt = f"{system_prompt}\n\n{prompt}\n\nIMPORTANT: Return ONLY valid JSON and NOTHING ELSE. Do not use markdown backticks."
                 try:
                     response = self.gemini_client.models.generate_content(
-                        model='gemini-3-flash-preview',
+                        model='gemini-1.5-flash',
                         contents=full_prompt,
                     )
                     clean_text = response.text.replace('```json', '').replace('```', '').strip()

@@ -599,9 +599,13 @@ class CandidateService:
                         ai_service = self.ai_agents.ai
                         prompt = f"Parse this resume:\n\n{extracted_text[:6000]}"
 
-                        ai_result = await loop.run_in_executor(
-                            None,
-                            lambda p=prompt: ai_service.generate_json_sync(p, PARSE_RESUME_SYSTEM)
+                        # Use asyncio.wait_for to prevent hanging if the AI provider stalls
+                        ai_result = await asyncio.wait_for(
+                            loop.run_in_executor(
+                                None,
+                                lambda p=prompt: ai_service.generate_json_sync(p, PARSE_RESUME_SYSTEM)
+                            ),
+                            timeout=45.0
                         )
 
                         if not ai_result or not ai_result.get("name"):
