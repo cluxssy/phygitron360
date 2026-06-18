@@ -43,6 +43,19 @@ class AdminService:
         # 6. Dispatch Welcome Email
         send_welcome_email(to_email=admin_email, company_name=company_name, temp_password=admin_password, subdomain=subdomain)
 
+        # 7. Spawn a bulk-upload background worker for the new tenant immediately
+        # (the startup event only covers tenants that exist at boot time)
+        try:
+            import asyncio
+            from backend.modules.source.services.candidate_service import CandidateService
+            svc = CandidateService(tenant_id=tenant_schema)
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(svc.process_bulk_upload_queue())
+        except Exception as worker_err:
+            import logging
+            logging.getLogger(__name__).warning(f"[provision_tenant] Could not start bulk worker for {tenant_schema}: {worker_err}")
+
         return {
             "success": True,
             "workspace_id": tenant_schema,

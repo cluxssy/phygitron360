@@ -93,7 +93,10 @@ scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
 
 @app.on_event("startup")
 async def start_background_workers():
-    from backend.core.database import get_db_connection
+    from backend.core.database import get_db_connection, create_tables
+    import logging
+    _log = logging.getLogger(__name__)
+
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -103,9 +106,20 @@ async def start_background_workers():
     finally:
         conn.close()
 
+    # Run create_tables() for every tenant as an idempotent migration.
+    # This ensures any tables added to new code versions (e.g. bulk_upload_jobs)
+    # are created in schemas that were provisioned before the code update.
+    for t_id in tenant_ids:
+        try:
+            create_tables(schema_name=t_id)
+            _log.info(f"[Startup] Schema migration OK for {t_id}")
+        except Exception as e:
+            _log.error(f"[Startup] Schema migration FAILED for {t_id}: {e}")
+
     for t_id in tenant_ids:
         svc = CandidateService(tenant_id=t_id)
         asyncio.create_task(svc.process_bulk_upload_queue())
+        _log.info(f"[Startup] Bulk-upload worker started for {t_id}")
 
     # Start APScheduler tasks
     scheduler.add_job(run_missed_clockout_check, CronTrigger(hour="17,21", minute=0))
