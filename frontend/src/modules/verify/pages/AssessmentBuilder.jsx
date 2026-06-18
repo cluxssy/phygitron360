@@ -148,7 +148,6 @@ export default function AssessmentBuilder() {
     try {
       let r, d;
       if (asmId) {
-        // Update
         r = await fetch(`/api/verify/builder/assessments/${asmId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -156,7 +155,6 @@ export default function AssessmentBuilder() {
         });
         d = await r.json();
       } else {
-        // Create
         r = await fetch('/api/verify/builder/assessments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -189,30 +187,32 @@ export default function AssessmentBuilder() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-primary" /></div>;
+  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+    <div className="flex flex-col gap-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-display font-black text-white uppercase tracking-tighter italic">
-          Assessment <span className="text-primary">Builder</span>
-        </h1>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">Assessment Builder</h2>
+          <p className="text-sm text-gray-500 mt-1">Create and configure skills assessments</p>
+        </div>
         <div className="flex gap-2">
           {step > 1 && (
-            <button onClick={() => setStep(step - 1)} className="px-4 py-2 rounded-xl bg-white/5 text-white/70 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors">
+            <button onClick={() => setStep(step - 1)} className="px-4 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">
               Back
             </button>
           )}
           {step < 3 ? (
-            <button onClick={() => setStep(step + 1)} className="px-6 py-2 rounded-xl bg-primary text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors">
+            <button onClick={() => setStep(step + 1)} className="px-6 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm">
               Next Step
             </button>
           ) : (
             <>
-              <button onClick={() => handleSave(false)} disabled={saving} className="px-6 py-2 rounded-xl bg-white/5 text-white text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors flex items-center gap-2">
+              <button onClick={() => handleSave(false)} disabled={saving} className="px-6 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-2">
                 <Save size={14} /> Draft
               </button>
-              <button onClick={() => handleSave(true)} disabled={saving} className="px-6 py-2 rounded-xl bg-emerald-400 text-black text-xs font-black uppercase tracking-widest hover:bg-emerald-300 transition-colors flex items-center gap-2">
+              <button onClick={() => handleSave(true)} disabled={saving} className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-sm">
                 <Send size={14} /> Publish
               </button>
             </>
@@ -227,28 +227,28 @@ export default function AssessmentBuilder() {
           { icon: List, label: 'Questions' },
           { icon: Eye, label: 'Review' }
         ].map((s, i) => (
-          <div key={i} className={`flex-1 flex items-center gap-3 p-4 rounded-xl border ${step === i + 1 ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/5 text-white/40'}`}>
+          <div key={i} className={`flex-1 flex items-center gap-3 p-4 rounded-xl border ${step === i + 1 ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-white border-gray-200 text-gray-500'}`}>
             <s.icon size={18} />
-            <span className="text-xs font-black uppercase tracking-widest">Step {i + 1}: {s.label}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Step {i + 1}: {s.label}</span>
           </div>
         ))}
       </div>
 
       {/* STEP 1: Settings */}
       {step === 1 && (
-        <div className="glass-panel p-8 space-y-6">
+        <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6">
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Title</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40" placeholder="e.g. Senior Frontend Developer Assessment" />
+            <label className="block text-xs font-medium text-gray-600 mb-2">Title</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" placeholder="e.g. Senior Frontend Developer Assessment" />
           </div>
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Description</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40 min-h-[100px]" placeholder="Brief description of the assessment..." />
+            <label className="block text-xs font-medium text-gray-600 mb-2">Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all min-h-[100px]" placeholder="Brief description of the assessment..." />
           </div>
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Assessment Type</label>
-              <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40">
+              <label className="block text-xs font-medium text-gray-600 mb-2">Assessment Type</label>
+              <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all">
                 <option value="Mixed">Mixed</option>
                 <option value="MCQ">Multiple Choice Only</option>
                 <option value="Coding">Coding Only</option>
@@ -256,28 +256,28 @@ export default function AssessmentBuilder() {
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Time Limit (Minutes)</label>
-              <input type="number" value={timeLimit} onChange={e => setTimeLimit(parseInt(e.target.value) || 0)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40" />
+              <label className="block text-xs font-medium text-gray-600 mb-2">Time Limit (Minutes)</label>
+              <input type="number" value={timeLimit} onChange={e => setTimeLimit(parseInt(e.target.value) || 0)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Pass Score (%)</label>
-              <input type="number" value={passScore} onChange={e => setPassScore(parseInt(e.target.value) || 0)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40" />
+              <label className="block text-xs font-medium text-gray-600 mb-2">Pass Score (%)</label>
+              <input type="number" value={passScore} onChange={e => setPassScore(parseInt(e.target.value) || 0)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" />
             </div>
           </div>
-          <div className="flex gap-6 pt-4 border-t border-white/5">
+          <div className="flex gap-6 pt-4 border-t border-gray-200">
             <label className="flex items-center gap-3 cursor-pointer group">
               <input type="checkbox" checked={shuffleQuestions} onChange={e => setShuffleQuestions(e.target.checked)} className="hidden" />
-              <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${shuffleQuestions ? 'bg-primary border-primary text-black' : 'border-white/20 text-transparent group-hover:border-white/40'}`}>
+              <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${shuffleQuestions ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 bg-white group-hover:border-purple-400'}`}>
                 <CheckCircle size={12} />
               </div>
-              <span className="text-xs font-black uppercase tracking-widest text-white/70">Shuffle Questions</span>
+              <span className="text-xs font-medium text-gray-700">Shuffle Questions</span>
             </label>
             <label className="flex items-center gap-3 cursor-pointer group">
               <input type="checkbox" checked={showResultImmediately} onChange={e => setShowResultImmediately(e.target.checked)} className="hidden" />
-              <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${showResultImmediately ? 'bg-primary border-primary text-black' : 'border-white/20 text-transparent group-hover:border-white/40'}`}>
+              <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${showResultImmediately ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 bg-white group-hover:border-purple-400'}`}>
                 <CheckCircle size={12} />
               </div>
-              <span className="text-xs font-black uppercase tracking-widest text-white/70">Show Result Immediately</span>
+              <span className="text-xs font-medium text-gray-700">Show Result Immediately</span>
             </label>
           </div>
         </div>
@@ -287,53 +287,53 @@ export default function AssessmentBuilder() {
       {step === 2 && (
         <div className="space-y-6">
           <div className="flex gap-3">
-            <button onClick={addQuestion} className="px-4 py-3 rounded-xl bg-primary/10 text-primary border border-primary/20 text-xs font-black uppercase tracking-widest hover:bg-primary/20 transition-colors flex items-center gap-2">
+            <button onClick={addQuestion} className="px-4 py-3 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold hover:bg-purple-100 transition-colors flex items-center gap-2">
               <Plus size={14} /> Add Question
             </button>
-            <button onClick={() => setShowImportUrl(true)} className="px-4 py-3 rounded-xl bg-white/5 text-white/70 border border-white/10 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors flex items-center gap-2">
-              <LinkIcon size={14} /> Import from URL (LeetCode)
+            <button onClick={() => setShowImportUrl(true)} className="px-4 py-3 rounded-xl bg-gray-50 text-gray-600 border border-gray-200 text-xs font-medium hover:bg-gray-100 transition-colors flex items-center gap-2">
+              <LinkIcon size={14} /> Import from URL
             </button>
           </div>
 
           {questions.length === 0 ? (
-            <div className="glass-panel p-12 text-center text-white/40 text-xs font-black uppercase tracking-widest">
-              No questions added yet.
+            <div className="bg-white rounded-2xl p-12 text-center border border-gray-200 shadow-sm">
+              <p className="text-sm text-gray-400 font-medium">No questions added yet.</p>
             </div>
           ) : (
             <div className="space-y-6">
               {questions.map((q, i) => (
-                <div key={q.id || i} className="glass-panel p-6 border-l-2 border-l-primary relative group">
+                <div key={q.id || i} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm border-l-4 border-l-purple-600 relative group">
                   <div className="absolute right-4 top-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => moveQuestion(i, 'up')} disabled={i === 0} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 disabled:opacity-30"><ArrowUp size={14}/></button>
-                    <button onClick={() => moveQuestion(i, 'down')} disabled={i === questions.length - 1} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 disabled:opacity-30"><ArrowDown size={14}/></button>
-                    <button onClick={() => removeQuestion(i)} className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500"><Trash2 size={14}/></button>
+                    <button onClick={() => moveQuestion(i, 'up')} disabled={i === 0} className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-30"><ArrowUp size={14}/></button>
+                    <button onClick={() => moveQuestion(i, 'down')} disabled={i === questions.length - 1} className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-30"><ArrowDown size={14}/></button>
+                    <button onClick={() => removeQuestion(i)} className="p-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600"><Trash2 size={14}/></button>
                   </div>
 
                   <div className="flex gap-4 mb-4 pr-32">
-                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-display font-black text-lg text-white/40 shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center font-bold text-lg text-gray-600 shrink-0">
                       {i + 1}
                     </div>
                     <div className="flex-1 space-y-4">
-                      <div className="flex gap-4">
-                        <select value={q.question_type} onChange={e => updateQuestion(i, 'question_type', e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none">
+                      <div className="flex gap-4 flex-wrap">
+                        <select value={q.question_type} onChange={e => updateQuestion(i, 'question_type', e.target.value)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-purple-400">
                           {QUESTION_TYPES.map(qt => <option key={qt.id} value={qt.id}>{qt.label}</option>)}
                         </select>
-                        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-                          <span className="text-[10px] font-black uppercase text-white/40">Marks:</span>
-                          <input type="number" value={q.marks || 1} onChange={e => updateQuestion(i, 'marks', parseFloat(e.target.value) || 0)} className="bg-transparent w-12 text-xs text-white outline-none text-right" />
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                          <span className="text-xs font-medium text-gray-500">Marks:</span>
+                          <input type="number" value={q.marks || 1} onChange={e => updateQuestion(i, 'marks', parseFloat(e.target.value) || 0)} className="bg-transparent w-12 text-sm text-gray-700 outline-none text-right" />
                         </div>
                       </div>
 
                       <textarea
                         value={q.question_text}
                         onChange={e => updateQuestion(i, 'question_text', e.target.value)}
-                        placeholder="Enter question text... (Markdown supported)"
-                        className="w-full bg-transparent border-b border-white/10 focus:border-primary outline-none py-2 text-sm text-white resize-none min-h-[60px]"
+                        placeholder="Enter question text..."
+                        className="w-full bg-transparent border-b border-gray-200 focus:border-purple-400 outline-none py-2 text-sm text-gray-700 resize-none min-h-[60px]"
                       />
 
                       {/* Type-specific UI */}
                       {q.question_type === 'mcq' && (
-                        <div className="space-y-2 mt-4 pl-4 border-l border-white/10">
+                        <div className="space-y-2 mt-4 pl-4 border-l border-gray-200">
                           {(q.options || []).map((opt, oIdx) => (
                             <div key={oIdx} className="flex items-center gap-3">
                               <input
@@ -341,7 +341,7 @@ export default function AssessmentBuilder() {
                                 name={`correct_${i}`}
                                 checked={q.correct_answer === opt && opt !== ''}
                                 onChange={() => updateQuestion(i, 'correct_answer', opt)}
-                                className="w-4 h-4 accent-primary"
+                                className="w-4 h-4 accent-purple-600"
                               />
                               <input
                                 type="text"
@@ -353,54 +353,54 @@ export default function AssessmentBuilder() {
                                   if (q.correct_answer === opt) updateQuestion(i, 'correct_answer', e.target.value);
                                 }}
                                 placeholder={`Option ${oIdx + 1}`}
-                                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary/50"
+                                className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-purple-400"
                               />
-                              <button onClick={() => updateQuestion(i, 'options', q.options.filter((_, idx) => idx !== oIdx))} className="text-white/30 hover:text-rose-400"><X size={14}/></button>
+                              <button onClick={() => updateQuestion(i, 'options', q.options.filter((_, idx) => idx !== oIdx))} className="text-gray-400 hover:text-rose-600"><X size={14}/></button>
                             </div>
                           ))}
-                          <button onClick={() => updateQuestion(i, 'options', [...(q.options || []), ''])} className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-white transition-colors mt-2">
+                          <button onClick={() => updateQuestion(i, 'options', [...(q.options || []), ''])} className="text-xs font-medium text-purple-600 hover:text-purple-800 transition-colors mt-2">
                             + Add Option
                           </button>
                         </div>
                       )}
 
                       {q.question_type === 'coding' && (
-                        <div className="space-y-4 mt-4 p-4 bg-black/30 rounded-xl border border-white/5">
-                          <div className="flex gap-4 items-center">
-                            <select value={q.programming_language || 'python'} onChange={e => updateQuestion(i, 'programming_language', e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none">
+                        <div className="space-y-4 mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                          <div className="flex gap-4 items-center flex-wrap">
+                            <select value={q.programming_language || 'python'} onChange={e => updateQuestion(i, 'programming_language', e.target.value)} className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-purple-400">
                               <option value="python">Python</option>
                               <option value="javascript">JavaScript</option>
                               <option value="java">Java</option>
                               <option value="cpp">C++</option>
                             </select>
-                            <button className="flex items-center gap-2 text-[10px] font-black uppercase text-primary bg-primary/10 px-3 py-1.5 rounded-lg">
-                              <Wand2 size={12} /> AI Generate Template
+                            <button className="flex items-center gap-2 text-xs font-medium text-purple-600 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-200 hover:bg-purple-100">
+                              <Wand2 size={12} /> Generate Template
                             </button>
                           </div>
                           <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Starter Code</label>
+                            <label className="block text-xs font-medium text-gray-600 mb-2">Starter Code</label>
                             <textarea
                               value={q.starter_code || ''}
                               onChange={e => updateQuestion(i, 'starter_code', e.target.value)}
-                              className="w-full bg-[#0d1117] border border-white/10 rounded-lg p-3 text-xs text-emerald-400 font-mono outline-none min-h-[120px]"
+                              className="w-full bg-white border border-gray-200 rounded-lg p-3 text-sm font-mono text-gray-700 outline-none focus:border-purple-400 min-h-[120px]"
                               placeholder="def solve(x):\n    pass"
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2 flex justify-between">
+                            <label className="block text-xs font-medium text-gray-600 mb-2 flex justify-between">
                               <span>Test Cases</span>
-                              <button onClick={() => updateQuestion(i, 'test_cases', [...(q.test_cases || []), {input: '', expected_output: ''}])} className="text-primary hover:text-white">+ Add Test</button>
+                              <button onClick={() => updateQuestion(i, 'test_cases', [...(q.test_cases || []), {input: '', expected_output: ''}])} className="text-purple-600 hover:text-purple-800 text-xs font-medium">+ Add Test</button>
                             </label>
                             <div className="space-y-2">
                               {(q.test_cases || []).map((tc, tIdx) => (
-                                <div key={tIdx} className="flex gap-2 items-start bg-white/5 p-2 rounded-lg">
+                                <div key={tIdx} className="flex gap-2 items-start bg-white p-2 rounded-lg border border-gray-200">
                                   <textarea value={tc.input} onChange={e => {
                                     const tcs = [...q.test_cases]; tcs[tIdx].input = e.target.value; updateQuestion(i, 'test_cases', tcs);
-                                  }} placeholder="Input (stdin)" className="flex-1 bg-transparent border border-white/10 rounded p-2 text-xs font-mono text-white outline-none h-16 resize-none" />
+                                  }} placeholder="Input" className="flex-1 bg-gray-50 border border-gray-200 rounded p-2 text-sm font-mono text-gray-700 outline-none focus:border-purple-400 h-16 resize-none" />
                                   <textarea value={tc.expected_output} onChange={e => {
                                     const tcs = [...q.test_cases]; tcs[tIdx].expected_output = e.target.value; updateQuestion(i, 'test_cases', tcs);
-                                  }} placeholder="Expected Output" className="flex-1 bg-transparent border border-white/10 rounded p-2 text-xs font-mono text-white outline-none h-16 resize-none" />
-                                  <button onClick={() => updateQuestion(i, 'test_cases', q.test_cases.filter((_, idx) => idx !== tIdx))} className="p-2 text-white/30 hover:text-rose-400"><Trash2 size={14}/></button>
+                                  }} placeholder="Expected Output" className="flex-1 bg-gray-50 border border-gray-200 rounded p-2 text-sm font-mono text-gray-700 outline-none focus:border-purple-400 h-16 resize-none" />
+                                  <button onClick={() => updateQuestion(i, 'test_cases', q.test_cases.filter((_, idx) => idx !== tIdx))} className="p-2 text-gray-400 hover:text-rose-600"><Trash2 size={14}/></button>
                                 </div>
                               ))}
                             </div>
@@ -410,11 +410,11 @@ export default function AssessmentBuilder() {
                       
                       {q.question_type === 'written' && (
                         <div className="mt-4">
-                          <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Model Answer (for AI Grading)</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-2">Model Answer (for AI Grading)</label>
                           <textarea
                             value={q.model_answer || ''}
                             onChange={e => updateQuestion(i, 'model_answer', e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40 min-h-[80px]"
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all min-h-[80px]"
                             placeholder="Expected points to cover..."
                           />
                         </div>
@@ -430,29 +430,29 @@ export default function AssessmentBuilder() {
 
       {/* STEP 3: Review */}
       {step === 3 && (
-        <div className="glass-panel p-8 space-y-8">
+        <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-8">
           <div className="text-center">
-            <h2 className="text-2xl font-display font-black text-white">{title}</h2>
-            <p className="text-sm text-white/50 mt-2">{description}</p>
+            <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
+            <p className="text-sm text-gray-500 mt-2">{description}</p>
             <div className="flex justify-center gap-4 mt-6">
-              <span className="px-3 py-1 rounded-full bg-white/5 text-[10px] font-black uppercase tracking-widest text-white/60">{type}</span>
-              <span className="px-3 py-1 rounded-full bg-white/5 text-[10px] font-black uppercase tracking-widest text-white/60">{timeLimit} Mins</span>
-              <span className="px-3 py-1 rounded-full bg-white/5 text-[10px] font-black uppercase tracking-widest text-white/60">{questions.length} Questions</span>
+              <span className="px-3 py-1 rounded-full bg-gray-100 text-xs font-medium text-gray-600">{type}</span>
+              <span className="px-3 py-1 rounded-full bg-gray-100 text-xs font-medium text-gray-600">{timeLimit} Mins</span>
+              <span className="px-3 py-1 rounded-full bg-gray-100 text-xs font-medium text-gray-600">{questions.length} Questions</span>
             </div>
           </div>
           
-          <div className="border-t border-white/10 pt-8">
-            <h3 className="text-sm font-black uppercase tracking-widest text-white/70 mb-4">Question Summary</h3>
+          <div className="border-t border-gray-200 pt-8">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Question Summary</h3>
             <div className="space-y-3">
               {questions.map((q, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                   <div className="flex items-center gap-4">
-                    <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-bold">{i+1}</span>
-                    <span className="text-sm text-white/80 line-clamp-1">{q.question_text || '(Empty Question)'}</span>
+                    <span className="w-6 h-6 rounded-lg bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{i+1}</span>
+                    <span className="text-sm text-gray-700 line-clamp-1">{q.question_text || '(Empty Question)'}</span>
                   </div>
                   <div className="flex gap-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-primary/70">{q.question_type}</span>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40">{q.marks} pts</span>
+                    <span className="text-xs font-medium text-purple-600">{q.question_type}</span>
+                    <span className="text-xs font-medium text-gray-400">{q.marks} pts</span>
                   </div>
                 </div>
               ))}
@@ -461,29 +461,29 @@ export default function AssessmentBuilder() {
         </div>
       )}
 
-      {/* Modals */}
+      {/* Import Modal */}
       {showImportUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowImportUrl(false)}>
-          <div className="glass-panel w-full max-w-lg p-8 relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowImportUrl(false)} className="absolute top-5 right-5 p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-colors">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowImportUrl(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg p-8 relative shadow-2xl border border-gray-200" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowImportUrl(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
               <X size={18} />
             </button>
-            <h2 className="text-xl font-display font-black text-white uppercase tracking-tighter italic mb-6 flex items-center gap-3">
-              <LinkIcon className="text-primary"/> Import from URL
+            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+              <LinkIcon className="text-purple-600"/> Import from URL
             </h2>
             <form onSubmit={handleImportUrl}>
               <div className="mb-6">
-                <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">LeetCode URL</label>
+                <label className="block text-xs font-medium text-gray-600 mb-2">URL</label>
                 <input
                   type="url"
                   required
                   value={importUrl}
                   onChange={e => setImportUrl(e.target.value)}
                   placeholder="https://leetcode.com/problems/two-sum/"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
                 />
               </div>
-              <button type="submit" disabled={importingUrl} className="w-full py-3 rounded-xl bg-primary text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-50">
+              <button type="submit" disabled={importingUrl} className="w-full py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50">
                 {importingUrl ? <Loader2 className="animate-spin mx-auto" size={16} /> : 'Import Questions'}
               </button>
             </form>
