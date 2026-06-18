@@ -78,6 +78,11 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "OPENAI_API_KEY", value = var.openai_api_key },
         { name = "GROQ_API_KEY", value = var.groq_api_key },
         { name = "AI_PROVIDER", value = var.ai_provider },
+        { name = "BULK_AI_PROVIDER", value = var.bulk_ai_provider },
+        { name = "BULK_PARSE_WORKERS", value = var.bulk_parse_workers },
+        { name = "GROQ_MODEL", value = var.groq_model },
+        { name = "SENDER_NAME", value = var.sender_name },
+        { name = "COMPANY_NAME", value = var.company_name },
         { name = "APP_BASE_URL", value = "http://${aws_lb.main.dns_name}" },
         { name = "AWS_S3_BUCKET", value = "phygitron360-uploads" },
         { name = "AWS_S3_REGION", value = var.aws_region }
