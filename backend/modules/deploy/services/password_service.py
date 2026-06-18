@@ -28,7 +28,7 @@ class PasswordService:
             password = password[:-3] + secrets.choice("!@#$%") + password[-2:]
         return password
     
-    def request_password_reset(self, email: str) -> Dict[str, Any]:
+    def request_password_reset(self, email: str, tenant_id: str = "public") -> Dict[str, Any]:
         """
         User requests password reset (forgot password).
         Returns success even if email doesn't exist (security).
@@ -38,24 +38,25 @@ class PasswordService:
         
         try:
             # Check if user exists
-            user = self.repo.get_user_by_email(email)
+            user = self.repo.get_user_by_email(email, tenant_id=tenant_id)
             if not user:
                 return {"success": True, "message": success_message}
             
             # Generate reset token
-            token = str(uuid.uuid4())
+            raw_token = str(uuid.uuid4())
+            token = f"{tenant_id}:{raw_token}"
             expires_at = datetime.now() + timedelta(hours=1)
             
             # Invalidate any existing tokens for this email
-            self.repo.invalidate_existing_tokens(email)
+            self.repo.invalidate_existing_tokens(email, tenant_id=tenant_id)
             
             # Create new token
             self.repo.create_reset_token({
                 "email": email,
-                "token": token,
+                "token": raw_token,
                 "expires_at": expires_at,
                 "reset_type": "self"
-            })
+            }, tenant_id=tenant_id)
             
             # Send email
             base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
@@ -79,7 +80,13 @@ class PasswordService:
     
     def verify_reset_token(self, token: str) -> Dict[str, Any]:
         """Verify if reset token is valid"""
-        reset_token = self.repo.get_reset_token(token)
+        if ":" not in token:
+            tenant_id = "public"
+            raw_token = token
+        else:
+            tenant_id, raw_token = token.split(":", 1)
+            
+        reset_token = self.repo.get_reset_token(raw_token, tenant_id=tenant_id)
         
         if not reset_token:
             return {"valid": False, "message": "Invalid or expired token"}
@@ -97,7 +104,7 @@ class PasswordService:
 
         
         # Get user info
-        user = self.repo.get_user_by_email(reset_token['email'])
+        user = self.repo.get_user_by_email(reset_token['email'], tenant_id=tenant_id)
         if not user:
             return {"valid": False, "message": "User not found"}
         
@@ -107,7 +114,9 @@ class PasswordService:
         return {
             "valid": True,
             "email": reset_token['email'],
-            "name": user_name
+            "name": user_name,
+            "tenant_id": tenant_id,
+            "raw_token": raw_token
         }
     
     def reset_password(self, token: str, new_password: str) -> Dict[str, Any]:
@@ -118,18 +127,20 @@ class PasswordService:
             return {"success": False, "message": verification['message']}
         
         email = verification['email']
+        tenant_id = verification['tenant_id']
+        raw_token = verification['raw_token']
         
         # Hash new password
         password_hash = pbkdf2_sha256.hash(new_password)
         
         # Update password
-        self.repo.update_password(email, password_hash, changed_by="Self")
+        self.repo.update_password(email, password_hash, changed_by="Self", tenant_id=tenant_id)
         
         # Mark token as used
-        self.repo.mark_token_used(token)
+        self.repo.mark_token_used(raw_token, tenant_id=tenant_id)
         
         # Send notification email
-        user = self.repo.get_user_by_email(email)
+        user = self.repo.get_user_by_email(email, tenant_id=tenant_id)
         user_name = user.get('name', email.split('@')[0]) if user else email.split('@')[0]
         self.email_service.send_password_changed_notification(
             recipient_email=email,
@@ -143,14 +154,15 @@ class PasswordService:
         self, 
         employee_code: str, 
         reset_type: str,  # 'temp_password' or 'reset_link'
-        admin_email: str
+        admin_email: str,
+        tenant_id: str = "public"
     ) -> Dict[str, Any]:
         """
         Admin/HR resets user password.
         reset_type: 'temp_password' or 'reset_link'
         """
         # Get employee info
-        employee = self.repo.get_employee_by_code(employee_code)
+        employee = self.repo.get_employee_by_code(employee_code, tenant_id=tenant_id)
         if not employee:
             return {"success": False, "message": "Employee not found"}
         
@@ -168,7 +180,8 @@ class PasswordService:
                 email, 
                 password_hash, 
                 changed_by=admin_email,
-                must_change=True
+                must_change=True,
+                tenant_id=tenant_id
             )
             
             # Send email with temporary password
@@ -189,20 +202,21 @@ class PasswordService:
         
         elif reset_type == 'reset_link':
             # Generate reset token
-            token = str(uuid.uuid4())
+            raw_token = str(uuid.uuid4())
+            token = f"{tenant_id}:{raw_token}"
             expires_at = datetime.now() + timedelta(hours=1)
             
             # Invalidate existing tokens
-            self.repo.invalidate_existing_tokens(email)
+            self.repo.invalidate_existing_tokens(email, tenant_id=tenant_id)
             
             # Create new token
             self.repo.create_reset_token({
                 "email": email,
-                "token": token,
+                "token": raw_token,
                 "expires_at": expires_at,
                 "reset_type": "admin",
                 "created_by": admin_email
-            })
+            }, tenant_id=tenant_id)
             
             # Send email
             base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
@@ -225,9 +239,9 @@ class PasswordService:
         else:
             return {"success": False, "message": "Invalid reset type"}
     
-    def check_must_change_password(self, email: str) -> bool:
+    def check_must_change_password(self, email: str, tenant_id: str = "public") -> bool:
         """Check if user must change password on login"""
-        user = self.repo.get_user_by_email(email)
+        user = self.repo.get_user_by_email(email, tenant_id=tenant_id)
         if not user:
             return False
         return bool(user.get('password_must_change', 0))

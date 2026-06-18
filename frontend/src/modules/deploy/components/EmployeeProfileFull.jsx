@@ -17,6 +17,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const [formData, setFormData] = useState({});
     const [assets, setAssets] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [managers, setManagers] = useState([]);
     const fileInputPfp = useRef();
     const fileInputCv = useRef();
     const fileInputId = useRef();
@@ -50,6 +51,12 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             fetchDetails(employeeCode);
             fetch(`/api/assets/${employeeCode}`, { credentials: 'include' })
                 .then(r => r.json()).then(d => setAssets(d)).catch(() => {});
+            
+            fetch('/api/options', { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if(data.managers) setManagers(data.managers);
+                }).catch(() => {});
         }
     }, [employeeCode]);
 
@@ -480,7 +487,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editMode} onChange={v => setFormData({...formData, doj: v})} />
                         <EditStatCard label="Contract" value={formData.employment_type} sub="Engagement Mode" editMode={editMode} onChange={v => setFormData({...formData, employment_type: v})} />
                         <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editMode} onChange={v => setFormData({...formData, experience_years: v})} />
-                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Hub" editMode={editMode} onChange={v => setFormData({...formData, reporting_manager: v})} />
+                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Hub" editMode={editMode} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} />
                     </div>
 
                     {/* Skill Synergy */}
@@ -949,22 +956,35 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
     );
 }
 
-function EditStatCard({ label, value, sub, editMode, onChange, type = "text" }) {
+function EditStatCard({ label, value, sub, editMode, onChange, type = "text", options = [], displayValue }) {
     return (
         <div className={`bg-white border border-[#e9ddff] rounded-2xl shadow-sm hover:shadow-md hover:shadow-[#7c3aed]/10 p-6 transition-all ${editMode ? 'ring-2 ring-[#c4b5fd]' : ''}`}>
             <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
                 {label}
             </p>
             {editMode ? (
-                <input
-                    type={type}
-                    value={value || ''}
-                    onChange={e => onChange(e.target.value)}
-                    className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd]"
-                />
+                type === 'select' ? (
+                    <select
+                        value={value || ''}
+                        onChange={e => onChange(e.target.value)}
+                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd] appearance-none"
+                    >
+                        <option value="">Select Manager</option>
+                        {options.map((opt, i) => (
+                            <option key={i} value={opt.value}>{opt.label}</option>
+                        ))}
+                    </select>
+                ) : (
+                    <input
+                        type={type}
+                        value={value || ''}
+                        onChange={e => onChange(e.target.value)}
+                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd]"
+                    />
+                )
             ) : (
                 <p className="text-lg font-display font-black text-black uppercase truncate">
-                    {value || '—'}
+                    {displayValue || value || '—'}
                 </p>
             )}
             <p className="text-[8px] font-black uppercase tracking-[0.2em] text-[#7c3aed] mt-2">

@@ -85,6 +85,11 @@ app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 # Background Workers
 import asyncio
 from backend.modules.source.services.candidate_service import CandidateService
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from backend.core.scheduler_jobs import run_missed_clockout_check, run_bimonthly_report
+
+scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
 
 @app.on_event("startup")
 async def start_background_workers():
@@ -101,6 +106,15 @@ async def start_background_workers():
     for t_id in tenant_ids:
         svc = CandidateService(tenant_id=t_id)
         asyncio.create_task(svc.process_bulk_upload_queue())
+
+    # Start APScheduler tasks
+    scheduler.add_job(run_missed_clockout_check, CronTrigger(hour="17,21", minute=0))
+    scheduler.add_job(run_bimonthly_report, CronTrigger(hour=9, minute=0))
+    scheduler.start()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    scheduler.shutdown()
 
 # Include Modules
 app.include_router(auth_router)

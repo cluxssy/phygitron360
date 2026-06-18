@@ -37,11 +37,12 @@ class PasswordResetRepository:
         finally:
             conn.close()
     
-    def create_reset_token(self, token_data: Dict[str, Any]) -> None:
+    def create_reset_token(self, token_data: Dict[str, Any], tenant_id: str = 'public') -> None:
         """Create password reset token"""
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("""
                     INSERT INTO password_reset_tokens 
                     (email, token, expires_at, reset_type, created_by)
@@ -57,11 +58,12 @@ class PasswordResetRepository:
         finally:
             conn.close()
     
-    def get_reset_token(self, token: str) -> Optional[Dict[str, Any]]:
+    def get_reset_token(self, token: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         """Get reset token by token string"""
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("""
                     SELECT * FROM password_reset_tokens 
                     WHERE token = %s
@@ -72,11 +74,12 @@ class PasswordResetRepository:
         finally:
             conn.close()
     
-    def invalidate_existing_tokens(self, email: str) -> None:
+    def invalidate_existing_tokens(self, email: str, tenant_id: str = 'public') -> None:
         """Mark all existing tokens for email as used"""
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("""
                     UPDATE password_reset_tokens 
                     SET used = 1, used_at = CURRENT_TIMESTAMP
@@ -86,11 +89,12 @@ class PasswordResetRepository:
         finally:
             conn.close()
     
-    def mark_token_used(self, token: str) -> None:
+    def mark_token_used(self, token: str, tenant_id: str = 'public') -> None:
         """Mark token as used"""
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("""
                     UPDATE password_reset_tokens 
                     SET used = 1, used_at = CURRENT_TIMESTAMP

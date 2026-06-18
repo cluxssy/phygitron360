@@ -16,6 +16,12 @@ export default function LoginPage() {
 
   const detectSubdomain = () => {
     const hostname = window.location.hostname;
+    
+    // Ignore IP addresses
+    if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostname)) {
+      return 'public';
+    }
+
     const parts = hostname.split('.');
     
     if (hostname.includes('localhost')) {

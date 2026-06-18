@@ -66,3 +66,13 @@ class LeaveBalance(BaseModel):
     total_leaves: float
     used_leaves: float
     extended_leaves: float
+
+class CorrectionRequest(BaseModel):
+    date: str
+    clock_in: Optional[str] = None
+    clock_out: Optional[str] = None
+    reason: str
+
+class CorrectionActionRequest(BaseModel):
+    action: str
+    rejection_reason: Optional[str] = None

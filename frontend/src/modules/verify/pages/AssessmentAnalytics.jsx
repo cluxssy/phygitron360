@@ -19,86 +19,112 @@ export default function AssessmentAnalytics({ assessmentId }) {
       .finally(() => setLoading(false));
   }, [assessmentId]);
 
-  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-primary" /></div>;
-  if (!stats) return <div className="p-10 text-center text-white/50">No data available</div>;
+  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
+  if (!stats) return <div className="p-10 text-center text-gray-400">No data available</div>;
 
   const { metrics, performance, top_performers } = stats;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-display font-black text-white uppercase tracking-tighter">Analytics</h2>
-          <p className="text-xs text-white/40 uppercase tracking-widest mt-1">Real-time performance metrics</p>
+          <h3 className="text-xl font-bold text-gray-800">Analytics</h3>
+          <p className="text-sm text-gray-500 mt-1">Real-time performance metrics</p>
         </div>
-        <button className="px-4 py-2 rounded-xl bg-white/5 text-white/70 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors">
+        <button className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors">
           Export CSV
         </button>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={<Users />} label="Assigned" value={metrics.total_assigned} />
-        <StatCard icon={<TrendingUp />} label="Submitted" value={metrics.total_submitted} />
-        <StatCard icon={<Award />} label="Passed" value={metrics.total_passed} color="text-emerald-400" />
-        <StatCard icon={<ShieldAlert />} label="Flagged" value={metrics.total_malpractice} color="text-rose-500" />
+        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Users size={16} className="text-purple-400" />
+            <p className="text-xs font-medium text-gray-500">Assigned</p>
+          </div>
+          <p className="text-3xl font-bold text-gray-800">{metrics.total_assigned}</p>
+        </div>
+        
+        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp size={16} className="text-purple-400" />
+            <p className="text-xs font-medium text-gray-500">Submitted</p>
+          </div>
+          <p className="text-3xl font-bold text-gray-800">{metrics.total_submitted}</p>
+        </div>
+        
+        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Award size={16} className="text-emerald-500" />
+            <p className="text-xs font-medium text-gray-500">Passed</p>
+          </div>
+          <p className="text-3xl font-bold text-emerald-600">{metrics.total_passed}</p>
+        </div>
+        
+        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldAlert size={16} className="text-rose-500" />
+            <p className="text-xs font-medium text-gray-500">Flagged</p>
+          </div>
+          <p className="text-3xl font-bold text-rose-600">{metrics.total_malpractice}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Averages */}
-        <div className="md:col-span-1 space-y-6">
-          <div className="glass-panel p-6">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4">Averages</h3>
-            <div className="space-y-6">
-              <div>
-                <p className="text-xs text-white/60 mb-1">Pass Rate</p>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-display font-black text-white">{performance.pass_rate_pct.toFixed(1)}%</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-white/60 mb-1">Average Score</p>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-display font-black text-primary">{performance.average_score.toFixed(1)}%</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-white/60 mb-1">Average Time</p>
-                <div className="flex items-end gap-2 text-white">
-                  <Clock size={20} className="text-white/40 mb-1.5" />
-                  <span className="text-2xl font-display font-black">{Math.floor(performance.average_time_taken / 60)}m {Math.floor(performance.average_time_taken % 60)}s</span>
-                </div>
+        <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Averages</h4>
+          <div className="space-y-6">
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Pass Rate</p>
+              <span className="text-3xl font-bold text-gray-800">{performance.pass_rate_pct.toFixed(1)}%</span>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Average Score</p>
+              <span className="text-3xl font-bold text-purple-600">{performance.average_score.toFixed(1)}%</span>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Average Time</p>
+              <div className="flex items-center gap-2">
+                <Clock size={20} className="text-gray-400" />
+                <span className="text-2xl font-bold text-gray-800">{Math.floor(performance.average_time_taken / 60)}m {Math.floor(performance.average_time_taken % 60)}s</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Leaderboard */}
-        <div className="md:col-span-2 glass-panel p-6 flex flex-col">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-6 flex items-center gap-2">
-            <BarChart3 size={14} /> Top Performers
-          </h3>
+        <div className="md:col-span-2 bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4 flex items-center gap-2">
+            <BarChart3 size={14} className="text-purple-600" /> Top Performers
+          </h4>
           
           {top_performers.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-white/30 italic">No submissions yet</div>
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400 italic">No submissions yet</div>
           ) : (
             <div className="space-y-3">
               {top_performers.map((p, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <div className="flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-amber-400/20 text-amber-400' : i === 1 ? 'bg-slate-300/20 text-slate-300' : i === 2 ? 'bg-amber-700/20 text-amber-600' : 'bg-white/10 text-white/40'}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                      i === 0 ? 'bg-amber-100 text-amber-700' : 
+                      i === 1 ? 'bg-gray-200 text-gray-600' : 
+                      i === 2 ? 'bg-amber-100 text-amber-600' : 
+                      'bg-gray-100 text-gray-400'
+                    }`}>
                       #{i + 1}
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-white">{p.user_name}</p>
-                      <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{new Date(p.created_at).toLocaleDateString()}</p>
+                      <p className="text-sm font-semibold text-gray-800">{p.user_name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{new Date(p.created_at).toLocaleDateString()}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`text-xl font-display font-black ${p.is_malpractice ? 'text-rose-500' : 'text-primary'}`}>
+                    <p className={`text-xl font-bold ${p.is_malpractice ? 'text-rose-600' : 'text-purple-600'}`}>
                       {Math.round(p.total_score)}%
                     </p>
-                    {p.is_malpractice && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest">Flagged</p>}
+                    {p.is_malpractice && <p className="text-[10px] font-semibold text-rose-600 uppercase tracking-wider">Flagged</p>}
                   </div>
                 </div>
               ))}
@@ -106,18 +132,6 @@ export default function AssessmentAnalytics({ assessmentId }) {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ icon, label, value, color = "text-white" }) {
-  return (
-    <div className="glass-panel p-5 flex flex-col">
-      <div className="flex items-center gap-2 mb-4">
-        <div className={`text-primary/60`}>{icon}</div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-white/50">{label}</p>
-      </div>
-      <p className={`text-4xl font-display font-black mt-auto ${color}`}>{value}</p>
     </div>
   );
 }

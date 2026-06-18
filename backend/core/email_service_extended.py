@@ -44,6 +44,8 @@ def _send_via_smtp(msg: MIMEMultipart) -> bool:
         return False
 
 
+SENT_MOCK_EMAILS = []
+
 def _mock_log(to_email: str, subject: str, plain_body: str):
     """Write a mock email dispatch to logs when SMTP is unavailable."""
     logger.warning("[EMAIL MOCK] SMTP not configured — logging email instead.")
@@ -52,6 +54,11 @@ def _mock_log(to_email: str, subject: str, plain_body: str):
     print(f"Subject: {subject}")
     print(f"Body:\n{plain_body}")
     print(f"------------------------------\n")
+    SENT_MOCK_EMAILS.append({
+        "to": to_email,
+        "subject": subject,
+        "body": plain_body
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -376,3 +383,156 @@ Talent Acquisition Team
         logger.error(f"send_generic_notification_email failed for {to_email}: {exc}")
         return False
 
+
+def send_clockout_reminder_email(
+    to_email: str,
+    employee_name: str,
+    clockin_time: str,
+    date: str,
+) -> bool:
+    """Send a reminder notification email to an employee who forgot to clock out."""
+    subject = f"Forgot to Clock Out: Reminder for {date}"
+    plain_body = f"""
+Dear {employee_name},
+
+Our records show that you clocked in at {clockin_time} on {date}, but have not clocked out yet.
+
+Please log in to the employee portal and submit an attendance correction request to update your clock-out time.
+
+Best regards,
+Operations Team
+"""
+    html_body = f"""
+<html><body style="font-family: Arial, sans-serif; color: #333;">
+  <h2 style="color:#ef4444;">Forgot to Clock Out</h2>
+  <p>Dear <strong>{employee_name}</strong>,</p>
+  <p>Our records show that you clocked in at <strong>{clockin_time}</strong> on <strong>{date}</strong>, but have not clocked out yet.</p>
+  <p>Please log in to the employee portal and submit an attendance correction request to update your clock-out time.</p>
+  <br/>
+  <p>Best regards,<br/><strong>Operations Team</strong></p>
+</body></html>
+"""
+    host, _, user, _ = _get_smtp_config()
+    if not all([host, user]):
+        _mock_log(to_email, subject, plain_body)
+        return True
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = user
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(plain_body, "plain"))
+        msg.attach(MIMEText(html_body, "html"))
+        result = _send_via_smtp(msg)
+        if result:
+            logger.info(f"Clock-out reminder email sent to {to_email}")
+        else:
+            _mock_log(to_email, subject, plain_body)
+        return True
+    except Exception as exc:
+        logger.error(f"send_clockout_reminder_email failed for {to_email}: {exc}")
+        return False
+
+def send_bimonthly_report_email(
+    to_email: str,
+    manager_name: str,
+    report_data: list,
+    period_label: str,
+    company_name: str
+) -> bool:
+    """Send bimonthly attendance report to a manager, attaching a generated PDF."""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+    import io
+
+    subject = f"Bimonthly Attendance Report: {period_label}"
+    plain_body = f"""
+Dear {manager_name},
+
+Please find attached the attendance report for your team for the period {period_label}.
+
+Best regards,
+Operations Team
+{company_name}
+"""
+    html_body = f"""
+<html><body style="font-family: Arial, sans-serif; color: #333;">
+  <h2 style="color:#2563eb;">Bimonthly Attendance Report</h2>
+  <p>Dear <strong>{manager_name}</strong>,</p>
+  <p>Please find attached the attendance report for your team for the period <strong>{period_label}</strong>.</p>
+  <br/>
+  <p>Best regards,<br/><strong>Operations Team</strong><br/>{company_name}</p>
+</body></html>
+"""
+    
+    # Generate PDF
+    pdf_buffer = io.BytesIO()
+    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = []
+    
+    elements.append(Paragraph(f"Attendance Report: {period_label}", styles['Title']))
+    elements.append(Spacer(1, 12))
+    
+    # Create Table Data
+    data = [["Employee Name", "Code", "Present", "Absent", "Half-Day", "Leave"]]
+    for emp in report_data:
+        stats = emp.get("stats", {})
+        data.append([
+            emp.get("name", ""),
+            emp.get("code", ""),
+            str(stats.get("present", 0)),
+            str(stats.get("absent", 0)),
+            str(stats.get("half_day", 0)),
+            str(stats.get("leave", 0))
+        ])
+        
+    t = Table(data)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    elements.append(t)
+    doc.build(elements)
+    pdf_bytes = pdf_buffer.getvalue()
+    pdf_buffer.close()
+
+    host, _, user, _ = _get_smtp_config()
+    if not all([host, user]):
+        _mock_log(to_email, subject, plain_body)
+        return True
+
+    try:
+        msg = MIMEMultipart("mixed")
+        msg["From"] = user
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        
+        alt = MIMEMultipart("alternative")
+        alt.attach(MIMEText(plain_body, "plain"))
+        alt.attach(MIMEText(html_body, "html"))
+        msg.attach(alt)
+
+        part = MIMEBase("application", "pdf")
+        part.set_payload(pdf_bytes)
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", 'attachment; filename="bimonthly_report.pdf"')
+        msg.attach(part)
+
+        result = _send_via_smtp(msg)
+        if result:
+            logger.info(f"Bimonthly report email sent to {to_email}")
+        else:
+            _mock_log(to_email, subject, plain_body)
+        return True
+    except Exception as exc:
+        logger.error(f"send_bimonthly_report_email failed for {to_email}: {exc}")
+        return False
