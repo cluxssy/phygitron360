@@ -1065,6 +1065,55 @@ export default function AttendancePanel({ mode }) {
                         </div>
                     )}
 
+                    {leaveForm.start_date && leaveForm.end_date && isSingleDay && (
+                        <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Duration Type</label>
+                            <select
+                                value={leaveForm.start_day_type}
+                                onChange={e => setLeaveForm({...leaveForm, start_day_type: e.target.value, end_day_type: e.target.value})}
+                                className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                            >
+                                <option value="Full Day">Full Day</option>
+                                <option value="First Half">First Half</option>
+                                <option value="Second Half">Second Half</option>
+                            </select>
+                        </div>
+                    )}
+                    
+                    {leaveForm.start_date && leaveForm.end_date && !isSingleDay && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Start Day Type</label>
+                                <select
+                                    value={leaveForm.start_day_type}
+                                    onChange={e => setLeaveForm({...leaveForm, start_day_type: e.target.value})}
+                                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                                >
+                                    <option value="Full Day">Full Day</option>
+                                    <option value="Second Half">Second Half</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">End Day Type</label>
+                                <select
+                                    value={leaveForm.end_day_type}
+                                    onChange={e => setLeaveForm({...leaveForm, end_day_type: e.target.value})}
+                                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
+                                >
+                                    <option value="Full Day">Full Day</option>
+                                    <option value="First Half">First Half</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {leaveForm.start_date && leaveForm.end_date && durationDays > 0 && (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Total Deduction:</span>
+                            <span className="text-sm font-black text-emerald-700">{durationDays} Day{durationDays !== 1 && 's'}</span>
+                        </div>
+                    )}
+
                     <div>
                         <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Protocol Rationale</label>
                         <textarea 
