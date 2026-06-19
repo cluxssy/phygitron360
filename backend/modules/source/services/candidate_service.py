@@ -609,6 +609,7 @@ class CandidateService:
                         )
 
                         if not ai_result or not ai_result.get("name"):
+                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: AI returned empty or invalid parse result. ai_result={ai_result}", flush=True)
                             self.repo.update_bulk_upload_job_item(
                                 item["id"], status="failed", error_message="AI returned empty or invalid parse result."
                             )

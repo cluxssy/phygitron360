@@ -22,7 +22,8 @@ class AIService:
             try:
                 from google import genai
                 self.gemini_client = genai.Client(api_key=self.gemini_api_key)
-            except Exception:
+            except Exception as e:
+                print(f"Failed to initialize Gemini client: {e}")
                 self.gemini_client = None
 
         if self.openai_api_key:
@@ -131,45 +132,63 @@ class AIService:
         import re
         provider = provider_override or os.getenv("BULK_AI_PROVIDER", self.provider)
 
-        # ── Groq (sync, thread-safe) ─────────────────────────────────────────
+        # ── Groq (sync REST API to avoid SDK issues) ─────────────────────────
         if provider == "groq":
-            if self.groq_client:
+            if self.groq_api_key:
                 try:
-                    response = self.groq_client.chat.completions.create(
-                        model=self.groq_model,
-                        messages=[
+                    import requests
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {self.groq_api_key}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "model": self.groq_model,
+                        "messages": [
                             {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": prompt},
+                            {"role": "user", "content": prompt}
                         ],
-                        temperature=0.1,
-                        max_tokens=4096,
-                        response_format={"type": "json_object"},
-                    )
-                    content = response.choices[0].message.content.strip()
-                    # Strip markdown fences if model ignores the format hint
+                        "temperature": 0.1,
+                        "max_tokens": 4096,
+                        "response_format": {"type": "json_object"}
+                    }
+                    response = requests.post(url, headers=headers, json=payload, timeout=40)
+                    response.raise_for_status()
+                    content = response.json()["choices"][0]["message"]["content"].strip()
+                    
                     match = re.search(r'(\{.*\}|\[.*\])', content, re.DOTALL)
                     return json.loads(match.group(1) if match else content)
                 except Exception as e:
                     err_str = str(e)
-                    print(f"Groq error ({err_str[:60]}). Falling back to Gemini to use its tokens...")
+                    print(f"Groq REST error ({err_str[:60]}). Falling back to Gemini...")
                     return self.generate_json_sync(prompt, system_prompt, provider_override="gemini")
             else:
-                print("Groq not configured — falling back to Gemini for bulk parse")
+                print("Groq API key not found — falling back to Gemini for bulk parse")
                 return self.generate_json_sync(prompt, system_prompt, provider_override="gemini")
 
-        # ── Gemini (sync call — their SDK supports sync) ─────────────────────
+        # ── Gemini (sync REST API to avoid SDK issues) ─────────────────────
         elif provider == "gemini":
-            if getattr(self, "gemini_client", None):
+            if self.gemini_api_key:
                 full_prompt = f"{system_prompt}\n\n{prompt}\n\nIMPORTANT: Return ONLY valid JSON and NOTHING ELSE. Do not use markdown backticks."
                 try:
-                    response = self.gemini_client.models.generate_content(
-                        model='gemini-1.5-flash',
-                        contents=full_prompt,
-                    )
-                    clean_text = response.text.replace('```json', '').replace('```', '').strip()
-                    return json.loads(clean_text)
+                    import requests
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={self.gemini_api_key}"
+                    payload = {
+                        "contents": [{"parts":[{"text": full_prompt}]}]
+                    }
+                    response = requests.post(url, json=payload, timeout=40)
+                    response.raise_for_status()
+                    res_json = response.json()
+                    
+                    if "candidates" in res_json and len(res_json["candidates"]) > 0:
+                        text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                        clean_text = text.replace('```json', '').replace('```', '').strip()
+                        return json.loads(clean_text)
+                    else:
+                        print(f"Gemini API returned unexpected payload: {res_json}")
+                        return {}
                 except Exception as e:
-                    print(f"Gemini sync failed: {e}")
+                    print(f"Gemini sync REST failed: {e}")
                     raise
             return {}
 
