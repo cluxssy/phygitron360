@@ -658,7 +658,7 @@ class CandidateRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                cur.execute("SELECT 1 FROM bulk_upload_job_items WHERE file_hash = %s AND status = 'success' LIMIT 1", (file_hash,))
+                cur.execute("SELECT 1 FROM bulk_upload_job_items WHERE file_hash = %s AND status = 'success' AND candidate_id IS NOT NULL LIMIT 1", (file_hash,))
                 return cur.fetchone() is not None
         finally:
             conn.close()
