@@ -93,6 +93,8 @@ scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
 
 @app.on_event("startup")
 async def start_background_workers():
+    import backend.core.database as db
+    db.main_loop = asyncio.get_running_loop()
     from backend.core.database import get_db_connection, create_tables
 
     conn = get_db_connection()
