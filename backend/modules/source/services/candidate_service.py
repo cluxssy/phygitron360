@@ -577,6 +577,7 @@ class CandidateService:
                             self.repo.update_bulk_upload_job_item(
                                 item["id"], status="duplicate", error_message="Exact file already uploaded before."
                             )
+                            print(f"[Worker-{worker_id}][{self.tenant_id}] SKIPPED item {item['id']} ({item['filename']}): Duplicate file hash.", flush=True)
                             continue
 
                         # 2. Use pre-extracted text (stored at upload time) — avoids re-reading disk
