@@ -14,6 +14,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 DATA_DIR = os.path.join(BASE_DIR, 'data') # Still used for static files/uploads
+main_loop = None
 
 # Database configuration from .env
 DB_HOST = os.getenv("DB_HOST", "localhost")
