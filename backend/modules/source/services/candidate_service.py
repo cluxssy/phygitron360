@@ -531,7 +531,7 @@ class CandidateService:
         import asyncio
         import re
 
-        num_workers = int(os.getenv("BULK_PARSE_WORKERS", "8"))
+        num_workers = int(os.getenv("BULK_PARSE_WORKERS", "2"))
         logger.info(f"[BulkWorker] Starting {num_workers} parallel AI parse workers for tenant {self.tenant_id}")
 
         # Per-job cancel registry: job_id -> asyncio.Event
@@ -614,6 +614,9 @@ class CandidateService:
                             self.repo.update_bulk_upload_job_item(
                                 item["id"], status="failed", error_message="AI returned empty or invalid parse result."
                             )
+                            provider = os.getenv("BULK_AI_PROVIDER") or os.getenv("AI_PROVIDER", "mock")
+                            if provider != "mock":
+                                await asyncio.sleep(3.5)
                             continue
 
                         # 4. Save candidate to DB (reuse existing logic)
@@ -628,8 +631,20 @@ class CandidateService:
                         )
                         print(f"[Worker-{worker_id}][{self.tenant_id}] SUCCESS item {item['id']} → candidate {result['candidate_id']}", flush=True)
 
+                        # Throttling to respect Free Tier rate limits (30 RPM)
+                        provider = os.getenv("BULK_AI_PROVIDER") or os.getenv("AI_PROVIDER", "mock")
+                        if provider != "mock":
+                            await asyncio.sleep(3.5)
+
                     except Exception as e:
                         err_str = str(e)
+                        # Sanitize any API keys from the error message
+                        ai_service = getattr(self.ai_agents, 'ai', None)
+                        if ai_service:
+                            for key in [getattr(ai_service, 'openai_api_key', None), getattr(ai_service, 'gemini_api_key', None), getattr(ai_service, 'groq_api_key', None)]:
+                                if key and len(key) > 5 and key in err_str:
+                                    err_str = err_str.replace(key, "******")
+
                         if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout']):
                             match = re.search(r'(?:retry in|try again in) (\d+\.?\d*)', err_str)
                             wait = int(float(match.group(1))) + 2 if match else 15
@@ -641,9 +656,18 @@ class CandidateService:
                             self.repo.update_bulk_upload_job_item(
                                 item["id"], status="failed", error_message=err_str[:500]
                             )
+                            provider = os.getenv("BULK_AI_PROVIDER") or os.getenv("AI_PROVIDER", "mock")
+                            if provider != "mock":
+                                await asyncio.sleep(3.5)
 
                 except Exception as outer_e:
-                    print(f"[Worker-{worker_id}][{self.tenant_id}] Outer loop error: {outer_e}", flush=True)
+                    outer_err_str = str(outer_e)
+                    ai_service = getattr(self.ai_agents, 'ai', None)
+                    if ai_service:
+                        for key in [getattr(ai_service, 'openai_api_key', None), getattr(ai_service, 'gemini_api_key', None), getattr(ai_service, 'groq_api_key', None)]:
+                            if key and len(key) > 5 and key in outer_err_str:
+                                outer_err_str = outer_err_str.replace(key, "******")
+                    print(f"[Worker-{worker_id}][{self.tenant_id}] Outer loop error: {outer_err_str}", flush=True)
                     await asyncio.sleep(15)
 
         # Launch all workers as concurrent tasks

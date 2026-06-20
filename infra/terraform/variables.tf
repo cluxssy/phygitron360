@@ -83,7 +83,7 @@ variable "bulk_ai_provider" {
 
 variable "bulk_parse_workers" {
   description = "Number of background workers"
-  default     = "8"
+  default     = "2"
 }
 
 variable "groq_model" {
