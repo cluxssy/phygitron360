@@ -149,7 +149,7 @@ class AIService:
                             {"role": "user", "content": prompt}
                         ],
                         "temperature": 0.1,
-                        "max_tokens": 4096,
+                        "max_tokens": 2048,
                         "response_format": {"type": "json_object"}
                     }
                     response = requests.post(url, headers=headers, json=payload, timeout=40)
@@ -168,11 +168,11 @@ class AIService:
 
         # ── Gemini (sync REST API to avoid SDK issues) ─────────────────────
         elif provider == "gemini":
-            if self.gemini_api_key:
+            if self.gemini_api_key and self.gemini_api_key.startswith("AIzaSy"):
                 full_prompt = f"{system_prompt}\n\n{prompt}\n\nIMPORTANT: Return ONLY valid JSON and NOTHING ELSE. Do not use markdown backticks."
                 try:
                     import requests
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={self.gemini_api_key}"
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_api_key}"
                     payload = {
                         "contents": [{"parts":[{"text": full_prompt}]}]
                     }
@@ -190,7 +190,9 @@ class AIService:
                 except Exception as e:
                     print(f"Gemini sync REST failed: {e}")
                     raise
-            return {}
+            else:
+                # No valid Gemini key, raise a fake 429 to trigger worker backoff and retry Groq later
+                raise RuntimeError("Gemini fallback skipped: No valid GEMINI_API_KEY (starts with AIzaSy). Original Groq rate_limit 429 should retry.")
 
         # ── OpenAI — not easily sync, raise helpful error ────────────────────
         elif provider == "openai":
