@@ -638,6 +638,13 @@ class CandidateService:
 
                     except Exception as e:
                         err_str = str(e)
+                        # Sanitize any API keys from the error message
+                        ai_service = getattr(self.ai_agents, 'ai', None)
+                        if ai_service:
+                            for key in [getattr(ai_service, 'openai_api_key', None), getattr(ai_service, 'gemini_api_key', None), getattr(ai_service, 'groq_api_key', None)]:
+                                if key and len(key) > 5 and key in err_str:
+                                    err_str = err_str.replace(key, "******")
+
                         if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout']):
                             match = re.search(r'(?:retry in|try again in) (\d+\.?\d*)', err_str)
                             wait = int(float(match.group(1))) + 2 if match else 15
@@ -654,7 +661,13 @@ class CandidateService:
                                 await asyncio.sleep(3.5)
 
                 except Exception as outer_e:
-                    print(f"[Worker-{worker_id}][{self.tenant_id}] Outer loop error: {outer_e}", flush=True)
+                    outer_err_str = str(outer_e)
+                    ai_service = getattr(self.ai_agents, 'ai', None)
+                    if ai_service:
+                        for key in [getattr(ai_service, 'openai_api_key', None), getattr(ai_service, 'gemini_api_key', None), getattr(ai_service, 'groq_api_key', None)]:
+                            if key and len(key) > 5 and key in outer_err_str:
+                                outer_err_str = outer_err_str.replace(key, "******")
+                    print(f"[Worker-{worker_id}][{self.tenant_id}] Outer loop error: {outer_err_str}", flush=True)
                     await asyncio.sleep(15)
 
         # Launch all workers as concurrent tasks

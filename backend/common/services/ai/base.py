@@ -23,7 +23,10 @@ class AIService:
                 from google import genai
                 self.gemini_client = genai.Client(api_key=self.gemini_api_key)
             except Exception as e:
-                print(f"Failed to initialize Gemini client: {e}")
+                err_str = str(e)
+                if self.gemini_api_key in err_str:
+                    err_str = err_str.replace(self.gemini_api_key, "******")
+                print(f"Failed to initialize Gemini client: {err_str}")
                 self.gemini_client = None
 
         if self.openai_api_key:
@@ -43,6 +46,13 @@ class AIService:
                 self.groq_client = None
         else:
             self.groq_client = None
+
+    def _sanitize_error(self, err: any) -> str:
+        err_str = str(err)
+        for key in [self.openai_api_key, self.gemini_api_key, self.groq_api_key]:
+            if key and len(key) > 5 and key in err_str:
+                err_str = err_str.replace(key, "******")
+        return err_str
 
 
     async def generate_json(self, prompt: str, system_prompt: str = "", provider_override: str = None) -> dict:
@@ -74,7 +84,7 @@ class AIService:
                 content = response.choices[0].message.content.strip()
                 return json.loads(content)
             except Exception as e:
-                print(f"Groq failed: {e}. Falling back to Gemini...")
+                print(f"Groq failed: {self._sanitize_error(e)}. Falling back to Gemini...")
                 return await self.generate_json(prompt, system_prompt, provider_override="gemini")
 
         # OpenAI Logic
@@ -95,7 +105,7 @@ class AIService:
                 clean_text = response.choices[0].message.content
                 return json.loads(clean_text)
             except Exception as e:
-                print(f"OpenAI failed: {e}. Falling back to Gemini...")
+                print(f"OpenAI failed: {self._sanitize_error(e)}. Falling back to Gemini...")
                 return await self.generate_json(prompt, system_prompt, provider_override="gemini")
             
         # Gemini Logic
@@ -114,8 +124,9 @@ class AIService:
                 clean_text = response.text.replace('```json', '').replace('```', '').strip()
                 return json.loads(clean_text)
             except Exception as e:
-                print(f"Gemini failed: {e}")
-                raise  # Re-raise so worker can handle 429 vs other errors correctly
+                err_str = self._sanitize_error(e)
+                print(f"Gemini failed: {err_str}")
+                raise RuntimeError(err_str) from None
         
         return {}
 
@@ -159,7 +170,7 @@ class AIService:
                     match = re.search(r'(\{.*\}|\[.*\])', content, re.DOTALL)
                     return json.loads(match.group(1) if match else content)
                 except Exception as e:
-                    err_str = str(e)
+                    err_str = self._sanitize_error(e)
                     print(f"Groq REST error ({err_str[:60]}). Falling back to Gemini...")
                     return self.generate_json_sync(prompt, system_prompt, provider_override="gemini")
             else:
@@ -188,8 +199,9 @@ class AIService:
                         print(f"Gemini API returned unexpected payload: {res_json}")
                         return {}
                 except Exception as e:
-                    print(f"Gemini sync REST failed: {e}")
-                    raise
+                    err_str = self._sanitize_error(e)
+                    print(f"Gemini sync REST failed: {err_str}")
+                    raise RuntimeError(err_str) from None
             else:
                 # No valid Gemini key, raise a fake 429 to trigger worker backoff and retry Groq later
                 raise RuntimeError("Gemini fallback skipped: No valid GEMINI_API_KEY (starts with AIzaSy). Original Groq rate_limit 429 should retry.")
