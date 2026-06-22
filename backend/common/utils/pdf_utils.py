@@ -84,22 +84,22 @@ def generate_ewandz_offer_pdf(offer_data: Dict) -> bytes:
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
     styles = getSampleStyleSheet()
     
-    PURPLE_COLOR = HexColor("#8B5CF6") # Ewandz purple
+    PURPLE_COLOR = HexColor("#874AF4") # Ewandz purple from template
     
-    styles.add(ParagraphStyle(name='CustomAddressRight', parent=styles['Normal'], fontSize=10, leading=14, alignment=TA_RIGHT))
-    styles.add(ParagraphStyle(name='CustomTitleRight', parent=styles['Heading1'], fontSize=16, alignment=TA_RIGHT, spaceAfter=12, color=PURPLE_COLOR, fontName='Helvetica-Bold'))
-    styles.add(ParagraphStyle(name='CustomDateLocationRight', parent=styles['Normal'], fontSize=11, leading=14, alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name='CustomAddressRight', parent=styles['Normal'], fontSize=12, leading=14, alignment=TA_RIGHT, fontName='Helvetica'))
+    styles.add(ParagraphStyle(name='CustomTitleRight', parent=styles['Heading1'], fontSize=20, alignment=TA_RIGHT, spaceAfter=12, textColor=PURPLE_COLOR, fontName='Helvetica-Bold'))
+    styles.add(ParagraphStyle(name='CustomDateLocationRight', parent=styles['Normal'], fontSize=12, leading=14, alignment=TA_RIGHT, fontName='Helvetica'))
     
     styles.add(ParagraphStyle(name='CustomFooterText', parent=styles['Normal'], fontSize=8, leading=10, alignment=TA_LEFT, textColor=HexColor("#555555")))
-    styles.add(ParagraphStyle(name='CustomBodyText', parent=styles['Normal'], fontSize=11, leading=16, spaceAfter=12))
-    styles.add(ParagraphStyle(name='CustomSignatory', parent=styles['Normal'], fontSize=11, leading=14, fontName='Helvetica-Bold'))
+    styles.add(ParagraphStyle(name='CustomBodyText', parent=styles['Normal'], fontSize=10, leading=15, spaceAfter=12, fontName='Helvetica'))
+    styles.add(ParagraphStyle(name='CustomSignatory', parent=styles['Normal'], fontSize=10, leading=14, fontName='Helvetica-Bold'))
 
     elements = []
     
     # The template has the logo around mid-page, so we push the address to 6.4 inches down to sit below it.
     elements.append(Spacer(1, 6.4*inch))
     
-    elements.append(Paragraph("<b>EWANDZDIGITAL SERVICES PVT LTD</b><br/>20, Okhla Phase III,<br/>Okhla Industrial Estate,<br/>New Delhi-110020, INDIA<br/><font color='blue'><u>www.ewandzdigital.com</u></font>", styles['CustomAddressRight']))
+    elements.append(Paragraph("<b>EWANDZDIGITAL SERVICES PVT LTD</b><br/>20, Okhla Phase III,<br/>Okhla Industrial Estate,<br/>New Delhi-110020, INDIA<br/><font color='#874AF4'>www.ewandzdigital.com</font>", styles['CustomAddressRight']))
     
     # Add the thin purple separator line from the original template
     from reportlab.platypus.flowables import HRFlowable
@@ -179,25 +179,18 @@ def generate_ewandz_offer_pdf(offer_data: Dict) -> bytes:
     
     elements.append(Spacer(1, 0.2*inch))
     elements.append(Paragraph(closing, styles['CustomBodyText']))
-    elements.append(Spacer(1, 0.2*inch))
+    # Insert the signature image dynamically so it flows with the text
+    from reportlab.platypus import Image
+    import os
+    sig_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "assets", "img_p1_40.png")
+    if os.path.exists(sig_path):
+        elements.append(Spacer(1, 0.2*inch))
+        elements.append(Image(sig_path, width=1.4*inch, height=0.38*inch, hAlign='LEFT'))
+        elements.append(Spacer(1, 0.1*inch))
+    else:
+        elements.append(Spacer(1, 0.8*inch))
     elements.append(Paragraph(signatory_name, styles['CustomSignatory']))
-    elements.append(Paragraph(signatory_title, styles['CustomBodyText']))
-    
-    # Add page 2 footer text using a Table for left/right alignment
-    elements.append(Spacer(1, 1*inch))
-    from reportlab.platypus import Table, TableStyle
-    
-    left_footer = Paragraph("Classification: EWANDZ Internal<br/>EWANDZDIGITAL SERVICES PVT LTD<br/>CIN: U72900DL2017PTC327055", styles['CustomFooterText'])
-    right_footer_style = ParagraphStyle(name='FooterRight', parent=styles['CustomFooterText'], alignment=TA_RIGHT)
-    right_footer = Paragraph("USA | POLAND | INDIA | CANADA<br/>www.ewandzdigital.com", right_footer_style)
-    
-    footer_table = Table([[left_footer, right_footer]], colWidths=[3.5*inch, 3.5*inch])
-    footer_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
-        ('LEFTPADDING', (0,0), (-1,-1), 0),
-        ('RIGHTPADDING', (0,0), (-1,-1), 0),
-    ]))
-    elements.append(footer_table)
+    elements.append(Paragraph(signatory_title, styles['CustomSignatory']))
     
     doc.build(elements)
     
