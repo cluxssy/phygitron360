@@ -118,7 +118,7 @@ class AIService:
             
             try:
                 response = self.gemini_client.models.generate_content(
-                    model='gemini-1.5-flash',
+                    model='gemini-2.5-flash',
                     contents=full_prompt,
                 )
                 clean_text = response.text.replace('```json', '').replace('```', '').strip()
@@ -183,7 +183,7 @@ class AIService:
                 full_prompt = f"{system_prompt}\n\n{prompt}\n\nIMPORTANT: Return ONLY valid JSON and NOTHING ELSE. Do not use markdown backticks."
                 try:
                     import requests
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_api_key}"
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_api_key}"
                     payload = {
                         "contents": [{"parts":[{"text": full_prompt}]}]
                     }
