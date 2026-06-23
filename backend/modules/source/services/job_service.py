@@ -58,8 +58,11 @@ class JobService:
         cid = candidate["id"]
         exp = int(candidate.get("total_experience_years") or 0)
         
-        cand_skills_raw = self.candidate_repo.get_candidate_skills(cid)
-        cand_skills = [{"name": s.get("skill_name") or s.get("name"), "level": s["level"]} for s in cand_skills_raw]
+        # Load candidate details to get primary/secondary skills
+        cand_db = self.candidate_repo.get_candidate_by_id(cid)
+        primary = (cand_db.get("primary_skills") or []) if cand_db else []
+        secondary = (cand_db.get("secondary_skills") or []) if cand_db else []
+        cand_skills = [{"name": s, "level": "intermediate"} for s in primary] + [{"name": s, "level": "beginner"} for s in secondary]
         
         fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp, min_exp=min_exp)
         

@@ -9,10 +9,10 @@ class CandidateBase(BaseModel):
     location: Optional[str] = None
     total_experience_years: Optional[float] = 0.0
     current_designation: Optional[str] = None
-    current_company: Optional[str] = None
-    expected_salary: Optional[str] = None
-    notice_period: Optional[str] = None
-    skills: List[str] = []
+    linkedin_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    primary_skills: List[str] = []
+    secondary_skills: List[str] = []
     status: str = "New"
     source: str = "Manual"
     ai_summary: Optional[str] = None

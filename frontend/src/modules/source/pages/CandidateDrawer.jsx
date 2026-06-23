@@ -69,7 +69,11 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
   const confidence = profile?.ai_scores?.find(s => s.score_type === 'confidence_signals');
   let confFlags = [];
-  try { confFlags = confidence ? JSON.parse(confidence.reasoning || '[]').filter(f => f.flag) : []; } catch { /* ignore */ }
+  try { 
+    const parsed = confidence ? JSON.parse(confidence.reasoning || '[]') : [];
+    // Ensure it's an array of strings or map objects down to strings if legacy
+    confFlags = Array.isArray(parsed) ? parsed.map(f => typeof f === 'string' ? f : (f.reason || f.skill || '')).filter(Boolean) : [];
+  } catch { /* ignore */ }
 
   // Fetch full profile when drawer opens
   useEffect(() => {
@@ -172,63 +176,23 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
   // ── Edit Profile Helpers ─────────────────────────────────────────────────
   const startEditing = () => {
-    const activeSkills = Array.isArray(data.structured_skills)
-      ? data.structured_skills.map(s => ({ name: s.skill_name || s.name, level: s.level, years_of_use: s.years_of_use }))
-      : (Array.isArray(data.skills) ? data.skills.map(s => typeof s === 'string' ? { name: s, level: 'intermediate', years_of_use: null } : s) : []);
-
     setEditForm({
       full_name: data.full_name || '',
+      email: data.email || '',
       phone: data.phone || '',
       location: data.location || '',
+      total_experience_years: data.total_experience_years || 0,
       current_designation: data.current_designation || '',
-      current_company: data.current_company || '',
-      expected_salary: data.expected_salary || '',
-      notice_period: data.notice_period || '',
-      availability: data.availability || '',
       linkedin_url: data.linkedin_url || '',
       portfolio_url: data.portfolio_url || '',
+      ai_summary: data.ai_summary || '',
+      primary_skills: Array.isArray(data.primary_skills) ? data.primary_skills.join(', ') : '',
+      secondary_skills: Array.isArray(data.secondary_skills) ? data.secondary_skills.join(', ') : '',
       certifications: Array.isArray(data.certifications) ? data.certifications : [],
-      languages: Array.isArray(data.languages) ? data.languages : [],
-      achievements: Array.isArray(data.achievements) ? data.achievements : [],
       experience: Array.isArray(data.experience) ? data.experience : [],
       education: Array.isArray(data.education) ? data.education : [],
-      skills: activeSkills,
-      projects: Array.isArray(data.projects) ? data.projects : [],
-      awards: Array.isArray(data.awards) ? data.awards : [],
-      publications: Array.isArray(data.publications) ? data.publications : [],
-      hobbies: Array.isArray(data.hobbies) ? data.hobbies : [],
-      work_authorization: data.work_authorization || '',
-      github_url: data.github_url || ''
     });
     setIsEditing(true);
-  };
-
-  const addSkillToForm = () => {
-    if (!newSkillName.trim()) return;
-    if (editForm.skills.some(s => s.name?.toLowerCase() === newSkillName.trim().toLowerCase())) {
-      toast.error('Skill already exists');
-      return;
-    }
-    setEditForm(prev => ({
-      ...prev,
-      skills: [...prev.skills, { name: newSkillName.trim(), level: newSkillLevel, years_of_use: parseInt(newSkillYears) || null }]
-    }));
-    setNewSkillName('');
-  };
-
-  const removeSkillFromForm = (idx) => {
-    setEditForm(prev => ({
-      ...prev,
-      skills: prev.skills.filter((_, i) => i !== idx)
-    }));
-  };
-
-  const updateSkillInForm = (idx, field, value) => {
-    setEditForm(prev => {
-      const updated = [...prev.skills];
-      updated[idx] = { ...updated[idx], [field]: value };
-      return { ...prev, skills: updated };
-    });
   };
 
   const saveProfile = async (e) => {
@@ -240,11 +204,18 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     }
     setSavingProfile(true);
     const tid = toast.loading('Saving profile changes...');
+    
+    const payload = {
+      ...editForm,
+      primary_skills: editForm.primary_skills.split(',').map(s => s.trim()).filter(Boolean),
+      secondary_skills: editForm.secondary_skills.split(',').map(s => s.trim()).filter(Boolean),
+    };
+    
     try {
       const r = await fetch(`/api/source/candidates/${candidate.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(payload),
       });
       const d = await r.json();
       if (r.ok && d.success) {
@@ -413,6 +384,17 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     </div>
                     
                     <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Email</label>
+                      <input
+                        type="email"
+                        required
+                        value={editForm.email}
+                        onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
+                    
+                    <div>
                       <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Phone</label>
                       <input
                         type="text"
@@ -433,22 +415,13 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     </div>
                     
                     <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Availability</label>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Total Experience (Years)</label>
                       <input
-                        type="text"
-                        value={editForm.availability}
-                        onChange={e => setEditForm({ ...editForm, availability: e.target.value })}
-                        placeholder="e.g. Immediate, 30 days"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Current Company</label>
-                      <input
-                        type="text"
-                        value={editForm.current_company}
-                        onChange={e => setEditForm({ ...editForm, current_company: e.target.value })}
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={editForm.total_experience_years}
+                        onChange={e => setEditForm({ ...editForm, total_experience_years: parseFloat(e.target.value) || 0 })}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
@@ -462,29 +435,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Expected Salary</label>
-                      <input
-                        type="text"
-                        value={editForm.expected_salary}
-                        onChange={e => setEditForm({ ...editForm, expected_salary: e.target.value })}
-                        placeholder="e.g. ₹15 LPA, $120k"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Notice Period</label>
-                      <input
-                        type="text"
-                        value={editForm.notice_period}
-                        onChange={e => setEditForm({ ...editForm, notice_period: e.target.value })}
-                        placeholder="e.g. 1 Month"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
-                      />
-                    </div>
-
+                    
                     <div>
                       <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">LinkedIn URL</label>
                       <input
@@ -494,7 +445,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
-
+                    
                     <div>
                       <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Portfolio URL</label>
                       <input
@@ -504,123 +455,40 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">GitHub URL</label>
-                      <input
-                        type="text"
-                        value={editForm.github_url}
-                        onChange={e => setEditForm({ ...editForm, github_url: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Work Authorization</label>
-                      <input
-                        type="text"
-                        value={editForm.work_authorization}
-                        onChange={e => setEditForm({ ...editForm, work_authorization: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Hobbies (comma separated)</label>
-                      <input
-                        type="text"
-                        value={Array.isArray(editForm.hobbies) ? editForm.hobbies.join(', ') : ''}
-                        onChange={e => setEditForm({ ...editForm, hobbies: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Skills Management Section */}
-                <div className="space-y-4 pt-4 border-t border-white/5">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                    <Zap size={14} /> Manage Skills
-                  </h3>
-                  
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                    {editForm.skills.length === 0 ? (
-                      <p className="text-[10px] text-white/30 uppercase font-bold text-center py-4">No skills added yet</p>
-                    ) : (
-                      editForm.skills.map((s, idx) => (
-                        <div key={idx} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 border border-white/5">
-                          <span className="text-xs font-bold text-white flex-1 truncate">{s.name}</span>
-                          
-                          <select
-                            value={s.level || 'intermediate'}
-                            onChange={e => updateSkillInForm(idx, 'level', e.target.value)}
-                            className="bg-[#0c1328] border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white outline-none focus:border-primary/30"
-                          >
-                            <option value="beginner">Beginner</option>
-                            <option value="intermediate">Intermediate</option>
-                            <option value="advanced">Advanced</option>
-                            <option value="expert">Expert</option>
-                          </select>
-
-                          <input
-                            type="number"
-                            min={0}
-                            max={50}
-                            placeholder="Yrs"
-                            value={s.years_of_use || ''}
-                            onChange={e => updateSkillInForm(idx, 'years_of_use', parseInt(e.target.value) || null)}
-                            className="w-12 bg-[#0c1328] border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white text-center outline-none focus:border-primary/30"
-                          />
-
-                          <button
-                            type="button"
-                            onClick={() => removeSkillFromForm(idx)}
-                            className="p-1 rounded text-rose-400 hover:bg-rose-400/10 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))
-                    )}
                   </div>
 
-                  <div className="flex gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                    <input
-                      type="text"
-                      placeholder="New skill name..."
-                      value={newSkillName}
-                      onChange={e => setNewSkillName(e.target.value)}
-                      className="flex-1 bg-[#0c1328] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none"
-                    />
-                    
-                    <select
-                      value={newSkillLevel}
-                      onChange={e => setNewSkillLevel(e.target.value)}
-                      className="bg-[#0c1328] border border-white/10 rounded-lg px-2 text-[10px] text-white outline-none"
-                    >
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                      <option value="expert">Expert</option>
-                    </select>
+                  <div className="space-y-4 pt-4 border-t border-white/5">
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">AI Profile Summary</label>
+                      <textarea
+                        value={editForm.ai_summary}
+                        onChange={e => setEditForm({ ...editForm, ai_summary: e.target.value })}
+                        rows={3}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
 
-                    <input
-                      type="number"
-                      min={0}
-                      max={50}
-                      placeholder="Years"
-                      value={newSkillYears}
-                      onChange={e => setNewSkillYears(e.target.value)}
-                      className="w-14 bg-[#0c1328] border border-white/10 rounded-lg px-2 text-[10px] text-white text-center outline-none"
-                    />
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Primary Skills (comma separated)</label>
+                      <input
+                        type="text"
+                        value={editForm.primary_skills}
+                        onChange={e => setEditForm({ ...editForm, primary_skills: e.target.value })}
+                        placeholder="e.g. React, Node.js, TypeScript"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={addSkillToForm}
-                      className="px-3 py-1.5 bg-primary text-black rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white transition-colors"
-                    >
-                      Add
-                    </button>
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Secondary Skills (comma separated)</label>
+                      <input
+                        type="text"
+                        value={editForm.secondary_skills}
+                        onChange={e => setEditForm({ ...editForm, secondary_skills: e.target.value })}
+                        placeholder="e.g. Git, Docker, AWS"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -693,15 +561,9 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     { icon: Mail, val: data?.email || 'None', link: data?.email ? `mailto:${data?.email}` : null },
                     { icon: Phone, val: data?.phone || 'None' },
                     { icon: MapPin, val: data?.location || 'None' },
-                    { icon: Briefcase, val: data?.current_company || 'None' },
                     { icon: Clock, val: data?.total_experience_years ? `${data.total_experience_years} years` : 'None' },
-                    { icon: DollarSign, val: data?.expected_salary ? `Exp: ${data.expected_salary}` : 'None' },
-                    { icon: Calendar, val: data?.notice_period ? `Notice: ${data.notice_period}` : 'None' },
-                    { icon: Activity, val: data?.availability ? `Status: ${data.availability}` : 'None' },
                     { icon: FileText, val: data?.portfolio_url ? 'Portfolio' : 'Portfolio: None', link: data?.portfolio_url },
                     { icon: Globe, val: data?.linkedin_url ? 'LinkedIn' : 'LinkedIn: None', link: data?.linkedin_url },
-                    { icon: Globe2, val: data?.github_url ? 'GitHub' : 'GitHub: None', link: data?.github_url },
-                    { icon: Shield, val: data?.work_authorization ? `Work Auth: ${data.work_authorization}` : 'Work Auth: None' },
                   ].map(({ icon: Icon, val, link }, idx) => (
                     <div key={idx} className="flex items-center gap-3 text-sm text-white/60">
                       <Icon size={14} className="text-primary/60 shrink-0" />
@@ -716,27 +578,32 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   ))}
                 </section>
 
-                {/* Skills */}
+                {/* Primary Skills */}
                 <section>
-                  <SectionLabel icon={<Zap size={13} />} label="Skill Profile" />
-                  {(data?.structured_skills || data?.skills || []).length > 0 ? (
+                  <SectionLabel icon={<Zap size={13} />} label="Primary Skills" />
+                  {data?.primary_skills?.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {(data.structured_skills || data.skills).map((s, i) => {
-                        const name = typeof s === 'string' ? s : (s.skill_name || s.name);
-                        const lvl = typeof s === 'string' ? 'intermediate' : (s.level || 'intermediate');
-                        const yrs = typeof s === 'string' ? null : s.years_of_use;
-                        return (
-                          <div key={i} className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-white/5 border border-white/5">
-                            <span className="text-[11px] font-bold text-white">{name}</span>
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg border uppercase ${LEVEL_COLOR[lvl] || 'bg-white/5 border-white/10 text-white/30'}`}>
-                              {lvl}
-                            </span>
-                            {yrs && (
-                               <span className="text-[9px] text-white/30">{yrs}y</span>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {data.primary_skills.map((s, i) => (
+                        <div key={i} className="flex items-center pl-3 pr-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20">
+                          <span className="text-[11px] font-bold text-primary">{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
+
+                {/* Secondary Skills */}
+                <section>
+                  <SectionLabel icon={<Zap size={13} />} label="Secondary Skills" />
+                  {data?.secondary_skills?.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {data.secondary_skills.map((s, i) => (
+                        <div key={i} className="flex items-center pl-3 pr-3 py-1.5 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-[11px] font-bold text-white">{s}</span>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
@@ -782,128 +649,16 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   )}
                 </section>
 
-                {/* Projects */}
+                {/* Certifications */}
                 <section>
-                  <SectionLabel icon={<Activity size={13} />} label="Projects" />
-                  {data?.projects?.length > 0 ? (
-                    <div className="space-y-3">
-                      {data.projects.map((proj, i) => (
-                        <div key={i} className="glass-panel p-4">
-                          <p className="text-xs font-bold text-white mb-1">{proj.title}</p>
-                          {proj.description && <p className="text-[11px] text-white/50 leading-relaxed whitespace-pre-wrap mb-2">{proj.description}</p>}
-                          {proj.technologies?.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {proj.technologies.map((t, idx) => (
-                                <span key={idx} className="text-[9px] bg-white/5 border border-white/10 text-white/60 px-2 py-0.5 rounded-md font-medium">
-                                  {t}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
-                  )}
-                </section>
-
-                {/* Certifications & Languages */}
-                <div className="grid grid-cols-2 gap-6">
-                  <section>
-                    <SectionLabel icon={<Award size={13} />} label="Certifications" />
-                    {data?.certifications?.length > 0 ? (
-                      <div className="space-y-2">
-                        {data.certifications.map((cert, i) => (
-                          <div key={i} className="glass-panel p-3">
-                            <p className="text-xs font-bold text-white">{cert.name}</p>
-                            {cert.issuer && <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest mt-1">{cert.issuer}</p>}
-                            {cert.year > 0 && <p className="text-[10px] text-white/40 mt-1">{cert.year}</p>}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
-                    )}
-                  </section>
-
-                  <section>
-                    <SectionLabel icon={<Globe2 size={13} />} label="Languages" />
-                    {data?.languages?.length > 0 ? (
-                      <div className="space-y-2">
-                        {data.languages.map((lang, i) => (
-                          <div key={i} className="flex justify-between items-center glass-panel p-3">
-                            <p className="text-xs font-bold text-white">{lang.name}</p>
-                            <p className="text-[9px] font-black uppercase tracking-widest text-primary/80 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">{lang.proficiency}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
-                    )}
-                  </section>
-                </div>
-
-                {/* Achievements */}
-                <section>
-                  <SectionLabel icon={<BookOpen size={13} />} label="Achievements" />
-                  {data?.achievements?.length > 0 ? (
+                  <SectionLabel icon={<Award size={13} />} label="Certifications" />
+                  {data?.certifications?.length > 0 ? (
                     <div className="space-y-2">
-                      {data.achievements.map((ach, i) => (
-                        <div key={i} className="glass-panel px-4 py-3 border-l-2 border-emerald-400/50">
-                          <p className="text-[11px] text-white/70 leading-relaxed font-medium">{ach}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
-                  )}
-                </section>
-
-                {/* Awards */}
-                <section>
-                  <SectionLabel icon={<Award size={13} />} label="Awards" />
-                  {data?.awards?.length > 0 ? (
-                    <div className="space-y-2">
-                      {data.awards.map((aw, i) => (
-                        <div key={i} className="glass-panel p-4">
-                          <p className="text-xs font-bold text-white mb-1">{aw.title}</p>
-                          {aw.issuer && <p className="text-[11px] text-primary/80 font-bold uppercase tracking-widest">{aw.issuer}</p>}
-                          {aw.year > 0 && <p className="text-[10px] text-white/40 mt-1">{aw.year}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
-                  )}
-                </section>
-
-                {/* Publications */}
-                <section>
-                  <SectionLabel icon={<Globe size={13} />} label="Publications" />
-                  {data?.publications?.length > 0 ? (
-                    <div className="space-y-2">
-                      {data.publications.map((pub, i) => (
-                        <div key={i} className="glass-panel p-4">
-                          <p className="text-xs font-bold text-white mb-1">{pub.title}</p>
-                          {pub.publisher_or_journal && <p className="text-[11px] text-primary/80 font-bold uppercase tracking-widest">{pub.publisher_or_journal}</p>}
-                          {pub.year > 0 && <p className="text-[10px] text-white/40 mt-1">{pub.year}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
-                  )}
-                </section>
-
-                {/* Hobbies */}
-                <section>
-                  <SectionLabel icon={<Activity size={13} />} label="Hobbies" />
-                  {data?.hobbies?.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {data.hobbies.map((hob, i) => (
-                        <div key={i} className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[11px] font-bold text-white">
-                          {hob}
+                      {data.certifications.map((cert, i) => (
+                        <div key={i} className="glass-panel p-3">
+                          <p className="text-xs font-bold text-white">{cert.name}</p>
+                          {cert.issuer && <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest mt-1">{cert.issuer}</p>}
+                          {cert.year > 0 && <p className="text-[10px] text-white/40 mt-1">{cert.year}</p>}
                         </div>
                       ))}
                     </div>
@@ -921,8 +676,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         <div key={i} className="glass-panel p-4 border-amber-400/10 bg-amber-400/5 flex items-start gap-3">
                           <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
                           <div>
-                            <p className="text-xs font-bold text-white">{f.skill}</p>
-                            <p className="text-[11px] text-white/40 leading-relaxed">{f.reason}</p>
+                            <p className="text-xs font-bold text-white">{f}</p>
                           </div>
                         </div>
                       ))}

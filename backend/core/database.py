@@ -225,31 +225,37 @@ def create_tables(schema_name='public'):
                 location TEXT,
                 total_experience_years REAL DEFAULT 0,
                 current_designation TEXT,
-                current_company TEXT,
-                expected_salary TEXT,
-                notice_period TEXT,
-                skills TEXT[], -- Array of strings for fast filtering
                 resume_path TEXT,
                 resume_url TEXT,
                 linkedin_url TEXT,
                 portfolio_url TEXT,
                 source TEXT DEFAULT 'Manual',
                 status TEXT DEFAULT 'New',
-                availability TEXT,
                 ai_summary TEXT,
                 certifications JSONB DEFAULT '[]'::jsonb,
-                languages JSONB DEFAULT '[]'::jsonb,
-                achievements JSONB DEFAULT '[]'::jsonb,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                primary_skills TEXT[] DEFAULT '{}'::text[],
+                secondary_skills TEXT[] DEFAULT '{}'::text[]
             )
         ''')
-        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS projects JSONB DEFAULT '[]'::jsonb")
-        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS awards JSONB DEFAULT '[]'::jsonb")
-        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS publications JSONB DEFAULT '[]'::jsonb")
-        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS hobbies JSONB DEFAULT '[]'::jsonb")
-        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS work_authorization TEXT")
-        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS github_url TEXT")
+        # Migrations to alter table for existing databases
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS primary_skills TEXT[] DEFAULT '{}'::text[]")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS secondary_skills TEXT[] DEFAULT '{}'::text[]")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS current_designation TEXT")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS current_company")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS expected_salary")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS notice_period")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS availability")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS languages")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS achievements")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS projects")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS awards")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS publications")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS hobbies")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS work_authorization")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS github_url")
+        cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS skills")
 
         # 3.0.1) Skill Taxonomy
         cur.execute('''

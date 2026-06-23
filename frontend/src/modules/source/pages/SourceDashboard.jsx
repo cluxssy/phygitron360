@@ -481,6 +481,24 @@ export default function SourceDashboard() {
     }
   };
 
+  const handleRetryFailed = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/retry-failed`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (r.ok) {
+        toast.success('Failed items queued for retry');
+        fetchActiveJob();
+      } else {
+        toast.error('Failed to retry items');
+      }
+    } catch {
+      toast.error('Error retrying items');
+    }
+  };
+
   // ── Create / Edit job role ────────────────────────────────────────────────────────
   const handleSaveRole = async (e) => {
     e.preventDefault();
@@ -1159,46 +1177,85 @@ export default function SourceDashboard() {
           {/* Bulk Upload Progress */}
           {bulkJobId && (
             <div className="bg-white w-full max-w-xl rounded-2xl p-6 border border-purple-200 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
-                {bulkJobProgress?.job?.total_files > 0 && (
-                  <div 
-                    className="h-full bg-purple-600 transition-all duration-500" 
-                    style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
-                  />
-                )}
-              </div>
-              <div className="flex justify-between items-center mb-4 mt-1">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
-                </h3>
-                {bulkJobProgress?.job?.total_files > 0 && (
-                  <span className="text-sm font-semibold text-purple-600">
-                    {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {bulkJobProgress?.items_stats?.map(st => (
-                  <div key={st.status} className="bg-gray-50 px-4 py-2 rounded-lg text-sm border border-gray-100 flex items-center">
-                    <div className={`w-2 h-2 rounded-full mr-2 ${
-                      st.status === 'success' ? 'bg-emerald-500' : 
-                      st.status === 'failed' ? 'bg-rose-500' : 
-                      st.status === 'pending' ? 'bg-gray-300' : 'bg-amber-500'
-                    }`} />
-                    <span className="text-gray-500 font-medium mr-2">{st.status}:</span>
-                    <span className="text-gray-800 font-semibold">{st.count}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between items-center mt-6">
-                <p className="text-xs text-gray-500">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
-                <div className="flex gap-4 items-center">
-                  <p className="text-xs text-gray-500">Runs in background</p>
-                  <button onClick={handleCancelQueue} className="px-4 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
-                    Cancel Queue
-                  </button>
-                </div>
-              </div>
+               <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
+                  {bulkJobProgress?.job?.total_files > 0 && (
+                    <div 
+                      className={`h-full transition-all duration-500 ${
+                        bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+                      }`} 
+                      style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+                    ></div>
+                  )}
+               </div>
+               <div className="flex justify-between items-center mb-4 mt-1">
+                 <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    {bulkJobProgress?.job?.status === 'paused' ? (
+                      <>
+                        <Pause size={14} className="text-amber-500" /> Queue Paused
+                      </>
+                    ) : (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
+                      </>
+                    )}
+                 </h3>
+                 {bulkJobProgress?.job?.total_files > 0 && (
+                   <span className={`text-sm font-semibold ${
+                     bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+                   }`}>
+                     {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+                   </span>
+                 )}
+               </div>
+               {(() => {
+                  const failedCount = bulkJobProgress?.items_stats?.find(s => s.status === 'failed')?.count || 0;
+                  if (failedCount > 0) {
+                    return (
+                      <div className="flex items-center gap-3 mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                        <span className="text-red-400 font-medium">
+                          {failedCount} file(s) failed
+                        </span>
+                        <button
+                          onClick={handleRetryFailed}
+                          className="px-3 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded-md text-sm font-medium transition-colors"
+                        >
+                          Retry Failed
+                        </button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+               <div className="flex flex-wrap gap-3">
+                  {bulkJobProgress?.items_stats?.map(st => (
+                     <div key={st.status} className="bg-gray-50 px-4 py-2 rounded-lg text-sm border border-gray-100 flex items-center">
+                        <div className={`w-2 h-2 rounded-full mr-2 ${
+                          st.status === 'success' ? 'bg-emerald-500' : 
+                          st.status === 'failed' ? 'bg-rose-500' : 
+                          st.status === 'pending' ? 'bg-gray-300' : 'bg-amber-500'
+                        }`}></div>
+                        <span className="text-gray-500 font-medium mr-2">{st.status}:</span>
+                        <span className="text-gray-800 font-semibold">{st.count}</span>
+                     </div>
+                  ))}
+               </div>
+               <div className="flex justify-between items-center mt-6">
+                 <p className="text-xs text-gray-500">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
+                 <div className="flex gap-3 items-center">
+                   {bulkJobProgress?.job?.status === 'paused' ? (
+                     <button onClick={handleResumeQueue} className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                       <Play size={12} /> Resume
+                     </button>
+                   ) : (
+                     <button onClick={handlePauseQueue} className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                       <Pause size={12} /> Pause
+                     </button>
+                   )}
+                   <button onClick={handleCancelQueue} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
+                     Cancel Queue
+                   </button>
+                 </div>
+               </div>
             </div>
           )}
         </div>

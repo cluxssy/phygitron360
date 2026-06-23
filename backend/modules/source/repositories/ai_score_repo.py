@@ -10,28 +10,38 @@ class AIScoreRepository:
     def _set_search_path(self, cur):
         cur.execute(f'SET search_path TO "{self.tenant_id}"')
 
-    def create_ai_score(self, data: Dict[str, Any]) -> int:
-        conn = get_db_connection()
+    def create_ai_score(self, data: Dict[str, Any], conn=None, cur=None) -> int:
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            should_close = True
         try:
-            with conn.cursor() as cur:
-                self._set_search_path(cur)
-                cur.execute('''
-                    INSERT INTO ai_scores (entity_type, entity_id, job_role_id, score_type, score, reasoning)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                ''', (
-                    data.get("entity_type"),
-                    data.get("entity_id"),
-                    data.get("job_role_id"),
-                    data.get("score_type"),
-                    data.get("score"),
-                    data.get("reasoning")
-                ))
-                score_id = cur.fetchone()[0]
+            self._set_search_path(cur)
+            cur.execute('''
+                INSERT INTO ai_scores (entity_type, entity_id, job_role_id, score_type, score, reasoning)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (
+                data.get("entity_type"),
+                data.get("entity_id"),
+                data.get("job_role_id"),
+                data.get("score_type"),
+                data.get("score"),
+                data.get("reasoning")
+            ))
+            score_id = cur.fetchone()[0]
+            if should_close:
                 conn.commit()
-                return score_id
+            return score_id
+        except Exception as e:
+            if should_close:
+                conn.rollback()
+            raise e
         finally:
-            conn.close()
+            if should_close:
+                cur.close()
+                conn.close()
 
     def get_scores_for_entity(self, entity_type: str, entity_id: int) -> List[Dict[str, Any]]:
         conn = get_db_connection()
@@ -60,7 +70,8 @@ class AIScoreRepository:
                             c.full_name, 
                             c.current_designation,
                             c.total_experience_years,
-                            c.skills,
+                            c.primary_skills,
+                            c.secondary_skills,
                             s.score,
                             s.reasoning,
                             s.computed_at
@@ -73,6 +84,11 @@ class AIScoreRepository:
                     ) AS latest_scores
                     ORDER BY score DESC
                 ''', (role_id,))
-                return [dict(r) for r in cur.fetchall()]
+                results = []
+                for r in cur.fetchall():
+                    row = dict(r)
+                    row["skills"] = (row.get("primary_skills") or []) + (row.get("secondary_skills") or [])
+                    results.append(row)
+                return results
         finally:
             conn.close()

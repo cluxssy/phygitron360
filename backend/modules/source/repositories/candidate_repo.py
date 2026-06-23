@@ -10,168 +10,167 @@ class CandidateRepository:
     def _set_search_path(self, cur):
         cur.execute(f'SET search_path TO "{self.tenant_id}"')
 
-    def create_candidate(self, data: Dict[str, Any]) -> int:
-        conn = get_db_connection()
+    def create_candidate(self, data: Dict[str, Any], conn=None, cur=None) -> int:
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            should_close = True
         try:
-            with conn.cursor() as cur:
-                self._set_search_path(cur)
-                
-                # 1. Main Candidate Row
+            self._set_search_path(cur)
+            
+            # 1. Main Candidate Row
+            cur.execute('''
+                INSERT INTO candidates 
+                (full_name, email, phone, location, total_experience_years, 
+                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (
+                data.get("full_name"),
+                data.get("email"),
+                data.get("phone"),
+                data.get("location"),
+                data.get("total_experience_years", 0),
+                data.get("current_designation"),
+                data.get("resume_path"),
+                data.get("resume_url"),
+                data.get("status", "New"),
+                data.get("source", "Manual"),
+                data.get("user_id"),
+                data.get("ai_summary"),
+                data.get("linkedin_url"),
+                data.get("portfolio_url"),
+                json.dumps(data.get("certifications", [])),
+                data.get("primary_skills", []),
+                data.get("secondary_skills", [])
+            ))
+            candidate_id = cur.fetchone()[0]
+
+            # 2. Experience
+            for exp in data.get("experience", []):
                 cur.execute('''
-                    INSERT INTO candidates 
-                    (full_name, email, phone, location, total_experience_years, 
-                     current_designation, current_company, expected_salary, notice_period, skills, resume_path, resume_url, status, source, availability, user_id, ai_summary, linkedin_url, portfolio_url, certifications, languages, achievements, projects, awards, publications, hobbies, work_authorization, github_url) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
+                    INSERT INTO candidate_experience 
+                    (candidate_id, company, designation, start_date, end_date, is_current, description)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ''', (
-                    data.get("full_name"),
-                    data.get("email"),
-                    data.get("phone"),
-                    data.get("location"),
-                    data.get("total_experience_years", 0),
-                    data.get("current_designation"),
-                    data.get("current_company"),
-                    data.get("expected_salary"),
-                    data.get("notice_period"),
-                    data.get("skills", []),
-                    data.get("resume_path"),
-                    data.get("resume_url"),
-                    data.get("status", "New"),
-                    data.get("source", "Manual"),
-                    data.get("availability"),
-                    data.get("user_id"),
-                    data.get("ai_summary"),
-                    data.get("linkedin_url"),
-                    data.get("portfolio_url"),
-                    json.dumps(data.get("certifications", [])),
-                    json.dumps(data.get("languages", [])),
-                    json.dumps(data.get("achievements", [])),
-                    json.dumps(data.get("projects", [])),
-                    json.dumps(data.get("awards", [])),
-                    json.dumps(data.get("publications", [])),
-                    json.dumps(data.get("hobbies", [])),
-                    data.get("work_authorization"),
-                    data.get("github_url")
-                ))
-                candidate_id = cur.fetchone()[0]
-
-                # 2. Experience
-                for exp in data.get("experience", []):
-                    cur.execute('''
-                        INSERT INTO candidate_experience 
-                        (candidate_id, company, designation, start_date, end_date, is_current, description)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ''', (
-                        candidate_id,
-                        exp.get("company"),
-                        exp.get("designation"),
-                        exp.get("start_date"),
-                        exp.get("end_date"),
-                        exp.get("is_current", False),
-                        exp.get("description")
-                    ))
-
-                # 3. Education
-                for edu in data.get("education", []):
-                    cur.execute('''
-                        INSERT INTO candidate_education 
-                        (candidate_id, institution, degree, field_of_study, start_date, end_date)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    ''', (
-                        candidate_id,
-                        edu.get("institution"),
-                        edu.get("degree"),
-                        edu.get("field_of_study"),
-                        edu.get("start_date"),
-                        edu.get("end_date")
-                    ))
-
-                conn.commit()
-                return candidate_id
-        finally:
-            conn.close()
-
-    def get_candidate_by_email(self, email: str) -> Optional[Dict[str, Any]]:
-        conn = get_db_connection()
-        try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                self._set_search_path(cur)
-                cur.execute("SELECT * FROM candidates WHERE email = %s", (email,))
-                row = cur.fetchone()
-                return dict(row) if row else None
-        finally:
-            conn.close()
-
-    def update_candidate(self, candidate_id: int, data: Dict[str, Any]) -> bool:
-        conn = get_db_connection()
-        try:
-            with conn.cursor() as cur:
-                self._set_search_path(cur)
-                
-                # Update main table
-                cur.execute('''
-                    UPDATE candidates 
-                    SET full_name = %s, phone = %s, location = %s, total_experience_years = %s,
-                        current_designation = %s, current_company = %s, 
-                        expected_salary = %s, notice_period = %s, availability = %s,
-                        ai_summary = %s, linkedin_url = %s, portfolio_url = %s,
-                        certifications = %s, languages = %s, achievements = %s,
-                        projects = %s, awards = %s, publications = %s, hobbies = %s,
-                        work_authorization = %s, github_url = %s,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                ''', (
-                    data.get("full_name"),
-                    data.get("phone"),
-                    data.get("location"),
-                    data.get("total_experience_years", 0),
-                    data.get("current_designation"),
-                    data.get("current_company"),
-                    data.get("expected_salary"),
-                    data.get("notice_period"),
-                    data.get("availability"),
-                    data.get("ai_summary"),
-                    data.get("linkedin_url"),
-                    data.get("portfolio_url"),
-                    json.dumps(data.get("certifications", [])),
-                    json.dumps(data.get("languages", [])),
-                    json.dumps(data.get("achievements", [])),
-                    json.dumps(data.get("projects", [])),
-                    json.dumps(data.get("awards", [])),
-                    json.dumps(data.get("publications", [])),
-                    json.dumps(data.get("hobbies", [])),
-                    data.get("work_authorization"),
-                    data.get("github_url"),
-                    candidate_id
+                    candidate_id,
+                    exp.get("company"),
+                    exp.get("designation"),
+                    exp.get("start_date"),
+                    exp.get("end_date"),
+                    exp.get("is_current", False),
+                    exp.get("description")
                 ))
 
-                # Clear old many-to-one data for refresh
-                cur.execute("DELETE FROM candidate_experience WHERE candidate_id = %s", (candidate_id,))
-                cur.execute("DELETE FROM candidate_education WHERE candidate_id = %s", (candidate_id,))
+            # 3. Education
+            for edu in data.get("education", []):
+                cur.execute('''
+                    INSERT INTO candidate_education 
+                    (candidate_id, institution, degree, field_of_study, start_date, end_date)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                ''', (
+                    candidate_id,
+                    edu.get("institution"),
+                    edu.get("degree"),
+                    edu.get("field_of_study"),
+                    edu.get("start_date"),
+                    edu.get("end_date")
+                ))
 
-                # Re-insert fresh experience
-                for exp in data.get("experience", []):
-                    cur.execute('''
-                        INSERT INTO candidate_experience 
-                        (candidate_id, company, designation, start_date, end_date, is_current, description)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ''', (candidate_id, exp.get("company"), exp.get("designation"), exp.get("start_date"), exp.get("end_date"), exp.get("is_current", False), exp.get("description")))
-
-                # Re-insert fresh education
-                for edu in data.get("education", []):
-                    cur.execute('''
-                        INSERT INTO candidate_education 
-                        (candidate_id, institution, degree, field_of_study, start_date, end_date)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    ''', (candidate_id, edu.get("institution"), edu.get("degree"), edu.get("field_of_study"), edu.get("start_date"), edu.get("end_date")))
-
+            if should_close:
                 conn.commit()
-                return True
+            return candidate_id
         except Exception as e:
-            conn.rollback()
+            if should_close:
+                conn.rollback()
             raise e
         finally:
-            conn.close()
+            if should_close:
+                cur.close()
+                conn.close()
+
+    def get_candidate_by_email(self, email: str, conn=None, cur=None) -> Optional[Dict[str, Any]]:
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            should_close = True
+            
+        try:
+            self._set_search_path(cur)
+            cur.execute("SELECT * FROM candidates WHERE email = %s", (email,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+        finally:
+            if should_close:
+                cur.close()
+                conn.close()
+
+    def update_candidate(self, candidate_id: int, data: Dict[str, Any], conn=None, cur=None) -> bool:
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            should_close = True
+        try:
+            self._set_search_path(cur)
+            
+            # Update main table
+            cur.execute('''
+                UPDATE candidates 
+                SET full_name = %s, phone = %s, location = %s, total_experience_years = %s,
+                    current_designation = %s,
+                    ai_summary = %s, linkedin_url = %s, portfolio_url = %s,
+                    certifications = %s, primary_skills = %s, secondary_skills = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (
+                data.get("full_name"),
+                data.get("phone"),
+                data.get("location"),
+                data.get("total_experience_years", 0),
+                data.get("current_designation"),
+                data.get("ai_summary"),
+                data.get("linkedin_url"),
+                data.get("portfolio_url"),
+                json.dumps(data.get("certifications", [])),
+                data.get("primary_skills", []),
+                data.get("secondary_skills", []),
+                candidate_id
+            ))
+
+            # Clear old many-to-one data for refresh
+            cur.execute("DELETE FROM candidate_experience WHERE candidate_id = %s", (candidate_id,))
+            cur.execute("DELETE FROM candidate_education WHERE candidate_id = %s", (candidate_id,))
+
+            # Re-insert fresh experience
+            for exp in data.get("experience", []):
+                cur.execute('''
+                    INSERT INTO candidate_experience 
+                    (candidate_id, company, designation, start_date, end_date, is_current, description)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ''', (candidate_id, exp.get("company"), exp.get("designation"), exp.get("start_date"), exp.get("end_date"), exp.get("is_current", False), exp.get("description")))
+
+            # Re-insert fresh education
+            for edu in data.get("education", []):
+                cur.execute('''
+                    INSERT INTO candidate_education 
+                    (candidate_id, institution, degree, field_of_study, start_date, end_date)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                ''', (candidate_id, edu.get("institution"), edu.get("degree"), edu.get("field_of_study"), edu.get("start_date"), edu.get("end_date")))
+
+            if should_close:
+                conn.commit()
+            return True
+        except Exception as e:
+            if should_close:
+                conn.rollback()
+            raise e
+        finally:
+            if should_close:
+                cur.close()
+                conn.close()
 
     def get_all_candidates(self, page: int = 1, page_size: int = 20) -> List[Dict[str, Any]]:
         conn = get_db_connection()
@@ -560,20 +559,30 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def update_bulk_upload_job_item(self, item_id: int, status: str, candidate_id: Optional[int] = None, error_message: Optional[str] = None):
-        conn = get_db_connection()
+    def update_bulk_upload_job_item(self, item_id: int, status: str, candidate_id: Optional[int] = None, error_message: Optional[str] = None, conn=None, cur=None):
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            should_close = True
         try:
-            with conn.cursor() as cur:
-                self._set_search_path(cur)
-                cur.execute(
-                    """UPDATE bulk_upload_job_items
-                       SET status = %s, candidate_id = %s, error_message = %s, updated_at = CURRENT_TIMESTAMP
-                       WHERE id = %s""",
-                    (status, candidate_id, error_message, item_id)
-                )
+            self._set_search_path(cur)
+            cur.execute(
+                """UPDATE bulk_upload_job_items
+                   SET status = %s, candidate_id = %s, error_message = %s, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = %s""",
+                (status, candidate_id, error_message, item_id)
+            )
+            if should_close:
                 conn.commit()
+        except Exception as e:
+            if should_close:
+                conn.rollback()
+            raise e
         finally:
-            conn.close()
+            if should_close:
+                cur.close()
+                conn.close()
 
     def reset_stuck_processing_items(self):
         conn = get_db_connection()
@@ -584,6 +593,20 @@ class CandidateRepository:
                     """UPDATE bulk_upload_job_items
                        SET status = 'pending', updated_at = CURRENT_TIMESTAMP
                        WHERE status = 'processing'"""
+                )
+                conn.commit()
+        finally:
+            conn.close()
+
+    def reset_stuck_extracting_jobs(self):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """UPDATE bulk_upload_jobs
+                       SET status = 'failed', error_message = 'Server restarted during extraction. Please upload the zip file again.', updated_at = CURRENT_TIMESTAMP
+                       WHERE status = 'extracting'"""
                 )
                 conn.commit()
         finally:
@@ -665,6 +688,7 @@ class CandidateRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
+                # Ensure we also aggregate any failed reasons
                 cur.execute(
                     """SELECT status, COUNT(*) as count 
                        FROM bulk_upload_job_items 
@@ -681,6 +705,35 @@ class CandidateRepository:
                     "job": dict(job) if job else None,
                     "items_stats": [dict(r) for r in rows]
                 }
+        finally:
+            conn.close()
+
+    def retry_failed_bulk_upload_items(self, job_id: int) -> bool:
+        """Mark all failed items for a job as pending so the workers pick them up again."""
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                # Reset items
+                cur.execute(
+                    """UPDATE bulk_upload_job_items
+                       SET status = 'pending', error_message = NULL, updated_at = CURRENT_TIMESTAMP
+                       WHERE job_id = %s AND status = 'failed'""",
+                    (job_id,)
+                )
+                if cur.rowcount > 0:
+                    # Reset job state back to processing
+                    cur.execute(
+                        """UPDATE bulk_upload_jobs
+                           SET status = 'processing', failed_files = 0, updated_at = CURRENT_TIMESTAMP
+                           WHERE id = %s""",
+                        (job_id,)
+                    )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to retry items for job {job_id}: {e}")
+            return False
         finally:
             conn.close()
 
@@ -757,18 +810,28 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def log_activity(self, candidate_id: int, actor_name: str, action: str, detail: str = None):
-        conn = get_db_connection()
+    def log_activity(self, candidate_id: int, actor_name: str, action: str, detail: str = None, conn=None, cur=None):
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            should_close = True
         try:
-            with conn.cursor() as cur:
-                self._set_search_path(cur)
-                cur.execute('''
-                    INSERT INTO candidate_activity_log (candidate_id, actor_name, action, detail)
-                    VALUES (%s, %s, %s, %s)
-                ''', (candidate_id, actor_name, action, detail))
+            self._set_search_path(cur)
+            cur.execute('''
+                INSERT INTO candidate_activity_log (candidate_id, actor_name, action, detail)
+                VALUES (%s, %s, %s, %s)
+            ''', (candidate_id, actor_name, action, detail))
+            if should_close:
                 conn.commit()
+        except Exception as e:
+            if should_close:
+                conn.rollback()
+            raise e
         finally:
-            conn.close()
+            if should_close:
+                cur.close()
+                conn.close()
 
     def get_activity_log(self, candidate_id: int) -> List[Dict]:
         conn = get_db_connection()

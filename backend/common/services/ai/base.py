@@ -17,9 +17,9 @@ load_dotenv(dotenv_path=env_path)
 
 class _TokenBucketLimiter:
     """Thread-safe token bucket rate limiter used across all workers."""
-    def __init__(self, rpm: int):
-        self._capacity = rpm
-        self._tokens = float(rpm)
+    def __init__(self, rpm: int, burst: float = 1.0):
+        self._capacity = burst  # Strict spacing by default to prevent TPM bursts
+        self._tokens = burst
         self._refill_rate = rpm / 60.0   # tokens per second
         self._lock = threading.Lock()
         self._last_refill = time.monotonic()
@@ -42,6 +42,16 @@ class _TokenBucketLimiter:
 
 _GROQ_LIMITER   = _TokenBucketLimiter(rpm=int(os.getenv("GROQ_RPM_LIMIT", "28")))
 _GEMINI_LIMITER = _TokenBucketLimiter(rpm=int(os.getenv("GEMINI_RPM_LIMIT", "13")))
+
+# Free tiers strictly prohibit concurrent requests per key.
+_gemini_keys = []
+multi = os.getenv("GEMINI_API_KEYS", "")
+if multi: _gemini_keys = [k.strip() for k in multi.split(",") if k.strip()]
+if not _gemini_keys:
+    single = os.getenv("GOOGLE_API_KEY", "")
+    if single.strip(): _gemini_keys = [single.strip()]
+
+_GEMINI_CONCURRENCY = threading.Semaphore(max(len(_gemini_keys), 1))
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +182,8 @@ class AIService:
     def __init__(self):
         self.provider = os.getenv("AI_PROVIDER", "mock").lower()
         self.groq_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        # Defaulting to 3.1-flash-lite as it has a massive 500 RPD and 250k TPM free tier limit
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
         # --- Key pools (support both single and comma-separated multi-key) ---
         self._groq_pool   = _KeyPool(_parse_key_list("GROQ_API_KEYS",   "GROQ_API_KEY"))
@@ -255,6 +266,21 @@ class AIService:
         known = ", ".join(f"{k}={v!r}" for k, v in pre.items() if v)
         hint = f"\n[PRE-EXTRACTED — do NOT re-derive these, just copy them into the JSON]: {known}\n\n" if known else ""
         return f"Parse this resume and return JSON:{hint}\n{resume_text[:5000]}"
+
+    @staticmethod
+    def build_batched_prompt(items: list[dict]) -> str:
+        """
+        Build a batched user prompt for multiple resumes using XML tags.
+        items: [{"id": 123, "text": "...", "pre": {...}}, ...]
+        """
+        parts = ["Parse the following resumes and return a single JSON object mapping ID to parsed data.\n"]
+        for item in items:
+            known = ", ".join(f"{k}={v!r}" for k, v in item.get("pre", {}).items() if v)
+            hint = f"\n[PRE-EXTRACTED]: {known}" if known else ""
+            # Strongly truncate to 4000 characters to prevent context overflow in a batch of 10
+            text = item.get("text", "")[:4000]
+            parts.append(f'<resume id="{item["id"]}">{hint}\n{text}\n</resume>')
+        return "\n".join(parts)
 
     # ------------------------------------------------------------------
     # ASYNC path (single uploads, scoring, offer letters)
@@ -407,46 +433,48 @@ class AIService:
                     "IMPORTANT: Return ONLY valid JSON. No markdown, no backticks, no explanation."
                 )
 
-                # 1. Try SDK first
-                client = self._get_gemini_client(key)
-                if client:
+                # Acquire the semaphore to prevent concurrent requests on the free tier
+                with _GEMINI_CONCURRENCY:
+                    # 1. Try SDK first
+                    client = self._get_gemini_client(key)
+                    if client:
+                        try:
+                            response = client.models.generate_content(model=self.gemini_model, contents=full_prompt)
+                            clean = response.text.replace('```json', '').replace('```', '').strip()
+                            return json.loads(clean)
+                        except Exception as sdk_err:
+                            err = self._sanitize_error(sdk_err)
+                            last_err = err
+                            if self._is_rate_limit(err):
+                                print(f"Gemini SDK 429 on key[{self._gemini_pool._idx}]. Error: {err[:200]}. Rotating key...")
+                                self._gemini_pool.rotate()
+                                continue
+                            else:
+                                print(f"Gemini SDK error: {err[:80]}. Trying REST...")
+
+                    # 2. REST fallback (only if SDK failed for non-429 reason or client wasn't created)
                     try:
-                        response = client.models.generate_content(model=self.gemini_model, contents=full_prompt)
-                        clean = response.text.replace('```json', '').replace('```', '').strip()
-                        return json.loads(clean)
-                    except Exception as sdk_err:
-                        err = self._sanitize_error(sdk_err)
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={key}"
+                        resp = _req.post(url, json={"contents": [{"parts": [{"text": full_prompt}]}]}, timeout=40)
+                        resp.raise_for_status()
+                        res_json = resp.json()
+                        if "candidates" in res_json and res_json["candidates"]:
+                            text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                            clean = text.replace('```json', '').replace('```', '').strip()
+                            return json.loads(clean)
+                        raise RuntimeError(f"Gemini REST unexpected payload: {res_json}")
+                    except Exception as e:
+                        err = self._sanitize_error(e)
                         last_err = err
                         if self._is_rate_limit(err):
-                            print(f"Gemini SDK 429 on key[{self._gemini_pool._idx}]. Rotating key...")
+                            print(f"Gemini REST 429. Error: {err[:200]}. Rotating key...")
                             self._gemini_pool.rotate()
                             continue
                         else:
-                            print(f"Gemini SDK error: {err[:80]}. Trying REST...")
-
-                # 2. REST fallback (only if SDK failed for non-429 reason or client wasn't created)
-                try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={key}"
-                    resp = _req.post(url, json={"contents": [{"parts": [{"text": full_prompt}]}]}, timeout=40)
-                    resp.raise_for_status()
-                    res_json = resp.json()
-                    if "candidates" in res_json and res_json["candidates"]:
-                        text = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                        clean = text.replace('```json', '').replace('```', '').strip()
-                        return json.loads(clean)
-                    raise RuntimeError(f"Gemini REST unexpected payload: {res_json}")
-                except Exception as e:
-                    err = self._sanitize_error(e)
-                    last_err = err
-                    if self._is_rate_limit(err):
-                        print(f"Gemini REST 429. Rotating key...")
-                        self._gemini_pool.rotate()
-                        continue
-                    else:
-                        print(f"Gemini REST error: {err[:80]}")
-                        # Non-rate-limit error on REST fallback: rotate and try next key
-                        self._gemini_pool.rotate()
-                        continue
+                            print(f"Gemini REST error: {err[:80]}")
+                            # Non-rate-limit error on REST fallback: rotate and try next key
+                            self._gemini_pool.rotate()
+                            continue
 
             raise RuntimeError(f"All Gemini keys exhausted. Last error: {last_err}")
 
@@ -474,37 +502,23 @@ class AIService:
     def _mock_json_response(self, prompt: str) -> dict:
         if "resume" in prompt.lower() or "cv" in prompt.lower():
             return {
-                "name": "Jane Doe",
-                "email": "jane.doe@example.com",
-                "phone": "+1 555-0198",
-                "location": "San Francisco, CA",
-                "experience_years_total": 5.5,
-                "current_designation": "Senior React Developer",
-                "current_company": "Tech Innovators Inc.",
-                "github_url": "",
-                "portfolio_url": "",
-                "linkedin_url": "",
-                "work_authorization": "",
-                "expected_salary": "",
-                "notice_period": "",
-                "availability": "available",
-                "ai_summary": "Mock candidate with 5+ years of React experience.",
-                "skills": [
-                    {"name": "React",      "normalized_name": "react",      "level": "expert",        "evidence": "", "years_of_use": 4},
-                    {"name": "TypeScript", "normalized_name": "typescript",  "level": "advanced",      "evidence": "", "years_of_use": 3},
-                    {"name": "FastAPI",    "normalized_name": "fastapi",     "level": "intermediate",  "evidence": "", "years_of_use": 2},
+                "n": "Jane Doe",
+                "e": "jane.doe@example.com",
+                "p": "+1 555-0198",
+                "l": "San Francisco, CA",
+                "d": "Senior React Developer",
+                "x": 5.5,
+                "ln": "https://linkedin.com/in/janedoe",
+                "pt": "https://janedoe.dev",
+                "s": "Mock candidate with 5+ years of React experience.",
+                "p_sk": ["React", "TypeScript", "JavaScript", "HTML5"],
+                "s_sk": ["FastAPI", "Git", "Docker", "AWS"],
+                "exp": [
+                    {"c": "Tech Innovators Inc.", "r": "Senior React Developer", "s": "2021-01", "e": "Present"}
                 ],
-                "experience": [
-                    {"company": "Tech Innovators Inc.", "designation": "Senior React Developer",
-                     "start_date": "2021-01", "end_date": None, "is_current": True,
-                     "description": "Led frontend architecture."},
+                "edu": [
+                    {"d": "Bachelors in Computer Science", "c": "State University", "s": "2014-08", "e": "2018-05"}
                 ],
-                "education": [
-                    {"institution": "State University", "degree": "Bachelors",
-                     "field_of_study": "Computer Science", "start_date": "2014-08", "end_date": "2018-05"},
-                ],
-                "projects": [], "certifications": [], "languages": [],
-                "achievements": [], "awards": [], "publications": [], "hobbies": [],
-                "confidence_signals": [],
+                "cert": []
             }
         return {}
