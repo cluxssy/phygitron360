@@ -244,6 +244,12 @@ def create_tables(schema_name='public'):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS projects JSONB DEFAULT '[]'::jsonb")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS awards JSONB DEFAULT '[]'::jsonb")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS publications JSONB DEFAULT '[]'::jsonb")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS hobbies JSONB DEFAULT '[]'::jsonb")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS work_authorization TEXT")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS github_url TEXT")
 
         # 3.0.1) Skill Taxonomy
         cur.execute('''

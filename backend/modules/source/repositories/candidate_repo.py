@@ -20,8 +20,8 @@ class CandidateRepository:
                 cur.execute('''
                     INSERT INTO candidates 
                     (full_name, email, phone, location, total_experience_years, 
-                     current_designation, current_company, expected_salary, notice_period, skills, resume_path, resume_url, status, source, availability, user_id, ai_summary, linkedin_url, portfolio_url, certifications, languages, achievements) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     current_designation, current_company, expected_salary, notice_period, skills, resume_path, resume_url, status, source, availability, user_id, ai_summary, linkedin_url, portfolio_url, certifications, languages, achievements, projects, awards, publications, hobbies, work_authorization, github_url) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 ''', (
                     data.get("full_name"),
@@ -45,7 +45,13 @@ class CandidateRepository:
                     data.get("portfolio_url"),
                     json.dumps(data.get("certifications", [])),
                     json.dumps(data.get("languages", [])),
-                    json.dumps(data.get("achievements", []))
+                    json.dumps(data.get("achievements", [])),
+                    json.dumps(data.get("projects", [])),
+                    json.dumps(data.get("awards", [])),
+                    json.dumps(data.get("publications", [])),
+                    json.dumps(data.get("hobbies", [])),
+                    data.get("work_authorization"),
+                    data.get("github_url")
                 ))
                 candidate_id = cur.fetchone()[0]
 
@@ -110,6 +116,8 @@ class CandidateRepository:
                         expected_salary = %s, notice_period = %s, availability = %s,
                         ai_summary = %s, linkedin_url = %s, portfolio_url = %s,
                         certifications = %s, languages = %s, achievements = %s,
+                        projects = %s, awards = %s, publications = %s, hobbies = %s,
+                        work_authorization = %s, github_url = %s,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
                 ''', (
@@ -128,6 +136,12 @@ class CandidateRepository:
                     json.dumps(data.get("certifications", [])),
                     json.dumps(data.get("languages", [])),
                     json.dumps(data.get("achievements", [])),
+                    json.dumps(data.get("projects", [])),
+                    json.dumps(data.get("awards", [])),
+                    json.dumps(data.get("publications", [])),
+                    json.dumps(data.get("hobbies", [])),
+                    data.get("work_authorization"),
+                    data.get("github_url"),
                     candidate_id
                 ))
 
@@ -561,6 +575,20 @@ class CandidateRepository:
         finally:
             conn.close()
 
+    def reset_stuck_processing_items(self):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """UPDATE bulk_upload_job_items
+                       SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+                       WHERE status = 'processing'"""
+                )
+                conn.commit()
+        finally:
+            conn.close()
+
     def get_pending_bulk_upload_job_items(self, limit: int = 1) -> List[Dict[str, Any]]:
         """Fetch one pending item at a time and mark as processing. Called by each parallel worker."""
         conn = get_db_connection()
@@ -568,9 +596,10 @@ class CandidateRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """SELECT * FROM bulk_upload_job_items
-                       WHERE status = 'pending'
-                       ORDER BY created_at ASC
+                    """SELECT i.* FROM bulk_upload_job_items i
+                       JOIN bulk_upload_jobs j ON i.job_id = j.id
+                       WHERE i.status = 'pending' AND j.status IN ('processing', 'pending')
+                       ORDER BY i.created_at ASC
                        LIMIT %s FOR UPDATE SKIP LOCKED""",
                     (limit,)
                 )
@@ -602,6 +631,32 @@ class CandidateRepository:
                 )
                 row = cur.fetchone()
                 return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def pause_bulk_upload_job(self, job_id: int):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    "UPDATE bulk_upload_jobs SET status = 'paused', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (job_id,)
+                )
+                conn.commit()
+        finally:
+            conn.close()
+
+    def resume_bulk_upload_job(self, job_id: int):
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    "UPDATE bulk_upload_jobs SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (job_id,)
+                )
+                conn.commit()
         finally:
             conn.close()
 

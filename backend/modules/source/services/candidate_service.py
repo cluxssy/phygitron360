@@ -137,9 +137,28 @@ class CandidateService:
         try:
             if ext == ".pdf":
                 import fitz
-                with fitz.open(file_path) as pdf:
-                    for page in pdf:
-                        extracted_text += page.get_text() + "\n"
+                try:
+                    fitz.TOOLS.mupdf_display_errors(False)
+                    fitz.TOOLS.mupdf_display_warnings(False)
+                except Exception:
+                    pass
+                try:
+                    with fitz.open(file_path) as pdf:
+                        for page in pdf:
+                            extracted_text += page.get_text() + "\n"
+                except Exception as pdf_err:
+                    logger.warning(f"PyMuPDF failed to parse {file_path}: {pdf_err}. Trying pdfplumber...")
+                    extracted_text = ""
+                
+                # Fallback: if PyMuPDF extracted nothing, try pdfplumber
+                if not extracted_text.strip():
+                    try:
+                        import pdfplumber
+                        with pdfplumber.open(file_path) as pdf:
+                            for page in pdf.pages:
+                                extracted_text += (page.extract_text() or "") + "\n"
+                    except Exception as pl_err:
+                        logger.warning(f"pdfplumber fallback failed for {file_path}: {pl_err}")
             elif ext == ".txt":
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
@@ -148,17 +167,22 @@ class CandidateService:
                     logger.warning(f"TXT read failed for {file_path}: {e}")
             elif ext in (".docx", ".doc"):
                 try:
-                    from docx import Document
-                    doc = Document(file_path)
-                    extracted_text = '\n'.join([para.text for para in doc.paragraphs if para.text.strip()])
+                    extracted_text = self._extract_docx_data(file_path)
                 except Exception as e:
                     # Common case: Naukri exports HTML files but names them .doc
                     try:
                         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                             content = f.read()
-                        if "<html" in content.lower() or "<table" in content.lower():
+                        
+                        # Binary .doc files contain random bytes that can accidentally match "<html" or "<table"
+                        # in OLE metadata/headers. We check only the first 1024 characters to be safe.
+                        content_lower_prefix = content[:1024].lower()
+                        if "<html" in content_lower_prefix or "<table" in content_lower_prefix:
                             from bs4 import BeautifulSoup
                             soup = BeautifulSoup(content, "html.parser")
+                            # Strip scripts and styles to avoid code extraction
+                            for s in soup(["script", "style"]):
+                                s.decompose()
                             extracted_text = soup.get_text(separator="\n", strip=True)
                         else:
                             # If it's a binary .doc and not HTML, try using system tools
@@ -188,7 +212,7 @@ class CandidateService:
                                 logger.warning(f"DOC extraction failed. Please install 'antiword' or 'catdoc' on your production server to parse legacy .doc files: {file_path}")
                                 extracted_text = ""
                     except Exception as fallback_err:
-                        logger.warning(f"DOCX/HTML extraction failed for {file_path}: {e}")
+                        logger.warning(f"DOCX/HTML extraction failed for {file_path}: {fallback_err} (Original error: {e})")
                         extracted_text = ""
         except Exception as e:
             logger.error(f"Text extraction failed for {file_path}: {e}")
@@ -196,6 +220,62 @@ class CandidateService:
 
         # Sanitize: strip NUL bytes and other control chars PostgreSQL rejects
         return self._sanitize_text(extracted_text)
+
+    def _extract_docx_data(self, file_path: str) -> str:
+        """Extracts text from paragraphs, tables, headers, footers, and textboxes inside a DOCX file."""
+        from docx import Document
+        doc = Document(file_path)
+        full_text = []
+
+        # 1. Extract from headers
+        try:
+            for section in doc.sections:
+                if section.header:
+                    for p in section.header.paragraphs:
+                        if p.text.strip():
+                            full_text.append(p.text.strip())
+        except Exception as e:
+            logger.debug(f"Header extraction skipped: {e}")
+
+        # 2. Extract from main body paragraphs
+        for para in doc.paragraphs:
+            if para.text.strip():
+                full_text.append(para.text.strip())
+
+        # 3. Extract from tables (rows and cells)
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = []
+                for cell in row.cells:
+                    cell_paragraphs = [p.text.strip() for p in cell.paragraphs if p.text.strip()]
+                    if cell_paragraphs:
+                        row_text.append(" | ".join(cell_paragraphs))
+                if row_text:
+                    full_text.append(" | ".join(row_text))
+
+        # 4. Extract from text boxes and shapes
+        try:
+            for txbx in doc.element.xpath('//w:txbxContent'):
+                for p_elem in txbx.xpath('.//w:p'):
+                    p_text = p_elem.text
+                    if not p_text:
+                        p_text = "".join([t.text for t in p_elem.xpath('.//w:t') if t.text])
+                    if p_text.strip():
+                        full_text.append(p_text.strip())
+        except Exception as e:
+            logger.debug(f"Textbox extraction skipped: {e}")
+
+        # 5. Extract from footers
+        try:
+            for section in doc.sections:
+                if section.footer:
+                    for p in section.footer.paragraphs:
+                        if p.text.strip():
+                            full_text.append(p.text.strip())
+        except Exception as e:
+            logger.debug(f"Footer extraction skipped: {e}")
+
+        return "\n".join(full_text)
 
     @staticmethod
     def _sanitize_text(text: str) -> str:
@@ -208,6 +288,29 @@ class CandidateService:
         import re
         text = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
         return text.strip()
+
+    def _extract_name_from_filename(self, filename: str) -> str:
+        """Fallback to extract candidate name from file name if LLM couldn't find it."""
+        if not filename:
+            return ""
+        # Remove extension
+        name = os.path.splitext(filename)[0]
+        # Remove Naukri_ prefix (case insensitive)
+        name = re.sub(r'^naukri_', '', name, flags=re.I)
+        # Remove bracketed experience e.g. [3y_8m]
+        name = re.sub(r'\[.*?\]', '', name)
+        # Remove common trailing terms like _SOC, _Resume, _CV, etc.
+        name = re.sub(r'[-_](?:soc|resume|cv|new|latest|updated|profile|docs?)\b', '', name, flags=re.I)
+        name = re.sub(r'\b(?:soc|resume|cv|new|latest|updated|profile|docs?)\b', '', name, flags=re.I)
+        # Replace punctuation/spacing characters with spaces
+        name = re.sub(r'[-_\.]', ' ', name)
+        # Clean double spaces
+        name = re.sub(r'\s+', ' ', name).strip()
+        # Handle CamelCase: split words
+        name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', name)
+        name = re.sub(r'\s+', ' ', name).strip()
+        # Title case capitalization
+        return name.title()
 
     def get_all_candidates(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
         candidates = self.repo.get_all_candidates(page=page, page_size=page_size)
@@ -598,7 +701,10 @@ class CandidateService:
                         # 3. Run AI parse in thread executor — sync SDK, never blocks event loop
                         from backend.common.services.ai.agents import PARSE_RESUME_SYSTEM
                         ai_service = self.ai_agents.ai
-                        prompt = f"Parse this resume:\n\n{extracted_text[:6000]}"
+
+                        # Pre-extract trivial fields and construct compressed prompt
+                        pre = ai_service.pre_extract_resume(extracted_text)
+                        prompt = ai_service.build_bulk_prompt(extracted_text, pre)
 
                         # Use asyncio.wait_for to prevent hanging if the AI provider stalls
                         ai_result = await asyncio.wait_for(
@@ -609,14 +715,25 @@ class CandidateService:
                             timeout=45.0
                         )
 
-                        if not ai_result or not ai_result.get("name"):
-                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: AI returned empty or invalid parse result. ai_result={ai_result}", flush=True)
+                        # Post-inject pre-extracted fields if the LLM skipped them or if we fell back to mock/offline
+                        if ai_result:
+                            for field, value in pre.items():
+                                if value and not ai_result.get(field):
+                                    ai_result[field] = value
+
+                        # Fallback: if name is empty, try to extract it from the filename
+                        if ai_result and not ai_result.get("name") and item.get("filename"):
+                            inferred_name = self._extract_name_from_filename(item["filename"])
+                            if inferred_name:
+                                ai_result["name"] = inferred_name
+
+                        # Only fail/re-queue if the parsed result is completely empty of key info (no name, no experience, and no skills)
+                        if not ai_result or (not ai_result.get("name") and not ai_result.get("experience") and not ai_result.get("skills")):
+                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: AI returned empty or invalid parse result. Re-queuing as pending. ai_result={ai_result}", flush=True)
+                            await asyncio.sleep(10)
                             self.repo.update_bulk_upload_job_item(
-                                item["id"], status="failed", error_message="AI returned empty or invalid parse result."
+                                item["id"], status="pending", error_message="AI returned empty or invalid parse result. Re-queued."
                             )
-                            provider = os.getenv("BULK_AI_PROVIDER") or os.getenv("AI_PROVIDER", "mock")
-                            if provider != "mock":
-                                await asyncio.sleep(3.5)
                             continue
 
                         # 4. Save candidate to DB (reuse existing logic)
@@ -631,13 +748,17 @@ class CandidateService:
                         )
                         print(f"[Worker-{worker_id}][{self.tenant_id}] SUCCESS item {item['id']} → candidate {result['candidate_id']}", flush=True)
 
-                        # Throttling to respect Free Tier rate limits (30 RPM)
+                        # Throttling to respect Free Tier rate limits (40k TPM on Groq, 15 RPM on Gemini)
                         provider = os.getenv("BULK_AI_PROVIDER") or os.getenv("AI_PROVIDER", "mock")
-                        if provider != "mock":
+                        if provider == "groq":
+                            await asyncio.sleep(6.0)
+                        elif provider == "gemini":
+                            await asyncio.sleep(4.5)
+                        elif provider != "mock":
                             await asyncio.sleep(3.5)
 
                     except Exception as e:
-                        err_str = str(e)
+                        err_str = str(e) or e.__class__.__name__
                         # Sanitize any API keys from the error message
                         ai_service = getattr(self.ai_agents, 'ai', None)
                         if ai_service:
@@ -645,12 +766,13 @@ class CandidateService:
                                 if key and len(key) > 5 and key in err_str:
                                     err_str = err_str.replace(key, "******")
 
-                        if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout']):
+                        if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout', 'TimeoutError']):
                             match = re.search(r'(?:retry in|try again in) (\d+\.?\d*)', err_str)
-                            wait = int(float(match.group(1))) + 2 if match else 15
-                            print(f"[Worker-{worker_id}][{self.tenant_id}] API busy, backing off {wait}s, re-queuing item {item['id']}", flush=True)
+                            wait = int(float(match.group(1))) + 2 if match else 35
+                            print(f"[Worker-{worker_id}][{self.tenant_id}] API busy, backing off {wait}s (holding item {item['id']} as processing to prevent other workers from picking it up immediately)...", flush=True)
+                            await asyncio.sleep(wait)
                             self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None)
-                            backoff = wait
+                            backoff = 0
                         else:
                             print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: {err_str[:300]}", flush=True)
                             self.repo.update_bulk_upload_job_item(
@@ -661,7 +783,7 @@ class CandidateService:
                                 await asyncio.sleep(3.5)
 
                 except Exception as outer_e:
-                    outer_err_str = str(outer_e)
+                    outer_err_str = str(outer_e) or outer_e.__class__.__name__
                     ai_service = getattr(self.ai_agents, 'ai', None)
                     if ai_service:
                         for key in [getattr(ai_service, 'openai_api_key', None), getattr(ai_service, 'gemini_api_key', None), getattr(ai_service, 'groq_api_key', None)]:
@@ -669,6 +791,12 @@ class CandidateService:
                                 outer_err_str = outer_err_str.replace(key, "******")
                     print(f"[Worker-{worker_id}][{self.tenant_id}] Outer loop error: {outer_err_str}", flush=True)
                     await asyncio.sleep(15)
+        # Reset any stuck processing items on startup
+        try:
+            self.repo.reset_stuck_processing_items()
+            logger.info(f"[BulkWorker][{self.tenant_id}] Cleaned up and reset stuck processing items to pending.")
+        except Exception as e:
+            logger.error(f"[BulkWorker][{self.tenant_id}] Error resetting stuck processing items: {e}")
 
         # Launch all workers as concurrent tasks
         await asyncio.gather(*[_single_worker(i) for i in range(num_workers)])
@@ -701,6 +829,12 @@ class CandidateService:
             "status": "New",
             "experience": ai_result.get("experience", []),
             "education": ai_result.get("education", []),
+            "projects": ai_result.get("projects", []),
+            "awards": ai_result.get("awards", []),
+            "publications": ai_result.get("publications", []),
+            "hobbies": ai_result.get("hobbies", []),
+            "work_authorization": ai_result.get("work_authorization"),
+            "github_url": ai_result.get("github_url"),
         }
 
         existing = None
@@ -792,6 +926,14 @@ class CandidateService:
 
     def cancel_bulk_upload_job(self, job_id: int) -> bool:
         self.repo.cancel_bulk_upload_job(job_id)
+        return True
+
+    def pause_bulk_upload_job(self, job_id: int) -> bool:
+        self.repo.pause_bulk_upload_job(job_id)
+        return True
+
+    def resume_bulk_upload_job(self, job_id: int) -> bool:
+        self.repo.resume_bulk_upload_job(job_id)
         return True
 
     def get_global_activity(self, limit: int = 10) -> List[Dict[str, Any]]:

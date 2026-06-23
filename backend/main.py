@@ -130,16 +130,8 @@ async def start_background_workers():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    scheduler.shutdown()
-
-    # Start APScheduler tasks
-    scheduler.add_job(run_missed_clockout_check, CronTrigger(hour="17,21", minute=0))
-    scheduler.add_job(run_bimonthly_report, CronTrigger(hour=9, minute=0))
-    scheduler.start()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    scheduler.shutdown()
+    if scheduler.running:
+        scheduler.shutdown()
 
 # Include Modules
 app.include_router(auth_router)

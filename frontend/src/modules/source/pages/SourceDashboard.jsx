@@ -9,7 +9,7 @@ import {
   Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
   ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
   Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
-  Archive  // <-- Add this line
+  Archive, Pause, Play
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -250,24 +250,28 @@ export default function SourceDashboard() {
     }
   }, [currentTab, fetchActivities]);
 
+  const fetchActiveJob = useCallback(async () => {
+    try {
+      const r = await fetch('/api/source/candidates/bulk-upload/active');
+      if (r.ok) {
+        const d = await r.json();
+        if (d.success && d.data && d.data.job) {
+          setBulkJobId(d.data.job.id);
+          setBulkJobProgress(d.data);
+        } else if (d.success && !d.data) {
+          setBulkJobId(null);
+          setBulkJobProgress(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch active bulk upload job', err);
+    }
+  }, []);
+
   // Resume tracking an active bulk upload job if we refresh the page
   useEffect(() => {
-    const fetchActiveJob = async () => {
-      try {
-        const r = await fetch('/api/source/candidates/bulk-upload/active');
-        if (r.ok) {
-          const d = await r.json();
-          if (d.success && d.data && d.data.job) {
-            setBulkJobId(d.data.job.id);
-            setBulkJobProgress(d.data);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch active bulk upload job', err);
-      }
-    };
     fetchActiveJob();
-  }, []);
+  }, [fetchActiveJob]);
 
   // Poll bulk upload progress
   useEffect(() => {
@@ -283,6 +287,14 @@ export default function SourceDashboard() {
             .filter(s => s.status !== 'pending' && s.status !== 'processing')
             .reduce((acc, curr) => acc + curr.count, 0);
           const job = d.data.job;
+
+          if (job && (job.status === 'cancelled' || job.status === 'failed')) {
+             setBulkJobId(null);
+             setBulkJobProgress(null);
+             fetchCandidates();
+             return;
+          }
+
           if (job && job.total_files > 0 && totalProcessed >= job.total_files) {
              setBulkJobId(null);
              toast.success('Bulk processing complete');
@@ -419,6 +431,42 @@ export default function SourceDashboard() {
       }
     } catch {
       toast.error('Error cancelling queue');
+    }
+  };
+
+  const handlePauseQueue = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/pause`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (r.ok) {
+        toast.success('Queue paused successfully');
+        fetchActiveJob();
+      } else {
+        toast.error('Failed to pause queue');
+      }
+    } catch {
+      toast.error('Error pausing queue');
+    }
+  };
+
+  const handleResumeQueue = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/resume`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (r.ok) {
+        toast.success('Queue resumed successfully');
+        fetchActiveJob();
+      } else {
+        toast.error('Failed to resume queue');
+      }
+    } catch {
+      toast.error('Error resuming queue');
     }
   };
 
@@ -1064,17 +1112,29 @@ export default function SourceDashboard() {
                  <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
                     {bulkJobProgress?.job?.total_files > 0 && (
                       <div 
-                        className="h-full bg-purple-600 transition-all duration-500" 
+                        className={`h-full transition-all duration-500 ${
+                          bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+                        }`} 
                         style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
                       ></div>
                     )}
                  </div>
                  <div className="flex justify-between items-center mb-4 mt-1">
                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
+                      {bulkJobProgress?.job?.status === 'paused' ? (
+                        <>
+                          <Pause size={14} className="text-amber-500" /> Queue Paused
+                        </>
+                      ) : (
+                        <>
+                          <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
+                        </>
+                      )}
                    </h3>
                    {bulkJobProgress?.job?.total_files > 0 && (
-                     <span className="text-sm font-semibold text-purple-600">
+                     <span className={`text-sm font-semibold ${
+                       bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+                     }`}>
                        {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
                      </span>
                    )}
@@ -1094,9 +1154,17 @@ export default function SourceDashboard() {
                  </div>
                  <div className="flex justify-between items-center mt-6">
                    <p className="text-xs text-gray-500">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
-                   <div className="flex gap-4 items-center">
-                     <p className="text-xs text-gray-500">Runs in background</p>
-                     <button onClick={handleCancelQueue} className="px-4 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
+                   <div className="flex gap-3 items-center">
+                     {bulkJobProgress?.job?.status === 'paused' ? (
+                       <button onClick={handleResumeQueue} className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                         <Play size={12} /> Resume
+                       </button>
+                     ) : (
+                       <button onClick={handlePauseQueue} className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                         <Pause size={12} /> Pause
+                       </button>
+                     )}
+                     <button onClick={handleCancelQueue} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
                        Cancel Queue
                      </button>
                    </div>

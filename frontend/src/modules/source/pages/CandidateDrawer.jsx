@@ -187,7 +187,13 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       achievements: Array.isArray(data.achievements) ? data.achievements : [],
       experience: Array.isArray(data.experience) ? data.experience : [],
       education: Array.isArray(data.education) ? data.education : [],
-      skills: activeSkills
+      skills: activeSkills,
+      projects: Array.isArray(data.projects) ? data.projects : [],
+      awards: Array.isArray(data.awards) ? data.awards : [],
+      publications: Array.isArray(data.publications) ? data.publications : [],
+      hobbies: Array.isArray(data.hobbies) ? data.hobbies : [],
+      work_authorization: data.work_authorization || '',
+      github_url: data.github_url || ''
     });
     setIsEditing(true);
   };
@@ -469,6 +475,36 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">GitHub URL</label>
+                      <input
+                        type="text"
+                        value={editForm.github_url}
+                        onChange={e => setEditForm({ ...editForm, github_url: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Work Authorization</label>
+                      <input
+                        type="text"
+                        value={editForm.work_authorization}
+                        onChange={e => setEditForm({ ...editForm, work_authorization: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Hobbies (comma separated)</label>
+                      <input
+                        type="text"
+                        value={Array.isArray(editForm.hobbies) ? editForm.hobbies.join(', ') : ''}
+                        onChange={e => setEditForm({ ...editForm, hobbies: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -617,27 +653,27 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   </div>
                 </div>
 
-                {data?.ai_summary && (
-                  <div className="glass-panel p-5 bg-primary/5 border-primary/20">
-                    <SectionLabel icon={<Star size={13} />} label="AI Profile Summary" color="text-primary" />
-                    <p className="text-xs text-white/70 leading-relaxed font-medium">{data.ai_summary}</p>
-                  </div>
-                )}
+                <div className="glass-panel p-5 bg-primary/5 border-primary/20">
+                  <SectionLabel icon={<Star size={13} />} label="AI Profile Summary" color="text-primary" />
+                  <p className="text-xs text-white/70 leading-relaxed font-medium">{data?.ai_summary || 'None'}</p>
+                </div>
 
                 {/* Basic info */}
                 <section className="grid grid-cols-2 gap-4">
                   {[
-                    { icon: Mail, val: data?.email, link: `mailto:${data?.email}` },
-                    { icon: Phone, val: data?.phone },
-                    { icon: MapPin, val: data?.location },
-                    { icon: Briefcase, val: data?.current_company },
-                    { icon: Clock, val: data?.total_experience_years ? `${data.total_experience_years} years` : null },
-                    { icon: DollarSign, val: data?.expected_salary ? `Exp: ${data.expected_salary}` : null },
-                    { icon: Calendar, val: data?.notice_period ? `Notice: ${data.notice_period}` : null },
-                    { icon: Activity, val: data?.availability ? `Status: ${data.availability}` : null },
-                    { icon: FileText, val: data?.portfolio_url ? 'Portfolio' : null, link: data?.portfolio_url },
-                    { icon: Globe, val: data?.linkedin_url ? 'LinkedIn' : null, link: data?.linkedin_url },
-                  ].filter(i => i.val).map(({ icon: Icon, val, link }, idx) => (
+                    { icon: Mail, val: data?.email || 'None', link: data?.email ? `mailto:${data?.email}` : null },
+                    { icon: Phone, val: data?.phone || 'None' },
+                    { icon: MapPin, val: data?.location || 'None' },
+                    { icon: Briefcase, val: data?.current_company || 'None' },
+                    { icon: Clock, val: data?.total_experience_years ? `${data.total_experience_years} years` : 'None' },
+                    { icon: DollarSign, val: data?.expected_salary ? `Exp: ${data.expected_salary}` : 'None' },
+                    { icon: Calendar, val: data?.notice_period ? `Notice: ${data.notice_period}` : 'None' },
+                    { icon: Activity, val: data?.availability ? `Status: ${data.availability}` : 'None' },
+                    { icon: FileText, val: data?.portfolio_url ? 'Portfolio' : 'Portfolio: None', link: data?.portfolio_url },
+                    { icon: Globe, val: data?.linkedin_url ? 'LinkedIn' : 'LinkedIn: None', link: data?.linkedin_url },
+                    { icon: Globe2, val: data?.github_url ? 'GitHub' : 'GitHub: None', link: data?.github_url },
+                    { icon: Shield, val: data?.work_authorization ? `Work Auth: ${data.work_authorization}` : 'Work Auth: None' },
+                  ].map(({ icon: Icon, val, link }, idx) => (
                     <div key={idx} className="flex items-center gap-3 text-sm text-white/60">
                       <Icon size={14} className="text-primary/60 shrink-0" />
                       {link ? (
@@ -651,12 +687,10 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   ))}
                 </section>
 
-
-
                 {/* Skills */}
-                {((data?.structured_skills || data?.skills || []).length > 0) && (
-                  <section>
-                    <SectionLabel icon={<Zap size={13} />} label="Skill Profile" />
+                <section>
+                  <SectionLabel icon={<Zap size={13} />} label="Skill Profile" />
+                  {(data?.structured_skills || data?.skills || []).length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {(data.structured_skills || data.skills).map((s, i) => {
                         const name = typeof s === 'string' ? s : (s.skill_name || s.name);
@@ -675,13 +709,15 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         );
                       })}
                     </div>
-                  </section>
-                )}
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
 
                 {/* Experience History */}
-                {data?.experience?.length > 0 && (
-                  <section>
-                    <SectionLabel icon={<Briefcase size={13} />} label="Professional Experience" />
+                <section>
+                  <SectionLabel icon={<Briefcase size={13} />} label="Professional Experience" />
+                  {data?.experience?.length > 0 ? (
                     <div className="space-y-3">
                       {data.experience.map((exp, i) => (
                         <div key={i} className="glass-panel p-4">
@@ -694,13 +730,15 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         </div>
                       ))}
                     </div>
-                  </section>
-                )}
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
 
                 {/* Education History */}
-                {data?.education?.length > 0 && (
-                  <section>
-                    <SectionLabel icon={<Shield size={13} />} label="Education" />
+                <section>
+                  <SectionLabel icon={<Shield size={13} />} label="Education" />
+                  {data?.education?.length > 0 ? (
                     <div className="space-y-3">
                       {data.education.map((edu, i) => (
                         <div key={i} className="glass-panel p-4">
@@ -710,14 +748,42 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         </div>
                       ))}
                     </div>
-                  </section>
-                )}
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
+
+                {/* Projects */}
+                <section>
+                  <SectionLabel icon={<Activity size={13} />} label="Projects" />
+                  {data?.projects?.length > 0 ? (
+                    <div className="space-y-3">
+                      {data.projects.map((proj, i) => (
+                        <div key={i} className="glass-panel p-4">
+                          <p className="text-xs font-bold text-white mb-1">{proj.title}</p>
+                          {proj.description && <p className="text-[11px] text-white/50 leading-relaxed whitespace-pre-wrap mb-2">{proj.description}</p>}
+                          {proj.technologies?.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {proj.technologies.map((t, idx) => (
+                                <span key={idx} className="text-[9px] bg-white/5 border border-white/10 text-white/60 px-2 py-0.5 rounded-md font-medium">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
 
                 {/* Certifications & Languages */}
                 <div className="grid grid-cols-2 gap-6">
-                  {data?.certifications?.length > 0 && (
-                    <section>
-                      <SectionLabel icon={<Award size={13} />} label="Certifications" />
+                  <section>
+                    <SectionLabel icon={<Award size={13} />} label="Certifications" />
+                    {data?.certifications?.length > 0 ? (
                       <div className="space-y-2">
                         {data.certifications.map((cert, i) => (
                           <div key={i} className="glass-panel p-3">
@@ -727,12 +793,14 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                           </div>
                         ))}
                       </div>
-                    </section>
-                  )}
+                    ) : (
+                      <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                    )}
+                  </section>
 
-                  {data?.languages?.length > 0 && (
-                    <section>
-                      <SectionLabel icon={<Globe2 size={13} />} label="Languages" />
+                  <section>
+                    <SectionLabel icon={<Globe2 size={13} />} label="Languages" />
+                    {data?.languages?.length > 0 ? (
                       <div className="space-y-2">
                         {data.languages.map((lang, i) => (
                           <div key={i} className="flex justify-between items-center glass-panel p-3">
@@ -741,14 +809,16 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                           </div>
                         ))}
                       </div>
-                    </section>
-                  )}
+                    ) : (
+                      <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                    )}
+                  </section>
                 </div>
 
                 {/* Achievements */}
-                {data?.achievements?.length > 0 && (
-                  <section>
-                    <SectionLabel icon={<BookOpen size={13} />} label="Achievements" />
+                <section>
+                  <SectionLabel icon={<BookOpen size={13} />} label="Achievements" />
+                  {data?.achievements?.length > 0 ? (
                     <div className="space-y-2">
                       {data.achievements.map((ach, i) => (
                         <div key={i} className="glass-panel px-4 py-3 border-l-2 border-emerald-400/50">
@@ -756,8 +826,62 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         </div>
                       ))}
                     </div>
-                  </section>
-                )}
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
+
+                {/* Awards */}
+                <section>
+                  <SectionLabel icon={<Award size={13} />} label="Awards" />
+                  {data?.awards?.length > 0 ? (
+                    <div className="space-y-2">
+                      {data.awards.map((aw, i) => (
+                        <div key={i} className="glass-panel p-4">
+                          <p className="text-xs font-bold text-white mb-1">{aw.title}</p>
+                          {aw.issuer && <p className="text-[11px] text-primary/80 font-bold uppercase tracking-widest">{aw.issuer}</p>}
+                          {aw.year > 0 && <p className="text-[10px] text-white/40 mt-1">{aw.year}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
+
+                {/* Publications */}
+                <section>
+                  <SectionLabel icon={<Globe size={13} />} label="Publications" />
+                  {data?.publications?.length > 0 ? (
+                    <div className="space-y-2">
+                      {data.publications.map((pub, i) => (
+                        <div key={i} className="glass-panel p-4">
+                          <p className="text-xs font-bold text-white mb-1">{pub.title}</p>
+                          {pub.publisher_or_journal && <p className="text-[11px] text-primary/80 font-bold uppercase tracking-widest">{pub.publisher_or_journal}</p>}
+                          {pub.year > 0 && <p className="text-[10px] text-white/40 mt-1">{pub.year}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
+
+                {/* Hobbies */}
+                <section>
+                  <SectionLabel icon={<Activity size={13} />} label="Hobbies" />
+                  {data?.hobbies?.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {data.hobbies.map((hob, i) => (
+                        <div key={i} className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[11px] font-bold text-white">
+                          {hob}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
+                  )}
+                </section>
 
                 {/* Confidence Flags */}
                 {confFlags.length > 0 && (
