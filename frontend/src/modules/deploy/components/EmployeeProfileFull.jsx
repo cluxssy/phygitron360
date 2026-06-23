@@ -8,6 +8,17 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HasPermission from '../../../components/common/HasPermission';
+import {
+  isValidEmail,
+  isValidPhone,
+  isValidPAN,
+  isValidBankAccount,
+  isValidPincode,
+  isValidDate,
+  isDateAfter,
+  isValidURL,
+  isPositiveNumber
+} from '../../../core/utils/validators';
 
 export default function EmployeeProfileFull({ employeeCode: initialCode, onBack }) {
     const [employeeCode, setEmployeeCode] = useState(initialCode);
@@ -18,6 +29,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const [assets, setAssets] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [managers, setManagers] = useState([]);
+    const [errors, setErrors] = useState({});
     const fileInputPfp = useRef();
     const fileInputCv = useRef();
     const fileInputId = useRef();
@@ -60,6 +72,66 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         }
     }, [employeeCode]);
 
+    // ── Validation Functions ──
+    const validateForm = () => {
+        const newErrors = {};
+
+        // Email validation
+        if (formData.email_id && !isValidEmail(formData.email_id)) {
+            newErrors.email_id = 'Please enter a valid email address';
+        }
+
+        // Phone validation
+        if (formData.contact_number && !isValidPhone(formData.contact_number)) {
+            newErrors.contact_number = 'Please enter a valid phone number (10 digits)';
+        }
+
+        // Emergency contact validation
+        if (formData.emergency_contact && !isValidPhone(formData.emergency_contact)) {
+            newErrors.emergency_contact = 'Please enter a valid emergency contact number (10 digits)';
+        }
+
+        // DOB validation - just check if valid date
+            if (formData.dob && !isValidDate(formData.dob)) {
+                newErrors.dob = 'Please enter a valid date of birth';
+            }
+
+        // DOJ validation - cannot be before DOB
+        if (formData.doj && formData.dob) {
+            if (!isValidDate(formData.doj)) {
+                newErrors.doj = 'Please enter a valid date of joining';
+            } else if (!isDateAfter(formData.doj, formData.dob)) {
+                newErrors.doj = 'Date of joining cannot be before date of birth';
+            }
+        }
+
+        // Experience validation
+        if (formData.experience_years && !isPositiveNumber(formData.experience_years)) {
+            newErrors.experience_years = 'Experience years must be a positive number';
+        }
+
+        // Bank Account validation
+        if (formData.bank_account_no && !isValidBankAccount(formData.bank_account_no)) {
+            newErrors.bank_account_no = 'Please enter a valid bank account number (digits only, 9-18 digits)';
+        }
+
+        // PAN validation
+        if (formData.pan_no && !isValidPAN(formData.pan_no)) {
+            newErrors.pan_no = 'Please enter a valid PAN (e.g. ABCDE1234F)';
+        }
+
+        // URL validations
+        if (formData.linkedin_url && !isValidURL(formData.linkedin_url)) {
+            newErrors.linkedin_url = 'Please enter a valid LinkedIn URL';
+        }
+        if (formData.portfolio_url && !isValidURL(formData.portfolio_url)) {
+            newErrors.portfolio_url = 'Please enter a valid portfolio URL';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     if (loading && !details) {
         return (
             <div className="flex flex-col items-center justify-center h-96">
@@ -72,6 +144,18 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     if (!details) return null;
 
     const handleSave = async () => {
+        // Run validation before saving
+        if (!validateForm()) {
+            // Focus the first field with error
+            const firstError = Object.keys(errors)[0];
+            if (firstError) {
+                const el = document.getElementById(`field-${firstError}`);
+                if (el) el.focus();
+            }
+            toast.error('Please fix the errors before saving');
+            return;
+        }
+
         setIsSaving(true);
         try {
             const payload = {
@@ -111,6 +195,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             
             toast.success('Profile updated successfully');
             setEditMode(false);
+            setErrors({});
             fetchDetails(details.employee_code);
         } catch (e) {
             toast.error(e.message);
@@ -121,6 +206,31 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
     const handleFileUpload = async (type, file) => {
         if (!file) return;
+        
+        // ── File Validation ──
+        const allowedTypes = {
+            pfp: ['image/jpeg', 'image/png', 'image/webp'],
+            cv: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+            id: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+        };
+        
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        
+        if (!allowedTypes[type].includes(file.type)) {
+            const typeNames = {
+                pfp: 'JPEG, PNG, WebP',
+                cv: 'PDF, DOC, DOCX',
+                id: 'JPEG, PNG, WebP, PDF'
+            };
+            toast.error(`Please upload a valid file type: ${typeNames[type]}`);
+            return;
+        }
+        
+        if (file.size > maxSize) {
+            toast.error('File size must be less than 5MB');
+            return;
+        }
+
         const fd = new FormData();
         if (type === 'pfp') fd.append('photo_file', file);
         if (type === 'cv') fd.append('cv_file', file);
@@ -142,6 +252,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     };
 
     const handleOffboard = async () => {
+        if (!window.confirm('Are you sure you want to initiate offboarding? This action is irreversible.')) return;
         const exitDate = new Date().toISOString().split('T')[0];
         try {
             const res = await fetch(`/api/employee/${details.employee_code}/offboard`, {
@@ -181,6 +292,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         } catch (e) {
             toast.error(e.message);
         }
+    };
+
+    // Helper to render error message
+    const renderError = (field) => {
+        if (errors[field]) {
+            return <p className="text-red-500 text-[9px] font-bold mt-1">{errors[field]}</p>;
+        }
+        return null;
     };
 
     return (
@@ -242,18 +361,22 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 <Image size={18} /> Update PFP
                             </button>
                         )}
-                        <input type="file" ref={fileInputPfp} hidden accept="image/*" onChange={e => handleFileUpload('pfp', e.target.files[0])} />
+                        <input type="file" ref={fileInputPfp} hidden accept="image/jpeg,image/png,image/webp" onChange={e => handleFileUpload('pfp', e.target.files[0])} />
                     </div>
                     
                     <div className="flex-1 space-y-4">
                         <div className="flex flex-col gap-2">
                             {editMode ? (
-                                <input 
-                                    type="text" 
-                                    value={formData.name}
-                                    onChange={e => setFormData({...formData, name: e.target.value})}
-                                    className="text-4xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
-                                />
+                                <div>
+                                    <input 
+                                        type="text" 
+                                        value={formData.name}
+                                        onChange={e => setFormData({...formData, name: e.target.value})}
+                                        className="text-4xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                        placeholder="Full Name"
+                                    />
+                                    {renderError('name')}
+                                </div>
                             ) : (
                                 <div className="flex items-center gap-4">
                                     <h2 className="text-4xl font-display font-black text-black uppercase tracking-tighter italic">{details.name}</h2>
@@ -294,182 +417,75 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
 
-    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
-
-        <div className="flex items-center gap-2 mb-2">
-
-            <Mail
-                size={12}
-                className="text-[#7c3aed]"
-            />
-
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
-                Email
-            </p>
-
-        </div>
-
-        {editMode ? (
-
+<div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+    <div className="flex items-center gap-2 mb-2">
+        <Mail size={12} className="text-[#7c3aed]" />
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">Email</p>
+    </div>
+    {editMode ? (
+        <div>
             <input
-                type="text"
+                type="email"
                 value={formData.email_id || ''}
-                onChange={e =>
-                    setFormData({
-                        ...formData,
-                        email_id: e.target.value
-                    })
-                }
-                className="
-                    w-full
-                    bg-white
-                    border
-                    border-[#ddd6fe]
-                    rounded-xl
-                    px-3
-                    py-2
-                    text-xs
-                    text-black
-                    font-semibold
-                    focus:outline-none
-                    focus:border-[#7c3aed]
-                "
+                onChange={e => setFormData({...formData, email_id: e.target.value})}
+                className="w-full bg-white border border-[#ddd6fe] rounded-xl px-3 py-2 text-xs text-black font-semibold focus:outline-none focus:border-[#7c3aed]"
+                placeholder="employee@company.com"
+                id="field-email_id"
             />
-
-        ) : (
-
-            <p className="text-xs font-black text-black truncate">
-                {formData.email_id || '—'}
-            </p>
-
-        )}
-
-    </div>
-
-    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
-
-        <div className="flex items-center gap-2 mb-2">
-
-            <Phone
-                size={12}
-                className="text-[#7c3aed]"
-            />
-
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
-                Contact
-            </p>
-
+            {renderError('email_id')}
         </div>
+    ) : (
+        <p className="text-xs font-black text-black truncate">{formData.email_id || '—'}</p>
+    )}
+</div>
 
-        {editMode ? (
-
+<div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+    <div className="flex items-center gap-2 mb-2">
+        <Phone size={12} className="text-[#7c3aed]" />
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">Contact</p>
+    </div>
+    {editMode ? (
+        <div>
             <input
-                type="text"
+                type="tel"
                 value={formData.contact_number || ''}
-                onChange={e =>
-                    setFormData({
-                        ...formData,
-                        contact_number: e.target.value
-                    })
-                }
-                className="
-                    w-full
-                    bg-white
-                    border
-                    border-[#ddd6fe]
-                    rounded-xl
-                    px-3
-                    py-2
-                    text-xs
-                    text-black
-                    font-semibold
-                    focus:outline-none
-                    focus:border-[#7c3aed]
-                "
+                onChange={e => setFormData({...formData, contact_number: e.target.value})}
+                className="w-full bg-white border border-[#ddd6fe] rounded-xl px-3 py-2 text-xs text-black font-semibold focus:outline-none focus:border-[#7c3aed]"
+                placeholder="9876543210"
+                id="field-contact_number"
             />
-
-        ) : (
-
-            <p className="text-xs font-black text-black truncate">
-                {formData.contact_number || '—'}
-            </p>
-
-        )}
-
-    </div>
-
-    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
-
-        <div className="flex items-center gap-2 mb-2">
-
-            <MapPin
-                size={12}
-                className="text-[#7c3aed]"
-            />
-
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
-                Location
-            </p>
-
+            {renderError('contact_number')}
         </div>
+    ) : (
+        <p className="text-xs font-black text-black truncate">{formData.contact_number || '—'}</p>
+    )}
+</div>
 
-        {editMode ? (
-
-            <input
-                type="text"
-                value={formData.location || ''}
-                onChange={e =>
-                    setFormData({
-                        ...formData,
-                        location: e.target.value
-                    })
-                }
-                className="
-                    w-full
-                    bg-white
-                    border
-                    border-[#ddd6fe]
-                    rounded-xl
-                    px-3
-                    py-2
-                    text-xs
-                    text-black
-                    font-semibold
-                    focus:outline-none
-                    focus:border-[#7c3aed]
-                "
-            />
-
-        ) : (
-
-            <p className="text-xs font-black text-black truncate">
-                {formData.location || '—'}
-            </p>
-
-        )}
-
+<div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+    <div className="flex items-center gap-2 mb-2">
+        <MapPin size={12} className="text-[#7c3aed]" />
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">Location</p>
     </div>
+    {editMode ? (
+        <input
+            type="text"
+            value={formData.location || ''}
+            onChange={e => setFormData({...formData, location: e.target.value})}
+            className="w-full bg-white border border-[#ddd6fe] rounded-xl px-3 py-2 text-xs text-black font-semibold focus:outline-none focus:border-[#7c3aed]"
+            placeholder="City, Country"
+        />
+    ) : (
+        <p className="text-xs font-black text-black truncate">{formData.location || '—'}</p>
+    )}
+</div>
 
-    <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
-
-        <div className="flex items-center gap-2 mb-2">
-
-            <Briefcase
-                size={12}
-                className="text-[#7c3aed]"
-            />
-
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
-                Employee ID
-            </p>
-
-        </div>
-
-        <p className="text-xs font-black text-black truncate">
-            {formData.employee_code || '—'}
-        </p>
-
+<div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
+    <div className="flex items-center gap-2 mb-2">
+        <Briefcase size={12} className="text-[#7c3aed]" />
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">Employee ID</p>
     </div>
+    <p className="text-xs font-black text-black truncate">{formData.employee_code || '—'}</p>
+</div>
 
 </div>
                     </div>
@@ -484,9 +500,9 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Personnel Statistics */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editMode} onChange={v => setFormData({...formData, doj: v})} />
+                        <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editMode} onChange={v => setFormData({...formData, doj: v})} error={errors.doj} />
                         <EditStatCard label="Contract" value={formData.employment_type} sub="Engagement Mode" editMode={editMode} onChange={v => setFormData({...formData, employment_type: v})} />
-                        <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editMode} onChange={v => setFormData({...formData, experience_years: v})} />
+                        <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editMode} onChange={v => setFormData({...formData, experience_years: v})} error={errors.experience_years} />
                         <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Hub" editMode={editMode} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} />
                     </div>
 
@@ -616,7 +632,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             />
                         </div>
                         <input type="file" ref={fileInputCv} hidden accept=".pdf,.doc,.docx" onChange={e => handleFileUpload('cv', e.target.files[0])} />
-                        <input type="file" ref={fileInputId} hidden accept="image/*,.pdf" onChange={e => handleFileUpload('id', e.target.files[0])} />
+                        <input type="file" ref={fileInputId} hidden accept="image/jpeg,image/png,image/webp,.pdf" onChange={e => handleFileUpload('id', e.target.files[0])} />
                     </div>
 
                     {/* Allocation & Lifecycle Matrix */}
@@ -743,12 +759,15 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     Primary Operation Base
                                 </p>
                                 {editMode ? (
-                                    <textarea
-                                        value={formData.current_address}
-                                        onChange={e => setFormData({...formData, current_address: e.target.value})}
-                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
-                                        rows={2}
-                                    />
+                                    <div>
+                                        <textarea
+                                            value={formData.current_address}
+                                            onChange={e => setFormData({...formData, current_address: e.target.value})}
+                                            className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                            rows={2}
+                                        />
+                                        {renderError('current_address')}
+                                    </div>
                                 ) : (
                                     <p className="text-xs text-black leading-relaxed bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff] shadow-sm">
                                         {details.current_address || 'Unregistered'}
@@ -760,12 +779,15 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     Permanent Identity Anchor
                                 </p>
                                 {editMode ? (
-                                    <textarea
-                                        value={formData.permanent_address}
-                                        onChange={e => setFormData({...formData, permanent_address: e.target.value})}
-                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
-                                        rows={2}
-                                    />
+                                    <div>
+                                        <textarea
+                                            value={formData.permanent_address}
+                                            onChange={e => setFormData({...formData, permanent_address: e.target.value})}
+                                            className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                            rows={2}
+                                        />
+                                        {renderError('permanent_address')}
+                                    </div>
                                 ) : (
                                     <p className="text-xs text-black leading-relaxed bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff] shadow-sm">
                                         {details.permanent_address || 'Matches Primary'}
@@ -802,13 +824,17 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     Bank Account No.
                                 </p>
                                 {editMode ? (
-                                    <input
-                                        type="text"
-                                        value={formData.bank_account_no || ''}
-                                        onChange={e => setFormData({...formData, bank_account_no: e.target.value})}
-                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
-                                        placeholder="Account Number"
-                                    />
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={formData.bank_account_no || ''}
+                                            onChange={e => setFormData({...formData, bank_account_no: e.target.value})}
+                                            className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                            placeholder="Enter 9-18 digit account number"
+                                            id="field-bank_account_no"
+                                        />
+                                        {renderError('bank_account_no')}
+                                    </div>
                                 ) : (
                                     <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
                                         {details.bank_account_no || 'Not recorded'}
@@ -820,13 +846,17 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     PAN No.
                                 </p>
                                 {editMode ? (
-                                    <input
-                                        type="text"
-                                        value={formData.pan_no || ''}
-                                        onChange={e => setFormData({...formData, pan_no: e.target.value})}
-                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed] uppercase"
-                                        placeholder="ABCDE1234F"
-                                    />
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={formData.pan_no || ''}
+                                            onChange={e => setFormData({...formData, pan_no: e.target.value})}
+                                            className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed] uppercase"
+                                            placeholder="ABCDE1234F"
+                                            id="field-pan_no"
+                                        />
+                                        {renderError('pan_no')}
+                                    </div>
                                 ) : (
                                     <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff] uppercase">
                                         {details.pan_no || 'Not recorded'}
@@ -841,13 +871,17 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={Phone} title="Emergency Contact" />
                         <div className="mt-6">
                             {editMode ? (
-                                <input
-                                    type="text"
-                                    value={formData.emergency_contact || ''}
-                                    onChange={e => setFormData({...formData, emergency_contact: e.target.value})}
-                                    className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
-                                    placeholder="Emergency contact number..."
-                                />
+                                <div>
+                                    <input
+                                        type="tel"
+                                        value={formData.emergency_contact || ''}
+                                        onChange={e => setFormData({...formData, emergency_contact: e.target.value})}
+                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                        placeholder="Enter 10-digit emergency contact number"
+                                        id="field-emergency_contact"
+                                    />
+                                    {renderError('emergency_contact')}
+                                </div>
                             ) : (
                                 <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
                                     {details.emergency_contact || 'Not registered'}
@@ -861,12 +895,16 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={Calendar} title="Biological Timestamp" />
                         <div className="mt-6">
                             {editMode ? (
-                                <input
-                                    type="date"
-                                    value={formData.dob || ''}
-                                    onChange={e => setFormData({...formData, dob: e.target.value})}
-                                    className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
-                                />
+                                <div>
+                                    <input
+                                        type="date"
+                                        value={formData.dob || ''}
+                                        onChange={e => setFormData({...formData, dob: e.target.value})}
+                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                        id="field-dob"
+                                    />
+                                    {renderError('dob')}
+                                </div>
                             ) : (
                                 <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
                                     {details.dob ? details.dob.split('T')[0] : 'Not recorded'}
@@ -956,32 +994,42 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
     );
 }
 
-function EditStatCard({ label, value, sub, editMode, onChange, type = "text", options = [], displayValue }) {
+function EditStatCard({ label, value, sub, editMode, onChange, type = "text", options = [], displayValue, error }) {
     return (
         <div className={`bg-white border border-[#e9ddff] rounded-2xl shadow-sm hover:shadow-md hover:shadow-[#7c3aed]/10 p-6 transition-all ${editMode ? 'ring-2 ring-[#c4b5fd]' : ''}`}>
             <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
                 {label}
             </p>
             {editMode ? (
-                type === 'select' ? (
-                    <select
-                        value={value || ''}
-                        onChange={e => onChange(e.target.value)}
-                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd] appearance-none"
-                    >
-                        <option value="">Select Manager</option>
-                        {options.map((opt, i) => (
-                            <option key={i} value={opt.value}>{opt.label}</option>
-                        ))}
-                    </select>
-                ) : (
-                    <input
-                        type={type}
-                        value={value || ''}
-                        onChange={e => onChange(e.target.value)}
-                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd]"
-                    />
-                )
+                <>
+                    {type === 'select' ? (
+                        <select
+                            value={value || ''}
+                            onChange={e => onChange(e.target.value)}
+                            className={`w-full bg-[#f4ecff] border ${error ? 'border-red-400' : 'border-[#ddd6fe]'} rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd] appearance-none`}
+                        >
+                            <option value="">Select Manager</option>
+                            {options.map((opt, i) => (
+                                <option key={i} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
+                    ) : type === 'date' ? (
+                        <input
+                            type="date"
+                            value={value || ''}
+                            onChange={e => onChange(e.target.value)}
+                            className={`w-full bg-[#f4ecff] border ${error ? 'border-red-400' : 'border-[#ddd6fe]'} rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd]`}
+                        />
+                    ) : (
+                        <input
+                            type={type}
+                            value={value || ''}
+                            onChange={e => onChange(e.target.value)}
+                            className={`w-full bg-[#f4ecff] border ${error ? 'border-red-400' : 'border-[#ddd6fe]'} rounded-lg px-3 py-2 text-sm text-black font-black uppercase focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[#c4b5fd]`}
+                        />
+                    )}
+                    {error && <p className="text-red-500 text-[9px] font-bold mt-1">{error}</p>}
+                </>
             ) : (
                 <p className="text-lg font-display font-black text-black uppercase truncate">
                     {displayValue || value || '—'}

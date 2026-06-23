@@ -8,6 +8,16 @@ import {
   Landmark, FileText, Upload, ExternalLink, Image, Package
 } from 'lucide-react';
 import ComboBox from '../../../core/components/ComboBox';
+import {
+  isValidEmail,
+  isValidPhone,
+  isValidPAN,
+  isValidBankAccount,
+  isValidPincode,
+  isValidURL,
+  validateFile,
+  MAX_FILE_SIZE,
+} from '../../../core/utils/validators';
 
 const DESIGNATIONS = [
     'Software Engineer', 'Senior Engineer', 'Team Lead', 'Project Manager', 
@@ -64,11 +74,9 @@ export default function MyProfile() {
       setDetails(data);
       setFormData({
           ...data,
-          // Flatten skills from nested skill_matrix
           primary_skillset: data.skill_matrix?.primary_skillset || '',
           secondary_skillset: data.skill_matrix?.secondary_skillset || '',
           experience_years: data.skill_matrix?.experience_years || '0',
-          // Normalize date fields to YYYY-MM-DD for date inputs
           doj: (data.doj || '').split('T')[0],
           dob: (data.dob || '').split('T')[0],
       });
@@ -79,10 +87,59 @@ export default function MyProfile() {
     }
   };
 
+  // ── Validation Functions ──
+  const validateProfile = () => {
+    // Email validation
+    if (formData.email_id && !isValidEmail(formData.email_id)) {
+      toast.error('Please enter a valid email address');
+      return false;
+    }
+
+    // Phone validation
+    if (formData.contact_number && !isValidPhone(formData.contact_number)) {
+      toast.error('Please enter a valid phone number (10 digits)');
+      return false;
+    }
+
+    // Emergency contact validation
+    if (formData.emergency_contact && !isValidPhone(formData.emergency_contact)) {
+      toast.error('Emergency contact must be a valid phone number (10 digits)');
+      return false;
+    }
+
+    // PAN validation
+    if (formData.pan_no && !isValidPAN(formData.pan_no)) {
+      toast.error('PAN must follow ABCDE1234F format');
+      return false;
+    }
+
+    // Bank Account validation
+    if (formData.bank_account_no && !isValidBankAccount(formData.bank_account_no)) {
+      toast.error('Bank account must be 9-18 digits only');
+      return false;
+    }
+
+    // URL validations
+    if (formData.linkedin_url && !isValidURL(formData.linkedin_url)) {
+      toast.error('Enter a valid LinkedIn URL');
+      return false;
+    }
+    if (formData.portfolio_url && !isValidURL(formData.portfolio_url)) {
+      toast.error('Enter a valid portfolio URL');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSave = async () => {
+    // Run validation before saving
+    if (!validateProfile()) {
+      return;
+    }
+
     setIsSaving(true);
     try {
-        // Send only the fields the backend accepts — never send nested objects
         const payload = {
             name: formData.name,
             designation: formData.designation,
@@ -101,7 +158,6 @@ export default function MyProfile() {
             education_details: formData.education_details,
             pf_included: formData.pf_included,
             mediclaim_included: formData.mediclaim_included,
-            // Skill matrix fields (flattened)
             primary_skillset: formData.primary_skillset,
             secondary_skillset: formData.secondary_skillset,
             experience_years: formData.experience_years,
@@ -131,6 +187,31 @@ export default function MyProfile() {
 
   const handleFileUpload = async (type, file) => {
     if (!file) return;
+
+    // ── File Validation ──
+    const allowedTypes = {
+      pfp: ['image/jpeg', 'image/png', 'image/webp'],
+      cv: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      id: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+    };
+    
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    
+    if (!allowedTypes[type].includes(file.type)) {
+      const typeNames = {
+        pfp: 'JPEG, PNG, WebP',
+        cv: 'PDF, DOC, DOCX',
+        id: 'JPEG, PNG, WebP, PDF'
+      };
+      toast.error(`Please upload a valid file type: ${typeNames[type]}`);
+      return;
+    }
+    
+    if (file.size > maxSize) {
+      toast.error('File size must be less than 5MB');
+      return;
+    }
+
     const fd = new FormData();
     if (type === 'pfp') fd.append('photo_file', file);
     if (type === 'cv') fd.append('cv_file', file);
@@ -355,7 +436,7 @@ export default function MyProfile() {
         type="file"
         ref={fileInputPfp}
         hidden
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         onChange={e =>
             handleFileUpload('pfp', e.target.files[0])
         }
@@ -435,30 +516,34 @@ export default function MyProfile() {
 
         {editMode ? (
 
-            <input
-                type="text"
-                value={formData.email_id || ''}
-                onChange={e =>
-                    setFormData({
-                        ...formData,
-                        email_id: e.target.value
-                    })
-                }
-                className="
-                    w-full
-                    bg-white
-                    border
-                    border-[#ddd6fe]
-                    rounded-xl
-                    px-3
-                    py-2
-                    text-xs
-                    text-black
-                    font-semibold
-                    focus:outline-none
-                    focus:border-[#7c3aed]
-                "
-            />
+            <div>
+                <input
+                    type="email"
+                    value={formData.email_id || ''}
+                    onChange={e =>
+                        setFormData({
+                            ...formData,
+                            email_id: e.target.value
+                        })
+                    }
+                    className="
+                        w-full
+                        bg-white
+                        border
+                        border-[#ddd6fe]
+                        rounded-xl
+                        px-3
+                        py-2
+                        text-xs
+                        text-black
+                        font-semibold
+                        focus:outline-none
+                        focus:border-[#7c3aed]
+                    "
+                    placeholder="employee@company.com"
+                />
+                <p className="text-[8px] text-[#7c3aed] font-bold uppercase tracking-widest mt-1">Enter a valid email address</p>
+            </div>
 
         ) : (
 
@@ -488,30 +573,34 @@ export default function MyProfile() {
 
         {editMode ? (
 
-            <input
-                type="text"
-                value={formData.contact_number || ''}
-                onChange={e =>
-                    setFormData({
-                        ...formData,
-                        contact_number: e.target.value
-                    })
-                }
-                className="
-                    w-full
-                    bg-white
-                    border
-                    border-[#ddd6fe]
-                    rounded-xl
-                    px-3
-                    py-2
-                    text-xs
-                    text-black
-                    font-semibold
-                    focus:outline-none
-                    focus:border-[#7c3aed]
-                "
-            />
+            <div>
+                <input
+                    type="tel"
+                    value={formData.contact_number || ''}
+                    onChange={e =>
+                        setFormData({
+                            ...formData,
+                            contact_number: e.target.value
+                        })
+                    }
+                    className="
+                        w-full
+                        bg-white
+                        border
+                        border-[#ddd6fe]
+                        rounded-xl
+                        px-3
+                        py-2
+                        text-xs
+                        text-black
+                        font-semibold
+                        focus:outline-none
+                        focus:border-[#7c3aed]
+                    "
+                    placeholder="9876543210"
+                />
+                <p className="text-[8px] text-[#7c3aed] font-bold uppercase tracking-widest mt-1">10 digits required</p>
+            </div>
 
         ) : (
 
@@ -671,7 +760,7 @@ export default function MyProfile() {
                     <FileCard editMode={editMode} label="ID Compliance" path={details.id_proofs} onUpload={() => fileInputId.current.click()} />
                 </div>
                 <input type="file" ref={fileInputCv} hidden accept=".pdf,.doc,.docx" onChange={e => handleFileUpload('cv', e.target.files[0])} />
-                <input type="file" ref={fileInputId} hidden accept="image/*,.pdf" onChange={e => handleFileUpload('id', e.target.files[0])} />
+                <input type="file" ref={fileInputId} hidden accept="image/jpeg,image/png,image/webp,.pdf" onChange={e => handleFileUpload('id', e.target.files[0])} />
               </div>
 
               {/* Detailed Allocation List (Relocated) */}
@@ -783,7 +872,16 @@ export default function MyProfile() {
                     <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Bank Account No.</p>
                         {editMode ? (
-                            <input type="text" value={formData.bank_account_no || ''} onChange={e => setFormData({...formData, bank_account_no: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" placeholder="Account Number" />
+                            <div>
+                                <input 
+                                    type="text" 
+                                    value={formData.bank_account_no || ''} 
+                                    onChange={e => setFormData({...formData, bank_account_no: e.target.value})} 
+                                    className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" 
+                                    placeholder="9-18 digit account number" 
+                                />
+                                <p className="text-[8px] text-[#7c3aed] font-bold uppercase tracking-widest mt-1">9-18 digits only</p>
+                            </div>
                         ) : (
                             <p className="text-xs text-black">{details.bank_account_no || 'Not recorded'}</p>
                         )}
@@ -791,7 +889,16 @@ export default function MyProfile() {
                     <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">PAN No.</p>
                         {editMode ? (
-                            <input type="text" value={formData.pan_no || ''} onChange={e => setFormData({...formData, pan_no: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black uppercase" placeholder="ABCDE1234F" />
+                            <div>
+                                <input 
+                                    type="text" 
+                                    value={formData.pan_no || ''} 
+                                    onChange={e => setFormData({...formData, pan_no: e.target.value})} 
+                                    className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black uppercase" 
+                                    placeholder="ABCDE1234F" 
+                                />
+                                <p className="text-[8px] text-[#7c3aed] font-bold uppercase tracking-widest mt-1">Format: ABCDE1234F</p>
+                            </div>
                         ) : (
                             <p className="text-xs text-black uppercase">{details.pan_no || 'Not recorded'}</p>
                         )}

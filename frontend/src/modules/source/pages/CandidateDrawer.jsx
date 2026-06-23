@@ -8,6 +8,11 @@ import {
   Award, Globe2, BookOpen, Plus, Trash2, Edit
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import {
+  isNonNegativeNumber,
+  isPhone,
+  isValidUrl,
+} from '../../../core/utils/validators';
 
 const LEVEL_COLOR = {
   beginner:     'bg-white/5 border-white/10 text-white/50',
@@ -228,6 +233,11 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
   const saveProfile = async (e) => {
     e.preventDefault();
+    const validationError = validateProfileEdit();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
     setSavingProfile(true);
     const tid = toast.loading('Saving profile changes...');
     try {
@@ -258,6 +268,9 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   // ── Offer Generation ──────────────────────────────────────────────────────
   const handleGenerateOffer = async (e) => {
     e.preventDefault();
+    if (!offerDetails.role_title.trim()) return toast.error('Role title is required');
+    if (!offerDetails.salary.trim()) return toast.error('Salary is required');
+    if (offerDetails.start_date && Number.isNaN(new Date(offerDetails.start_date).getTime())) return toast.error('Start date is invalid');
     setGeneratingOffer(true);
     try {
       const r = await fetch(`/api/source/candidates/${candidate.id}/offer-preview`, {
@@ -273,6 +286,22 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       }
     } catch { toast.error('Error generating offer'); }
     finally { setGeneratingOffer(false); }
+  };
+
+  const validateProfileEdit = () => {
+    if (!editForm?.full_name?.trim()) return 'Full name is required.';
+    if (editForm.phone && !isPhone(editForm.phone)) return 'Phone must be 7-15 digits, optionally starting with +.';
+    if (editForm.total_experience_years !== undefined && editForm.total_experience_years !== '' && !isNonNegativeNumber(editForm.total_experience_years)) {
+      return 'Total experience must be 0 or greater.';
+    }
+    if (editForm.expected_salary && !/^[0-9,.\sA-Za-z/-]+$/.test(editForm.expected_salary)) {
+      return 'Expected salary contains unsupported characters.';
+    }
+    if (!isValidUrl(editForm.linkedin_url)) return 'LinkedIn URL must start with http:// or https://.';
+    if (!isValidUrl(editForm.portfolio_url)) return 'Portfolio URL must start with http:// or https://.';
+    const badSkill = (editForm.skills || []).find(s => s.years_of_use !== null && s.years_of_use !== '' && !isNonNegativeNumber(s.years_of_use));
+    if (badSkill) return 'Skill years must be 0 or greater.';
+    return '';
   };
 
   const handleCreateOffer = async () => {

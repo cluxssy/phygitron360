@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { X, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import {
+  MAX_FILE_SIZE,
+  isAtLeastAge,
+  isEmail,
+  isEmployeeCode,
+  isNonNegativeNumber,
+  isPhone,
+  validateFile,
+} from '../../../core/utils/validators';
 
 const ROLES = ['org_admin', 'manager', 'employee', 'candidate'];
 
@@ -48,7 +57,36 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
+  const validateSingle = () => {
+    const required = [
+      ['Employee ID', form.code],
+      ['Full Name', form.name],
+      ['Email Address', form.email],
+      ['Phone Number', form.phone],
+      ['Date of Birth', form.dob],
+      ['Joining Date', form.doj],
+      ['Department', form.team],
+      ['Job Title', form.designation],
+      ['Work Location', form.location],
+    ];
+    const missing = required.find(([, value]) => !String(value || '').trim());
+    if (missing) return `${missing[0]} is required.`;
+    if (!isEmployeeCode(form.code)) return 'Employee ID must be 3-20 letters, numbers, hyphens, or underscores.';
+    if (!isEmail(form.email)) return 'Enter a valid email address.';
+    if (!isPhone(form.phone)) return 'Phone number must be 7-15 digits, optionally starting with +.';
+    if (form.emergency && !isPhone(form.emergency)) return 'Emergency contact must be 7-15 digits, optionally starting with +.';
+    if (!isAtLeastAge(form.dob, 18)) return 'Employee must be at least 18 years old.';
+    if (form.experience_years !== '' && !isNonNegativeNumber(form.experience_years)) return 'Experience must be 0 or greater.';
+    if (!ROLES.includes(form.role)) return 'Select a valid system access role.';
+    return '';
+  };
+
   const submitSingle = async () => {
+    const validationError = validateSingle();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -81,6 +119,12 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    const error = validateFile(file, ['.xlsx', '.xls', '.csv'], MAX_FILE_SIZE.spreadsheet, 'Employee bulk file');
+    if (error) {
+      toast.error(error);
+      e.target.value = '';
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -108,6 +152,11 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       toast.error('No data to upload.');
       return;
     }
+    const rowError = validateBulkRows(bulkData);
+    if (rowError) {
+      toast.error(rowError, { duration: 7000 });
+      return;
+    }
     setBulkUploading(true);
     try {
       const res = await fetch('/api/employees/bulk', {
@@ -131,6 +180,29 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     } finally {
       setBulkUploading(false);
     }
+  };
+
+  const validateBulkRows = (rows) => {
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      const rowNo = i + 2;
+      const code = String(row["Employee Code"] || '').trim();
+      const name = String(row["Name"] || '').trim();
+      const email = String(row["Email ID"] || '').trim();
+      const phone = String(row["Contact Number"] || '').trim();
+      const dob = String(row["Date of Birth"] || '').trim();
+      const doj = String(row["Date of Joining"] || '').trim();
+      const exp = row["Experience Years"];
+
+      if (!code || !name || !email) return `Row ${rowNo}: Employee Code, Name, and Email ID are mandatory.`;
+      if (!isEmployeeCode(code)) return `Row ${rowNo}: Employee Code must be 3-20 letters/numbers/hyphen/underscore.`;
+      if (!isEmail(email)) return `Row ${rowNo}: Enter a valid Email ID.`;
+      if (phone && !isPhone(phone)) return `Row ${rowNo}: Contact Number must be 7-15 digits.`;
+      if (dob && !isAtLeastAge(dob, 18)) return `Row ${rowNo}: Date of Birth must confirm age 18 or above.`;
+      if (doj && Number.isNaN(new Date(doj).getTime())) return `Row ${rowNo}: Date of Joining is invalid.`;
+      if (exp !== undefined && exp !== '' && !isNonNegativeNumber(exp)) return `Row ${rowNo}: Experience Years must be 0 or greater.`;
+    }
+    return '';
   };
 
   return (
