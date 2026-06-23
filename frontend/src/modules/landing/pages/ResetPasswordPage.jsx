@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Command, ArrowRight, Zap, CheckCircle } from 'lucide-react';
 import hideIcon from "../../../assets/hide.png";
 import viewIcon from "../../../assets/view.png";
+import { validatePassword } from '../../../core/utils/validators';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -49,6 +50,11 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     if (password !== confirmPassword) {
         setError('Key mismatch.');
+        return;
+    }
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+        setError(passwordError);
         return;
     }
     setLoading(true);

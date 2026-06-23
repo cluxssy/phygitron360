@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/login.css';
 import loginImg from "../../../assets/login.png";
+import { isEmail } from '../../../core/utils/validators';
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -34,6 +35,10 @@ export default function ForgotPasswordPage() {
 
   const handleReset = async (e) => {
     e.preventDefault();
+    if (!isEmail(email)) {
+      setError('Enter a valid email address.');
+      return;
+    }
     setLoading(true);
     setError('');
 

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { isEmail, validatePassword } from '../../../core/utils/validators';
 
 import logo from '../../../assets/phy360.png';
 import bellIcon from '../../../assets/bell.png';
@@ -74,6 +75,11 @@ export default function SuperadminDashboard() {
 
   const handleProvision = async (e) => {
     e.preventDefault();
+    if (!provisionForm.company_name.trim()) return toast.error('Company name is required.');
+    if (provisionForm.company_name.trim().length < 2) return toast.error('Company name must be at least 2 characters.');
+    if (!isEmail(provisionForm.admin_email)) return toast.error('Enter a valid admin email address.');
+    const passwordError = validatePassword(provisionForm.admin_password);
+    if (passwordError) return toast.error(passwordError);
     setProvisioning(true);
     try {
       const res = await fetch('/api/admin/tenants', {
@@ -120,6 +126,10 @@ export default function SuperadminDashboard() {
 
   const handleUpdateOps = async (e) => {
     e.preventDefault();
+    const allowedPlans = ['starter', 'growth', 'enterprise'];
+    if (!tenantOps.company_name?.trim()) return toast.error('Company name is required.');
+    if (tenantOps.plan && !allowedPlans.includes(String(tenantOps.plan).toLowerCase())) return toast.error('Select a valid plan.');
+    if (!tenantOps.modules_enabled?.length) return toast.error('At least one module must remain enabled.');
     setSavingOps(true);
     try {
       const res = await fetch(`/api/admin/tenants/${selectedTenant.id}/ops`, {

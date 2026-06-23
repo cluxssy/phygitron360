@@ -2,6 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { Activity, Download, Save, Send, CheckCircle, Plus, AlertCircle, BarChart3, TrendingUp } from 'lucide-react';
+import {
+  isValidEmail,
+  isValidPhone,
+  isValidPAN,
+  isValidBankAccount,
+  isValidPincode,
+  isValidURL
+} from '../../../core/utils/validators';
 
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
 const HALF_YEARS = ['H1', 'H2'];
@@ -48,6 +56,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
   const [localData, setLocalData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const PERIODS = periodType === 'Quarterly' ? QUARTERS : periodType === 'Half Yearly' ? HALF_YEARS : MONTHS;
 
@@ -86,6 +95,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       setAssessments(list);
       const active = list.find(d => d.period_value === activePeriod);
       setLocalData(active || null);
+      setErrors({});
     } catch (e) {
       toast.error(e.message || 'Failed to load assessments');
       setAssessments([]);
@@ -101,6 +111,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
     setActivePeriod(p);
     const active = assessments.find(d => d.period_value === p);
     setLocalData(active || null);
+    setErrors({});
   };
 
   const createNewAssessment = () => {
@@ -112,9 +123,10 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       total_manager_score: 0,
       self_percentage: 0,
       manager_percentage: 0,
-      percentage: 0, // Fallback/legacy
+      percentage: 0,
       entries: DEFAULT_ENTRIES.map(e => ({ ...e })),
     });
+    setErrors({});
   };
 
   const handleRequestReview = async () => {
@@ -139,13 +151,11 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
     } catch (e) { toast.error(e.message || "Request failed"); }
   };
 
-  // True when the admin is viewing their own employee record (personal view via switch)
   const isSelf = !!user?.employee_code && user.employee_code === selectedEmp;
 
   const handleEntryChange = (idx, field, value) => {
     if (!localData) return;
     
-    // Enforcement: Manager view edits manager fields, Employee view edits self fields
     if (isAdmin && (field === 'self_score' || field === 'employee_comment')) return;
     if (!isAdmin && (field === 'manager_score' || field === 'manager_comment')) return;
 
@@ -175,8 +185,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
     updated.total_manager_score = mgrSum;
     updated.self_percentage = selfCount ? Math.round((selfSum / (selfCount * 10)) * 100) : 0;
     updated.manager_percentage = mgrCount ? Math.round((mgrSum / (mgrCount * 10)) * 100) : 0;
-    
-    // For backward compatibility / composite view
     updated.percentage = updated.manager_percentage || updated.self_percentage || 0;
     setLocalData(updated);
   };
@@ -204,6 +212,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       }
       toast.success(statusOverride === 'Submitted' ? 'Assessment submitted for review' : statusOverride === 'Reviewed' ? 'Assessment finalized' : 'Draft saved');
       await loadAssessments();
+      setErrors({});
     } catch (e) {
       toast.error(e.message || 'Failed to save assessment');
     } finally {
@@ -234,7 +243,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
   const empName = isAdmin ? (employees.find(e => e.employee_code === selectedEmp)?.name || selectedEmp) : user?.name;
   const periodStatus = (p) => assessments.find(a => a.period_value === p);
 
-  // Permissions
   const canEmployeeEdit = !isAdmin && (localData?.status === 'Draft' || localData?.status === 'Requested');
   const canManagerEdit = isAdmin && localData?.status !== 'Finalized';
   const statusCfg = STATUS_CONFIG[localData?.status] || STATUS_CONFIG['Draft'];
@@ -243,7 +251,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
 
   // Theme-aware styles
   const styles = {
-    // Containers
     mainCard: isLightMode 
       ? "bg-white border border-[#ebe7ff] rounded-[2rem] p-6 shadow-[0_10px_40px_rgba(180,140,255,0.04)]" 
       : "glass-panel p-6 border-white/5",
@@ -260,7 +267,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       ? "bg-white border border-[#ebe7ff] rounded-[2rem] p-16 flex flex-col items-center justify-center gap-6"
       : "glass-panel border-white/5 p-16 flex flex-col items-center justify-center gap-6",
 
-    // Tabs
     tabButton: (isActive) => isLightMode
       ? `flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 ${
           isActive ? 'bg-[#7c3aed] text-white shadow-lg shadow-purple-200' : 'border border-[#ece6ff] bg-white text-black/50 hover:bg-[#faf7ff]'
@@ -275,7 +281,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       ? `px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${isActive ? '!bg-black !text-white' : 'text-black/60 hover:bg-white'}`
       : `px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${isActive ? 'bg-primary text-black' : 'text-white/40 hover:text-white'}`,
 
-    // Selects / Inputs
     select: isLightMode
       ? "border border-[#ece6ff] bg-white text-black text-xs px-4 py-2.5 rounded-xl outline-none focus:border-[#8b5cf6]"
       : "glass-panel border-white/5 text-white text-xs bg-transparent px-4 py-2.5 rounded-xl focus:outline-none focus:border-primary/30",
@@ -288,7 +293,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       ? "w-full mt-2 border border-[#d8fbe0] bg-white text-emerald-600 text-[10px] px-3 py-2 rounded-lg focus:outline-none focus:border-emerald-500/30 placeholder-emerald-600/20"
       : "w-full mt-2 glass-panel border-white/10 text-emerald-400 text-[10px] bg-transparent px-3 py-2 rounded-lg focus:outline-none focus:border-emerald-500/30 placeholder-white/10",
 
-    // Text Colors
     titleText: isLightMode ? "text-black" : "text-white",
     subtitleText: isLightMode ? "text-[#7c3aed]" : "text-white/30",
     bodyText: isLightMode ? "text-black/80" : "text-white/60",
@@ -298,7 +302,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       : `text-[8px] font-black uppercase tracking-widest mb-1 ${isActive ? 'text-primary' : 'text-white/20'}`,
     percentageText: isLightMode ? "text-black/80" : "text-white",
 
-    // Table elements
     thead: isLightMode ? "border-b border-[#ebe7ff] bg-[#f7f3ff]" : "border-b border-white/5 bg-white/[0.01]",
     th: (isColor) => isLightMode
       ? `px-4 py-4 text-[9px] font-black uppercase tracking-widest ${isColor === 'primary' ? 'text-[#7c3aed]' : isColor === 'emerald' ? 'text-emerald-600' : 'text-black/50'}`
@@ -311,7 +314,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       ? "text-[10px] text-[#7c3aed] leading-tight bg-[#f7f3ff] p-2 rounded-lg border border-[#e9ddff] italic"
       : "text-[10px] text-primary/40 leading-tight bg-primary/5 p-2 rounded-lg border border-primary/10 italic",
 
-    // Entry score buttons
     entryScoreBtn: (isActive, isManager) => {
       if (isActive) {
         return isManager 
@@ -323,7 +325,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
         : 'px-2 py-1 h-8 rounded-lg text-[10px] font-black glass-panel border-white/5 text-white/20 hover:text-white/40';
     },
 
-    // Footer actions
     footer: isLightMode ? "px-8 py-5 border-t border-[#ebe7ff] bg-[#faf7ff] flex gap-3 justify-end items-center flex-wrap" : "px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-3 justify-end items-center flex-wrap",
     btnSaveDraft: isLightMode
       ? "flex items-center gap-2 px-6 py-2.5 border border-[#ece6ff] bg-white hover:bg-[#faf7ff] text-[#7c3aed] text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
@@ -332,7 +333,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
       ? "flex items-center gap-2 px-8 py-2.5 bg-gradient-to-r from-[#8b5cf6] to-[#c084fc] text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-purple-100 hover:scale-[1.02] active:scale-[0.98] transition-all"
       : "flex items-center gap-2 px-8 py-2.5 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all",
 
-    // XLSX Export
     btnExport: isLightMode
       ? "flex items-center gap-2 px-5 py-2.5 border border-[#ece6ff] bg-white text-black/50 hover:text-black hover:border-black/20 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-30"
       : "flex items-center gap-2 px-5 py-2.5 glass-panel border-white/10 hover:border-primary/30 text-white/40 hover:text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-30",
@@ -447,7 +447,6 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
               key={t}
               onClick={() => {
                 setPeriodType(t);
-
                 setActivePeriod(
                   t === 'Quarterly'
                     ? 'Q1'

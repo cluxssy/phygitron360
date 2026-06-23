@@ -7,6 +7,13 @@ import {
   Copy, Link, Ban
 } from 'lucide-react';
 import ComboBox from '../../../core/components/ComboBox';
+import {
+  isEmail,
+  isEmployeeCode,
+  isFutureDate,
+  isNonEmpty,
+  isValidPhone,
+} from '../../../core/utils/validators';
 
 const DESIGNATIONS = [
     'Software Engineer', 'Senior Engineer', 'Team Lead', 'Project Manager', 
@@ -99,6 +106,14 @@ export default function OnboardingPanel() {
   const sendInvite = async () => {
     if (!form.name || !form.email) {
       toast.error('Please input complete vectors');
+      return;
+    }
+    if (!isEmail(form.email)) {
+      toast.error('Enter a valid invite email address');
+      return;
+    }
+    if (!isNonEmpty(form.role)) {
+      toast.error('Select an onboarding role');
       return;
     }
     setSubmitting(true);
@@ -197,10 +212,28 @@ export default function OnboardingPanel() {
 
   const handleApprove = async (e) => {
     e.preventDefault();
+
+    // ── Validation ──
     if (!approveForm.manager || !approveForm.location || !approveForm.code) {
         toast.error("Please fill in all required information");
         return;
     }
+
+    if (!isEmployeeCode(approveForm.code)) {
+        toast.error("Employee code must be 3-20 letters, numbers, hyphens, or underscores");
+        return;
+    }
+
+    if (!approveForm.doj) {
+        toast.error("Date of joining is required");
+        return;
+    }
+
+    if (isFutureDate(approveForm.doj)) {
+        toast.error("Date of joining cannot be in the future");
+        return;
+    }
+
     setSubmitting(true);
     try {
         const formData = new FormData();
@@ -522,6 +555,7 @@ export default function OnboardingPanel() {
                <div className="space-y-1.5">
                   <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Email</label>
                   <input 
+                    type="email"
                     value={form.email} 
                     onChange={e => setForm({...form, email: e.target.value})} 
                     className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
@@ -827,6 +861,7 @@ export default function OnboardingPanel() {
                                     : 'glass-panel border border-white/10 bg-black/40 text-primary font-black focus:border-primary/40'
                                 }`}
                               />
+                              <p className={`text-[8px] font-bold uppercase tracking-widest ml-1 ${isLightMode ? 'text-emerald-600' : 'text-white/30'}`}>Format: 3-20 letters, numbers, hyphens, or underscores</p>
                            </div>
                            <div className="space-y-2">
                               <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-emerald-800' : 'text-white/30'}`}>Official Date of Joining (DOJ)</label>
@@ -840,6 +875,7 @@ export default function OnboardingPanel() {
                                     : 'glass-panel border border-white/10 bg-black/40 text-white focus:border-emerald-500/40'
                                 }`}
                               />
+                              <p className={`text-[8px] font-bold uppercase tracking-widest ml-1 ${isLightMode ? 'text-emerald-600' : 'text-white/30'}`}>Cannot be in the future</p>
                            </div>
                        </div>
 

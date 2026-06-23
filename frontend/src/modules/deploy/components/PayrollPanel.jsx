@@ -6,6 +6,13 @@ import {
   ChevronDown, Download, Search, CheckCircle, AlertCircle,
   DollarSign, TrendingUp, Calendar, RefreshCw, Eye, X
 } from 'lucide-react';
+import {
+  MAX_FILE_SIZE,
+  isBankAccount,
+  isNonNegativeNumber,
+  isPan,
+  validateFile,
+} from '../../../core/utils/validators';
 
 const MONTH_NAMES = {
   1: 'January', 2: 'February', 3: 'March', 4: 'April',
@@ -97,8 +104,9 @@ export default function PayrollPanel() {
   };
 
   const handleFileSelected = (f) => {
-    if (!f.name.endsWith('.xlsx') && !f.name.endsWith('.xls')) {
-      toast.error('Only .xlsx files are accepted');
+    const error = validateFile(f, ['.xlsx', '.xls'], MAX_FILE_SIZE.spreadsheet, 'Payroll Excel file');
+    if (error) {
+      toast.error(error);
       return;
     }
     setFile(f);
@@ -107,6 +115,8 @@ export default function PayrollPanel() {
 
   const parseFile = async () => {
     if (!file) { toast.error('Please select an Excel file first'); return; }
+    if (payMonth < 1 || payMonth > 12) { toast.error('Pay month must be between 1 and 12'); return; }
+    if (payYear < 2000 || payYear > 2100) { toast.error('Pay year must be between 2000 and 2100'); return; }
     setIsParsing(true);
     try {
       const fd = new FormData();
@@ -122,6 +132,8 @@ export default function PayrollPanel() {
 
   const pushPayCycle = async () => {
     if (!preview.length) { toast.error('No records to push — parse a file first'); return; }
+    const validationError = validatePayrollPreview(preview);
+    if (validationError) { toast.error(validationError, { duration: 7000 }); return; }
     setIsPushing(true);
     try {
       const payload = {
@@ -162,6 +174,31 @@ export default function PayrollPanel() {
       fetchCycles();
     } catch (e) { toast.error(e.message); }
     finally { setIsPushing(false); }
+  };
+
+  const validatePayrollPreview = (records) => {
+    const moneyFields = [
+      'basic_salary', 'hra', 'special_allowance', 'medical_insurance',
+      'pf_employer_contribution', 'travelling_reimbursement', 'gross_ctc',
+      'income_tax', 'medical_deduction', 'employer_pf', 'employee_pf',
+      'total_deductions', 'net_in_hand'
+    ];
+    for (let i = 0; i < records.length; i += 1) {
+      const r = records[i];
+      const label = r.employee_code || `record ${i + 1}`;
+      if (!r.employee_code) return `Payroll ${label}: employee code is required.`;
+      for (const field of moneyFields) {
+        if (r[field] !== undefined && r[field] !== null && !isNonNegativeNumber(r[field])) {
+          return `${label}: ${field.replaceAll('_', ' ')} must be 0 or greater.`;
+        }
+      }
+      if (r.bank_account_no && !isBankAccount(r.bank_account_no)) return `${label}: bank account number should be 9-18 digits.`;
+      if (r.pan_no && !isPan(r.pan_no)) return `${label}: PAN must follow ABCDE1234F format.`;
+      if ((Number(r.total_deductions) || 0) > (Number(r.monthly_ctc) || Number(r.gross_ctc) || 0)) {
+        return `${label}: deductions look higher than earnings. Please review before pushing.`;
+      }
+    }
+    return '';
   };
 
   const downloadPDF = async (employeeCode, year, month) => {

@@ -6,6 +6,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  isPositiveNumber,
+  isValidUrl,
+} from '../../../core/utils/validators';
 
 const QUESTION_TYPES = [
   { id: 'mcq', label: 'Multiple Choice' },
@@ -106,6 +110,10 @@ export default function AssessmentBuilder() {
   const handleImportUrl = async (e) => {
     e.preventDefault();
     if (!importUrl) return;
+    if (!isValidUrl(importUrl)) {
+      toast.error('Enter a valid http:// or https:// URL');
+      return;
+    }
     setImportingUrl(true);
     try {
       const r = await fetch('/api/verify/builder/import-url', {
@@ -130,8 +138,8 @@ export default function AssessmentBuilder() {
   };
 
   const handleSave = async (publish = false) => {
-    if (!title) return toast.error('Title is required');
-    if (questions.length === 0 && publish) return toast.error('Add questions before publishing');
+    const validationError = validateAssessment(publish);
+    if (validationError) return toast.error(validationError, { duration: 7000 });
     
     setSaving(true);
     const payload = {
@@ -185,6 +193,37 @@ export default function AssessmentBuilder() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const validateAssessment = (publish) => {
+    if (!title.trim()) return 'Title is required.';
+    if (timeLimit !== '' && (!Number.isFinite(Number(timeLimit)) || Number(timeLimit) < 1 || Number(timeLimit) > 600)) {
+      return 'Time limit must be between 1 and 600 minutes.';
+    }
+    if (!Number.isFinite(Number(passScore)) || Number(passScore) < 0 || Number(passScore) > 100) {
+      return 'Pass score must be between 0 and 100.';
+    }
+    if (questions.length === 0 && publish) return 'Add questions before publishing.';
+
+    for (let i = 0; i < questions.length; i += 1) {
+      const q = questions[i];
+      const label = `Question ${i + 1}`;
+      if (!q.question_text?.trim()) return `${label}: question text is required.`;
+      if (!isPositiveNumber(q.marks || 0)) return `${label}: marks must be greater than 0.`;
+      if (q.question_type === 'mcq') {
+        const filledOptions = (q.options || []).filter(opt => String(opt || '').trim());
+        if (filledOptions.length < 2) return `${label}: MCQ needs at least 2 options.`;
+        if (!q.correct_answer || !filledOptions.includes(q.correct_answer)) return `${label}: select a correct MCQ answer.`;
+      }
+      if (q.question_type === 'coding') {
+        const validTests = (q.test_cases || []).filter(tc => String(tc.expected_output ?? '').trim());
+        if (validTests.length < 3) return `${label}: coding questions need at least 3 expected outputs.`;
+      }
+      if (q.question_type === 'written' && publish && !q.model_answer?.trim()) {
+        return `${label}: add a model answer before publishing written questions.`;
+      }
+    }
+    return '';
   };
 
   if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;

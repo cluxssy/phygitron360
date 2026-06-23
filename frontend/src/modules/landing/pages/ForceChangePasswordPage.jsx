@@ -4,6 +4,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import '../styles/login.css';
 import hideIcon from "../../../assets/hide.png";
 import viewIcon from "../../../assets/view.png";
+import { validatePassword } from '../../../core/utils/validators';
 
 export default function ForceChangePasswordPage() {
   const navigate = useNavigate();
@@ -34,6 +35,15 @@ export default function ForceChangePasswordPage() {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       setError("New passwords do not match.");
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setError("New password must be different from current password.");
+      return;
+    }
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     
