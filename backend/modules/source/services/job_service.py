@@ -192,6 +192,27 @@ class JobService:
                     self.repo.create_invite_if_not_exists(cid, role_id, hr_id)
                 self.candidate_repo.update_candidate_status(cid, "Invited", role_id=role_id)
 
+                # Auto-assign latest active assessment
+                if user_id:
+                    try:
+                        from backend.core.database import get_db_connection
+                        from psycopg2.extras import RealDictCursor
+                        with get_db_connection() as asm_conn:
+                            with asm_conn.cursor(cursor_factory=RealDictCursor) as asm_cur:
+                                asm_cur.execute("SELECT id FROM assessments WHERE status='active' ORDER BY id DESC LIMIT 1")
+                                asm = asm_cur.fetchone()
+                                if asm:
+                                    asm_cur.execute("SELECT 1 FROM assessment_assignments WHERE assessment_id=%s AND user_id=%s", (asm['id'], user_id))
+                                    if not asm_cur.fetchone():
+                                        asm_cur.execute(
+                                            "INSERT INTO assessment_assignments (assessment_id, user_id, assigned_by) VALUES (%s, %s, %s)",
+                                            (asm['id'], user_id, hr_id)
+                                        )
+                            asm_conn.commit()
+                    except Exception as asm_ex:
+                        import logging
+                        logging.getLogger(__name__).error(f"Auto-assign assessment failed: {asm_ex}")
+
                 # Format custom templates candidate-by-candidate
                 cand_subject = subject
                 cand_body = custom_body

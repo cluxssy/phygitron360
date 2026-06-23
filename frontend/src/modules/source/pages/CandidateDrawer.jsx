@@ -62,6 +62,10 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   const [generatingOffer, setGeneratingOffer] = useState(false);
   const [creatingOffer, setCreatingOffer] = useState(false);
 
+  // Assessments state
+  const [assessmentResults, setAssessmentResults] = useState([]);
+  const [loadingAssessments, setLoadingAssessments] = useState(false);
+
   // AI analysis parsed from stored scores
   const fitScore = profile?.ai_scores?.find(s => s.score_type === 'role_fit');
   let fitData = null;
@@ -86,7 +90,19 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     const url = roleId ? `/api/source/candidates/${candidate.id}?role_id=${roleId}` : `/api/source/candidates/${candidate.id}`;
     fetch(url)
       .then(r => r.json())
-      .then(d => { if (d.success) setProfile(d.data); })
+      .then(d => { 
+        if (d.success) {
+          setProfile(d.data); 
+          if (d.data.user_id) {
+            setLoadingAssessments(true);
+            fetch(`/api/verify/submissions/user/${d.data.user_id}/results`)
+              .then(r2 => r2.json())
+              .then(d2 => { if (d2.success) setAssessmentResults(d2.data || []); })
+              .catch(() => {})
+              .finally(() => setLoadingAssessments(false));
+          }
+        }
+      })
       .catch(() => { /* use shallow data */ })
       .finally(() => setLoadingProfile(false));
   }, [candidate?.id]);
@@ -577,6 +593,41 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     </div>
                   ))}
                 </section>
+
+                {/* Assessment Results */}
+                {(loadingAssessments || assessmentResults.length > 0) && (
+                  <section>
+                    <SectionLabel icon={<CheckCircle size={13} />} label="Assessment Results" />
+                    {loadingAssessments ? (
+                      <div className="flex items-center gap-2 text-white/40 text-xs">
+                        <Loader2 size={12} className="animate-spin" /> Loading results...
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {assessmentResults.map((ar, i) => (
+                          <div key={i} className="glass-panel p-4 flex flex-col gap-2">
+                            <div className="flex items-start justify-between">
+                              <span className="text-xs font-bold text-white">{ar.assessment?.title || `Assessment #${ar.assessment_id}`}</span>
+                              {ar.pass_status !== null && (
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border uppercase ${ar.pass_status ? 'bg-emerald-400/10 border-emerald-400/20 text-emerald-400' : 'bg-rose-400/10 border-rose-400/20 text-rose-400'}`}>
+                                  {ar.pass_status ? 'Passed' : 'Failed'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-white/60">
+                              <span>Score: <strong className="text-white">{ar.score !== null ? `${ar.score}%` : 'Pending'}</strong></span>
+                              {ar.is_malpractice && (
+                                <span className="flex items-center gap-1 text-rose-400">
+                                  <AlertTriangle size={12} /> Malpractice Flagged
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
 
                 {/* Primary Skills */}
                 <section>

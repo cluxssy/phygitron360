@@ -129,3 +129,46 @@ class AssignmentRepository:
                 conn.commit()
         finally:
             conn.close()
+
+    def start_session(self, asm_id: int, user_id: int) -> bool:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """
+                    UPDATE assessment_assignments
+                    SET status = 'in_progress', started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE assessment_id = %s AND user_id = %s AND status = 'pending'
+                    RETURNING id
+                    """,
+                    (asm_id, user_id)
+                )
+                row = cur.fetchone()
+                conn.commit()
+                return bool(row)
+        finally:
+            conn.close()
+
+    def record_strike(self, asm_id: int, user_id: int, max_strikes: int = 5) -> Dict[str, Any]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """
+                    UPDATE assessment_assignments
+                    SET strike_count = strike_count + 1,
+                        updated_at = CURRENT_TIMESTAMP,
+                        terminated_by_proctor = CASE WHEN strike_count + 1 >= %s THEN TRUE ELSE FALSE END,
+                        status = CASE WHEN strike_count + 1 >= %s THEN 'terminated' ELSE status END
+                    WHERE assessment_id = %s AND user_id = %s
+                    RETURNING strike_count, terminated_by_proctor
+                    """,
+                    (max_strikes, max_strikes, asm_id, user_id)
+                )
+                row = cur.fetchone()
+                conn.commit()
+                return dict(row) if row else {"strike_count": 0, "terminated_by_proctor": False}
+        finally:
+            conn.close()

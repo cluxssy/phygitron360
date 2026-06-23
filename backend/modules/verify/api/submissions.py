@@ -65,6 +65,20 @@ def list_my_results(
     return {"success": True, "data": rows}
 
 # ---------------------------------------------------------------------------
+# 2b. GET /user/{user_id}/results — list results for a specific user (HR)
+# ---------------------------------------------------------------------------
+
+@router.get("/user/{user_id}/results")
+def list_user_results(
+    user_id: int,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    service: SubmissionService = Depends(get_submission_service),
+):
+    """List all assessment results for a specific user."""
+    rows = service.get_my_results(user_id)
+    return {"success": True, "data": rows}
+
+# ---------------------------------------------------------------------------
 # 3. GET /results/{result_id} — full result details
 # ---------------------------------------------------------------------------
 
@@ -85,6 +99,21 @@ def get_result_details(
 
     if not is_owner and not has_manage:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    if is_owner and not has_manage:
+        import json
+        feedback_str = result.get("feedback") or "{}"
+        try:
+            feedback_json = json.loads(feedback_str) if isinstance(feedback_str, str) else feedback_str
+        except:
+            feedback_json = {}
+        is_released = feedback_json.get("_is_released", False)
+        
+        if not result.get("show_result_immediately") and not is_released:
+            result["score"] = None
+            result["pass_status"] = None
+            result["feedback"] = None
+            result["scores_per_question"] = None
 
     return {"success": True, "data": result}
 

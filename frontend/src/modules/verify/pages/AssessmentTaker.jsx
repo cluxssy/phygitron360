@@ -69,45 +69,74 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     }
   }, [step, timeLeft]);
 
-  // Proctoring basic checks (tab switch)
+  // Proctoring basic checks (tab switch, fullscreen exit)
   useEffect(() => {
     if (step !== 'taking') return;
-    const handleVisibility = () => {
-      if (document.hidden) {
-        setProctoringEvents(prev => [...prev, {
-          type: 'tab_switch',
-          timestamp: new Date().toISOString(),
-          details: 'User switched tabs or minimized window'
-        }]);
-        toast.error('Warning: Tab switching is recorded!', { icon: '⚠️' });
-      }
+    const handleProctoringViolation = async (type, detailStr) => {
+      setProctoringEvents(prev => [...prev, {
+        type: type,
+        timestamp: new Date().toISOString(),
+        details: detailStr
+      }]);
+      toast.error(`Warning: ${detailStr} recorded!`, { icon: '⚠️' });
+      try {
+        const r = await fetch(`/api/verify/assignments/${asmId}/record-strike`, {
+          method: 'POST', credentials: 'include'
+        });
+        const d = await r.json();
+        if (d.data?.terminated_by_proctor) {
+          toast.error('Assessment terminated due to excessive proctoring violations.', { duration: 5000 });
+          handleSubmit(true);
+        }
+      } catch(e){}
     };
+
+    const handleVisibility = () => {
+      if (document.hidden) handleProctoringViolation('tab_switch', 'Tab switching');
+    };
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) handleProctoringViolation('fullscreen_exit', 'Exiting fullscreen');
+    };
+    
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [step]);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [step, asmId]);
 
   const requestCamera = async () => {
     try {
       setCameraError('');
-      const str = await navigator.mediaDevices.getUserMedia({ video: true });
+      const str = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setStream(str);
       if (videoRef.current) {
         videoRef.current.srcObject = str;
       }
     } catch (e) {
-      setCameraError('Camera access denied or unavailable. This assessment requires a camera.');
+      setCameraError('Camera and Microphone access denied or unavailable. This assessment requires both to proceed.');
     }
   };
 
-  const startAssessment = () => {
-    // ── Camera Validation ──
+  const startAssessment = async () => {
     if (!stream) {
-      toast.error('Camera access required');
+      toast.error('Camera & Mic access required to start');
       return;
     }
-    setStep('taking');
-    startTimeRef.current = Date.now();
-    setErrors({});
+    try {
+      const r = await fetch(`/api/verify/assignments/${asmId}/start-session`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen rejected by browser', e));
+      }
+      setStep('taking');
+      startTimeRef.current = Date.now();
+    } catch (e) {
+      toast.error('Failed to start session');
+    }
   };
 
   const stopCamera = () => {
@@ -199,7 +228,9 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       toast.error('Failed to submit. Please contact support.');
     } finally {
       setIsSubmitting(false);
-      setErrors({});
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(e => console.log(e));
+      }
     }
   };
 

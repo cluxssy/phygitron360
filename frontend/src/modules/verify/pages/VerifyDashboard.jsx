@@ -9,6 +9,8 @@ import AssessmentTaker from './AssessmentTaker';
 import ResultScreen from './ResultScreen';
 import AssessmentAnalytics from './AssessmentAnalytics';
 import CandidateDashboard from './CandidateDashboard';
+import QuestionBank from './QuestionBank';
+import LiveMonitor from './LiveMonitor';
 import { useNavigate } from 'react-router-dom';
 
 import "../../../styles/light-theme-override.css";
@@ -48,6 +50,8 @@ export default function VerifyDashboard() {
       case 'take': return <AssessmentTaker />;
       case 'result': return <ResultScreen />;
       case 'analytics': return <AssessmentAnalytics assessmentId={asmId} />;
+      case 'bank': return <QuestionBank />;
+      case 'live': return <LiveMonitor />;
       case 'candidate': return <CandidateDashboard />;
       default: return isAdmin ? <ManageAssessments /> : <CandidateDashboard />;
     }
@@ -119,6 +123,7 @@ export default function VerifyDashboard() {
         <div className="sidebar verify-sidebar">
           {isAdmin && <button className={tab === 'manage' ? 'active' : ''} onClick={() => setTab('manage')}>Manage</button>}
           {isAdmin && <button className={tab === 'builder' ? 'active' : ''} onClick={() => setTab('builder')}>Builder</button>}
+          {isAdmin && <button className={tab === 'bank' ? 'active' : ''} onClick={() => setTab('bank')}>Question Bank</button>}
           {isAdmin && <button className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>Analytics</button>}
           {!isAdmin && <button className={tab === 'candidate' ? 'active' : ''} onClick={() => setTab('candidate')}>My Assessments</button>}
         </div>

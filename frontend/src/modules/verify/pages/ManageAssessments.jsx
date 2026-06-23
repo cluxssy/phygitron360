@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Loader2, RefreshCw, Filter, Trash2, Edit3, Users,
   BarChart2, Send, ChevronDown, Clock, FileText, CheckCircle,
-  XCircle, AlertTriangle, Lock, Unlock, Shuffle, Search
+  XCircle, AlertTriangle, Lock, Unlock, Shuffle, Search, Activity
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -39,8 +39,10 @@ function Modal({ onClose, title, children }) {
 
 function AssignModal({ assessment, onClose }) {
   const [userIds, setUserIds] = useState('');
+  const [questionIds, setQuestionIds] = useState('');
   const [deadline, setDeadline] = useState('');
   const [generateVariants, setGenerateVariants] = useState(false);
+  const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -48,13 +50,21 @@ function AssignModal({ assessment, onClose }) {
     if (!userIds.trim()) return toast.error('Enter at least one user ID');
     const ids = userIds.split(',').map(s => parseInt(s.trim())).filter(Boolean);
     if (!ids.length) return toast.error('Invalid user IDs');
+    const qIds = questionIds ? questionIds.split(',').map(s => parseInt(s.trim())).filter(Boolean) : null;
+    
     setSubmitting(true);
     try {
       const r = await fetch(`/api/verify/assignments/${assessment.id}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ user_ids: ids, deadline: deadline || null, generate_variants: generateVariants }),
+        body: JSON.stringify({ 
+          user_ids: ids, 
+          deadline: deadline || null, 
+          generate_variants: generateVariants,
+          question_ids: qIds && qIds.length ? qIds : null,
+          shuffle_questions: shuffleQuestions
+        }),
       });
       const d = await r.json();
       if (r.ok) {
@@ -90,18 +100,37 @@ function AssignModal({ assessment, onClose }) {
             onChange={e => setDeadline(e.target.value)}
           />
         </div>
-        <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-200">
-          <div>
-            <p className="text-sm font-semibold text-gray-800">Generate Variants</p>
-            <p className="text-xs text-gray-400 mt-0.5">AI shuffles question order & options per candidate</p>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-gray-600">Question Subset IDs (comma-separated, optional)</label>
+          <input
+            type="text"
+            placeholder="e.g. 101, 102 (leave blank for all)"
+            className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+            value={questionIds}
+            onChange={e => setQuestionIds(e.target.value)}
+          />
+        </div>
+        
+        <div className="flex flex-col gap-3 p-4 rounded-xl bg-gray-50 border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Generate AI Variants</p>
+              <p className="text-xs text-gray-400 mt-0.5">AI shuffles options and regenerates questions</p>
+            </div>
+            <button type="button" onClick={() => setGenerateVariants(v => !v)} className={`relative w-12 h-6 rounded-full border transition-colors duration-200 ${generateVariants ? 'bg-purple-600 border-purple-600' : 'bg-gray-200 border-gray-300'}`}>
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${generateVariants ? 'translate-x-6' : ''}`} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setGenerateVariants(v => !v)}
-            className={`relative w-12 h-6 rounded-full border transition-colors duration-200 ${generateVariants ? 'bg-purple-600 border-purple-600' : 'bg-gray-200 border-gray-300'}`}
-          >
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${generateVariants ? 'translate-x-6' : ''}`} />
-          </button>
+          
+          <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Shuffle Questions Locally</p>
+              <p className="text-xs text-gray-400 mt-0.5">Randomize the order per candidate</p>
+            </div>
+            <button type="button" onClick={() => setShuffleQuestions(v => !v)} className={`relative w-12 h-6 rounded-full border transition-colors duration-200 ${shuffleQuestions ? 'bg-purple-600 border-purple-600' : 'bg-gray-200 border-gray-300'}`}>
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${shuffleQuestions ? 'translate-x-6' : ''}`} />
+            </button>
+          </div>
         </div>
         <button
           type="submit"
@@ -366,6 +395,15 @@ export default function ManageAssessments() {
                   >
                     <BarChart2 size={13} /> Results
                   </button>
+
+                  {asm.status?.toLowerCase() === 'active' && (
+                    <button
+                      onClick={() => navigate(`/verify?tab=live&asm_id=${asm.id}`)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
+                    >
+                      <Activity size={13} className="animate-pulse" /> Live
+                    </button>
+                  )}
 
                   <button
                     onClick={() => setAssignTarget(asm)}

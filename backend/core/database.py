@@ -445,6 +445,74 @@ def create_tables(schema_name='public'):
             )
         ''')
 
+        # 26) Question Bank
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS question_bank (
+                id SERIAL PRIMARY KEY,
+                question_text TEXT NOT NULL,
+                question_type VARCHAR(20) NOT NULL DEFAULT 'mcq',
+                options JSONB,
+                correct_answer TEXT,
+                model_answer TEXT,
+                starter_code TEXT,
+                test_cases JSONB,
+                programming_language VARCHAR(20),
+                accepted_file_types VARCHAR(100),
+                marks DECIMAL(6,2) DEFAULT 1.0,
+                tags JSONB DEFAULT '[]'::jsonb,
+                images JSONB DEFAULT '[]'::jsonb,
+                is_deleted BOOLEAN DEFAULT FALSE,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        ''')
+
+        # 27) Forge Courses
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS forge_courses (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                target_skill_ids JSONB DEFAULT '[]'::jsonb,
+                difficulty TEXT DEFAULT 'beginner',
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 28) Forge Enrollments
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS forge_enrollments (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                course_id INTEGER NOT NULL REFERENCES forge_courses(id) ON DELETE CASCADE,
+                status TEXT DEFAULT 'enrolled',
+                progress_percent INTEGER DEFAULT 0,
+                enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                enrolled_by TEXT DEFAULT 'auto'
+            )
+        ''')
+
+        # Alter Verify Tables for new features
+        cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS shuffle_questions BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS show_result_immediately BOOLEAN DEFAULT TRUE")
+        cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'mixed'")
+
+        cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS strike_count INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS terminated_by_proctor BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS custom_questions JSONB")
+        cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ")
+
+        cur.execute("ALTER TABLE assessment_results ADD COLUMN IF NOT EXISTS is_malpractice BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE assessment_results ADD COLUMN IF NOT EXISTS weak_skill_ids JSONB DEFAULT '[]'::jsonb")
+        cur.execute("ALTER TABLE assessment_results ADD COLUMN IF NOT EXISTS scores_per_question JSONB")
+        cur.execute("ALTER TABLE assessment_results ADD COLUMN IF NOT EXISTS proctoring_flags JSONB DEFAULT '[]'::jsonb")
+
+        cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb")
+        cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::jsonb")
+
         # 3.1) Candidate Experience (For AI Analysis)
         cur.execute('''
             CREATE TABLE IF NOT EXISTS candidate_experience (

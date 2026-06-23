@@ -32,6 +32,8 @@ from backend.modules.verify.api.assignments import router as verify_assignments_
 from backend.modules.verify.api.submissions import router as verify_submissions_router
 from backend.modules.verify.api.sandbox import router as verify_sandbox_router
 from backend.modules.verify.api.queries import router as verify_queries_router
+from backend.modules.verify.api.question_bank import router as verify_question_bank_router
+from backend.modules.verify.api.live_monitoring import router as verify_live_monitor_router
 
 app = FastAPI(
     title="PHYGITRON 360",
@@ -157,6 +159,8 @@ app.include_router(verify_assignments_router, dependencies=[Depends(require_modu
 app.include_router(verify_submissions_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_sandbox_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_queries_router, dependencies=[Depends(require_module("verify"))])
+app.include_router(verify_question_bank_router, dependencies=[Depends(require_module("verify"))])
+app.include_router(verify_live_monitor_router, dependencies=[Depends(require_module("verify"))])
 
 
 if __name__ == "__main__":
