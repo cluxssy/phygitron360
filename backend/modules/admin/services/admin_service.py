@@ -49,9 +49,11 @@ class AdminService:
             import asyncio
             from backend.modules.source.services.candidate_service import CandidateService
             svc = CandidateService(tenant_id=tenant_schema)
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(svc.process_bulk_upload_queue())
+            import backend.core.database as db
+            if db.main_loop and db.main_loop.is_running():
+                asyncio.run_coroutine_threadsafe(svc.process_bulk_upload_queue(), db.main_loop)
+                import logging
+                logging.getLogger(__name__).info(f"[provision_tenant] Bulk worker started successfully for {tenant_schema} via main_loop.")
         except Exception as worker_err:
             import logging
             logging.getLogger(__name__).warning(f"[provision_tenant] Could not start bulk worker for {tenant_schema}: {worker_err}")

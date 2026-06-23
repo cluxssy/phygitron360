@@ -57,12 +57,18 @@ class CandidateUpdate(BaseModel):
     portfolio_url: Optional[str] = None
     availability: Optional[str] = None
     ai_summary: Optional[str] = None
-    certifications: Optional[List[str]] = None
-    languages: Optional[List[str]] = None
+    certifications: Optional[List[Any]] = None
+    languages: Optional[List[Any]] = None
     achievements: Optional[List[str]] = None
     experience: Optional[List[dict]] = None
     education: Optional[List[dict]] = None
     skills: Optional[List[Any]] = None
+    projects: Optional[List[dict]] = None
+    awards: Optional[List[dict]] = None
+    publications: Optional[List[dict]] = None
+    hobbies: Optional[List[str]] = None
+    work_authorization: Optional[str] = None
+    github_url: Optional[str] = None
 
 
 class StatusUpdate(BaseModel):
@@ -187,6 +193,32 @@ async def cancel_bulk_upload(
     return {
         "success": success,
         "message": "Job cancelled successfully."
+    }
+
+
+@router.post("/bulk-upload/{job_id}/pause")
+async def pause_bulk_upload(
+    job_id: int,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Pause a bulk upload job."""
+    success = service.pause_bulk_upload_job(job_id)
+    return {
+        "success": success,
+        "message": "Job paused successfully."
+    }
+
+
+@router.post("/bulk-upload/{job_id}/resume")
+async def resume_bulk_upload(
+    job_id: int,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Resume a bulk upload job."""
+    success = service.resume_bulk_upload_job(job_id)
+    return {
+        "success": success,
+        "message": "Job resumed successfully."
     }
 
 

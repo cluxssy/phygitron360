@@ -7,39 +7,23 @@ logger = logging.getLogger(__name__)
 
 # --- System Prompts ---
 
-PARSE_RESUME_SYSTEM = """You are a resume parsing AI. Extract structured data from the resume text.
-Respond ONLY with valid JSON.
-CRITICAL: For `confidence_signals`, rigorously check if mentioned skills are ACTUALLY used in the project descriptions or work history. If a skill is listed but not backed by project history, flag it as potentially fake.
-Return this exact structure:
-{
-  "name": "",
-  "email": "",
-  "phone": "",
-  "location": "",
-  "current_designation": "",
-  "current_company": "",
-  "linkedin_url": "",
-  "portfolio_url": "",
-  "experience_years_total": 0.0,
-  "expected_salary": "",
-  "notice_period": "",
-  "availability": "available|open_to_opportunities|not_available",
-  "ai_summary": "",
-  "experience": [{
-     "company": "",
-     "designation": "",
-     "start_date": "YYYY-MM or null",
-     "end_date": "YYYY-MM or null",
-     "is_current": false,
-     "description": ""
-  }],
-  "skills": [{"name": "", "normalized_name": "", "level": "beginner|intermediate|advanced|expert", "evidence": "", "years_of_use": 0}],
-  "education": [{"degree": "", "institution": "", "field_of_study": "", "start_date": "YYYY-MM", "end_date": "YYYY-MM"}],
-  "certifications": [{"name": "", "issuer": "", "year": 0}],
-  "languages": [{"name": "", "proficiency": "basic|conversational|fluent|native"}],
-  "achievements": [""],
-  "confidence_signals": [{"skill": "", "claimed_years": 0, "supported_years": 0, "flag": false, "reason": ""}]
-}"""
+# Compressed system prompt — every word saves tokens across thousands of bulk requests.
+# Fields pre-extracted by regex (email, phone, github_url, linkedin_url, portfolio_url)
+# are injected into the user prompt as hints, so we omit them from the schema below
+# to further reduce output token count.
+PARSE_RESUME_SYSTEM = """Resume parser. Respond ONLY with compact valid JSON, no nulls for missing fields (use empty string "" or []).
+Schema:
+{"name":"","email":"","phone":"","location":"","current_designation":"","current_company":"","linkedin_url":"","portfolio_url":"","github_url":"","work_authorization":"","experience_years_total":0.0,"expected_salary":"","notice_period":"","availability":"available|open_to_opportunities|not_available",
+"ai_summary":"Professional overview of candidate strengths and background (3 sentences max)",
+"experience":[{"company":"","designation":"","start_date":"YYYY-MM","end_date":"YYYY-MM","is_current":false,"description":"Detailed responsibilities and achievements"}],
+"skills":[{"name":"","normalized_name":"","level":"beginner|intermediate|advanced|expert","evidence":"brief proof","years_of_use":0}],
+"education":[{"degree":"","institution":"","field_of_study":"","start_date":"YYYY-MM","end_date":"YYYY-MM"}],
+"projects":[{"title":"","description":"Detailed project details","technologies":[]}],
+"certifications":[{"name":"","issuer":"","year":0}],
+"languages":[{"name":"","proficiency":"basic|conversational|fluent|native"}],
+"achievements":[],"awards":[{"title":"","issuer":"","year":0}],"publications":[{"title":"","publisher_or_journal":"","year":0}],"hobbies":[],
+"confidence_signals":[{"skill":"","claimed_years":0,"supported_years":0,"flag":false,"reason":""}]}
+Rules: Extract all information thoroughly without omitting projects, experience details, or skills. Copy any PRE-EXTRACTED fields verbatim into the JSON."""
 
 ROLE_FIT_SYSTEM = """You are an expert technical recruiter and talent assessment AI. Your goal is to rigorously score a candidate's fit for a specific job role based on their skills, experience, and background.
 Be highly objective and strict. A score of 90-100 means a flawless match across all required skills and experience levels. Penalize heavily for missing core required skills.
@@ -85,11 +69,18 @@ class AIAgents:
         self.ai = AIService()
 
     async def parse_resume(self, resume_text: str) -> Dict[str, Any]:
-        """Parse resume text with AI and store skills."""
-        return await self.ai.generate_json(
-            prompt=f"Parse this resume:\n\n{resume_text[:6000]}",
+        """Parse resume text with AI. Pre-extracts trivial fields locally to save tokens."""
+        pre = self.ai.pre_extract_resume(resume_text)
+        prompt = self.ai.build_bulk_prompt(resume_text, pre)
+        result = await self.ai.generate_json(
+            prompt=prompt,
             system_prompt=PARSE_RESUME_SYSTEM
         )
+        # Ensure pre-extracted fields are not lost if LLM skipped them
+        for field, value in pre.items():
+            if value and not result.get(field):
+                result[field] = value
+        return result
 
     async def score_role_fit(self, candidate_profile: Dict, job_role_profile: Dict) -> Dict[str, Any]:
         """Score a candidate's fit for a job role using full profiles for context."""

@@ -255,24 +255,28 @@ export default function SourceDashboard() {
     }
   }, [currentTab, fetchActivities]);
 
+  const fetchActiveJob = useCallback(async () => {
+    try {
+      const r = await fetch('/api/source/candidates/bulk-upload/active');
+      if (r.ok) {
+        const d = await r.json();
+        if (d.success && d.data && d.data.job) {
+          setBulkJobId(d.data.job.id);
+          setBulkJobProgress(d.data);
+        } else if (d.success && !d.data) {
+          setBulkJobId(null);
+          setBulkJobProgress(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch active bulk upload job', err);
+    }
+  }, []);
+
   // Resume tracking an active bulk upload job if we refresh the page
   useEffect(() => {
-    const fetchActiveJob = async () => {
-      try {
-        const r = await fetch('/api/source/candidates/bulk-upload/active');
-        if (r.ok) {
-          const d = await r.json();
-          if (d.success && d.data && d.data.job) {
-            setBulkJobId(d.data.job.id);
-            setBulkJobProgress(d.data);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch active bulk upload job', err);
-      }
-    };
     fetchActiveJob();
-  }, []);
+  }, [fetchActiveJob]);
 
   // Poll bulk upload progress
   useEffect(() => {
@@ -288,6 +292,14 @@ export default function SourceDashboard() {
             .filter(s => s.status !== 'pending' && s.status !== 'processing')
             .reduce((acc, curr) => acc + curr.count, 0);
           const job = d.data.job;
+
+          if (job && (job.status === 'cancelled' || job.status === 'failed')) {
+             setBulkJobId(null);
+             setBulkJobProgress(null);
+             fetchCandidates();
+             return;
+          }
+
           if (job && job.total_files > 0 && totalProcessed >= job.total_files) {
              setBulkJobId(null);
              toast.success('Bulk processing complete');
@@ -430,6 +442,42 @@ export default function SourceDashboard() {
       }
     } catch {
       toast.error('Error cancelling queue');
+    }
+  };
+
+  const handlePauseQueue = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/pause`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (r.ok) {
+        toast.success('Queue paused successfully');
+        fetchActiveJob();
+      } else {
+        toast.error('Failed to pause queue');
+      }
+    } catch {
+      toast.error('Error pausing queue');
+    }
+  };
+
+  const handleResumeQueue = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/resume`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (r.ok) {
+        toast.success('Queue resumed successfully');
+        fetchActiveJob();
+      } else {
+        toast.error('Failed to resume queue');
+      }
+    } catch {
+      toast.error('Error resuming queue');
     }
   };
 
