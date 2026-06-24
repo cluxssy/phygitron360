@@ -744,6 +744,7 @@ class CandidateService:
                                     valid_items.append((item, pre, item_id_str))
                                     
                                 if not batched_payloads:
+                                    conn.commit()
                                     continue
                                     
                                 # 3. Call AI with batched prompt
@@ -769,8 +770,8 @@ class CandidateService:
                                         wait = int(float(match.group(1))) + 2 if match else 35
                                         print(f"[Worker-{worker_id}][{self.tenant_id}] API busy, backing off {wait}s...", flush=True)
                                         backoff = wait
-                                        # Return all valid items to pending
-                                        for item, _, _ in valid_items:
+                                        # Return all remaining items in the overall batch to pending so they aren't stuck in processing!
+                                        for item in items[i:]:
                                             self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None, conn=conn, cur=cur)
                                         break  # Break out of the batch loop entirely
                                     else:
