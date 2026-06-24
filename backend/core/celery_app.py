@@ -15,7 +15,10 @@ celery_app = Celery(
     "phygitron360",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["backend.modules.verify.services.assessment_tasks"]
+    include=[
+        "backend.modules.verify.services.assessment_tasks",
+        "backend.modules.source.services.ats_tasks",
+    ]
 )
 
 celery_app.conf.update(

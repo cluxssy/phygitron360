@@ -57,6 +57,62 @@ class AIScoreRepository:
         finally:
             conn.close()
 
+    def get_last_scored_at(self, role_id: int):
+        """Return the most recent computed_at timestamp for a role's scores, or None."""
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute("""
+                    SELECT MAX(computed_at) FROM ai_scores
+                    WHERE job_role_id = %s AND score_type = 'role_fit'
+                """, (role_id,))
+                row = cur.fetchone()
+                return row[0] if row else None
+        finally:
+            conn.close()
+
+    def get_scored_count(self, role_id: int) -> int:
+        """Return how many candidates have been scored for this role."""
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute("""
+                    SELECT COUNT(*) FROM ai_scores
+                    WHERE job_role_id = %s AND score_type = 'role_fit'
+                """, (role_id,))
+                row = cur.fetchone()
+                return row[0] if row else 0
+        finally:
+            conn.close()
+
+    def upsert_role_fit_score(self, candidate_id: int, role_id: int, score: float, reasoning: str):
+
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                # Check if it exists
+                cur.execute('''
+                    SELECT id FROM ai_scores 
+                    WHERE entity_type = 'candidate' AND entity_id = %s AND job_role_id = %s AND score_type = 'role_fit'
+                ''', (candidate_id, role_id))
+                row = cur.fetchone()
+                if row:
+                    cur.execute('''
+                        UPDATE ai_scores SET score = %s, reasoning = %s, computed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    ''', (score, reasoning, row[0]))
+                else:
+                    cur.execute('''
+                        INSERT INTO ai_scores (entity_type, entity_id, job_role_id, score_type, score, reasoning)
+                        VALUES ('candidate', %s, %s, 'role_fit', %s, %s)
+                    ''', (candidate_id, role_id, score, reasoning))
+                conn.commit()
+        finally:
+            conn.close()
+
     def get_ranked_candidates_for_role(self, role_id: int) -> List[Dict[str, Any]]:
         """Returns unique candidates ranked by their latest AI role-fit score."""
         conn = get_db_connection()

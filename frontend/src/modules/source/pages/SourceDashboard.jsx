@@ -193,7 +193,9 @@ export default function SourceDashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
-  const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0 });
+  const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, required_skills: [] });
+  const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'intermediate' });
+  const [scoreStatus, setScoreStatus] = useState({});
   const [inviteForm, setInviteForm] = useState({
     role_id: '',
     templateType: 'prebuilt',
@@ -526,14 +528,38 @@ export default function SourceDashboard() {
     } catch { toast.error('Error saving role'); }
   };
 
-  const openEditRole = (role) => {
+  const openEditRole = (r) => {
     setNewRole({
-      id: role.id,
-      title: role.title,
-      description: role.description || '',
-      min_experience: role.min_experience || 0
+      id: r.id,
+      title: r.title,
+      description: r.description || '',
+      min_experience: r.min_experience || 0,
+      required_skills: Array.isArray(r.required_skills) ? r.required_skills : [],
     });
+    setNewSkillInput({ name: '', level: 'intermediate' });
     setShowNewRole(true);
+  };
+
+  const addSkillToRole = () => {
+    const name = newSkillInput.name.trim();
+    if (!name) return;
+    const already = newRole.required_skills.some(s => s.skill.toLowerCase() === name.toLowerCase());
+    if (already) { toast.error('Skill already added'); return; }
+    setNewRole(r => ({ ...r, required_skills: [...r.required_skills, { skill: name, level: newSkillInput.level }] }));
+    setNewSkillInput(s => ({ ...s, name: '' }));
+  };
+
+  const removeSkillFromRole = (idx) => {
+    setNewRole(r => ({ ...r, required_skills: r.required_skills.filter((_, i) => i !== idx) }));
+  };
+
+  const fetchScoreStatus = async (roleId) => {
+    if (!roleId) return;
+    try {
+      const r = await fetch(`/api/source/job-roles/${roleId}/score-status`, { credentials: 'include' });
+      const d = await r.json();
+      if (d.success) setScoreStatus(prev => ({ ...prev, [roleId]: d.data }));
+    } catch { /* non-fatal */ }
   };
 
   // ── Bulk AI score ──────────────────────────────────────────────────────────
@@ -827,7 +853,7 @@ export default function SourceDashboard() {
 
           {currentTab === 'jobs' && (
             <button
-              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0 }); setShowNewRole(true); }}
+              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'intermediate' }); setShowNewRole(true); }}
               className="
               px-7
               py-4
@@ -1099,13 +1125,37 @@ export default function SourceDashboard() {
                       <Edit size={14} />
                     </button>
                   </div>
-                  <p className="text-xs font-medium text-purple-600 mt-1 mb-3">Min Exp: {r.min_experience} yrs</p>
-                  <p className="text-sm text-gray-500 leading-relaxed line-clamp-3 mb-4">{r.description || 'No description provided.'}</p>
-                  <div className="mt-auto pt-4 border-t border-gray-100">
-                    <p className="text-sm text-gray-600">
-                      {candidates.filter(c => c.role_id === r.id).length} candidates
-                    </p>
+                  <p className="text-xs font-medium text-purple-600 mt-1 mb-2">Min Exp: {r.min_experience} yrs</p>
+                  {/* Required Skills chips */}
+                  {Array.isArray(r.required_skills) && r.required_skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {r.required_skills.slice(0, 6).map((s, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
+                          {s.skill || s}
+                        </span>
+                      ))}
+                      {r.required_skills.length > 6 && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">+{r.required_skills.length - 6} more</span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4">{r.description || 'No description provided.'}</p>
+                  <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
+                    <p className="text-sm text-gray-600">{candidates.filter(c => c.role_id === r.id).length} candidates</p>
+                    <button
+                      onClick={() => { handleAutoRank(r.id); fetchScoreStatus(r.id); }}
+                      disabled={autoRanking}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-xs font-medium hover:bg-purple-100 transition-colors disabled:opacity-50"
+                    >
+                      <Zap size={12} /> Re-rank
+                    </button>
                   </div>
+                  {scoreStatus[r.id] && (
+                    <p className="text-[10px] text-gray-400 mt-2">
+                      {scoreStatus[r.id].scored_count} scored
+                      {scoreStatus[r.id].last_scored_at ? ` · ${new Date(scoreStatus[r.id].last_scored_at).toLocaleString()}` : ''}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -1616,6 +1666,52 @@ export default function SourceDashboard() {
             <Field label="Min. Experience (years)">
               <input type="number" min={0} className="form-input" value={newRole.min_experience} onChange={e => setNewRole(r => ({ ...r, min_experience: parseInt(e.target.value) || 0 }))} />
             </Field>
+
+            {/* Skills Builder */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Required Skills</label>
+              {/* Existing skill chips */}
+              {newRole.required_skills.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {newRole.required_skills.map((s, i) => (
+                    <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                      {s.skill} <span className="text-purple-400">▸</span> {s.level}
+                      <button type="button" onClick={() => removeSkillFromRole(i)} className="ml-1 text-purple-400 hover:text-purple-700"><X size={10} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Add new skill row */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="form-input flex-1"
+                  placeholder="Skill name e.g. Python"
+                  value={newSkillInput.name}
+                  onChange={e => setNewSkillInput(s => ({ ...s, name: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSkillToRole(); } }}
+                />
+                <select
+                  className="form-input w-36"
+                  value={newSkillInput.level}
+                  onChange={e => setNewSkillInput(s => ({ ...s, level: e.target.value }))}
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="expert">Expert</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={addSkillToRole}
+                  className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors whitespace-nowrap"
+                >
+                  + Add
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1.5">Press Enter or click Add. All candidates will be auto-ranked against these skills after saving.</p>
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setShowNewRole(false)} className="flex-1 py-3 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">Cancel</button>
               <button type="submit" className="flex-1 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm">
