@@ -200,7 +200,7 @@ async def pause_bulk_upload(
 @router.post("/bulk-upload/{job_id}/resume")
 async def resume_bulk_upload(
     job_id: int, 
-    user: dict = Depends(require_auth)
+    user: dict = Depends(get_current_user)
 ):
     service = CandidateService(tenant_id=user.get("tenant_id"))
     success = service.resume_bulk_upload_job(job_id)
@@ -211,7 +211,7 @@ async def resume_bulk_upload(
 @router.post("/bulk-upload/{job_id}/retry-failed")
 async def retry_failed_bulk_upload(
     job_id: int, 
-    user: dict = Depends(require_auth)
+    user: dict = Depends(get_current_user)
 ):
     service = CandidateService(tenant_id=user.get("tenant_id"))
     success = service.retry_failed_bulk_upload_job(job_id)
