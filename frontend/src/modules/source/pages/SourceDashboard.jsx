@@ -9,7 +9,7 @@ import {
   Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
   ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
   Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
-  Archive
+  Archive, Pause, Play
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
