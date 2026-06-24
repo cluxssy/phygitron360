@@ -58,8 +58,11 @@ class JobService:
         cid = candidate["id"]
         exp = int(candidate.get("total_experience_years") or 0)
         
-        cand_skills_raw = self.candidate_repo.get_candidate_skills(cid)
-        cand_skills = [{"name": s.get("skill_name") or s.get("name"), "level": s["level"]} for s in cand_skills_raw]
+        # Load candidate details to get primary/secondary skills
+        cand_db = self.candidate_repo.get_candidate_by_id(cid)
+        primary = (cand_db.get("primary_skills") or []) if cand_db else []
+        secondary = (cand_db.get("secondary_skills") or []) if cand_db else []
+        cand_skills = [{"name": s, "level": "intermediate"} for s in primary] + [{"name": s, "level": "beginner"} for s in secondary]
         
         fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp, min_exp=min_exp)
         
@@ -188,6 +191,27 @@ class JobService:
                 if role_id is not None:
                     self.repo.create_invite_if_not_exists(cid, role_id, hr_id)
                 self.candidate_repo.update_candidate_status(cid, "Invited", role_id=role_id)
+
+                # Auto-assign latest active assessment
+                if user_id:
+                    try:
+                        from backend.core.database import get_db_connection
+                        from psycopg2.extras import RealDictCursor
+                        with get_db_connection() as asm_conn:
+                            with asm_conn.cursor(cursor_factory=RealDictCursor) as asm_cur:
+                                asm_cur.execute("SELECT id FROM assessments WHERE status='active' ORDER BY id DESC LIMIT 1")
+                                asm = asm_cur.fetchone()
+                                if asm:
+                                    asm_cur.execute("SELECT 1 FROM assessment_assignments WHERE assessment_id=%s AND user_id=%s", (asm['id'], user_id))
+                                    if not asm_cur.fetchone():
+                                        asm_cur.execute(
+                                            "INSERT INTO assessment_assignments (assessment_id, user_id, assigned_by) VALUES (%s, %s, %s)",
+                                            (asm['id'], user_id, hr_id)
+                                        )
+                            asm_conn.commit()
+                    except Exception as asm_ex:
+                        import logging
+                        logging.getLogger(__name__).error(f"Auto-assign assessment failed: {asm_ex}")
 
                 # Format custom templates candidate-by-candidate
                 cand_subject = subject

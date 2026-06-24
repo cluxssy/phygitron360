@@ -28,8 +28,9 @@ class RecruitmentService:
             raise ValueError("Candidate or Role not found")
 
         # Prepare candidate profile with skills
-        candidate_skills = self.candidate_repo.get_candidate_skills(candidate_id)
-        candidate['skills_list'] = [{"name": s['skill_name'], "level": s['level']} for s in candidate_skills]
+        primary = candidate.get("primary_skills") or []
+        secondary = candidate.get("secondary_skills") or []
+        candidate['skills_list'] = [{"name": s, "level": "intermediate"} for s in primary] + [{"name": s, "level": "beginner"} for s in secondary]
         
         # Run AI Agent for scoring
         ai_result = await self.ai_agents.score_role_fit(candidate, role)

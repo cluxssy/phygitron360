@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Zap, ArrowRight, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { validatePassword } from '../utils/validators';
 
 export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -13,6 +14,15 @@ export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match.');
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setError('New password must be different from current password.');
+      return;
+    }
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     setLoading(true);

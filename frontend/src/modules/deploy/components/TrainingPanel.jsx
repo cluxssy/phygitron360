@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { BookOpen, Plus, CheckCircle, Clock, Users } from 'lucide-react';
+import { isDateString } from '../../../core/utils/validators';
 
 export default function TrainingPanel() {
   const [programs, setPrograms] = useState([]);
@@ -28,6 +29,10 @@ export default function TrainingPanel() {
   };
 
   const updateStatus = async (id, status) => {
+    if (!['Pending', 'Completed'].includes(status)) {
+      toast.error('Invalid training status');
+      return;
+    }
     try {
       await fetch(`/api/training/assignment/${id}`, {
         method: 'PUT', credentials: 'include',
@@ -40,6 +45,10 @@ export default function TrainingPanel() {
   };
 
   const assignTraining = async () => {
+    if (!form.program_id) return toast.error('Select a training program');
+    if (!form.employee_codes.length) return toast.error('Select at least one employee');
+    if (!isDateString(form.date)) return toast.error('Training date is required');
+    if (!form.duration.trim()) return toast.error('Duration is required, e.g. 2 Days');
     try {
       const res = await fetch('/api/training/assign', {
         method: 'POST', credentials: 'include',

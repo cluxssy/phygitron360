@@ -2,10 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   UserPlus, ArrowRight, Zap, CheckCircle, Upload, 
-  Trash2, Plus, Info, ShieldCheck, Phone, MapPin, GraduationCap 
+  Trash2, Plus, Info, ShieldCheck, Phone, MapPin, GraduationCap,
+  Eye, EyeOff
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import logo from "../../../assets/phy360.png";
+import {
+  MAX_FILE_SIZE,
+  isAtLeastAge,
+  isBankAccount,
+  isPan,
+  validateFile,
+  validatePassword,
+  isValidEmail,
+  isNonEmpty,
+} from '../../../core/utils/validators';
 
 const COUNTRY_CODES = [
   { code: '+91', country: 'IN (+91)' },
@@ -31,6 +42,9 @@ export default function OnboardPage() {
 
   // Validation States
   const [validationErrors, setValidationErrors] = useState({});
+
+  // Password visibility
+  const [showPassword, setShowPassword] = useState(false);
 
   // Form states
   const [form, setForm] = useState({
@@ -90,33 +104,31 @@ export default function OnboardPage() {
       const errors = {};
       
       if (currentStep === 1) {
-          // Password length
-          if (form.password.length < 8) errors.password = "Minimum 8 characters required";
+          // Password validation
+          const passwordError = validatePassword(form.password);
+          if (passwordError) errors.password = passwordError;
           
           // DOB / Age check
           if (!form.dob) errors.dob = "Required";
-          else {
-              const birthDate = new Date(form.dob);
-              const age = new Date().getFullYear() - birthDate.getFullYear();
-              if (age < 18) errors.dob = "Must be at least 18 years old";
-          }
+          else if (!isAtLeastAge(form.dob, 18)) errors.dob = "Must be at least 18 years old";
           
-          // Phone validation
-          const phoneDigitsRegex = /^\d{7,15}$/;
+          // Phone validation - strictly 10 digits
+          const phoneDigits = form.contact_number.replace(/\D/g, '');
           if (!form.contact_number) {
-              errors.contact_number = "Required";
-          } else if (!phoneDigitsRegex.test(form.contact_number.trim())) {
-              errors.contact_number = "Must be a valid number of digits (7-15 digits)";
+              errors.contact_number = "Contact number is required";
+          } else if (!/^\d{10}$/.test(phoneDigits)) {
+              errors.contact_number = "Must be exactly 10 digits (e.g. 9876543210)";
           }
 
           if (!emergencyName) {
-              errors.emergencyName = "Required";
+              errors.emergencyName = "Emergency contact name is required";
           }
           
+          const emergencyDigits = emergencyPhone.replace(/\D/g, '');
           if (!emergencyPhone) {
-              errors.emergencyPhone = "Required";
-          } else if (!phoneDigitsRegex.test(emergencyPhone.trim())) {
-              errors.emergencyPhone = "Must be a valid number of digits (7-15 digits)";
+              errors.emergencyPhone = "Emergency phone is required";
+          } else if (!/^\d{10}$/.test(emergencyDigits)) {
+              errors.emergencyPhone = "Must be exactly 10 digits (e.g. 9876543210)";
           }
       }
 
@@ -127,13 +139,17 @@ export default function OnboardPage() {
           if (!form.primary_skills) errors.primary_skills = "Required";
           if (!form.bank_name) errors.bank_name = "Required";
           if (!form.bank_account_no) errors.bank_account_no = "Required";
+          else if (!isBankAccount(form.bank_account_no)) errors.bank_account_no = "9-18 digits only";
           if (!form.pan_no) errors.pan_no = "Required";
+          else if (!isPan(form.pan_no)) errors.pan_no = "Use ABCDE1234F format";
       }
 
       if (currentStep === 3) {
           educationList.forEach((edu, idx) => {
               if (!edu.degree || !edu.university || !edu.year) {
                   errors[`edu_${idx}`] = "All fields required";
+              } else if (!/^\d{4}$/.test(String(edu.year).trim())) {
+                  errors[`edu_${idx}`] = "Year must be 4 digits";
               }
           });
       }
@@ -187,6 +203,18 @@ export default function OnboardPage() {
   const handleFileChange = (e) => {
       const { name, files: fList } = e.target;
       const file = fList[0];
+      const rules = {
+          photo_file: { exts: ['.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.image, label: 'Profile photo' },
+          cv_file: { exts: ['.pdf'], size: MAX_FILE_SIZE.resume, label: 'Resume/CV' },
+          id_proof_file: { exts: ['.pdf', '.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.document, label: 'ID proof' },
+      };
+      const rule = rules[name];
+      const fileError = rule ? validateFile(file, rule.exts, rule.size, rule.label) : '';
+      if (fileError) {
+          toast.error(fileError);
+          e.target.value = '';
+          return;
+      }
       setFiles(prev => ({ ...prev, [name]: file }));
 
       // Simulate Resume Parsing for CV
@@ -254,6 +282,14 @@ export default function OnboardPage() {
     } finally {
         setSubmitting(false);
     }
+  };
+
+  // Helper to render error message
+  const renderError = (field) => {
+    if (validationErrors[field]) {
+        return <p className="text-red-500 text-[9px] font-bold mt-1 ml-1">{validationErrors[field]}</p>;
+    }
+    return null;
   };
 
   return (
@@ -331,13 +367,29 @@ export default function OnboardPage() {
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Password</label>
-                               <input type="password" name="password" value={form.password} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.password ? 'border-error/50' : 'border-white/5'}`} placeholder="Min 8 characters" />
-                               {validationErrors.password && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.password}</p>}
+                               <div className="relative">
+                                 <input 
+                                   type={showPassword ? 'text' : 'password'} 
+                                   name="password" 
+                                   value={form.password} 
+                                   onChange={handleChange} 
+                                   className={`w-full glass-panel-input pr-10 ${validationErrors.password ? 'border-error/50' : 'border-white/5'}`} 
+                                   placeholder="Min 8 characters" 
+                                 />
+                                 <button
+                                   type="button"
+                                   onClick={() => setShowPassword(!showPassword)}
+                                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors"
+                                 >
+                                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                 </button>
+                               </div>
+                               {renderError('password')}
                             </div>
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Date of birth</label>
                                <input type="date" name="dob" value={form.dob} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.dob ? 'border-error/50' : 'border-white/5'}`} />
-                               {validationErrors.dob && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.dob}</p>}
+                               {renderError('dob')}
                             </div>
                          </div>
 
@@ -349,9 +401,9 @@ export default function OnboardPage() {
                                  <select 
                                    value={phoneCountryCode} 
                                    onChange={e => setPhoneCountryCode(e.target.value)} 
-                                   className="bg-[#f7f7f7] border border-[#e5e5e5] rounded-xl px-3 text-xs text-black outline-none focus:border-[#7b1eff]/40 transition-colors w-28"
+                                   className="bg-white border border-gray-300 rounded-xl px-3 text-xs text-gray-900 outline-none focus:border-[#7b1eff]/40 transition-colors w-28"
                                  >
-                                   {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-black">{c.country}</option>)}
+                                   {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-gray-900" style={{ color: '#000000' }}>{c.country}</option>)}
                                  </select>
                                  <input 
                                    required
@@ -360,10 +412,10 @@ export default function OnboardPage() {
                                    value={form.contact_number} 
                                    onChange={handleChange} 
                                    className={`flex-1 glass-panel-input ${validationErrors.contact_number ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
-                                   placeholder="98765 43210" 
+                                   placeholder="9876543210" 
                                  />
                                </div>
-                               {validationErrors.contact_number && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.contact_number}</p>}
+                               {renderError('contact_number')}
                             </div>
 
                             {/* Emergency Contact Name */}
@@ -376,7 +428,7 @@ export default function OnboardPage() {
                                  className={`w-full glass-panel-input ${validationErrors.emergencyName ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
                                  placeholder="e.g. Jane Doe (Relation)" 
                                />
-                               {validationErrors.emergencyName && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.emergencyName}</p>}
+                               {renderError('emergencyName')}
                             </div>
                          </div>
 
@@ -388,9 +440,9 @@ export default function OnboardPage() {
                                  <select 
                                    value={emergencyCountryCode} 
                                    onChange={e => setEmergencyCountryCode(e.target.value)} 
-                                   className="bg-[#f7f7f7] border border-[#e5e5e5] rounded-xl px-3 text-xs text-black outline-none focus:border-[#7b1eff]/40 transition-colors w-28"
+                                   className="bg-white border border-gray-300 rounded-xl px-3 text-xs text-gray-900 outline-none focus:border-[#7b1eff]/40 transition-colors w-28"
                                  >
-                                   {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-black">{c.country}</option>)}
+                                   {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-gray-900" style={{ color: '#000000' }}>{c.country}</option>)}
                                  </select>
                                  <input 
                                    required
@@ -398,10 +450,10 @@ export default function OnboardPage() {
                                    value={emergencyPhone} 
                                    onChange={e => setEmergencyPhone(e.target.value)} 
                                    className={`flex-1 glass-panel-input ${validationErrors.emergencyPhone ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
-                                   placeholder="98765 43210" 
+                                   placeholder="9876543210" 
                                  />
                                </div>
-                               {validationErrors.emergencyPhone && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.emergencyPhone}</p>}
+                               {renderError('emergencyPhone')}
                             </div>
                          </div>
                       </div>
@@ -444,7 +496,7 @@ export default function OnboardPage() {
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Primary skills</label>
                                <input type="text" name="primary_skills" value={form.primary_skills} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.primary_skills ? 'border-error/50' : 'border-white/5'}`} placeholder="Core Skills" />
-                               {validationErrors.primary_skills && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.primary_skills}</p>}
+                               {renderError('primary_skills')}
                             </div>
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Secondary skills</label>
@@ -456,17 +508,18 @@ export default function OnboardPage() {
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Bank Name *</label>
                                <input type="text" name="bank_name" value={form.bank_name} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.bank_name ? 'border-error/50' : 'border-white/5'}`} placeholder="e.g. HDFC Bank" />
-                               {validationErrors.bank_name && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.bank_name}</p>}
+                               {renderError('bank_name')}
                             </div>
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Bank Account No. *</label>
-                               <input type="text" name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.bank_account_no ? 'border-error/50' : 'border-white/5'}`} placeholder="Account Number" />
-                               {validationErrors.bank_account_no && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.bank_account_no}</p>}
+                               <input type="text" name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.bank_account_no ? 'border-error/50' : 'border-white/5'}`} placeholder="9-18 digit account number" inputMode="numeric" />
+                               {renderError('bank_account_no')}
                             </div>
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">PAN No. *</label>
                                <input type="text" name="pan_no" value={form.pan_no} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.pan_no ? 'border-error/50' : 'border-white/5'}`} placeholder="e.g. ABCDE1234F" style={{textTransform: 'uppercase'}} />
-                               {validationErrors.pan_no && <p className="text-[9px] text-error font-bold uppercase tracking-widest mt-1 ml-1">{validationErrors.pan_no}</p>}
+                               {!validationErrors.pan_no && <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest mt-1 ml-1">PAN format: ABCDE1234F</p>}
+                               {renderError('pan_no')}
                             </div>
                          </div>
                       </div>
@@ -610,14 +663,14 @@ export default function OnboardPage() {
           -webkit-backdrop-filter: none !important;
         }
 
-        .onboard-page [class*="bg-[#0B1326"] {
+        .onboard-page [class*="bg-[#0B1326]"] {
           background: #ffffff !important;
           border-radius: 8px !important;
           backdrop-filter: none !important;
           -webkit-backdrop-filter: none !important;
         }
 
-        .onboard-page [class*="bg-[#060E20"],
+        .onboard-page [class*="bg-[#060E20]"],
         .onboard-page [class*="bg-black/40"],
         .onboard-page [class*="bg-white/5"] {
           background: #f7f7f7 !important;

@@ -36,33 +36,27 @@ class ManualCandidateCreate(BaseModel):
     location: Optional[str] = None
     total_experience_years: float = 0
     current_designation: Optional[str] = None
-    current_company: Optional[str] = None
-    expected_salary: Optional[str] = None
-    notice_period: Optional[str] = None
     linkedin_url: Optional[str] = None
     portfolio_url: Optional[str] = None
-    skills: Optional[List[str]] = None
+    primary_skills: Optional[List[str]] = []
+    secondary_skills: Optional[List[str]] = []
 
 
 class CandidateUpdate(BaseModel):
     full_name: Optional[str] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
     total_experience_years: Optional[float] = None
     current_designation: Optional[str] = None
-    current_company: Optional[str] = None
-    expected_salary: Optional[str] = None
-    notice_period: Optional[str] = None
     linkedin_url: Optional[str] = None
     portfolio_url: Optional[str] = None
-    availability: Optional[str] = None
     ai_summary: Optional[str] = None
-    certifications: Optional[List[str]] = None
-    languages: Optional[List[str]] = None
-    achievements: Optional[List[str]] = None
+    certifications: Optional[List[Any]] = None
     experience: Optional[List[dict]] = None
     education: Optional[List[dict]] = None
-    skills: Optional[List[Any]] = None
+    primary_skills: Optional[List[str]] = None
+    secondary_skills: Optional[List[str]] = None
 
 
 class StatusUpdate(BaseModel):
@@ -188,6 +182,42 @@ async def cancel_bulk_upload(
         "success": success,
         "message": "Job cancelled successfully."
     }
+
+
+@router.post("/bulk-upload/{job_id}/pause")
+async def pause_bulk_upload(
+    job_id: int,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Pause a bulk upload job."""
+    success = service.pause_bulk_upload_job(job_id)
+    return {
+        "success": success,
+        "message": "Job paused successfully."
+    }
+
+
+@router.post("/bulk-upload/{job_id}/resume")
+async def resume_bulk_upload(
+    job_id: int, 
+    user: dict = Depends(require_auth)
+):
+    service = CandidateService(tenant_id=user.get("tenant_id"))
+    success = service.resume_bulk_upload_job(job_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to resume bulk upload")
+    return {"message": "Job resumed successfully"}
+
+@router.post("/bulk-upload/{job_id}/retry-failed")
+async def retry_failed_bulk_upload(
+    job_id: int, 
+    user: dict = Depends(require_auth)
+):
+    service = CandidateService(tenant_id=user.get("tenant_id"))
+    success = service.retry_failed_bulk_upload_job(job_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to retry bulk upload items")
+    return {"message": "Failed items queued for retry"}
 
 
 @router.post("/manual")

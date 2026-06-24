@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.verify.services.assignment_service import AssignmentService
+from backend.modules.verify.api.live_monitoring import notify_live_monitor
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -24,6 +25,8 @@ class AssignRequest(BaseModel):
     user_ids: List[int]
     deadline: Optional[str] = None          # ISO date string
     generate_variants: bool = False
+    question_ids: Optional[List[int]] = None # Optional subset of questions to assign
+    shuffle_questions: bool = False         # Whether to shuffle per user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/verify/assignments", tags=["Verify - Assignments"])
@@ -63,6 +66,8 @@ async def assign_assessment(
             assigned_by=current_user["id"],
             deadline=body.deadline,
             generate_variants=body.generate_variants,
+            question_ids=body.question_ids,
+            shuffle_questions=body.shuffle_questions,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -89,3 +94,41 @@ def list_candidates(
     """List all users assigned to an assessment along with their status."""
     rows = service.get_assignment_candidates(asm_id)
     return {"success": True, "data": rows}
+
+# ---------------------------------------------------------------------------
+# 4. POST /{asm_id}/start-session — mark assessment as started
+# ---------------------------------------------------------------------------
+
+@router.post("/{asm_id}/start-session")
+def start_assessment_session(
+    asm_id: int,
+    current_user: dict = Depends(get_current_user),
+    service: AssignmentService = Depends(get_assignment_service),
+):
+    """Mark the assessment status as 'in_progress' and record start time."""
+    success = service.start_session(asm_id, current_user["id"])
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot start session. It may be already started or not assigned.")
+    
+    # Broadcast to HR
+    asyncio.create_task(notify_live_monitor(asm_id, "session_started", current_user["id"]))
+    
+    return {"success": True, "message": "Session started"}
+
+# ---------------------------------------------------------------------------
+# 5. POST /{asm_id}/record-strike — increment strike count
+# ---------------------------------------------------------------------------
+
+@router.post("/{asm_id}/record-strike")
+def record_proctoring_strike(
+    asm_id: int,
+    current_user: dict = Depends(get_current_user),
+    service: AssignmentService = Depends(get_assignment_service),
+):
+    """Increment strike count. Will terminate if limit reached."""
+    result = service.record_strike(asm_id, current_user["id"])
+    
+    # Broadcast to HR
+    asyncio.create_task(notify_live_monitor(asm_id, "strike_recorded", current_user["id"], result))
+    
+    return {"success": True, "data": result, "message": "Strike recorded"}

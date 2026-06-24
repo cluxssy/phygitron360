@@ -6,9 +6,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  isPositiveNumber,
+  isValidUrl,
+} from '../../../core/utils/validators';
 
 const QUESTION_TYPES = [
-  { id: 'mcq', label: 'Multiple Choice' },
+  { id: 'mcq', label: 'Multiple Choice (Single)' },
+  { id: 'mcq_multi', label: 'Multiple Choice (Multiple Correct)' },
   { id: 'written', label: 'Written Answer' },
   { id: 'coding', label: 'Coding Challenge' },
   { id: 'file_upload', label: 'File Upload' },
@@ -40,6 +45,30 @@ export default function AssessmentBuilder() {
   const [showImportUrl, setShowImportUrl] = useState(false);
   const [importUrl, setImportUrl] = useState('');
   const [importingUrl, setImportingUrl] = useState(false);
+  
+  // Bank Import
+  const [showBankImport, setShowBankImport] = useState(false);
+  const [bankQuestions, setBankQuestions] = useState([]);
+  const [loadingBank, setLoadingBank] = useState(false);
+
+  const fetchBankQuestions = async () => {
+    setLoadingBank(true);
+    try {
+      const r = await fetch('/api/verify/question-bank', { credentials: 'include' });
+      const d = await r.json();
+      setBankQuestions(d.data || []);
+    } catch {
+      toast.error('Failed to load bank questions');
+    } finally {
+      setLoadingBank(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showBankImport && bankQuestions.length === 0) {
+      fetchBankQuestions();
+    }
+  }, [showBankImport]);
 
   useEffect(() => {
     if (asmId) {
@@ -106,6 +135,10 @@ export default function AssessmentBuilder() {
   const handleImportUrl = async (e) => {
     e.preventDefault();
     if (!importUrl) return;
+    if (!isValidUrl(importUrl)) {
+      toast.error('Enter a valid http:// or https:// URL');
+      return;
+    }
     setImportingUrl(true);
     try {
       const r = await fetch('/api/verify/builder/import-url', {
@@ -130,8 +163,8 @@ export default function AssessmentBuilder() {
   };
 
   const handleSave = async (publish = false) => {
-    if (!title) return toast.error('Title is required');
-    if (questions.length === 0 && publish) return toast.error('Add questions before publishing');
+    const validationError = validateAssessment(publish);
+    if (validationError) return toast.error(validationError, { duration: 7000 });
     
     setSaving(true);
     const payload = {
@@ -185,6 +218,37 @@ export default function AssessmentBuilder() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const validateAssessment = (publish) => {
+    if (!title.trim()) return 'Title is required.';
+    if (timeLimit !== '' && (!Number.isFinite(Number(timeLimit)) || Number(timeLimit) < 1 || Number(timeLimit) > 600)) {
+      return 'Time limit must be between 1 and 600 minutes.';
+    }
+    if (!Number.isFinite(Number(passScore)) || Number(passScore) < 0 || Number(passScore) > 100) {
+      return 'Pass score must be between 0 and 100.';
+    }
+    if (questions.length === 0 && publish) return 'Add questions before publishing.';
+
+    for (let i = 0; i < questions.length; i += 1) {
+      const q = questions[i];
+      const label = `Question ${i + 1}`;
+      if (!q.question_text?.trim()) return `${label}: question text is required.`;
+      if (!isPositiveNumber(q.marks || 0)) return `${label}: marks must be greater than 0.`;
+      if (q.question_type === 'mcq') {
+        const filledOptions = (q.options || []).filter(opt => String(opt || '').trim());
+        if (filledOptions.length < 2) return `${label}: MCQ needs at least 2 options.`;
+        if (!q.correct_answer || !filledOptions.includes(q.correct_answer)) return `${label}: select a correct MCQ answer.`;
+      }
+      if (q.question_type === 'coding') {
+        const validTests = (q.test_cases || []).filter(tc => String(tc.expected_output ?? '').trim());
+        if (validTests.length < 3) return `${label}: coding questions need at least 3 expected outputs.`;
+      }
+      if (q.question_type === 'written' && publish && !q.model_answer?.trim()) {
+        return `${label}: add a model answer before publishing written questions.`;
+      }
+    }
+    return '';
   };
 
   if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
@@ -290,6 +354,9 @@ export default function AssessmentBuilder() {
             <button onClick={addQuestion} className="px-4 py-3 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold hover:bg-purple-100 transition-colors flex items-center gap-2">
               <Plus size={14} /> Add Question
             </button>
+            <button onClick={() => setShowBankImport(true)} className="px-4 py-3 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold hover:bg-indigo-100 transition-colors flex items-center gap-2">
+              <List size={14} /> Import from Bank
+            </button>
             <button onClick={() => setShowImportUrl(true)} className="px-4 py-3 rounded-xl bg-gray-50 text-gray-600 border border-gray-200 text-xs font-medium hover:bg-gray-100 transition-colors flex items-center gap-2">
               <LinkIcon size={14} /> Import from URL
             </button>
@@ -332,16 +399,25 @@ export default function AssessmentBuilder() {
                       />
 
                       {/* Type-specific UI */}
-                      {q.question_type === 'mcq' && (
+                      {(q.question_type === 'mcq' || q.question_type === 'mcq_multi') && (
                         <div className="space-y-2 mt-4 pl-4 border-l border-gray-200">
                           {(q.options || []).map((opt, oIdx) => (
                             <div key={oIdx} className="flex items-center gap-3">
                               <input
-                                type="radio"
+                                type={q.question_type === 'mcq' ? 'radio' : 'checkbox'}
                                 name={`correct_${i}`}
-                                checked={q.correct_answer === opt && opt !== ''}
-                                onChange={() => updateQuestion(i, 'correct_answer', opt)}
-                                className="w-4 h-4 accent-purple-600"
+                                checked={q.question_type === 'mcq' ? (q.correct_answer === opt && opt !== '') : ((q.correct_answer || '').includes(opt) && opt !== '')}
+                                onChange={(e) => {
+                                  if (q.question_type === 'mcq') {
+                                    updateQuestion(i, 'correct_answer', opt);
+                                  } else {
+                                    let curr = q.correct_answer ? q.correct_answer.split('|||') : [];
+                                    if (e.target.checked) curr.push(opt);
+                                    else curr = curr.filter(c => c !== opt);
+                                    updateQuestion(i, 'correct_answer', curr.join('|||'));
+                                  }
+                                }}
+                                className={`w-4 h-4 accent-purple-600 ${q.question_type === 'mcq_multi' ? 'rounded' : ''}`}
                               />
                               <input
                                 type="text"
@@ -350,7 +426,8 @@ export default function AssessmentBuilder() {
                                   const newOpts = [...(q.options || [])];
                                   newOpts[oIdx] = e.target.value;
                                   updateQuestion(i, 'options', newOpts);
-                                  if (q.correct_answer === opt) updateQuestion(i, 'correct_answer', e.target.value);
+                                  // Simplified correct answer updates on option text change for demo
+                                  if (q.question_type === 'mcq' && q.correct_answer === opt) updateQuestion(i, 'correct_answer', e.target.value);
                                 }}
                                 placeholder={`Option ${oIdx + 1}`}
                                 className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-purple-400"
@@ -487,6 +564,44 @@ export default function AssessmentBuilder() {
                 {importingUrl ? <Loader2 className="animate-spin mx-auto" size={16} /> : 'Import Questions'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bank Import Modal */}
+      {showBankImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowBankImport(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-8 relative shadow-2xl border border-gray-200 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowBankImport(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+              <X size={18} />
+            </button>
+            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+              <List className="text-indigo-600"/> Import from Bank
+            </h2>
+            <div className="flex-1 overflow-y-auto min-h-[300px]">
+              {loadingBank ? (
+                <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-600" /></div>
+              ) : bankQuestions.length === 0 ? (
+                <div className="text-center py-10 text-gray-500">No questions found in bank.</div>
+              ) : (
+                <div className="space-y-3">
+                  {bankQuestions.map(bq => (
+                    <div key={bq.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{bq.question_text}</p>
+                        <span className="text-xs text-gray-500 mt-1 block uppercase">{bq.question_type} | {bq.marks} pts</span>
+                      </div>
+                      <button onClick={() => {
+                        setQuestions([...questions, { ...bq, id: `bank_${bq.id}_${Date.now()}` }]);
+                        toast.success('Question added');
+                      }} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-semibold hover:bg-indigo-100">
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

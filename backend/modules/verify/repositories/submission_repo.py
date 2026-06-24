@@ -53,6 +53,14 @@ class SubmissionRepository:
             conn.close()
 
     def update_result_grading(self, result_id: int, assessment_id: int, user_id: int, scores_per_q: Dict, pct_score: float, passed: bool, feedback_str: str) -> None:
+        # Extract weak_skill_ids from feedback JSON
+        weak_skill_ids = []
+        try:
+            fb = json.loads(feedback_str)
+            weak_skill_ids = fb.get("weak_skill_ids", [])
+        except Exception:
+            pass
+
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
@@ -64,10 +72,11 @@ class SubmissionRepository:
                         score = %s,
                         pass_status = %s,
                         feedback = %s,
+                        weak_skill_ids = %s,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
                     """,
-                    (json.dumps(scores_per_q), pct_score, passed, feedback_str, result_id),
+                    (json.dumps(scores_per_q), pct_score, passed, feedback_str, json.dumps(weak_skill_ids), result_id),
                 )
                 cur.execute(
                     """
@@ -77,6 +86,65 @@ class SubmissionRepository:
                     """,
                     (assessment_id, user_id),
                 )
+
+                # Forge auto-enrollment for weak skills
+                if weak_skill_ids:
+                    # Find any active forge_courses that target these weak skills
+                    cur.execute("SELECT id, target_skill_ids FROM forge_courses WHERE is_active = TRUE")
+                    courses = cur.fetchall()
+                    for course in courses:
+                        course_id = course[0]
+                        target_skills = course[1] or []
+                        if any(ws in target_skills for ws in weak_skill_ids):
+                            # Check if already enrolled
+                            cur.execute(
+                                "SELECT 1 FROM forge_enrollments WHERE user_id = %s AND course_id = %s",
+                                (user_id, course_id)
+                            )
+                            if not cur.fetchone():
+                                cur.execute(
+                                    """
+                                    INSERT INTO forge_enrollments (user_id, course_id, enrolled_by)
+                                    VALUES (%s, %s, %s)
+                                    """,
+                                    (user_id, course_id, 'auto_remediation')
+                                )
+                
+                # Deploy auto-updates (Certificates & Skill Matrix)
+                if passed:
+                    cur.execute("SELECT employee_code, full_name FROM users LEFT JOIN candidates ON candidates.user_id = users.id WHERE users.id = %s", (user_id,))
+                    u_row = cur.fetchone()
+                    if u_row and u_row[0]:
+                        emp_code = u_row[0]
+                        candidate_name = u_row[1] or "Employee"
+                        cur.execute("SELECT title FROM assessments WHERE id = %s", (assessment_id,))
+                        asm_row = cur.fetchone()
+                        asm_title = asm_row[0] if asm_row else f"Assessment {assessment_id}"
+                        
+                        # 1. Update Skill Matrix
+                        cur.execute(
+                            """
+                            INSERT INTO skill_matrix (employee_code, primary_skillset)
+                            VALUES (%s, %s)
+                            """,
+                            (emp_code, f"{asm_title} Certified")
+                        )
+                        
+                        # 2. Generate PDF Certificate
+                        try:
+                            from backend.modules.verify.services.certificate_generator import generate_certificate
+                            cert_path = generate_certificate(candidate_name, asm_title, pct_score, result_id)
+                            cur.execute(
+                                """
+                                INSERT INTO employee_documents (employee_code, document_type, document_name, file_path, uploaded_by)
+                                VALUES (%s, %s, %s, %s, %s)
+                                """,
+                                (emp_code, 'Certificate', f"{asm_title} Certificate", cert_path, 'Auto-Grader')
+                            )
+                        except Exception as cert_err:
+                            import logging
+                            logging.getLogger(__name__).warning(f"Failed to generate certificate: {cert_err}")
+
                 conn.commit()
         finally:
             conn.close()
@@ -103,7 +171,12 @@ class SubmissionRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                cur.execute("SELECT * FROM assessment_results WHERE id = %s", (result_id,))
+                cur.execute('''
+                    SELECT r.*, a.show_result_immediately 
+                    FROM assessment_results r 
+                    JOIN assessments a ON a.id = r.assessment_id 
+                    WHERE r.id = %s
+                ''', (result_id,))
                 row = cur.fetchone()
                 if not row: return None
                 result = dict(row)
@@ -151,7 +224,8 @@ class SubmissionRepository:
                         r.score,
                         r.pass_status,
                         r.submitted_at,
-                        r.is_malpractice
+                        r.is_malpractice,
+                        r.feedback
                     FROM assessment_results r
                     JOIN assessments a ON a.id = r.assessment_id
                     WHERE r.user_id = %s
@@ -162,9 +236,22 @@ class SubmissionRepository:
                 rows = []
                 for r in cur.fetchall():
                     row = dict(r)
-                    if not row.get("show_result_immediately"):
+                    feedback_str = row.get("feedback") or "{}"
+                    try:
+                        feedback_json = json.loads(feedback_str) if isinstance(feedback_str, str) else feedback_str
+                    except:
+                        feedback_json = {}
+                    is_released = feedback_json.get("_is_released", False)
+                    
+                    if not row.get("show_result_immediately") and not is_released:
                         row["score"] = None
                         row["pass_status"] = None
+                        row["feedback"] = None
+                        
+                    # Don't send full feedback in list API anyway
+                    if "feedback" in row:
+                        del row["feedback"]
+                        
                     rows.append(row)
                 return rows
         finally:

@@ -46,36 +46,84 @@ class CandidateService:
 
         # 3. Parse with AI Engine (Using advanced AIAgents)
         ai_result = await self.ai_agents.parse_resume(extracted_text)
-        if not ai_result or not ai_result.get("name"): # AI returns 'name'
+        name = ai_result.get("n") or ai_result.get("name")
+        if not ai_result or not name:
             raise ValueError("AI could not parse useful data from this resume")
 
         # 4. Create or Update Candidate Record
-        email = ai_result.get("email")
+        email = ai_result.get("e") or ai_result.get("email")
         if not email:
             email = f"unknown_{uuid.uuid4().hex[:8]}@phygitron.local"
             
+        # Extract primary / secondary skills from AI result or fallback to splitting skills
+        primary_skills = ai_result.get("p_sk") or ai_result.get("primary_skills", [])
+        secondary_skills = ai_result.get("s_sk") or ai_result.get("secondary_skills", [])
+        if not primary_skills and ai_result.get("skills"):
+            skills_raw = ai_result.get("skills", [])
+            primary_skills = [s.get("name") if isinstance(s, dict) else s for s in skills_raw]
+
+        # Map experience from restructured format
+        raw_experience = ai_result.get("exp") or ai_result.get("experience", [])
+        experience = []
+        for exp in raw_experience:
+            if isinstance(exp, dict):
+                experience.append({
+                    "company": exp.get("c") or exp.get("company", ""),
+                    "designation": exp.get("r") or exp.get("designation") or exp.get("role", ""),
+                    "start_date": exp.get("s") or exp.get("start_date", ""),
+                    "end_date": exp.get("e") or exp.get("end_date", ""),
+                    "is_current": exp.get("is_current") or (exp.get("e") == "Present" or exp.get("end_date") == "Present"),
+                    "description": exp.get("description", "")
+                })
+            else:
+                experience.append(exp)
+
+        # Map education from restructured format
+        raw_education = ai_result.get("edu") or ai_result.get("education", [])
+        education = []
+        for edu in raw_education:
+            if isinstance(edu, dict):
+                education.append({
+                    "degree": edu.get("d") or edu.get("degree", ""),
+                    "institution": edu.get("c") or edu.get("institution") or edu.get("college", ""),
+                    "start_date": edu.get("s") or edu.get("start_date", ""),
+                    "end_date": edu.get("e") or edu.get("end_date", ""),
+                    "field_of_study": edu.get("field_of_study", "")
+                })
+            else:
+                education.append(edu)
+
+        # Map certifications from restructured format
+        raw_certifications = ai_result.get("cert") or ai_result.get("certifications", [])
+        certifications = []
+        for cert in raw_certifications:
+            if isinstance(cert, dict):
+                certifications.append({
+                    "name": cert.get("n") or cert.get("name", ""),
+                    "issuer": cert.get("i") or cert.get("issuer", ""),
+                    "year": int(cert.get("y") or cert.get("year") or 0)
+                })
+            else:
+                certifications.append(cert)
+
         candidate_data = {
-            "full_name": ai_result.get("name") or "Unknown Candidate",
+            "full_name": name or "Unknown Candidate",
             "email": email,
-            "phone": ai_result.get("phone"),
-            "location": ai_result.get("location"),
-            "total_experience_years": ai_result.get("experience_years_total") or 0,
-            "current_designation": ai_result.get("current_designation"),
-            "current_company": ai_result.get("current_company"),
-            "expected_salary": ai_result.get("expected_salary"),
-            "notice_period": ai_result.get("notice_period"),
-            "linkedin_url": ai_result.get("linkedin_url"),
-            "portfolio_url": ai_result.get("portfolio_url"),
-            "availability": ai_result.get("availability"),
-            "ai_summary": ai_result.get("ai_summary"),
-            "certifications": ai_result.get("certifications"),
-            "languages": ai_result.get("languages"),
-            "achievements": ai_result.get("achievements"),
+            "phone": ai_result.get("p") or ai_result.get("phone"),
+            "location": ai_result.get("l") or ai_result.get("location"),
+            "total_experience_years": ai_result.get("x") or ai_result.get("experience_years_total") or 0,
+            "current_designation": ai_result.get("d") or ai_result.get("current_designation"),
+            "linkedin_url": ai_result.get("ln") or ai_result.get("linkedin_url"),
+            "portfolio_url": ai_result.get("pt") or ai_result.get("portfolio_url"),
+            "ai_summary": ai_result.get("s") or ai_result.get("ai_summary"),
+            "certifications": certifications,
             "resume_path": file_path,
             "source": "AI Resume Parse",
             "status": "New",
-            "experience": ai_result.get("experience", []),
-            "education": ai_result.get("education", [])
+            "primary_skills": primary_skills,
+            "secondary_skills": secondary_skills,
+            "experience": experience,
+            "education": education
         }
         
         # We only try to upsert if we actually had a valid email from the AI.
@@ -92,26 +140,6 @@ class CandidateService:
         else:
             candidate_id = self.repo.create_candidate(candidate_data)
             self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI')
-
-        # 5. Process Skills from AI Result
-        for skill_data in ai_result.get("skills", []):
-            name = skill_data.get("name")
-            if not name: continue
-            
-            # Get or create from taxonomy
-            skill_record = self.skill_repo.get_skill_by_name(name)
-            if not skill_record:
-                skill_id = self.skill_repo.create_skill(name=name, category="extracted", aliases=[name])
-            else:
-                skill_id = skill_record['id']
-
-            # Link to candidate
-            self.repo.upsert_candidate_skill(candidate_id, skill_id, {
-                "level": skill_data.get("level", "beginner"),
-                "source": "resume",
-                "years_of_use": skill_data.get("years_of_use"),
-                "evidence": skill_data.get("evidence")
-            })
 
         # 6. Process Confidence Signals
         confidence_signals = ai_result.get("confidence_signals", [])
@@ -137,9 +165,28 @@ class CandidateService:
         try:
             if ext == ".pdf":
                 import fitz
-                with fitz.open(file_path) as pdf:
-                    for page in pdf:
-                        extracted_text += page.get_text() + "\n"
+                try:
+                    fitz.TOOLS.mupdf_display_errors(False)
+                    fitz.TOOLS.mupdf_display_warnings(False)
+                except Exception:
+                    pass
+                try:
+                    with fitz.open(file_path) as pdf:
+                        for page in pdf:
+                            extracted_text += page.get_text() + "\n"
+                except Exception as pdf_err:
+                    logger.warning(f"PyMuPDF failed to parse {file_path}: {pdf_err}. Trying pdfplumber...")
+                    extracted_text = ""
+                
+                # Fallback: if PyMuPDF extracted nothing, try pdfplumber
+                if not extracted_text.strip():
+                    try:
+                        import pdfplumber
+                        with pdfplumber.open(file_path) as pdf:
+                            for page in pdf.pages:
+                                extracted_text += (page.extract_text() or "") + "\n"
+                    except Exception as pl_err:
+                        logger.warning(f"pdfplumber fallback failed for {file_path}: {pl_err}")
             elif ext == ".txt":
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
@@ -148,17 +195,22 @@ class CandidateService:
                     logger.warning(f"TXT read failed for {file_path}: {e}")
             elif ext in (".docx", ".doc"):
                 try:
-                    from docx import Document
-                    doc = Document(file_path)
-                    extracted_text = '\n'.join([para.text for para in doc.paragraphs if para.text.strip()])
+                    extracted_text = self._extract_docx_data(file_path)
                 except Exception as e:
                     # Common case: Naukri exports HTML files but names them .doc
                     try:
                         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                             content = f.read()
-                        if "<html" in content.lower() or "<table" in content.lower():
+                        
+                        # Binary .doc files contain random bytes that can accidentally match "<html" or "<table"
+                        # in OLE metadata/headers. We check only the first 1024 characters to be safe.
+                        content_lower_prefix = content[:1024].lower()
+                        if "<html" in content_lower_prefix or "<table" in content_lower_prefix:
                             from bs4 import BeautifulSoup
                             soup = BeautifulSoup(content, "html.parser")
+                            # Strip scripts and styles to avoid code extraction
+                            for s in soup(["script", "style"]):
+                                s.decompose()
                             extracted_text = soup.get_text(separator="\n", strip=True)
                         else:
                             # If it's a binary .doc and not HTML, try using system tools
@@ -188,7 +240,7 @@ class CandidateService:
                                 logger.warning(f"DOC extraction failed. Please install 'antiword' or 'catdoc' on your production server to parse legacy .doc files: {file_path}")
                                 extracted_text = ""
                     except Exception as fallback_err:
-                        logger.warning(f"DOCX/HTML extraction failed for {file_path}: {e}")
+                        logger.warning(f"DOCX/HTML extraction failed for {file_path}: {fallback_err} (Original error: {e})")
                         extracted_text = ""
         except Exception as e:
             logger.error(f"Text extraction failed for {file_path}: {e}")
@@ -196,6 +248,67 @@ class CandidateService:
 
         # Sanitize: strip NUL bytes and other control chars PostgreSQL rejects
         return self._sanitize_text(extracted_text)
+
+    def _extract_docx_data(self, file_path: str) -> str:
+        """Extracts text from paragraphs, tables, headers, footers, and textboxes inside a DOCX file."""
+        from docx import Document
+        doc = Document(file_path)
+        full_text = []
+
+        def extract_from_block(block):
+            if not block: return
+            
+            # Paragraphs
+            for p in getattr(block, 'paragraphs', []):
+                if p.text.strip():
+                    full_text.append(p.text.strip())
+                    
+            # Tables
+            for t in getattr(block, 'tables', []):
+                for row in t.rows:
+                    row_text = []
+                    for cell in row.cells:
+                        cell_paragraphs = [p.text.strip() for p in cell.paragraphs if p.text.strip()]
+                        if cell_paragraphs:
+                            row_text.append(" | ".join(cell_paragraphs))
+                    if row_text:
+                        full_text.append(" | ".join(row_text))
+                        
+            # Textboxes (often used in fancy resume headers/footers)
+            try:
+                if hasattr(block, 'element') and block.element is not None:
+                    for txbx in block.element.xpath('.//w:txbxContent'):
+                        for p_elem in txbx.xpath('.//w:p'):
+                            p_text = p_elem.text
+                            if not p_text:
+                                p_text = "".join([t.text for t in p_elem.xpath('.//w:t') if t.text])
+                            if p_text.strip():
+                                full_text.append(p_text.strip())
+            except Exception as e:
+                pass
+
+        # 1. Extract from headers
+        try:
+            for section in doc.sections:
+                extract_from_block(getattr(section, 'header', None))
+                extract_from_block(getattr(section, 'first_page_header', None))
+                extract_from_block(getattr(section, 'even_page_header', None))
+        except Exception as e:
+            logger.debug(f"Header extraction skipped: {e}")
+
+        # 2 & 3 & 4. Extract from main body paragraphs, tables, and text boxes
+        extract_from_block(doc)
+
+        # 5. Extract from footers
+        try:
+            for section in doc.sections:
+                extract_from_block(getattr(section, 'footer', None))
+                extract_from_block(getattr(section, 'first_page_footer', None))
+                extract_from_block(getattr(section, 'even_page_footer', None))
+        except Exception as e:
+            logger.debug(f"Footer extraction skipped: {e}")
+
+        return "\n".join(full_text)
 
     @staticmethod
     def _sanitize_text(text: str) -> str:
@@ -207,7 +320,38 @@ class CandidateService:
         # Replace other non-printable control chars (except tab, newline, carriage return)
         import re
         text = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+        
+        # Compress whitespace to save LLM tokens and improve parsing
+        # 1. Replace multiple spaces/tabs with a single space
+        text = re.sub(r'[ \t]+', ' ', text)
+        # 2. Replace multiple newlines (with optional spaces between) with a single newline
+        text = re.sub(r'\n\s*\n', '\n', text)
+        
         return text.strip()
+
+    def _extract_name_from_filename(self, filename: str) -> str:
+        """Fallback to extract candidate name from file name if LLM couldn't find it."""
+        import re
+        if not filename:
+            return ""
+        # Remove extension
+        name = os.path.splitext(filename)[0]
+        # Remove Naukri_ prefix (case insensitive)
+        name = re.sub(r'^naukri_', '', name, flags=re.I)
+        # Remove bracketed experience e.g. [3y_8m]
+        name = re.sub(r'\[.*?\]', '', name)
+        # Remove common trailing terms like _SOC, _Resume, _CV, etc.
+        name = re.sub(r'[-_](?:soc|resume|cv|new|latest|updated|profile|docs?)\b', '', name, flags=re.I)
+        name = re.sub(r'\b(?:soc|resume|cv|new|latest|updated|profile|docs?)\b', '', name, flags=re.I)
+        # Replace punctuation/spacing characters with spaces
+        name = re.sub(r'[-_\.]', ' ', name)
+        # Clean double spaces
+        name = re.sub(r'\s+', ' ', name).strip()
+        # Handle CamelCase: split words
+        name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', name)
+        name = re.sub(r'\s+', ' ', name).strip()
+        # Title case capitalization
+        return name.title()
 
     def get_all_candidates(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
         candidates = self.repo.get_all_candidates(page=page, page_size=page_size)
@@ -276,11 +420,13 @@ class CandidateService:
                 role_min_exp = role.get("min_experience") or 0
 
         for cand in candidates:
-            cand_skills = self.repo.get_candidate_skills(cand["id"])
-            cand["structured_skills"] = cand_skills
+            cand["primary_skills"] = cand.get("primary_skills") or []
+            cand["secondary_skills"] = cand.get("secondary_skills") or []
+            cand["structured_skills"] = [{"name": s, "level": "intermediate"} for s in cand["primary_skills"]] + [{"name": s, "level": "beginner"} for s in cand["secondary_skills"]]
+            cand["skills"] = cand["primary_skills"] + cand["secondary_skills"]
             
             if role_id and req_skills:
-                flat_skills = [{"name": s.get("skill_name") or s.get("name"), "level": s["level"]} for s in cand_skills]
+                flat_skills = cand["structured_skills"]
                 fit = calculate_role_fit(
                     flat_skills,
                     req_skills,
@@ -305,7 +451,9 @@ class CandidateService:
             role_id = row.get("job_role_id")
             if role_id and (not row.get("insights") or not row["insights"].get("final_score")):
                 try:
-                    cand_skills = self.repo.get_candidate_skills(row["id"])
+                    primary = row.get("primary_skills") or []
+                    secondary = row.get("secondary_skills") or []
+                    flat_skills = [{"name": s, "level": "intermediate"} for s in primary] + [{"name": s, "level": "beginner"} for s in secondary]
                     
                     from backend.modules.source.repositories.job_role_repo import JobRoleRepository
                     from backend.modules.source.services.ats_engine import normalise_required_skills, calculate_role_fit
@@ -321,7 +469,6 @@ class CandidateService:
                         )
                         role_min_exp = role.get("min_experience") or 0
                         
-                        flat_skills = [{"name": s.get("skill_name") or s.get("name"), "level": s.get("level", "intermediate")} for s in cand_skills]
                         fit = calculate_role_fit(
                             flat_skills,
                             req_skills,
@@ -341,9 +488,12 @@ class CandidateService:
         if not cand:
             return None
             
-        cand["structured_skills"] = self.repo.get_candidate_skills(candidate_id)
+        cand["primary_skills"] = cand.get("primary_skills") or []
+        cand["secondary_skills"] = cand.get("secondary_skills") or []
+        cand["structured_skills"] = [{"name": s, "level": "intermediate"} for s in cand["primary_skills"]] + [{"name": s, "level": "beginner"} for s in cand["secondary_skills"]]
+        cand["skills"] = cand["primary_skills"] + cand["secondary_skills"]
         cand["latest_offer"] = self.repo.get_candidate_latest_offer(candidate_id)
-        cand["resume_ats_score"] = compute_resume_ats_score({**cand, "skills": cand["structured_skills"]})
+        cand["resume_ats_score"] = compute_resume_ats_score(cand)
 
         if role_id:
             from backend.modules.source.repositories.job_role_repo import JobRoleRepository
@@ -355,7 +505,7 @@ class CandidateService:
                     title=role.get("title") or "",
                     description=role.get("description") or ""
                 )
-                flat_skills = [{"name": s.get("skill_name") or s.get("name"), "level": s["level"]} for s in cand["structured_skills"]]
+                flat_skills = cand["structured_skills"]
                 cand["role_fit"] = calculate_role_fit(
                     flat_skills,
                     req_skills,
@@ -365,90 +515,29 @@ class CandidateService:
         return cand
 
     def update_candidate(self, candidate_id: int, data: Dict[str, Any], actor_name: str = "System") -> bool:
-        from backend.core.database import get_db_connection
         # 1. Update candidate record in DB
         success = self.repo.update_candidate(candidate_id, data)
         if not success:
             return False
 
         self.repo.log_activity(candidate_id, actor_name, 'profile_updated', 'Profile details manually updated')
-
-        # 2. Update skills list if provided
-        if "skills" in data:
-            # Get current candidate skills to know what to delete
-            current_skills = self.repo.get_candidate_skills(candidate_id)
-            current_skill_ids = {s['skill_id'] for s in current_skills}
-
-            new_skill_ids = set()
-
-            for skill_info in data["skills"]:
-                if isinstance(skill_info, str):
-                    name = skill_info.strip()
-                    level = "intermediate"
-                    years_of_use = None
-                    evidence = None
-                elif isinstance(skill_info, dict):
-                    name = (skill_info.get("name") or skill_info.get("skill_name") or "").strip()
-                    level = skill_info.get("level", "intermediate")
-                    years_of_use = skill_info.get("years_of_use")
-                    evidence = skill_info.get("evidence")
-                else:
-                    continue
-
-                if not name:
-                    continue
-
-                # Get or create from taxonomy
-                skill_record = self.skill_repo.get_skill_by_name(name)
-                if not skill_record:
-                    skill_id = self.skill_repo.create_skill(name=name, category="extracted", aliases=[name])
-                else:
-                    skill_id = skill_record['id']
-
-                new_skill_ids.add(skill_id)
-
-                # Upsert candidate skill
-                self.repo.upsert_candidate_skill(candidate_id, skill_id, {
-                    "level": level,
-                    "source": "manual",
-                    "years_of_use": years_of_use,
-                    "evidence": evidence
-                })
-
-            # Delete skills that are no longer in the updated list
-            skills_to_delete = current_skill_ids - new_skill_ids
-            if skills_to_delete:
-                conn = get_db_connection()
-                try:
-                    with conn.cursor() as cur:
-                        self.repo._set_search_path(cur)
-                        cur.execute(
-                            "DELETE FROM candidate_skills WHERE candidate_id = %s AND skill_id = ANY(%s)",
-                            (candidate_id, list(skills_to_delete))
-                        )
-                        conn.commit()
-                finally:
-                    conn.close()
-
         return True
 
-    async def bulk_upload_resumes(self, files: List[tuple], user_id: int) -> Dict[str, Any]:
-        """files is a list of tuples: (filename, content_bytes).
-        Phase 1: extract text immediately at upload time, save to disk, batch-insert queue items.
-        Phase 2: parallel workers pick up items and call AI asynchronously.
-        """
+    def _sync_process_files(self, job_id: int, files_data: List[tuple], job_dir: str):
+        """Heavy I/O and CPU bound file extraction and hashing runs synchronously in a background thread."""
         allowed_exts = (".pdf", ".docx", ".doc", ".txt")
         import zipfile
         import io
         import hashlib
+        import os
+        import uuid
+        import logging
+        logger = logging.getLogger(__name__)
 
         queue_items = []
-        job_id = self.repo.create_bulk_upload_job(user_id, 0)
-        job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
-        os.makedirs(job_dir, exist_ok=True)
-
         total_files = 0
-        for fn, content in files:
+
+        for fn, content in files_data:
             if fn.lower().endswith(".zip"):
                 try:
                     with zipfile.ZipFile(io.BytesIO(content)) as z:
@@ -473,7 +562,7 @@ class CandidateService:
                                 "filename": clean_fn,
                                 "file_path": file_path,
                                 "file_hash": file_hash,
-                                "extracted_text": extracted_text[:12000] if extracted_text else "",
+                                "extracted_text": extracted_text if extracted_text else "",
                             })
                             total_files += 1
                 except Exception as zip_err:
@@ -494,7 +583,7 @@ class CandidateService:
                     "filename": clean_fn,
                     "file_path": file_path,
                     "file_hash": file_hash,
-                    "extracted_text": extracted_text[:12000] if extracted_text else "",
+                    "extracted_text": extracted_text if extracted_text else "",
                 })
                 total_files += 1
 
@@ -512,10 +601,31 @@ class CandidateService:
             finally:
                 conn.close()
 
+    async def bulk_upload_resumes(self, files: List[tuple], user_id: int) -> Dict[str, Any]:
+        """files is a list of tuples: (filename, content_bytes).
+        Phase 1: Spin up background thread to extract text immediately at upload time, save to disk, batch-insert queue items.
+        Phase 2: parallel workers pick up items and call AI asynchronously.
+        """
+        import asyncio
+
+        job_id = self.repo.create_bulk_upload_job(user_id, 0)
+        job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
+        os.makedirs(job_dir, exist_ok=True)
+
+        loop = asyncio.get_event_loop()
+        # Fire and forget the extraction task on a background thread
+        loop.run_in_executor(
+            None,
+            self._sync_process_files,
+            job_id,
+            files,
+            job_dir
+        )
+
         return {
             "job_id": job_id,
             "status": "processing",
-            "message": f"Successfully queued {total_files} files for AI processing.",
+            "message": "Upload accepted. Files are being unpacked and queued."
         }
 
     async def process_bulk_upload_queue(self):
@@ -543,9 +653,10 @@ class CandidateService:
             return cancel_events[job_id]
 
         async def _single_worker(worker_id: int):
-            """One independent worker loop — fetches and processes items one at a time."""
+            """One independent worker loop — fetches and processes items in batches of 50."""
             backoff = 0  # seconds to sleep before next attempt (per-worker)
             loop = asyncio.get_event_loop()
+            from backend.core.database import get_db_connection
 
             while True:
                 try:
@@ -554,114 +665,174 @@ class CandidateService:
                         await asyncio.sleep(backoff)
                         backoff = 0
 
-                    # Fetch exactly 1 pending item (SKIP LOCKED — no deadlocks between workers)
-                    items = self.repo.get_pending_bulk_upload_job_items(limit=1)
+                    # Fetch up to 50 pending items (SKIP LOCKED)
+                    items = self.repo.get_pending_bulk_upload_job_items(limit=50)
                     if not items:
                         await asyncio.sleep(5)
                         continue
-                    print(f"[Worker-{worker_id}][{self.tenant_id}] Picked up item {items[0].get('id')} filename={items[0].get('filename')}", flush=True)
 
-                    item = items[0]
-                    job_id = item.get("job_id")
+                    print(f"[Worker-{worker_id}][{self.tenant_id}] Picked up batch of {len(items)} items", flush=True)
 
-                    # Check for job cancellation
-                    if job_id and _get_cancel_event(job_id).is_set():
-                        self.repo.update_bulk_upload_job_item(
-                            item["id"], status="cancelled", error_message="Job was cancelled."
-                        )
-                        continue
-
+                    # Get a connection and cursor for this batch to execute everything in one transaction
+                    conn = get_db_connection()
                     try:
-                        # 1. Duplicate hash check
-                        if self.repo.check_file_hash_exists(item["file_hash"]):
-                            self.repo.update_bulk_upload_job_item(
-                                item["id"], status="duplicate", error_message="Exact file already uploaded before."
-                            )
-                            print(f"[Worker-{worker_id}][{self.tenant_id}] SKIPPED item {item['id']} ({item['filename']}): Duplicate file hash.", flush=True)
-                            continue
+                        with conn.cursor() as cur:
+                            # Chunk items into sub-batches of 5 for AI prompting to prevent API timeouts
+                            for i in range(0, len(items), 5):
+                                sub_batch = items[i:i+5]
+                                
+                                # Check if job is paused (so we don't keep parsing in-memory items)
+                                if sub_batch and sub_batch[0].get("job_id"):
+                                    cur.execute("SELECT status FROM bulk_upload_jobs WHERE id = %s", (sub_batch[0]["job_id"],))
+                                    job_row = cur.fetchone()
+                                    if job_row and job_row[0] == 'paused':
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] Job paused. Returning {len(items)-i} items to pending.", flush=True)
+                                        for item in items[i:]:
+                                            self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None, conn=conn, cur=cur)
+                                        conn.commit()
+                                        break
+                                
+                                # Prepare batched items
+                                batched_payloads = []
+                                valid_items = []
+                                
+                                for item in sub_batch:
+                                    job_id = item.get("job_id")
+                                    
+                                    # Check for job cancellation
+                                    if job_id and _get_cancel_event(job_id).is_set():
+                                        self.repo.update_bulk_upload_job_item(
+                                            item["id"], status="cancelled", error_message="Job was cancelled.", conn=conn, cur=cur
+                                        )
+                                        continue
 
-                        # 2. Use pre-extracted text (stored at upload time) — avoids re-reading disk
-                        extracted_text = item.get("extracted_text") or ""
+                                    cur.execute("SAVEPOINT check_item")
+                                    # 1. Duplicate hash check
+                                    if self.repo.check_file_hash_exists(item["file_hash"]):
+                                        self.repo.update_bulk_upload_job_item(
+                                            item["id"], status="duplicate", error_message="Exact file already uploaded before.", conn=conn, cur=cur
+                                        )
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] SKIPPED item {item['id']} ({item['filename']}): Duplicate file hash.", flush=True)
+                                        cur.execute("RELEASE SAVEPOINT check_item")
+                                        continue
+                                    cur.execute("RELEASE SAVEPOINT check_item")
+                                    
+                                    # 2. Extract text
+                                    extracted_text = item.get("extracted_text") or ""
+                                    if not extracted_text and item.get("file_path") and os.path.exists(item["file_path"]):
+                                        ext = os.path.splitext(item["filename"])[1].lower()
+                                        extracted_text = self._extract_text(item["file_path"], ext)
 
-                        # Fallback: if text is empty (old queue items), re-extract from disk
-                        if not extracted_text and item.get("file_path") and os.path.exists(item["file_path"]):
-                            ext = os.path.splitext(item["filename"])[1].lower()
-                            extracted_text = self._extract_text(item["file_path"], ext)
+                                    if not extracted_text.strip():
+                                        self.repo.update_bulk_upload_job_item(
+                                            item["id"], status="failed", error_message="Could not extract text from file.", conn=conn, cur=cur
+                                        )
+                                        continue
+                                        
+                                    from backend.common.services.ai.agents import PARSE_RESUME_SYSTEM
+                                    ai_service = self.ai_agents.ai
+                                    pre = ai_service.pre_extract_resume(extracted_text)
+                                    
+                                    # Use a clear prefix "item_" to ensure valid JSON keys and easier LLM parsing
+                                    item_id_str = f"item_{item['id']}"
+                                    
+                                    batched_payloads.append({
+                                        "id": item_id_str,
+                                        "text": extracted_text,
+                                        "pre": pre
+                                    })
+                                    valid_items.append((item, pre, item_id_str))
+                                    
+                                if not batched_payloads:
+                                    continue
+                                    
+                                # 3. Call AI with batched prompt
+                                try:
+                                    prompt = ai_service.build_batched_prompt(batched_payloads)
+                                    
+                                    ai_result_map = await asyncio.wait_for(
+                                        loop.run_in_executor(
+                                            None,
+                                            lambda p=prompt: ai_service.generate_json_sync(p, PARSE_RESUME_SYSTEM)
+                                        ),
+                                        timeout=900.0 # high timeout (15 mins) because 8 workers queueing on a single free tier semaphore can take minutes
+                                    )
+                                    
+                                    if not isinstance(ai_result_map, dict):
+                                        raise ValueError(f"AI did not return a valid dictionary. Got type {type(ai_result_map)}")
+                                        
+                                except Exception as e:
+                                    err_str = str(e) or e.__class__.__name__
+                                    # Handle Rate limit
+                                    if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout', 'TimeoutError', 'RemoteDisconnected', 'aborted', 'closed connection']):
+                                        match = re.search(r'(?:retry in|try again in) (\d+\.?\d*)', err_str)
+                                        wait = int(float(match.group(1))) + 2 if match else 35
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] API busy, backing off {wait}s...", flush=True)
+                                        backoff = wait
+                                        # Return all valid items to pending
+                                        for item, _, _ in valid_items:
+                                            self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None, conn=conn, cur=cur)
+                                        break  # Break out of the batch loop entirely
+                                    else:
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on AI batch prompt: {err_str[:300]}", flush=True)
+                                        for item, _, _ in valid_items:
+                                            self.repo.update_bulk_upload_job_item(item["id"], status="failed", error_message=err_str[:500], conn=conn, cur=cur)
+                                        continue # move to next sub-batch
 
-                        if not extracted_text.strip():
-                            print(f"[Worker-{worker_id}][{self.tenant_id}] Item {item['id']} FAILED: no text extracted. file_path={item.get('file_path')} exists={os.path.exists(item.get('file_path',''))}", flush=True)
-                            self.repo.update_bulk_upload_job_item(
-                                item["id"], status="failed", error_message="Could not extract text from file."
-                            )
-                            continue
+                                # 4. Process each returned item in the batch
+                                for item, pre, item_id_str in valid_items:
+                                    ai_result = ai_result_map.get(item_id_str)
+                                    
+                                    cur.execute("SAVEPOINT item_insert")
+                                    try:
+                                        if not ai_result or not isinstance(ai_result, dict) or (not ai_result.get("n") and not ai_result.get("exp") and not ai_result.get("p_sk")):
+                                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: AI omitted or returned empty parse result.", flush=True)
+                                            self.repo.update_bulk_upload_job_item(
+                                                item["id"], status="failed", error_message="AI omitted or returned empty parse result.", conn=conn, cur=cur
+                                            )
+                                            cur.execute("RELEASE SAVEPOINT item_insert")
+                                            continue
+                                            
+                                        # Post-inject pre-extracted fields if the LLM skipped them
+                                        for field, value in pre.items():
+                                            if value:
+                                                mapping = {"email": "e", "phone": "p", "linkedin_url": "ln", "portfolio_url": "pt", "experience_years_total": "x"}
+                                                short_key = mapping.get(field)
+                                                if short_key and not ai_result.get(short_key):
+                                                    ai_result[short_key] = value
 
-                        # 3. Run AI parse in thread executor — sync SDK, never blocks event loop
-                        from backend.common.services.ai.agents import PARSE_RESUME_SYSTEM
-                        ai_service = self.ai_agents.ai
-                        prompt = f"Parse this resume:\n\n{extracted_text[:6000]}"
+                                        # Fallback name
+                                        if not ai_result.get("n") and item.get("filename"):
+                                            inferred_name = self._extract_name_from_filename(item["filename"])
+                                            if inferred_name:
+                                                ai_result["n"] = inferred_name
 
-                        # Use asyncio.wait_for to prevent hanging if the AI provider stalls
-                        ai_result = await asyncio.wait_for(
-                            loop.run_in_executor(
-                                None,
-                                lambda p=prompt: ai_service.generate_json_sync(p, PARSE_RESUME_SYSTEM)
-                            ),
-                            timeout=45.0
-                        )
+                                        file_content = b""
+                                        if item.get("file_path") and os.path.exists(item["file_path"]):
+                                            with open(item["file_path"], "rb") as f:
+                                                file_content = f.read()
 
-                        if not ai_result or not ai_result.get("name"):
-                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: AI returned empty or invalid parse result. ai_result={ai_result}", flush=True)
-                            self.repo.update_bulk_upload_job_item(
-                                item["id"], status="failed", error_message="AI returned empty or invalid parse result."
-                            )
-                            provider = os.getenv("BULK_AI_PROVIDER") or os.getenv("AI_PROVIDER", "mock")
-                            if provider != "mock":
-                                await asyncio.sleep(3.5)
-                            continue
+                                        result = await self._save_ai_parsed_candidate(ai_result, item["file_path"], file_content, conn=conn, cur=cur)
+                                        self.repo.update_bulk_upload_job_item(
+                                            item["id"], status="success", candidate_id=result["candidate_id"], conn=conn, cur=cur
+                                        )
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] SUCCESS item {item['id']} → candidate {result['candidate_id']}", flush=True)
+                                        cur.execute("RELEASE SAVEPOINT item_insert")
+                                    except Exception as e:
+                                        cur.execute("ROLLBACK TO SAVEPOINT item_insert")
+                                        err_str = str(e) or e.__class__.__name__
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR saving item {item['id']}: {err_str[:300]}", flush=True)
+                                        self.repo.update_bulk_upload_job_item(
+                                            item["id"], status="failed", error_message=err_str[:500], conn=conn, cur=cur
+                                        )
 
-                        # 4. Save candidate to DB (reuse existing logic)
-                        file_content = b""
-                        if item.get("file_path") and os.path.exists(item["file_path"]):
-                            with open(item["file_path"], "rb") as f:
-                                file_content = f.read()
-
-                        result = await self._save_ai_parsed_candidate(ai_result, item["file_path"], file_content)
-                        self.repo.update_bulk_upload_job_item(
-                            item["id"], status="success", candidate_id=result["candidate_id"]
-                        )
-                        print(f"[Worker-{worker_id}][{self.tenant_id}] SUCCESS item {item['id']} → candidate {result['candidate_id']}", flush=True)
-
-                        # Throttling to respect Free Tier rate limits (30 RPM)
-                        provider = os.getenv("BULK_AI_PROVIDER") or os.getenv("AI_PROVIDER", "mock")
-                        if provider != "mock":
-                            await asyncio.sleep(3.5)
-
-                    except Exception as e:
-                        err_str = str(e)
-                        # Sanitize any API keys from the error message
-                        ai_service = getattr(self.ai_agents, 'ai', None)
-                        if ai_service:
-                            for key in [getattr(ai_service, 'openai_api_key', None), getattr(ai_service, 'gemini_api_key', None), getattr(ai_service, 'groq_api_key', None)]:
-                                if key and len(key) > 5 and key in err_str:
-                                    err_str = err_str.replace(key, "******")
-
-                        if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout']):
-                            match = re.search(r'(?:retry in|try again in) (\d+\.?\d*)', err_str)
-                            wait = int(float(match.group(1))) + 2 if match else 15
-                            print(f"[Worker-{worker_id}][{self.tenant_id}] API busy, backing off {wait}s, re-queuing item {item['id']}", flush=True)
-                            self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None)
-                            backoff = wait
-                        else:
-                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: {err_str[:300]}", flush=True)
-                            self.repo.update_bulk_upload_job_item(
-                                item["id"], status="failed", error_message=err_str[:500]
-                            )
-                            provider = os.getenv("BULK_AI_PROVIDER") or os.getenv("AI_PROVIDER", "mock")
-                            if provider != "mock":
-                                await asyncio.sleep(3.5)
+                                # Commit all processed items in this sub-batch instantly so the frontend UI can see them!
+                                conn.commit()
+                    finally:
+                        conn.close()
 
                 except Exception as outer_e:
-                    outer_err_str = str(outer_e)
+                    outer_err_str = str(outer_e) or outer_e.__class__.__name__
                     ai_service = getattr(self.ai_agents, 'ai', None)
                     if ai_service:
                         for key in [getattr(ai_service, 'openai_api_key', None), getattr(ai_service, 'gemini_api_key', None), getattr(ai_service, 'groq_api_key', None)]:
@@ -669,71 +840,110 @@ class CandidateService:
                                 outer_err_str = outer_err_str.replace(key, "******")
                     print(f"[Worker-{worker_id}][{self.tenant_id}] Outer loop error: {outer_err_str}", flush=True)
                     await asyncio.sleep(15)
+        # Reset any stuck processing items on startup
+        try:
+            self.repo.reset_stuck_processing_items()
+            self.repo.reset_stuck_extracting_jobs()
+            logger.info(f"[BulkWorker][{self.tenant_id}] Cleaned up and reset stuck processing items and extracting jobs.")
+        except Exception as e:
+            logger.error(f"[BulkWorker][{self.tenant_id}] Error resetting stuck jobs: {e}")
 
         # Launch all workers as concurrent tasks
         await asyncio.gather(*[_single_worker(i) for i in range(num_workers)])
 
-    async def _save_ai_parsed_candidate(self, ai_result: Dict[str, Any], file_path: str, file_content: bytes) -> Dict[str, Any]:
+    async def _save_ai_parsed_candidate(self, ai_result: Dict[str, Any], file_path: str, file_content: bytes, conn=None, cur=None) -> Dict[str, Any]:
         """Save AI-parsed resume data to the database. Extracted from process_and_save_resume for reuse by bulk workers."""
-        email = ai_result.get("email")
+        email = ai_result.get("e") or ai_result.get("email")
         if not email:
             email = f"unknown_{uuid.uuid4().hex[:8]}@phygitron.local"
 
+        name = ai_result.get("n") or ai_result.get("name")
+
+        # Extract primary / secondary skills from AI result or fallback to splitting skills
+        primary_skills = ai_result.get("p_sk") or ai_result.get("primary_skills") or []
+        secondary_skills = ai_result.get("s_sk") or ai_result.get("secondary_skills") or []
+        if not primary_skills and ai_result.get("skills"):
+            skills_raw = ai_result.get("skills") or []
+            primary_skills = [s.get("name") if isinstance(s, dict) else s for s in skills_raw]
+
+        # Map experience from restructured format
+        raw_experience = ai_result.get("exp") or ai_result.get("experience") or []
+        experience = []
+        for exp in raw_experience:
+            if isinstance(exp, dict):
+                experience.append({
+                    "company": exp.get("c") or exp.get("company", ""),
+                    "designation": exp.get("r") or exp.get("designation") or exp.get("role", ""),
+                    "start_date": exp.get("s") or exp.get("start_date", ""),
+                    "end_date": exp.get("e") or exp.get("end_date", ""),
+                    "is_current": exp.get("is_current") or (exp.get("e") == "Present" or exp.get("end_date") == "Present"),
+                    "description": exp.get("description", "")
+                })
+            else:
+                experience.append(exp)
+
+        # Map education from restructured format
+        raw_education = ai_result.get("edu") or ai_result.get("education") or []
+        education = []
+        for edu in raw_education:
+            if isinstance(edu, dict):
+                education.append({
+                    "degree": edu.get("d") or edu.get("degree", ""),
+                    "institution": edu.get("c") or edu.get("institution") or edu.get("college", ""),
+                    "start_date": edu.get("s") or edu.get("start_date", ""),
+                    "end_date": edu.get("e") or edu.get("end_date", ""),
+                    "field_of_study": edu.get("field_of_study", "")
+                })
+            else:
+                education.append(edu)
+
+        # Map certifications from restructured format
+        raw_certifications = ai_result.get("cert") or ai_result.get("certifications") or []
+        certifications = []
+        for cert in raw_certifications:
+            if isinstance(cert, dict):
+                certifications.append({
+                    "name": cert.get("n") or cert.get("name", ""),
+                    "issuer": cert.get("i") or cert.get("issuer", ""),
+                    "year": int(cert.get("y") or cert.get("year") or 0)
+                })
+            else:
+                certifications.append(cert)
+
         candidate_data = {
-            "full_name": ai_result.get("name") or "Unknown Candidate",
+            "full_name": name or "Unknown Candidate",
             "email": email,
-            "phone": ai_result.get("phone"),
-            "location": ai_result.get("location"),
-            "total_experience_years": ai_result.get("experience_years_total") or 0,
-            "current_designation": ai_result.get("current_designation"),
-            "current_company": ai_result.get("current_company"),
-            "expected_salary": ai_result.get("expected_salary"),
-            "notice_period": ai_result.get("notice_period"),
-            "linkedin_url": ai_result.get("linkedin_url"),
-            "portfolio_url": ai_result.get("portfolio_url"),
-            "availability": ai_result.get("availability"),
-            "ai_summary": ai_result.get("ai_summary"),
-            "certifications": ai_result.get("certifications"),
-            "languages": ai_result.get("languages"),
-            "achievements": ai_result.get("achievements"),
+            "phone": ai_result.get("p") or ai_result.get("phone"),
+            "location": ai_result.get("l") or ai_result.get("location"),
+            "total_experience_years": ai_result.get("x") or ai_result.get("experience_years_total") or 0,
+            "current_designation": ai_result.get("d") or ai_result.get("current_designation"),
+            "linkedin_url": ai_result.get("ln") or ai_result.get("linkedin_url"),
+            "portfolio_url": ai_result.get("pt") or ai_result.get("portfolio_url"),
+            "ai_summary": ai_result.get("s") or ai_result.get("ai_summary"),
+            "certifications": certifications,
             "resume_path": file_path,
             "source": "AI Resume Parse",
             "status": "New",
-            "experience": ai_result.get("experience", []),
-            "education": ai_result.get("education", []),
+            "primary_skills": primary_skills,
+            "secondary_skills": secondary_skills,
+            "experience": experience,
+            "education": education
         }
 
         existing = None
         if "unknown_" not in candidate_data["email"]:
-            existing = self.repo.get_candidate_by_email(candidate_data["email"])
+            existing = self.repo.get_candidate_by_email(candidate_data["email"], conn=conn, cur=cur)
 
         if existing:
             candidate_id = existing["id"]
-            self.repo.update_candidate(candidate_id, candidate_data)
-            self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via bulk resume re-upload')
+            self.repo.update_candidate(candidate_id, candidate_data, conn=conn, cur=cur)
+            self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via bulk resume re-upload', conn=conn, cur=cur)
         else:
-            candidate_id = self.repo.create_candidate(candidate_data)
-            self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI')
-
-        # Process skills
-        for skill_data in ai_result.get("skills", []):
-            name = skill_data.get("name")
-            if not name:
-                continue
-            skill_record = self.skill_repo.get_skill_by_name(name)
-            if not skill_record:
-                skill_id = self.skill_repo.create_skill(name=name, category="extracted", aliases=[name])
-            else:
-                skill_id = skill_record['id']
-            self.repo.upsert_candidate_skill(candidate_id, skill_id, {
-                "level": skill_data.get("level", "beginner"),
-                "source": "resume",
-                "years_of_use": skill_data.get("years_of_use"),
-                "evidence": skill_data.get("evidence"),
-            })
+            candidate_id = self.repo.create_candidate(candidate_data, conn=conn, cur=cur)
+            self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI', conn=conn, cur=cur)
 
         # Store confidence signals
-        confidence_signals = ai_result.get("confidence_signals", [])
+        confidence_signals = ai_result.get("cs") or ai_result.get("confidence_signals", [])
         if confidence_signals:
             self.ai_score_repo.create_ai_score({
                 "entity_type": "candidate",
@@ -742,7 +952,7 @@ class CandidateService:
                 "score_type": "confidence_signals",
                 "score": 0,
                 "reasoning": json.dumps(confidence_signals),
-            })
+            }, conn=conn, cur=cur)
 
         return {"candidate_id": candidate_id, "parsed_data": ai_result}
 
@@ -793,6 +1003,16 @@ class CandidateService:
     def cancel_bulk_upload_job(self, job_id: int) -> bool:
         self.repo.cancel_bulk_upload_job(job_id)
         return True
+
+    def pause_bulk_upload_job(self, job_id: int) -> bool:
+        self.repo.pause_bulk_upload_job(job_id)
+        return True
+
+    def resume_bulk_upload_job(self, job_id: int) -> bool:
+        return self.repo.resume_bulk_upload_job(job_id)
+
+    def retry_failed_bulk_upload_job(self, job_id: int) -> bool:
+        return self.repo.retry_failed_bulk_upload_items(job_id)
 
     def get_global_activity(self, limit: int = 10) -> List[Dict[str, Any]]:
         return self.repo.get_global_activity(limit=limit)

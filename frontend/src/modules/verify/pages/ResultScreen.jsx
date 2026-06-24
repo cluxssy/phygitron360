@@ -32,8 +32,39 @@ export default function ResultScreen() {
     fetch(`/api/verify/submissions/results/${resultId}`)
       .then(r => r.json())
       .then(d => {
-        if (d.success) setResult(d.data);
-        else toast.error('Failed to load result');
+        if (d.success) {
+          const res = d.data;
+          
+          // Parse feedback JSON if it's a string
+          if (typeof res.feedback === 'string') {
+            try { res.feedback = JSON.parse(res.feedback); } catch(e) { res.feedback = {}; }
+          }
+          res.ai_summary = res.feedback?._ai_summary;
+          
+          // Parse scores_per_question into details array
+          if (typeof res.scores_per_question === 'string') {
+            try { res.scores_per_question = JSON.parse(res.scores_per_question); } catch(e) { res.scores_per_question = {}; }
+          }
+          
+          // Match details to questions array
+          const details = [];
+          if (res.assessment?.questions) {
+             res.assessment.questions.forEach(q => {
+               const scoreObj = (res.scores_per_question || {})[q.id];
+               if (scoreObj) {
+                 details.push({
+                   question_id: q.id,
+                   score_awarded: scoreObj.score,
+                   feedback: scoreObj.feedback,
+                   answer_provided: scoreObj.answer_provided
+                 });
+               }
+             });
+          }
+          res.details = details;
+          
+          setResult(res);
+        } else toast.error('Failed to load result');
       })
       .catch(() => toast.error('Error loading result'))
       .finally(() => setLoading(false));
@@ -76,7 +107,7 @@ export default function ResultScreen() {
   if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
   if (!result) return <div className="p-10 text-center text-gray-400">Result not found. It may still be grading or you lack permission.</div>;
 
-  const passed = result.total_score >= result.assessment.pass_score;
+  const passed = result.score >= result.assessment.pass_score;
   const malpractice = result.is_malpractice;
   
   const scoreColor = malpractice ? 'text-rose-600' : passed ? 'text-emerald-600' : 'text-amber-600';
@@ -119,7 +150,7 @@ export default function ResultScreen() {
 
           <div className="flex items-end gap-4 mb-2">
             <span className={`text-5xl font-bold leading-none ${scoreColor}`}>
-              {Math.round(result.total_score)}%
+              {Math.round(result.score || 0)}%
             </span>
             <span className="text-sm font-medium text-gray-400 mb-2">
               Required: {result.assessment.pass_score}%

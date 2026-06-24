@@ -4,6 +4,14 @@ import {
   Trash2, CheckCircle, Upload, FileText, UserPlus, 
   ShieldCheck, MapPin, GraduationCap, Phone, Plus, ArrowRight 
 } from 'lucide-react';
+import {
+  MAX_FILE_SIZE,
+  isAtLeastAge,
+  isBankAccount,
+  isPan,
+  isPincode,
+  validateFile,
+} from '../../../core/utils/validators';
 
 const COUNTRY_CODES = [
   { code: '+91', country: 'IN (+91)' },
@@ -80,13 +88,31 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
 
   const handleFileChange = (e) => {
     const { name, files: f } = e.target;
-    setFiles(prev => ({ ...prev, [name]: f[0] }));
+    const file = f[0];
+    if (!file) return;
+    const fileRules = {
+      photo_file: { exts: ['.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.image, label: 'Profile photo' },
+      cv_file: { exts: ['.pdf'], size: MAX_FILE_SIZE.resume, label: 'Resume/CV' },
+      id_proof_file: { exts: ['.pdf', '.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.document, label: 'ID proof' },
+    };
+    const rule = fileRules[name];
+    const error = rule ? validateFile(file, rule.exts, rule.size, rule.label) : '';
+    if (error) {
+      toast.error(error);
+      e.target.value = '';
+      return;
+    }
+    setFiles(prev => ({ ...prev, [name]: file }));
   };
 
   const validateStep = () => {
     if (step === 1) {
       if (!form.full_name || !form.dob || !form.contact_number || !emergencyName || !emergencyPhone || !form.bank_name || !form.bank_account_no || !form.pan_no) {
         toast.error("All personal, contact, and financial details are mandatory");
+        return false;
+      }
+      if (!isAtLeastAge(form.dob, 18)) {
+        toast.error("Date of Birth must confirm age 18 or above");
         return false;
       }
       
@@ -99,6 +125,14 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
         toast.error("Emergency Contact must be a valid number of digits (7-15 digits)");
         return false;
       }
+      if (!isBankAccount(form.bank_account_no)) {
+        toast.error("Bank account number must be 9-18 digits only");
+        return false;
+      }
+      if (!isPan(form.pan_no)) {
+        toast.error("PAN must follow ABCDE1234F format");
+        return false;
+      }
     }
 
     if (step === 2) {
@@ -106,11 +140,19 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
         toast.error("All address fields are mandatory");
         return false;
       }
+      if (!isPincode(form.pincode)) {
+        toast.error("Pincode must be a valid 6 digit Indian pincode");
+        return false;
+      }
     }
 
     if (step === 3) {
       if (educationList.some(e => !e.degree || !e.university || !e.cgpa || !e.year)) {
         toast.error("Complete all academic records. All fields are mandatory");
+        return false;
+      }
+      if (educationList.some(e => !/^\d{4}$/.test(String(e.year).trim()))) {
+        toast.error("Graduation year must be 4 digits, e.g. 2022");
         return false;
       }
     }
@@ -291,11 +333,13 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Account No. *</label>
-                  <input required name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="Account Number" />
+                  <input required name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="9-18 digits only" inputMode="numeric" />
+                  <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest ml-1">Digits only, usually 9-18 digits</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">PAN No. *</label>
                   <input required name="pan_no" value={form.pan_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="ABCDE1234F" style={{textTransform: 'uppercase'}} />
+                  <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest ml-1">Format: ABCDE1234F</p>
                 </div>
               </div>
 
@@ -346,7 +390,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Pincode *</label>
-                  <input required placeholder="e.g. 560001" value={form.pincode} onChange={e => setForm({...form, pincode: e.target.value})} className="w-full glass-panel-input"/>
+                  <input required placeholder="6 digits, e.g. 560001" value={form.pincode} onChange={e => setForm({...form, pincode: e.target.value})} className="w-full glass-panel-input" inputMode="numeric"/>
                 </div>
               </div>
             </div>

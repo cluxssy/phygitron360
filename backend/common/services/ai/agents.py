@@ -7,39 +7,42 @@ logger = logging.getLogger(__name__)
 
 # --- System Prompts ---
 
-PARSE_RESUME_SYSTEM = """You are a resume parsing AI. Extract structured data from the resume text.
-Respond ONLY with valid JSON.
-CRITICAL: For `confidence_signals`, rigorously check if mentioned skills are ACTUALLY used in the project descriptions or work history. If a skill is listed but not backed by project history, flag it as potentially fake.
-Return this exact structure:
+# Compressed system prompt — every word saves tokens across thousands of bulk requests.
+# Fields pre-extracted by regex (email, phone, github_url, linkedin_url, portfolio_url)
+# are injected into the user prompt as hints, so we omit them from the schema below
+# to further reduce output token count.
+PARSE_RESUME_SYSTEM = """Resume parser. You will receive multiple resumes enclosed in <resume id="X">...</resume> tags.
+Respond ONLY with compact valid JSON. Return a single JSON object where keys are the resume IDs, and values are the parsed data. No nulls (use "" or []).
+Schema:
 {
-  "name": "",
-  "email": "",
-  "phone": "",
-  "location": "",
-  "current_designation": "",
-  "current_company": "",
-  "linkedin_url": "",
-  "portfolio_url": "",
-  "experience_years_total": 0.0,
-  "expected_salary": "",
-  "notice_period": "",
-  "availability": "available|open_to_opportunities|not_available",
-  "ai_summary": "",
-  "experience": [{
-     "company": "",
-     "designation": "",
-     "start_date": "YYYY-MM or null",
-     "end_date": "YYYY-MM or null",
-     "is_current": false,
-     "description": ""
-  }],
-  "skills": [{"name": "", "normalized_name": "", "level": "beginner|intermediate|advanced|expert", "evidence": "", "years_of_use": 0}],
-  "education": [{"degree": "", "institution": "", "field_of_study": "", "start_date": "YYYY-MM", "end_date": "YYYY-MM"}],
-  "certifications": [{"name": "", "issuer": "", "year": 0}],
-  "languages": [{"name": "", "proficiency": "basic|conversational|fluent|native"}],
-  "achievements": [""],
-  "confidence_signals": [{"skill": "", "claimed_years": 0, "supported_years": 0, "flag": false, "reason": ""}]
-}"""
+  "X": {
+    "n": "Full Name",
+    "e": "Email",
+    "p": "Phone",
+    "l": "Location",
+    "d": "Current Designation",
+    "x": 0.0, // total years of experience
+    "ln": "LinkedIn URL",
+    "pt": "Portfolio URL",
+    "s": "AI Profile Summary", // Maximum 250 characters. No more.
+    "p_sk": ["Skill 1", "Skill 2", "Skill 3", "Skill 4"], // EXACTLY 4 main skills. No more, no less.
+    "s_sk": ["Skill 1", "Skill 2", "Skill 3", "Skill 4"], // EXACTLY 4 secondary skills. No more, no less. Cannot be empty.
+    "exp": [{"c": "Company Name", "r": "Role", "s": "Start Date YYYY-MM", "e": "End Date YYYY-MM"}], // Professional experience only. No other fields.
+    "edu": [{"d": "Degree Name", "c": "College Name", "s": "Start Date YYYY-MM", "e": "End Date YYYY-MM"}], // Education only. No other fields.
+    "cert": [{"n": "Certification Name", "i": "Issuer", "y": 2024}], // Certifications
+    "cs": ["Suspicious gap in 2020", "Frequent job hopping"] // Confidence signals or red flags (max 2 items)
+  }
+}
+Rules:
+1. "s" (AI Profile Summary) MUST be maximum 250 characters.
+2. "p_sk" MUST contain EXACTLY 4 primary skills. No more, no less.
+3. "s_sk" MUST contain EXACTLY 4 secondary skills. No more, no less.
+4. "exp" elements MUST ONLY contain keys "c", "r", "s", and "e". No descriptions or other keys.
+5. "edu" elements MUST ONLY contain keys "d", "c", "s", and "e". No field of study or other keys.
+6. "cs" MUST contain at most 2 critical red flags or confidence signals. Specifically check for and flag any skills listed in the resume that are NEVER mentioned or used in their work experience/projects. If none, return [].
+7. Copy pre-extracted fields verbatim if present.
+8. You MUST return a key for EVERY <resume id="X"> provided. Do NOT mix up candidate details.
+"""
 
 ROLE_FIT_SYSTEM = """You are an expert technical recruiter and talent assessment AI. Your goal is to rigorously score a candidate's fit for a specific job role based on their skills, experience, and background.
 Be highly objective and strict. A score of 90-100 means a flawless match across all required skills and experience levels. Penalize heavily for missing core required skills.
@@ -85,11 +88,29 @@ class AIAgents:
         self.ai = AIService()
 
     async def parse_resume(self, resume_text: str) -> Dict[str, Any]:
-        """Parse resume text with AI and store skills."""
-        return await self.ai.generate_json(
-            prompt=f"Parse this resume:\n\n{resume_text[:6000]}",
+        """Parse resume text with AI. Pre-extracts trivial fields locally to save tokens."""
+        pre = self.ai.pre_extract_resume(resume_text)
+        prompt = self.ai.build_bulk_prompt(resume_text, pre)
+        result = await self.ai.generate_json(
+            prompt=prompt,
             system_prompt=PARSE_RESUME_SYSTEM
         )
+        # Ensure pre-extracted fields are not lost if LLM skipped them
+        mapping = {
+            "email": "e",
+            "phone": "p",
+            "linkedin_url": "ln",
+            "portfolio_url": "pt",
+            "experience_years_total": "x"
+        }
+        for field, value in pre.items():
+            if value:
+                short_key = mapping.get(field)
+                if short_key and not result.get(short_key) and not result.get(field):
+                    result[short_key] = value
+                elif not short_key and not result.get(field):
+                    result[field] = value
+        return result
 
     async def score_role_fit(self, candidate_profile: Dict, job_role_profile: Dict) -> Dict[str, Any]:
         """Score a candidate's fit for a job role using full profiles for context."""

@@ -9,7 +9,7 @@ import {
   Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
   ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
   Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
-  Archive  // <-- Add this line
+  Archive
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -24,6 +24,11 @@ import logo from "../../../assets/phy360.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
+import {
+  MAX_FILE_SIZE,
+  isNonNegativeNumber,
+  validateFile,
+} from '../../../core/utils/validators';
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
@@ -250,24 +255,28 @@ export default function SourceDashboard() {
     }
   }, [currentTab, fetchActivities]);
 
+  const fetchActiveJob = useCallback(async () => {
+    try {
+      const r = await fetch('/api/source/candidates/bulk-upload/active');
+      if (r.ok) {
+        const d = await r.json();
+        if (d.success && d.data && d.data.job) {
+          setBulkJobId(d.data.job.id);
+          setBulkJobProgress(d.data);
+        } else if (d.success && !d.data) {
+          setBulkJobId(null);
+          setBulkJobProgress(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch active bulk upload job', err);
+    }
+  }, []);
+
   // Resume tracking an active bulk upload job if we refresh the page
   useEffect(() => {
-    const fetchActiveJob = async () => {
-      try {
-        const r = await fetch('/api/source/candidates/bulk-upload/active');
-        if (r.ok) {
-          const d = await r.json();
-          if (d.success && d.data && d.data.job) {
-            setBulkJobId(d.data.job.id);
-            setBulkJobProgress(d.data);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch active bulk upload job', err);
-      }
-    };
     fetchActiveJob();
-  }, []);
+  }, [fetchActiveJob]);
 
   // Poll bulk upload progress
   useEffect(() => {
@@ -283,6 +292,14 @@ export default function SourceDashboard() {
             .filter(s => s.status !== 'pending' && s.status !== 'processing')
             .reduce((acc, curr) => acc + curr.count, 0);
           const job = d.data.job;
+
+          if (job && (job.status === 'cancelled' || job.status === 'failed')) {
+             setBulkJobId(null);
+             setBulkJobProgress(null);
+             fetchCandidates();
+             return;
+          }
+
           if (job && job.total_files > 0 && totalProcessed >= job.total_files) {
              setBulkJobId(null);
              toast.success('Bulk processing complete');
@@ -347,12 +364,18 @@ export default function SourceDashboard() {
     const validExtensions = ['.pdf', '.doc', '.docx', '.txt', '.zip'];
     let validCount = 0;
     for (let i = 0; i < files.length; i++) {
-        const name = files[i].name.toLowerCase();
-        if (validExtensions.some(ext => name.endsWith(ext))) {
-            const cleanFile = new File([files[i]], files[i].name, { type: files[i].type });
-            fd.append('files', cleanFile);
-            validCount++;
+        const file = files[i];
+        const isZip = file.name.toLowerCase().endsWith('.zip');
+        const error = validateFile(file, validExtensions, isZip ? MAX_FILE_SIZE.archive : MAX_FILE_SIZE.resume, file.name);
+        if (error) {
+            toast.error(error);
+            setUploading(false);
+            if (e.target) e.target.value = '';
+            return;
         }
+        const cleanFile = new File([file], file.name, { type: file.type });
+        fd.append('files', cleanFile);
+        validCount++;
     }
     if (validCount === 0) {
         toast.error('No supported files found (PDF, DOCX, TXT, ZIP)');
@@ -422,9 +445,65 @@ export default function SourceDashboard() {
     }
   };
 
+  const handlePauseQueue = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/pause`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (r.ok) {
+        toast.success('Queue paused successfully');
+        fetchActiveJob();
+      } else {
+        toast.error('Failed to pause queue');
+      }
+    } catch {
+      toast.error('Error pausing queue');
+    }
+  };
+
+  const handleResumeQueue = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/resume`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (r.ok) {
+        toast.success('Queue resumed successfully');
+        fetchActiveJob();
+      } else {
+        toast.error('Failed to resume queue');
+      }
+    } catch {
+      toast.error('Error resuming queue');
+    }
+  };
+
+  const handleRetryFailed = async () => {
+    if (!bulkJobId) return;
+    try {
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/retry-failed`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (r.ok) {
+        toast.success('Failed items queued for retry');
+        fetchActiveJob();
+      } else {
+        toast.error('Failed to retry items');
+      }
+    } catch {
+      toast.error('Error retrying items');
+    }
+  };
+
   // ── Create / Edit job role ────────────────────────────────────────────────────────
   const handleSaveRole = async (e) => {
     e.preventDefault();
+    if (!newRole.title.trim()) return toast.error('Role title is required');
+    if (!isNonNegativeNumber(newRole.min_experience)) return toast.error('Minimum experience must be 0 or greater');
     const isEdit = !!newRole.id;
     const url = isEdit ? `/api/source/job-roles/${newRole.id}` : '/api/source/job-roles';
     const method = isEdit ? 'PUT' : 'POST';
@@ -480,6 +559,9 @@ export default function SourceDashboard() {
   const handleInvite = async (e) => {
     e.preventDefault();
     if (!inviteForm.role_id) return toast.error('Select a role');
+    if (inviteForm.templateType === 'custom' && (!inviteForm.subject.trim() || !inviteForm.custom_body.trim())) {
+      return toast.error('Custom invite requires both subject and email body');
+    }
     const ids = [...selectedIds];
     
     const payload = {
@@ -1029,80 +1111,153 @@ export default function SourceDashboard() {
         </div>
       ) : currentTab === 'upload' ? (
         <div className="flex-1 flex items-center justify-center flex-col gap-6">
-            <div className="bg-white w-full max-w-xl rounded-2xl p-8 border border-gray-200 shadow-sm relative">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <Upload size={24} className="text-purple-600"/> Resume Processing Center
-              </h2>
-              <div 
-                className={`border-2 border-dashed rounded-xl p-12 text-center transition-all group flex flex-col items-center ${
-                  isDragging ? 'border-purple-400 bg-purple-50' : 'border-gray-300 bg-gray-50 hover:border-purple-400 hover:bg-purple-50/50'
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <input type="file" ref={fileRef} onChange={handleUpload} className="hidden" accept=".pdf,.doc,.docx,.txt,.zip" multiple />
-                <input type="file" ref={folderRef} onChange={handleUpload} className="hidden" webkitdirectory="true" directory="true" />
-                <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform cursor-pointer" onClick={() => !uploading && fileRef.current.click()}>
-                  {uploading ? <Loader2 size={28} className="text-purple-600 animate-spin" /> : <Upload size={28} className="text-purple-600" />}
-                </div>
-                <p className="text-gray-800 font-semibold text-base mb-2">{uploading ? 'Queueing Files...' : 'Select files or an entire folder'}</p>
-                <p className="text-sm text-gray-500">Supported formats: PDF, DOCX, TXT, ZIP</p>
-                <div className="flex gap-4 mt-6">
-                  <button disabled={uploading} onClick={() => !uploading && fileRef.current.click()} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium text-gray-700 transition-colors">
-                    Select Files
-                  </button>
-                  <button disabled={uploading} onClick={() => !uploading && folderRef.current.click()} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium text-gray-700 transition-colors">
-                    Select Folder
-                  </button>
-                </div>
+          <div className="bg-white w-full max-w-xl rounded-2xl p-8 border border-gray-200 shadow-sm relative">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <Upload size={24} className="text-purple-600"/> Resume Processing Center
+            </h2>
+            
+            {/* Upload Area - Click anywhere to upload files/folders */}
+            <div 
+              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all group flex flex-col items-center cursor-pointer ${
+                isDragging ? 'border-purple-400 bg-purple-50' : 'border-gray-300 bg-gray-50 hover:border-purple-400 hover:bg-purple-50/50'
+              }`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => !uploading && fileRef.current?.click()}
+            >
+              {/* Hidden file inputs - supports files and folders */}
+              <input 
+                type="file" 
+                ref={fileRef} 
+                onChange={handleUpload} 
+                className="hidden" 
+                accept=".pdf,.doc,.docx,.txt,.zip" 
+                multiple 
+              />
+              <input 
+                type="file" 
+                ref={folderRef} 
+                onChange={handleUpload} 
+                className="hidden" 
+                webkitdirectory="true" 
+                directory="true" 
+                multiple 
+              />
+              
+              {/* Upload Icon - Clickable */}
+              <div className="w-20 h-20 rounded-full bg-purple-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform cursor-pointer">
+                {uploading ? (
+                  <Loader2 size={32} className="text-purple-600 animate-spin" />
+                ) : (
+                  <Upload size={32} className="text-purple-600" />
+                )}
+              </div>
+              
+              <p className="text-gray-800 font-semibold text-base mb-2">
+                {uploading ? 'Queueing Files...' : 'Click to upload or drag & drop'}
+              </p>
+              <p className="text-sm text-gray-500">Supported: PDF, DOCX, TXT, ZIP · Upload files or entire folders</p>
+              
+              {/* Hidden hint - click the icon or the box */}
+              <div className="mt-4 flex items-center gap-6 text-xs text-gray-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-400"></span> Single files
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-400"></span> Entire folders
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-400"></span> ZIP archives
+                </span>
               </div>
             </div>
-            
-            {bulkJobId && (
-              <div className="bg-white w-full max-w-xl rounded-2xl p-6 border border-purple-200 shadow-sm relative overflow-hidden">
-                 <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
-                    {bulkJobProgress?.job?.total_files > 0 && (
-                      <div 
-                        className="h-full bg-purple-600 transition-all duration-500" 
-                        style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
-                      ></div>
+          </div>
+          
+          {/* Bulk Upload Progress */}
+          {bulkJobId && (
+            <div className="bg-white w-full max-w-xl rounded-2xl p-6 border border-purple-200 shadow-sm relative overflow-hidden">
+               <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
+                  {bulkJobProgress?.job?.total_files > 0 && (
+                    <div 
+                      className={`h-full transition-all duration-500 ${
+                        bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+                      }`} 
+                      style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+                    ></div>
+                  )}
+               </div>
+               <div className="flex justify-between items-center mb-4 mt-1">
+                 <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    {bulkJobProgress?.job?.status === 'paused' ? (
+                      <>
+                        <Pause size={14} className="text-amber-500" /> Queue Paused
+                      </>
+                    ) : (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
+                      </>
                     )}
-                 </div>
-                 <div className="flex justify-between items-center mb-4 mt-1">
-                   <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
-                   </h3>
-                   {bulkJobProgress?.job?.total_files > 0 && (
-                     <span className="text-sm font-semibold text-purple-600">
-                       {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
-                     </span>
-                   )}
-                 </div>
-                 <div className="flex flex-wrap gap-3">
-                    {bulkJobProgress?.items_stats?.map(st => (
-                       <div key={st.status} className="bg-gray-50 px-4 py-2 rounded-lg text-sm border border-gray-100 flex items-center">
-                          <div className={`w-2 h-2 rounded-full mr-2 ${
-                            st.status === 'success' ? 'bg-emerald-500' : 
-                            st.status === 'failed' ? 'bg-rose-500' : 
-                            st.status === 'pending' ? 'bg-gray-300' : 'bg-amber-500'
-                          }`}></div>
-                          <span className="text-gray-500 font-medium mr-2">{st.status}:</span>
-                          <span className="text-gray-800 font-semibold">{st.count}</span>
-                       </div>
-                    ))}
-                 </div>
-                 <div className="flex justify-between items-center mt-6">
-                   <p className="text-xs text-gray-500">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
-                   <div className="flex gap-4 items-center">
-                     <p className="text-xs text-gray-500">Runs in background</p>
-                     <button onClick={handleCancelQueue} className="px-4 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
-                       Cancel Queue
+                 </h3>
+                 {bulkJobProgress?.job?.total_files > 0 && (
+                   <span className={`text-sm font-semibold ${
+                     bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+                   }`}>
+                     {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+                   </span>
+                 )}
+               </div>
+               {(() => {
+                  const failedCount = bulkJobProgress?.items_stats?.find(s => s.status === 'failed')?.count || 0;
+                  if (failedCount > 0) {
+                    return (
+                      <div className="flex items-center gap-3 mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                        <span className="text-red-400 font-medium">
+                          {failedCount} file(s) failed
+                        </span>
+                        <button
+                          onClick={handleRetryFailed}
+                          className="px-3 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded-md text-sm font-medium transition-colors"
+                        >
+                          Retry Failed
+                        </button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+               <div className="flex flex-wrap gap-3">
+                  {bulkJobProgress?.items_stats?.map(st => (
+                     <div key={st.status} className="bg-gray-50 px-4 py-2 rounded-lg text-sm border border-gray-100 flex items-center">
+                        <div className={`w-2 h-2 rounded-full mr-2 ${
+                          st.status === 'success' ? 'bg-emerald-500' : 
+                          st.status === 'failed' ? 'bg-rose-500' : 
+                          st.status === 'pending' ? 'bg-gray-300' : 'bg-amber-500'
+                        }`}></div>
+                        <span className="text-gray-500 font-medium mr-2">{st.status}:</span>
+                        <span className="text-gray-800 font-semibold">{st.count}</span>
+                     </div>
+                  ))}
+               </div>
+               <div className="flex justify-between items-center mt-6">
+                 <p className="text-xs text-gray-500">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
+                 <div className="flex gap-3 items-center">
+                   {bulkJobProgress?.job?.status === 'paused' ? (
+                     <button onClick={handleResumeQueue} className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                       <Play size={12} /> Resume
                      </button>
-                   </div>
+                   ) : (
+                     <button onClick={handlePauseQueue} className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                       <Pause size={12} /> Pause
+                     </button>
+                   )}
+                   <button onClick={handleCancelQueue} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
+                     Cancel Queue
+                   </button>
                  </div>
-              </div>
-            )}
+               </div>
+            </div>
+          )}
         </div>
       ) : currentTab === 'offers' ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
