@@ -550,51 +550,49 @@ class CandidateService:
                             clean_fn = name.split("/")[-1]
                             file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
                             
-                            # Stream from zip to disk to prevent memory spike
-                            with z.open(name) as source, open(file_path, "wb") as target:
-                                shutil.copyfileobj(source, target)
-                                
-                            # Calculate hash from disk
+                            # Stream from zip to disk AND calculate hash simultaneously to avoid reading back from EFS
                             hasher = hashlib.sha256()
-                            with open(file_path, "rb") as f:
-                                for chunk in iter(lambda: f.read(4096), b""):
+                            with z.open(name) as source, open(file_path, "wb") as target:
+                                while True:
+                                    chunk = source.read(8192)
+                                    if not chunk:
+                                        break
+                                    target.write(chunk)
                                     hasher.update(chunk)
                             file_hash = hasher.hexdigest()
-
-                            # Extract text at upload time — no AI needed yet
-                            ext = os.path.splitext(clean_fn)[1].lower()
-                            extracted_text = self._extract_text(file_path, ext)
 
                             queue_items.append({
                                 "filename": clean_fn,
                                 "file_path": file_path,
                                 "file_hash": file_hash,
-                                "extracted_text": extracted_text if extracted_text else "",
+                                "extracted_text": "", # Deferred to parallel workers
                             })
                             total_files += 1
                 except Exception as zip_err:
+                    import logging
+                    logger = logging.getLogger(__name__)
                     logger.error(f"Failed to extract zip file {fn}: {zip_err}")
             else:
                 if not fn.lower().endswith(allowed_exts):
                     continue
                 clean_fn = fn.split("/")[-1]
                 file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
-                shutil.copyfile(file_path_source, file_path)
                 
                 hasher = hashlib.sha256()
-                with open(file_path, "rb") as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
+                with open(file_path_source, "rb") as source, open(file_path, "wb") as target:
+                    while True:
+                        chunk = source.read(8192)
+                        if not chunk:
+                            break
+                        target.write(chunk)
                         hasher.update(chunk)
                 file_hash = hasher.hexdigest()
-
-                ext = os.path.splitext(clean_fn)[1].lower()
-                extracted_text = self._extract_text(file_path, ext)
 
                 queue_items.append({
                     "filename": clean_fn,
                     "file_path": file_path,
                     "file_hash": file_hash,
-                    "extracted_text": extracted_text if extracted_text else "",
+                    "extracted_text": "", # Deferred to parallel workers
                 })
                 total_files += 1
                 
