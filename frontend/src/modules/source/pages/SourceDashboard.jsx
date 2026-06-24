@@ -189,6 +189,7 @@ export default function SourceDashboard() {
 
   // Form states
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
@@ -1149,7 +1150,18 @@ export default function SourceDashboard() {
               {/* Upload Icon - Clickable */}
               <div className="w-20 h-20 rounded-full bg-purple-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform cursor-pointer">
                 {uploading ? (
-                  <Loader2 size={32} className="text-purple-600 animate-spin" />
+                  <div className="relative flex items-center justify-center w-14 h-14">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" fill="none" stroke="#E9D5FF" strokeWidth="10" />
+                      <circle 
+                        cx="50" cy="50" r="40" fill="none" stroke="#9333EA" strokeWidth="10" 
+                        strokeDasharray="251.2" 
+                        strokeDashoffset={251.2 - (251.2 * (uploadProgress || 1)) / 100}
+                        strokeLinecap="round"
+                        className="transition-all duration-300 ease-out"
+                      />
+                    </svg>
+                  </div>
                 ) : (
                   <Upload size={32} className="text-purple-600" />
                 )}
