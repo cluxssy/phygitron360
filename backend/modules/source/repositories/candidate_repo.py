@@ -1,5 +1,8 @@
 import json
+import logging
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
@@ -418,6 +421,16 @@ class CandidateRepository:
                 params.append(limit)
 
                 if role_id:
+                    count_sql = f"""
+                        SELECT COUNT(*) as total
+                        FROM candidates c
+                        LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s
+                        {where_clause}
+                    """
+                    count_params = [role_id] + params[:-1]
+                    cur.execute(count_sql, tuple(count_params))
+                    total_count = cur.fetchone()['total']
+
                     sql = f"""
                         SELECT c.*, ca.status as job_status
                         FROM candidates c
@@ -428,6 +441,15 @@ class CandidateRepository:
                     """
                     params.insert(0, role_id)
                 else:
+                    count_sql = f"""
+                        SELECT COUNT(*) as total
+                        FROM candidates c
+                        {where_clause}
+                    """
+                    count_params = params[:-1]
+                    cur.execute(count_sql, tuple(count_params))
+                    total_count = cur.fetchone()['total']
+
                     sql = f"""
                         SELECT c.*, c.status as job_status
                         FROM candidates c
@@ -435,7 +457,7 @@ class CandidateRepository:
                         {order_clause}
                         LIMIT %s
                     """
-                cur.execute(sql, params)
+                cur.execute(sql, tuple(params))
                 
                 # Normalize job_status to status so frontend works seamlessly
                 results = []
@@ -443,7 +465,7 @@ class CandidateRepository:
                     row = dict(r)
                     row['status'] = row.get('job_status') or row['status']
                     results.append(row)
-                return results
+                return results, total_count
         finally:
             conn.close()
 
@@ -667,6 +689,7 @@ class CandidateRepository:
                     (job_id,)
                 )
                 conn.commit()
+                return True
         finally:
             conn.close()
 
@@ -680,6 +703,7 @@ class CandidateRepository:
                     (job_id,)
                 )
                 conn.commit()
+                return True
         finally:
             conn.close()
 
@@ -725,7 +749,7 @@ class CandidateRepository:
                     # Reset job state back to processing
                     cur.execute(
                         """UPDATE bulk_upload_jobs
-                           SET status = 'processing', failed_files = 0, updated_at = CURRENT_TIMESTAMP
+                           SET status = 'processing', updated_at = CURRENT_TIMESTAMP
                            WHERE id = %s""",
                         (job_id,)
                     )
@@ -755,6 +779,7 @@ class CandidateRepository:
                     WHERE id = %s
                 """, (job_id,))
             conn.commit()
+            return True
         except Exception as e:
             conn.rollback()
             raise e

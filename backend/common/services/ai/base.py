@@ -277,8 +277,8 @@ class AIService:
         for item in items:
             known = ", ".join(f"{k}={v!r}" for k, v in item.get("pre", {}).items() if v)
             hint = f"\n[PRE-EXTRACTED]: {known}" if known else ""
-            # Strongly truncate to 4000 characters to prevent context overflow in a batch of 10
-            text = item.get("text", "")[:4000]
+            # Truncate to 15000 characters to ensure we capture Education/Certifications at the bottom
+            text = item.get("text", "")[:15000]
             parts.append(f'<resume id="{item["id"]}">{hint}\n{text}\n</resume>')
         return "\n".join(parts)
 

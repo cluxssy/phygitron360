@@ -142,7 +142,7 @@ class CandidateService:
             self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI')
 
         # 6. Process Confidence Signals
-        confidence_signals = ai_result.get("confidence_signals", [])
+        confidence_signals = ai_result.get("cs") or ai_result.get("confidence_signals", [])
         if confidence_signals:
             import json
             self.ai_score_repo.create_ai_score({
@@ -399,8 +399,8 @@ class CandidateService:
         sort_by: str = "newest",
         role_id: Optional[int] = None,
         limit: int = 20
-    ) -> List[Dict[str, Any]]:
-        candidates = self.repo.search_candidates(
+    ) -> tuple[List[Dict[str, Any]], int]:
+        candidates, total_count = self.repo.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
             search=search, sort_by=sort_by, limit=limit, role_id=role_id
         )
@@ -441,7 +441,7 @@ class CandidateService:
         if sort_by == "fit_score":
             candidates.sort(key=lambda c: c.get("fit_score", 0), reverse=True)
 
-        return candidates
+        return candidates, total_count
 
     def get_active_candidates(self) -> List[Dict[str, Any]]:
         rows = self.repo.get_active_candidates()
