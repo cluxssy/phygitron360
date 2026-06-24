@@ -523,11 +523,11 @@ class CandidateService:
         self.repo.log_activity(candidate_id, actor_name, 'profile_updated', 'Profile details manually updated')
         return True
 
-    def _sync_process_files(self, job_id: int, files_data: List[tuple], job_dir: str):
+    def _sync_process_files(self, job_id: int, files_data: List[tuple], job_dir: str, temp_dir: str = None):
         """Heavy I/O and CPU bound file extraction and hashing runs synchronously in a background thread."""
         allowed_exts = (".pdf", ".docx", ".doc", ".txt")
         import zipfile
-        import io
+        import shutil
         import hashlib
         import os
         import uuid
@@ -537,22 +537,29 @@ class CandidateService:
         queue_items = []
         total_files = 0
 
-        for fn, content in files_data:
+        for fn, file_path_source in files_data:
             if fn.lower().endswith(".zip"):
                 try:
-                    with zipfile.ZipFile(io.BytesIO(content)) as z:
+                    with zipfile.ZipFile(file_path_source) as z:
                         for name in z.namelist():
                             if name.endswith("/") or name.split("/")[-1].startswith(".") or "__MACOSX" in name:
                                 continue
                             if not name.lower().endswith(allowed_exts):
                                 continue
 
-                            file_bytes = z.read(name)
                             clean_fn = name.split("/")[-1]
-                            file_hash = hashlib.sha256(file_bytes).hexdigest()
                             file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
-                            with open(file_path, "wb") as f:
-                                f.write(file_bytes)
+                            
+                            # Stream from zip to disk to prevent memory spike
+                            with z.open(name) as source, open(file_path, "wb") as target:
+                                shutil.copyfileobj(source, target)
+                                
+                            # Calculate hash from disk
+                            hasher = hashlib.sha256()
+                            with open(file_path, "rb") as f:
+                                for chunk in iter(lambda: f.read(4096), b""):
+                                    hasher.update(chunk)
+                            file_hash = hasher.hexdigest()
 
                             # Extract text at upload time — no AI needed yet
                             ext = os.path.splitext(clean_fn)[1].lower()
@@ -571,10 +578,14 @@ class CandidateService:
                 if not fn.lower().endswith(allowed_exts):
                     continue
                 clean_fn = fn.split("/")[-1]
-                file_hash = hashlib.sha256(content).hexdigest()
                 file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
-                with open(file_path, "wb") as f:
-                    f.write(content)
+                shutil.copyfile(file_path_source, file_path)
+                
+                hasher = hashlib.sha256()
+                with open(file_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        hasher.update(chunk)
+                file_hash = hasher.hexdigest()
 
                 ext = os.path.splitext(clean_fn)[1].lower()
                 extracted_text = self._extract_text(file_path, ext)
@@ -586,6 +597,10 @@ class CandidateService:
                     "extracted_text": extracted_text if extracted_text else "",
                 })
                 total_files += 1
+                
+        # Cleanup temporary directory created by API endpoint
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         self.repo.update_bulk_upload_job(job_id, 0, "[]", "processing")
 
@@ -601,8 +616,8 @@ class CandidateService:
             finally:
                 conn.close()
 
-    async def bulk_upload_resumes(self, files: List[tuple], user_id: int) -> Dict[str, Any]:
-        """files is a list of tuples: (filename, content_bytes).
+    async def bulk_upload_resumes(self, files: List[tuple], user_id: int, temp_dir: str = None) -> Dict[str, Any]:
+        """files is a list of tuples: (filename, file_path_source).
         Phase 1: Spin up background thread to extract text immediately at upload time, save to disk, batch-insert queue items.
         Phase 2: parallel workers pick up items and call AI asynchronously.
         """
@@ -619,7 +634,8 @@ class CandidateService:
             self._sync_process_files,
             job_id,
             files,
-            job_dir
+            job_dir,
+            temp_dir
         )
 
         return {
@@ -681,14 +697,15 @@ class CandidateService:
                             for i in range(0, len(items), 5):
                                 sub_batch = items[i:i+5]
                                 
-                                # Check if job is paused (so we don't keep parsing in-memory items)
+                                # Check if job is paused or cancelled (so we don't keep parsing in-memory items)
                                 if sub_batch and sub_batch[0].get("job_id"):
                                     cur.execute("SELECT status FROM bulk_upload_jobs WHERE id = %s", (sub_batch[0]["job_id"],))
                                     job_row = cur.fetchone()
-                                    if job_row and job_row[0] == 'paused':
-                                        print(f"[Worker-{worker_id}][{self.tenant_id}] Job paused. Returning {len(items)-i} items to pending.", flush=True)
+                                    if job_row and job_row[0] in ('paused', 'cancelled'):
+                                        status_to_set = 'pending' if job_row[0] == 'paused' else 'cancelled'
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] Job {job_row[0]}. Returning {len(items)-i} items to {status_to_set}.", flush=True)
                                         for item in items[i:]:
-                                            self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None, conn=conn, cur=cur)
+                                            self.repo.update_bulk_upload_job_item(item["id"], status=status_to_set, error_message=None, conn=conn, cur=cur)
                                         conn.commit()
                                         break
                                 

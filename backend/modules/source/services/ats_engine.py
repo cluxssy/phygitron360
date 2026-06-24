@@ -162,7 +162,11 @@ def calculate_role_fit(
             similarity = _skill_similarity(req_name, cand["name"])
             if similarity <= 0:
                 continue
-            level_ratio = min(LEVEL_WEIGHTS[cand["level"]] / req_weight, 1.0)
+            # Soften the penalty if candidate has lower level than required
+            raw_ratio = LEVEL_WEIGHTS[cand["level"]] / req_weight
+            level_ratio = min(raw_ratio ** 0.5, 1.0)
+            
+            # Points awarded
             points = req_weight * similarity * level_ratio
             if points > best_points:
                 best = cand
@@ -182,10 +186,15 @@ def calculate_role_fit(
                 "required_level": req_level,
             })
 
-    score = (earned / total_weight * 100.0) if total_weight else 0.0
+    raw_score = (earned / total_weight * 100.0) if total_weight else 0.0
+    
+    # Boost the score with a gentle curve (so 64% raw becomes 80%, 81% raw becomes 90%)
+    score = (raw_score ** 0.5) * 10
+    
     if min_exp and exp_years < min_exp:
+        # Soften experience penalty too
         exp_ratio = max(exp_years, 0) / max(min_exp, 1)
-        score *= 0.75 + (0.25 * exp_ratio)
+        score *= 0.85 + (0.15 * exp_ratio)
 
     return {
         "score": round(min(score, 100.0), 1),

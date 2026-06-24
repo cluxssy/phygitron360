@@ -130,16 +130,29 @@ async def bulk_upload_resumes(
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Process multiple resume files at once. Returns a job ID to track progress."""
+    import tempfile
+    import shutil
+    import os
+    
     files_data = []
-    for f in files:
-        files_data.append((f.filename, await f.read()))
-        
-    result = await service.bulk_upload_resumes(files_data, user.get("id"))
-    return {
-        "success": True,
-        "data": result,
-        "message": result.get("message", "Bulk upload queued.")
-    }
+    temp_dir = tempfile.mkdtemp(prefix="bulk_upload_")
+    
+    try:
+        for f in files:
+            temp_path = os.path.join(temp_dir, f.filename)
+            with open(temp_path, "wb") as buffer:
+                shutil.copyfileobj(f.file, buffer)
+            files_data.append((f.filename, temp_path))
+            
+        result = await service.bulk_upload_resumes(files_data, user.get("id"), temp_dir)
+        return {
+            "success": True,
+            "data": result,
+            "message": result.get("message", "Bulk upload queued.")
+        }
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise e
 
 @router.get("/bulk-upload/active")
 async def get_active_bulk_upload(

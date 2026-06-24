@@ -92,7 +92,7 @@ async def create_job_role(
 
 
 @router.put("/job-roles/{role_id}")
-def update_job_role(
+async def update_job_role(
     role_id: int,
     body: JobRoleUpdate,
     service: JobService = Depends(get_job_service),
@@ -105,11 +105,11 @@ def update_job_role(
         updates["description"] = body.description
     if body.required_skills is not None:
         import json
-        updates["required_skills"] = json.dumps(body.required_skills)
+        updates["required_skills"] = body.required_skills
     if body.min_experience is not None:
         updates["min_experience"] = body.min_experience
 
-    updated = service.update_job_role(role_id, updates)
+    updated = await service.update_job_role(role_id, updates)
     if not updated:
         raise HTTPException(status_code=404, detail="Job role not found")
 
