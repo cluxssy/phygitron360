@@ -348,7 +348,6 @@ class AIService:
                     print(f"Gemini async failed: {err}")
                     raise RuntimeError(err) from None
             return self._mock_json_response(prompt)
-
         return {}
 
     # ------------------------------------------------------------------
