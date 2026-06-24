@@ -59,6 +59,22 @@ variable "google_api_key" {
   default     = ""
 }
 
+variable "gemini_api_keys" {
+  description = "Comma-separated list of Gemini API Keys for pooling"
+  sensitive   = true
+  default     = ""
+}
+
+variable "gemini_rpm_limit" {
+  description = "RPM limit per Gemini key"
+  default     = "13"
+}
+
+variable "gemini_model" {
+  description = "Gemini Model"
+  default     = "gemini-3.1-flash-lite"
+}
+
 variable "openai_api_key" {
   description = "OpenAI API Key"
   sensitive   = true

@@ -593,7 +593,6 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     </div>
                   ))}
                 </section>
-
                 {/* Assessment Results */}
                 {(loadingAssessments || assessmentResults.length > 0) && (
                   <section>
