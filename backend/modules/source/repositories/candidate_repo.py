@@ -766,11 +766,15 @@ class CandidateRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                # Mark pending and processing items as cancelled
+                # Mark pending and processing items as cancelled, skipping any locked by active workers
                 cur.execute("""
                     UPDATE bulk_upload_job_items 
                     SET status = 'cancelled' 
-                    WHERE job_id = %s AND status IN ('pending', 'processing')
+                    WHERE id IN (
+                        SELECT id FROM bulk_upload_job_items 
+                        WHERE job_id = %s AND status IN ('pending', 'processing')
+                        FOR UPDATE SKIP LOCKED
+                    )
                 """, (job_id,))
                 # Mark job as cancelled
                 cur.execute("""

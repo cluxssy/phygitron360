@@ -42,7 +42,34 @@ class JobService:
         data["required_skills"] = required_skills or []
         return self.repo.create_job_role(data)
 
-    def update_job_role(self, role_id: int, updates: Dict[str, Any]) -> bool:
+    async def update_job_role(self, role_id: int, updates: Dict[str, Any]) -> bool:
+        if "description" in updates and "required_skills" not in updates:
+            desc = updates["description"]
+            # Fetch existing title if not in updates
+            title = updates.get("title")
+            if not title:
+                existing = self.repo.get_job_role_by_id(role_id)
+                title = existing.get("title", "") if existing else ""
+                
+            try:
+                if hasattr(self.ai_agents, "extract_jd_skills"):
+                    required_skills = await self.ai_agents.extract_jd_skills(desc)
+                else:
+                    from backend.modules.source.services.ats_engine import normalise_required_skills
+                    required_skills = normalise_required_skills(None, title=title, description=desc)
+                updates["required_skills"] = required_skills or []
+            except Exception as exc:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"AI skill extraction failed (non-fatal): {exc}")
+                from backend.modules.source.services.ats_engine import normalise_required_skills
+                updates["required_skills"] = normalise_required_skills(None, title=title, description=desc) or []
+                
+        # The database repository expects a JSON string for the required_skills JSONB column
+        if "required_skills" in updates and isinstance(updates["required_skills"], list):
+            import json
+            updates["required_skills"] = json.dumps(updates["required_skills"])
+            
         return self.repo.update_job_role(role_id, updates)
 
     def delete_job_role(self, role_id: int) -> bool:
