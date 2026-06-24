@@ -251,11 +251,11 @@ def search_candidates(
 ):
     """Advanced candidate search with optional ATS scoring against a job role."""
     try:
-        results = service.search_candidates(
+        results, total_count = service.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
             search=search, sort_by=sort_by, role_id=role_id, limit=limit
         )
-        return {"success": True, "data": results, "count": len(results)}
+        return {"success": True, "data": results, "count": len(results), "total_count": total_count}
     except Exception as exc:
         logger.error(f"search_candidates failed: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))

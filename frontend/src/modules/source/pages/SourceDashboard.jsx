@@ -158,6 +158,7 @@ export default function SourceDashboard() {
   }
 
   const [candidates, setCandidates] = useState([]);
+  const [totalCandidates, setTotalCandidates] = useState(0);
   const [jobRoles, setJobRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(initFilters);
@@ -228,6 +229,7 @@ export default function SourceDashboard() {
       const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
       const d = await r.json();
       setCandidates(d.data || []);
+      setTotalCandidates(d.total_count ?? (d.data || []).length);
     } catch {
       toast.error('Failed to load candidates');
     } finally {
@@ -366,7 +368,7 @@ export default function SourceDashboard() {
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const isZip = file.name.toLowerCase().endsWith('.zip');
-        const error = validateFile(file, validExtensions, isZip ? MAX_FILE_SIZE.archive : MAX_FILE_SIZE.resume, file.name);
+        const error = validateFile(file, validExtensions, null , file.name);
         if (error) {
             toast.error(error);
             setUploading(false);
@@ -660,7 +662,6 @@ export default function SourceDashboard() {
   const setTab = (tab) => navigate(`/source?tab=${tab}`);
 
   // Calculate stats for home dashboard
-  const totalCandidates = candidates.length;
   const favouriteCount = candidates.filter(c => c.status?.toLowerCase() === 'favourite').length;
   const invitedCount = candidates.filter(c => c.status?.toLowerCase() === 'invited').length;
   const archivedCount = candidates.filter(c => c.status?.toLowerCase() === 'archived').length;
