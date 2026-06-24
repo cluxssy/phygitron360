@@ -366,7 +366,7 @@ export default function SourceDashboard() {
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const isZip = file.name.toLowerCase().endsWith('.zip');
-        const error = validateFile(file, validExtensions, isZip ? MAX_FILE_SIZE.archive : MAX_FILE_SIZE.resume, file.name);
+        const error = validateFile(file, validExtensions, null , file.name);
         if (error) {
             toast.error(error);
             setUploading(false);
