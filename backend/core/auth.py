@@ -37,61 +37,74 @@ def _normalize_roles(roles: list) -> list:
     return list({_normalize_role(r) for r in roles if r})
 
 
-def _resolve_permissions(user_id: int, roles: list, tenant_id: str) -> dict:
+def _resolve_permissions(user_id: int, roles: list, tenant_id: str, cur=None) -> dict:
     """
     Aggregates permissions from role_permissions table then applies
     user-level overrides from user_permissions. Returns {key: True} dict.
     """
-    conn = get_db_connection()
+    own_conn = False
+    if cur is None:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        own_conn = True
+        
     try:
         all_perms: set = set()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(f'SET search_path TO "{tenant_id}"')
+        cur.execute(f'SET search_path TO "{tenant_id}"')
 
-            # 1. Role-based permissions
-            for role in roles:
-                cur.execute(
-                    "SELECT permission FROM role_permissions WHERE role = %s AND is_allowed = 1",
-                    (role,)
-                )
-                for row in cur.fetchall():
-                    all_perms.add(row["permission"])
-
-            # 2. User-specific overrides (add or revoke)
+        # 1. Role-based permissions
+        for role in roles:
             cur.execute(
-                "SELECT permission, is_allowed FROM user_permissions WHERE user_id = %s",
-                (user_id,)
+                "SELECT permission FROM role_permissions WHERE role = %s AND is_allowed = 1",
+                (role,)
             )
             for row in cur.fetchall():
-                if row["is_allowed"]:
-                    all_perms.add(row["permission"])
-                else:
-                    all_perms.discard(row["permission"])
+                all_perms.add(row["permission"])
+
+        # 2. User-specific overrides (add or revoke)
+        cur.execute(
+            "SELECT permission, is_allowed FROM user_permissions WHERE user_id = %s",
+            (user_id,)
+        )
+        for row in cur.fetchall():
+            if row["is_allowed"]:
+                all_perms.add(row["permission"])
+            else:
+                all_perms.discard(row["permission"])
 
         return {p: True for p in all_perms}
     except Exception:
         return {}
     finally:
-        conn.close()
+        if own_conn:
+            cur.close()
+            conn.close()
 
 
-def _resolve_tenant_modules(tenant_id: str) -> list:
+def _resolve_tenant_modules(tenant_id: str, cur=None) -> list:
     """Returns the list of enabled modules for the given tenant."""
     if tenant_id == "public":
         return ["source", "forge", "verify", "deploy"]
-    conn = get_db_connection()
+        
+    own_conn = False
+    if cur is None:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        own_conn = True
+        
     try:
-        with conn.cursor() as cur:
-            cur.execute("SET search_path TO public")
-            cur.execute("SELECT modules_enabled FROM tenants WHERE id = %s", (tenant_id,))
-            row = cur.fetchone()
-            if row and row[0]:
-                return row[0]
+        cur.execute("SET search_path TO public")
+        cur.execute("SELECT modules_enabled FROM tenants WHERE id = %s", (tenant_id,))
+        row = cur.fetchone()
+        if row and row.get("modules_enabled"):
+            return row["modules_enabled"]
         return ["source", "forge", "verify", "deploy"]
     except Exception:
         return ["source", "forge", "verify", "deploy"]
     finally:
-        conn.close()
+        if own_conn:
+            cur.close()
+            conn.close()
 
 
 def get_current_user(request: Request) -> dict:
@@ -149,6 +162,30 @@ def get_current_user(request: Request) -> dict:
                 (user_id,)
             )
             user_row = cur.fetchone()
+            
+            if not user_row:
+                raise HTTPException(status_code=401, detail="User not found.")
+
+            if not user_row.get("is_active", 1):
+                raise HTTPException(status_code=403, detail="Account is deactivated.")
+
+            raw_roles  = user_row.get("roles") or [user_row.get("role")]
+            norm_roles = _normalize_roles(raw_roles)
+
+            permissions    = _resolve_permissions(user_id, norm_roles, tenant_id, cur)
+            modules_enabled = _resolve_tenant_modules(tenant_id, cur)
+            
+            # Fetch tenant company name
+            company_name = tenant_id
+            try:
+                cur.execute("SET search_path TO public")
+                cur.execute("SELECT company_name FROM tenants WHERE id = %s", (tenant_id,))
+                row2 = cur.fetchone()
+                if row2:
+                    company_name = row2.get("company_name", tenant_id)
+            except Exception:
+                pass
+                
     except HTTPException:
         raise
     except Exception as exc:
@@ -156,18 +193,6 @@ def get_current_user(request: Request) -> dict:
     finally:
         conn.close()
 
-    if not user_row:
-        raise HTTPException(status_code=401, detail="User not found.")
-
-    if not user_row.get("is_active", 1):
-        raise HTTPException(status_code=403, detail="Account is deactivated.")
-
-    raw_roles  = user_row.get("roles") or [user_row.get("role")]
-    norm_roles = _normalize_roles(raw_roles)
-
-    permissions    = _resolve_permissions(user_id, norm_roles, tenant_id)
-    modules_enabled = _resolve_tenant_modules(tenant_id)
-    
     # SECURITY FIX: Tenant-level contractual restrictions must override seeded role permissions.
     # If the database granted 'module.forge.access' to org_admin but the tenant doesn't
     # have 'forge' enabled, we strip the access right entirely from the session.
@@ -176,20 +201,6 @@ def get_current_user(request: Request) -> dict:
         perm_key = f"module.{mod}.access"
         if perm_key in permissions and mod not in modules_lower:
             del permissions[perm_key]
-
-    # Fetch tenant company name
-    company_name = tenant_id
-    try:
-        conn2 = get_db_connection()
-        with conn2.cursor() as cur2:
-            cur2.execute("SET search_path TO public")
-            cur2.execute("SELECT company_name FROM tenants WHERE id = %s", (tenant_id,))
-            row2 = cur2.fetchone()
-            if row2:
-                company_name = row2[0]
-        conn2.close()
-    except Exception:
-        pass
 
     return {
         "id":             user_row["id"],

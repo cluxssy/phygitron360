@@ -1,5 +1,6 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor, register_default_jsonb
+from psycopg2.pool import ThreadedConnectionPool
 import json
 import os
 from dotenv import load_dotenv
@@ -23,16 +24,50 @@ DB_NAME = os.getenv("DB_NAME", "hrms_db")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
+_pool = None
+
+def get_db_pool():
+    global _pool
+    if _pool is None:
+        _pool = ThreadedConnectionPool(
+            minconn=2,
+            maxconn=10,
+            host=DB_HOST,
+            port=DB_PORT,
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD
+        )
+    return _pool
+
+class PooledConnectionWrapper:
+    """Wraps a psycopg2 connection to override close() so it returns to the pool."""
+    def __init__(self, conn, pool):
+        self._conn = conn
+        self._pool = pool
+        self._closed = False
+        
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+        
+    def close(self):
+        if not self._closed:
+            self._pool.putconn(self._conn)
+            self._closed = True
+            
+    def __enter__(self):
+        self._conn.__enter__()
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._conn.__exit__(exc_type, exc_val, exc_tb)
+        self.close()
+
 def get_db_connection():
-    """Returns a connection to the PostgreSQL database."""
-    conn = psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
-    return conn
+    """Returns a connection from the ThreadedConnectionPool."""
+    pool = get_db_pool()
+    conn = pool.getconn()
+    return PooledConnectionWrapper(conn, pool)
 
 def create_tables(schema_name='public'):
     """Initializes the database schema for PostgreSQL."""
@@ -72,6 +107,8 @@ def create_tables(schema_name='public'):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token)")
 
             # --- Lead Generation / Demo Requests ---
             cur.execute('''

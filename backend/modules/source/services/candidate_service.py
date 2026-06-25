@@ -553,8 +553,43 @@ class CandidateService:
         import logging
         logger = logging.getLogger(__name__)
 
+        self.repo.update_bulk_upload_job(job_id, 0, "[]", "extracting")
+
         queue_items = []
         total_files = 0
+        BATCH_SIZE = 50
+        has_flushed_once = False
+
+        def flush_batch():
+            nonlocal queue_items, has_flushed_once, total_files
+            if not queue_items and has_flushed_once:
+                return
+
+            if queue_items:
+                self.repo.create_bulk_upload_job_items(job_id, queue_items)
+            
+            status_to_set = "processing" if not has_flushed_once else None
+            has_flushed_once = True
+
+            from backend.core.database import get_db_connection
+            conn = get_db_connection()
+            try:
+                with conn.cursor() as cur:
+                    self.repo._set_search_path(cur)
+                    if status_to_set:
+                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s, status = %s WHERE id = %s", (total_files, status_to_set, job_id))
+                    else:
+                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s WHERE id = %s", (total_files, job_id))
+                    conn.commit()
+            finally:
+                conn.close()
+            
+            queue_items.clear()
+            
+            # Yield the GIL so the FastAPI event loop thread has a chance to send the HTTP response
+            # to the frontend. Without this, a tight unzipping loop can starve the event loop.
+            import time
+            time.sleep(0.01)
 
         for fn, file_path_source in files_data:
             if fn.lower().endswith(".zip"):
@@ -587,6 +622,10 @@ class CandidateService:
                                 "extracted_text": "", # Deferred to parallel workers
                             })
                             total_files += 1
+
+                            if len(queue_items) >= BATCH_SIZE:
+                                flush_batch()
+
                 except Exception as zip_err:
                     import logging
                     logger = logging.getLogger(__name__)
@@ -614,46 +653,59 @@ class CandidateService:
                     "extracted_text": "", # Deferred to parallel workers
                 })
                 total_files += 1
+
+                if len(queue_items) >= BATCH_SIZE:
+                    flush_batch()
                 
+        # Flush any remaining items at the end
+        flush_batch()
+
         # Cleanup temporary directory created by API endpoint
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        self.repo.update_bulk_upload_job(job_id, 0, "[]", "processing")
-
-        if queue_items:
-            self.repo.create_bulk_upload_job_items(job_id, queue_items)
-            from backend.core.database import get_db_connection
-            conn = get_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    self.repo._set_search_path(cur)
-                    cur.execute("UPDATE bulk_upload_jobs SET total_files = %s WHERE id = %s", (total_files, job_id))
-                    conn.commit()
-            finally:
-                conn.close()
+        # Safety catch-all to ensure job is marked processing even if there were 0 files
+        from backend.core.database import get_db_connection
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self.repo._set_search_path(cur)
+                cur.execute("UPDATE bulk_upload_jobs SET status = 'processing' WHERE id = %s AND status = 'extracting'", (job_id,))
+                conn.commit()
+        finally:
+            conn.close()
 
     async def bulk_upload_resumes(self, files: List[tuple], user_id: int, temp_dir: str = None) -> Dict[str, Any]:
         """files is a list of tuples: (filename, file_path_source).
         Phase 1: Spin up background thread to extract text immediately at upload time, save to disk, batch-insert queue items.
         Phase 2: parallel workers pick up items and call AI asynchronously.
+        
+        IMPORTANT: We use a DEDICATED ThreadPoolExecutor (not the shared default pool) for the
+        extraction task. The shared pool (asyncio default) can be fully consumed by the 8 AI parse
+        workers' run_in_executor calls. If extraction queues into the same pool, it will block
+        indefinitely - preventing the HTTP response from returning and the UI from spawning.
         """
         import asyncio
+        from concurrent.futures import ThreadPoolExecutor
 
         job_id = self.repo.create_bulk_upload_job(user_id, 0)
         job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
         os.makedirs(job_dir, exist_ok=True)
 
-        loop = asyncio.get_event_loop()
-        # Fire and forget the extraction task on a background thread
+        loop = asyncio.get_running_loop()
+        # Use a dedicated 1-thread executor so extraction is NEVER blocked by AI workers
+        # occupying all slots of the shared default pool.
+        extraction_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"extraction_job_{job_id}")
         loop.run_in_executor(
-            None,
+            extraction_executor,
             self._sync_process_files,
             job_id,
             files,
             job_dir,
             temp_dir
         )
+        # Detach the executor - it will self-destruct once the thread finishes
+        extraction_executor.shutdown(wait=False)
 
         return {
             "job_id": job_id,
@@ -674,7 +726,7 @@ class CandidateService:
         import asyncio
         import re
 
-        num_workers = int(os.getenv("BULK_PARSE_WORKERS", "2"))
+        num_workers = int(os.getenv("BULK_PARSE_WORKERS", "8"))
         logger.info(f"[BulkWorker] Starting {num_workers} parallel AI parse workers for tenant {self.tenant_id}")
 
         # Per-job cancel registry: job_id -> asyncio.Event
