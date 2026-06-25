@@ -286,7 +286,8 @@ export default function SourceDashboard() {
   // Poll bulk upload progress
   useEffect(() => {
     if (!bulkJobId) return;
-    const interval = setInterval(async () => {
+
+    const fetchProgress = async () => {
       try {
         const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`);
         const d = await r.json();
@@ -298,23 +299,23 @@ export default function SourceDashboard() {
             .reduce((acc, curr) => acc + curr.count, 0);
           const job = d.data.job;
 
-          if (job && (job.status === 'cancelled' || job.status === 'failed')) {
+          if (job && (job.status === 'cancelled' || job.status === 'failed' || (job.total_files > 0 && totalProcessed >= job.total_files))) {
              setBulkJobId(null);
+             if (job.status === 'completed' || (job.total_files > 0 && totalProcessed >= job.total_files)) {
+                 toast.success('Bulk processing complete');
+                 fetchCandidates();
+             }
              setBulkJobProgress(null);
-             fetchCandidates();
              return;
-          }
-
-          if (job && job.total_files > 0 && totalProcessed >= job.total_files) {
-             setBulkJobId(null);
-             toast.success('Bulk processing complete');
-             fetchCandidates();
           }
         }
       } catch (err) {
         console.error('Polling error', err);
       }
-    }, 3000);
+    };
+
+    fetchProgress();
+    const interval = setInterval(fetchProgress, 3000);
     return () => clearInterval(interval);
   }, [bulkJobId, fetchCandidates]);
 

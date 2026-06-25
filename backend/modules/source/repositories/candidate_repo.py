@@ -643,7 +643,7 @@ class CandidateRepository:
                 cur.execute(
                     """SELECT i.* FROM bulk_upload_job_items i
                        JOIN bulk_upload_jobs j ON i.job_id = j.id
-                       WHERE i.status = 'pending' AND j.status IN ('processing', 'pending')
+                       WHERE i.status = 'pending' AND j.status IN ('processing', 'pending', 'extracting')
                        ORDER BY i.created_at ASC
                        LIMIT %s FOR UPDATE SKIP LOCKED""",
                     (limit,)
@@ -669,8 +669,8 @@ class CandidateRepository:
                 cur.execute(
                     """SELECT j.* 
                        FROM bulk_upload_jobs j
-                       JOIN bulk_upload_job_items i ON j.id = i.job_id
-                       WHERE i.status IN ('pending', 'processing')
+                       LEFT JOIN bulk_upload_job_items i ON j.id = i.job_id
+                       WHERE i.status IN ('pending', 'processing') OR j.status = 'extracting'
                        ORDER BY j.created_at DESC
                        LIMIT 1"""
                 )
