@@ -150,12 +150,7 @@ def score_all_candidates_for_role(self, role_id: int, tenant_id: str):
         raise self.retry(exc=exc, countdown=30)
 
 
-@celery_app.task(name="score_new_candidate_for_all_roles", bind=True, max_retries=3)
-def score_new_candidate_for_all_roles(self, candidate_id: int, tenant_id: str):
-    """
-    Score a single newly uploaded candidate against ALL active job roles in the tenant.
-    Triggered automatically when a new resume is parsed and saved.
-    """
+def _run_score_new_candidate_for_all_roles(candidate_id: int, tenant_id: str):
     from backend.core.database import get_db_connection
     from psycopg2.extras import RealDictCursor
 
@@ -226,8 +221,19 @@ def score_new_candidate_for_all_roles(self, candidate_id: int, tenant_id: str):
             return {"status": "complete", "scored_roles": scored}
 
     except Exception as exc:
-        logger.error(f"[ATS] Failed scoring new candidate {candidate_id}: {exc}")
         conn.rollback()
-        raise self.retry(exc=exc, countdown=10)
+        raise exc
     finally:
         conn.close()
+
+@celery_app.task(name="score_new_candidate_for_all_roles", bind=True, max_retries=3)
+def score_new_candidate_for_all_roles(self, candidate_id: int, tenant_id: str):
+    """
+    Score a single newly uploaded candidate against ALL active job roles in the tenant.
+    Triggered automatically when a new resume is parsed and saved.
+    """
+    try:
+        return _run_score_new_candidate_for_all_roles(candidate_id, tenant_id)
+    except Exception as exc:
+        logger.error(f"[ATS] Candidate scoring failed for {candidate_id}: {exc}")
+        raise self.retry(exc=exc, countdown=30)

@@ -807,7 +807,9 @@ class CandidateService:
                                     extracted_text = item.get("extracted_text") or ""
                                     if not extracted_text and item.get("file_path") and os.path.exists(item["file_path"]):
                                         ext = os.path.splitext(item["filename"])[1].lower()
-                                        extracted_text = self._extract_text(item["file_path"], ext)
+                                        extracted_text = await loop.run_in_executor(
+                                            None, self._extract_text, item["file_path"], ext
+                                        )
 
                                     if not extracted_text.strip():
                                         self.repo.update_bulk_upload_job_item(
@@ -1030,8 +1032,18 @@ class CandidateService:
             self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI', conn=conn, cur=cur)
             # Fire background task to score new candidate against ALL active job roles
             try:
-                from backend.modules.source.services.ats_tasks import score_new_candidate_for_all_roles
-                score_new_candidate_for_all_roles.delay(candidate_id, self.tenant_id)
+                import os
+                from backend.modules.source.services.ats_tasks import score_new_candidate_for_all_roles, _run_score_new_candidate_for_all_roles
+                
+                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+                if "localhost" in redis_url:
+                    import asyncio
+                    # Run purely in background thread to avoid 10s Celery/Redis connection timeout
+                    asyncio.get_running_loop().run_in_executor(
+                        None, _run_score_new_candidate_for_all_roles, candidate_id, self.tenant_id
+                    )
+                else:
+                    score_new_candidate_for_all_roles.delay(candidate_id, self.tenant_id)
             except Exception as _ats_err:
                 logger.warning(f"[ATS] Failed to queue scoring for new candidate {candidate_id}: {_ats_err}")
 
