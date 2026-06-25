@@ -190,19 +190,19 @@ export default function OfferApprovals() {
           <select 
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white uppercase tracking-wider outline-none focus:border-primary/40 transition-colors"
+            className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-black uppercase tracking-wider outline-none focus:border-purple-400 transition-colors"
           >
-            <option className="bg-black text-white" value="pending">Pending Review</option>
-            <option className="bg-black text-white" value="changes_requested">Changes Requested</option>
-            <option className="bg-black text-white" value="approved">Approved</option>
-            <option className="bg-black text-white" value="sent">Sent</option>
-            <option className="bg-black text-white" value="rejected">Rejected</option>
-            <option className="bg-black text-white" value="all">All Offers</option>
+            <option className="bg-white text-black" value="pending">Pending Review</option>
+            <option className="bg-white text-black" value="changes_requested">Changes Requested</option>
+            <option className="bg-white text-black" value="approved">Approved</option>
+            <option className="bg-white text-black" value="sent">Sent</option>
+            <option className="bg-white text-black" value="rejected">Rejected</option>
+            <option className="bg-white text-black" value="all">All Offers</option>
           </select>
 
           <button
             onClick={fetchOffers}
-            className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-colors duration-150"
+            className="p-3.5 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors duration-150"
           >
             <RefreshCw size={16} />
           </button>

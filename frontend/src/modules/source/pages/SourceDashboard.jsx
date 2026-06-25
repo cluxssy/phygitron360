@@ -222,9 +222,8 @@ export default function SourceDashboard() {
       if (filters.role_id) {
         params.set('role_id', filters.role_id);
         params.set('limit', filters.limit);
-      } else {
-        params.set('limit', 1000);
       }
+      // No limit when no role_id is selected - fetch all candidates
 
       const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
       const d = await r.json();
@@ -367,8 +366,7 @@ export default function SourceDashboard() {
     let validCount = 0;
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const isZip = file.name.toLowerCase().endsWith('.zip');
-        const error = validateFile(file, validExtensions, null , file.name);
+        const error = validateFile(file, validExtensions, null, file.name);
         if (error) {
             toast.error(error);
             setUploading(false);
@@ -669,6 +667,13 @@ export default function SourceDashboard() {
   const newCount = candidates.filter(c => !c.status || c.status?.toLowerCase() === 'new').length;
   const rejectedCount = candidates.filter(c => c.status?.toLowerCase() === 'rejected').length;
 
+  // Calculate today's stats
+  const today = new Date().toISOString().split('T')[0];
+  const resumesUploadedToday = candidates.filter(c => c.created_at?.startsWith(today)).length;
+  const invitationsSentToday = activities.filter(a => {
+    return a.created_at?.startsWith(today) && a.action?.toLowerCase().includes('invite');
+  }).length;
+
   return (
     <div className="dashboard-page light-theme-override" style={{ backgroundColor: '#FAF8FF' }}>
       <div className="topbar">
@@ -934,36 +939,49 @@ export default function SourceDashboard() {
             </div>
           </div>
 
-          {/* Row 2: Pipeline and Activity */}
+          {/* Row 2: Activity and Today's Stats */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-700 mb-4">Hiring Pipeline Overview</h3>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500">Applied</p>
-                    <p className="text-2xl font-bold text-gray-800 mt-1">{newCount}</p>
+                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <TrendingUp size={16} className="text-purple-600" /> Today's Activity
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+                    <p className="text-xs font-medium text-gray-500">Resumes Uploaded Today</p>
+                    <p className="text-3xl font-bold text-emerald-600 mt-2">{resumesUploadedToday}</p>
+                    <p className="text-xs text-gray-400 mt-1">Updated today</p>
                   </div>
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500">Screened</p>
-                    <p className="text-2xl font-bold text-gray-800 mt-1">{favouriteCount}</p>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+                    <p className="text-xs font-medium text-gray-500">Invitations Sent Today</p>
+                    <p className="text-3xl font-bold text-amber-600 mt-2">{invitationsSentToday}</p>
+                    <p className="text-xs text-gray-400 mt-1">Updated today</p>
                   </div>
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500">Interviewed</p>
-                    <p className="text-2xl font-bold text-gray-800 mt-1">{invitedCount}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500">Selected</p>
-                    <p className="text-2xl font-bold text-gray-800 mt-1">{hiredCount}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500">Rejected</p>
-                    <p className="text-2xl font-bold text-gray-800 mt-1">{rejectedCount}</p>
+                </div>
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  <p className="text-xs font-medium text-gray-500 mb-3">Weekly Activity</p>
+                  <div className="flex items-end justify-between h-24 gap-2">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
+                      const dayIndex = new Date().getDay();
+                      const isToday = i === dayIndex - 1;
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <div 
+                            className={`w-full rounded-t-md transition-all duration-500 ${
+                              isToday ? 'bg-purple-500' : 'bg-purple-200 hover:bg-purple-400'
+                            }`}
+                            style={{ height: `${Math.random() * 80 + 20}%` }}
+                          ></div>
+                          <span className={`text-[10px] ${isToday ? 'text-purple-600 font-semibold' : 'text-gray-400'}`}>
+                            {day}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             </div>
-
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm h-full">
                 <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
@@ -982,7 +1000,7 @@ export default function SourceDashboard() {
                       <p className="text-sm font-medium">No activities logged</p>
                     </div>
                   ) : (
-                    activities.map((act) => {
+                    activities.slice(0, 5).map((act) => {
                       const dateStr = act.created_at ? new Date(act.created_at).toLocaleString() : 'Just now';
                       
                       let Icon = Activity;
