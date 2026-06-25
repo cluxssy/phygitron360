@@ -30,19 +30,41 @@ class CandidateService:
         """
         Orchestrates resume upload, text extraction, AI parsing, and database saving.
         """
-        # 1. Save File
-        file_id = str(uuid.uuid4())
-        ext = os.path.splitext(filename)[1].lower()
-        save_filename = f"{file_id}{ext}"
-        file_path = os.path.join(self.UPLOAD_DIR, save_filename)
-        
-        with open(file_path, "wb") as buffer:
-            buffer.write(file_content)
+        import tempfile
+        from backend.common.services.storage_service import save_file_content
+        import mimetypes
 
-        # 2. Extract Text
-        extracted_text = self._extract_text(file_path, ext)
-        if not extracted_text.strip():
-            raise ValueError("Could not extract any text from the file.")
+        # 1. Save to Temporary File for Text Extraction
+        ext = os.path.splitext(filename)[1].lower()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(file_content)
+            tmp_path = tmp.name
+
+        try:
+            # 2. Extract Text
+            extracted_text = self._extract_text(tmp_path, ext)
+            if not extracted_text.strip():
+                raise ValueError("Could not extract any text from the file.")
+        finally:
+            import os
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+        # 3. Save File Permanently (S3 or Local)
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        file_id = str(uuid.uuid4())
+        save_filename = f"{file_id}{ext}"
+        
+        final_file_path = save_file_content(
+            content=file_content,
+            filename=save_filename,
+            content_type=content_type,
+            tenant_id=self.tenant_id,
+            module_name="source",
+            data_type="resumes"
+        ) or tmp_path
+
+
 
         # 3. Parse with AI Engine (Using advanced AIAgents)
         ai_result = await self.ai_agents.parse_resume(extracted_text)
@@ -117,7 +139,7 @@ class CandidateService:
             "portfolio_url": ai_result.get("pt") or ai_result.get("portfolio_url"),
             "ai_summary": ai_result.get("s") or ai_result.get("ai_summary"),
             "certifications": certifications,
-            "resume_path": file_path,
+            "resume_path": final_file_path,
             "source": "AI Resume Parse",
             "status": "New",
             "primary_skills": primary_skills,
@@ -158,6 +180,7 @@ class CandidateService:
             "candidate_id": candidate_id,
             "parsed_data": ai_result
         }
+
 
     def _extract_text(self, file_path: str, ext: str) -> str:
         """Extract plain text from a resume file. Always returns a clean string safe for DB storage."""
@@ -762,9 +785,10 @@ class CandidateService:
                     conn = get_db_connection()
                     try:
                         with conn.cursor() as cur:
-                            # Chunk items into sub-batches of 5 for AI prompting to prevent API timeouts
-                            for i in range(0, len(items), 5):
-                                sub_batch = items[i:i+5]
+                            # Chunk items into sub-batches of 25 for AI prompting to prevent API timeouts
+                            # (Fetches 50 from queue, sends to AI in 2 chunks of 25)
+                            for i in range(0, len(items), 25):
+                                sub_batch = items[i:i+25]
                                 
                                 # Check if job is paused or cancelled (so we don't keep parsing in-memory items)
                                 if sub_batch and sub_batch[0].get("job_id"):
@@ -942,6 +966,7 @@ class CandidateService:
 
     async def _save_ai_parsed_candidate(self, ai_result: Dict[str, Any], file_path: str, file_content: bytes, conn=None, cur=None) -> Dict[str, Any]:
         """Save AI-parsed resume data to the database. Extracted from process_and_save_resume for reuse by bulk workers."""
+        import uuid
         email = ai_result.get("e") or ai_result.get("email")
         if not email:
             email = f"unknown_{uuid.uuid4().hex[:8]}@phygitron.local"
@@ -953,10 +978,18 @@ class CandidateService:
         secondary_skills = ai_result.get("s_sk") or ai_result.get("secondary_skills") or []
         if not primary_skills and ai_result.get("skills"):
             skills_raw = ai_result.get("skills") or []
-            primary_skills = [s.get("name") if isinstance(s, dict) else s for s in skills_raw]
+            if isinstance(skills_raw, list):
+                primary_skills = [s.get("name") if isinstance(s, dict) else str(s) for s in skills_raw]
+            elif isinstance(skills_raw, str):
+                primary_skills = [s.strip() for s in skills_raw.split(",")]
+            else:
+                primary_skills = []
 
         # Map experience from restructured format
         raw_experience = ai_result.get("exp") or ai_result.get("experience") or []
+        if not isinstance(raw_experience, list):
+            raw_experience = []
+            
         experience = []
         for exp in raw_experience:
             if isinstance(exp, dict):
@@ -973,6 +1006,9 @@ class CandidateService:
 
         # Map education from restructured format
         raw_education = ai_result.get("edu") or ai_result.get("education") or []
+        if not isinstance(raw_education, list):
+            raw_education = []
+            
         education = []
         for edu in raw_education:
             if isinstance(edu, dict):
@@ -988,6 +1024,9 @@ class CandidateService:
 
         # Map certifications from restructured format
         raw_certifications = ai_result.get("cert") or ai_result.get("certifications") or []
+        if not isinstance(raw_certifications, list):
+            raw_certifications = []
+            
         certifications = []
         for cert in raw_certifications:
             if isinstance(cert, dict):
@@ -998,6 +1037,28 @@ class CandidateService:
                 })
             else:
                 certifications.append(cert)
+
+        from backend.common.services.storage_service import save_file_content
+        import os
+        
+        # We need the file content to save it
+        actual_content = file_content
+        if not actual_content and file_path and os.path.exists(file_path):
+            with open(file_path, "rb") as f:
+                actual_content = f.read()
+                
+        final_path = file_path
+        if actual_content:
+            ext = os.path.splitext(file_path)[1].lower() if file_path else ".bin"
+            filename = f"{uuid.uuid4()}{ext}"
+            final_path = save_file_content(
+                content=actual_content,
+                filename=filename,
+                content_type="application/octet-stream",
+                tenant_id=self.tenant_id,
+                module_name="source",
+                data_type="resumes"
+            ) or file_path
 
         candidate_data = {
             "full_name": name or "Unknown Candidate",
@@ -1010,7 +1071,7 @@ class CandidateService:
             "portfolio_url": ai_result.get("pt") or ai_result.get("portfolio_url"),
             "ai_summary": ai_result.get("s") or ai_result.get("ai_summary"),
             "certifications": certifications,
-            "resume_path": file_path,
+            "resume_path": final_path,
             "source": "AI Resume Parse",
             "status": "New",
             "primary_skills": primary_skills,

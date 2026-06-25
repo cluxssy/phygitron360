@@ -392,6 +392,14 @@ export default function SourceDashboard() {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/source/candidates/bulk-upload');
         xhr.withCredentials = true;
+        
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            setUploadProgress(percentComplete);
+          }
+        };
+
         xhr.onload = () => {
           try {
             const d = JSON.parse(xhr.responseText);
@@ -1259,35 +1267,46 @@ export default function SourceDashboard() {
           {/* Bulk Upload Progress */}
           {bulkJobId && (
             <div className="bg-white w-full max-w-xl rounded-2xl p-6 border border-purple-200 shadow-sm relative overflow-hidden">
-               <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
-                  {bulkJobProgress?.job?.total_files > 0 && (
-                    <div 
-                      className={`h-full transition-all duration-500 ${
-                        bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
-                      }`} 
-                      style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
-                    ></div>
-                  )}
-               </div>
-               <div className="flex justify-between items-center mb-4 mt-1">
-                 <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    {bulkJobProgress?.job?.status === 'paused' ? (
-                      <>
-                        <Pause size={14} className="text-amber-500" /> Queue Paused
-                      </>
-                    ) : (
-                      <>
-                        <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
-                      </>
-                    )}
-                 </h3>
-                 {bulkJobProgress?.job?.total_files > 0 && (
-                   <span className={`text-sm font-semibold ${
-                     bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
-                   }`}>
-                     {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
-                   </span>
-                 )}
+           <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
+              {bulkJobProgress?.job?.status === 'extracting' ? (
+                // Indeterminate animated bar during the extracting phase
+                <div className="h-full bg-purple-400 animate-pulse" style={{ width: '100%' }} />
+              ) : bulkJobProgress?.job?.total_files > 0 ? (
+                <div 
+                  className={`h-full transition-all duration-500 ${
+                    bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+                  }`} 
+                  style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+                ></div>
+              ) : null}
+           </div>
+           <div className="flex justify-between items-center mb-4 mt-1">
+             <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                {bulkJobProgress?.job?.status === 'paused' ? (
+                  <>
+                    <Pause size={14} className="text-amber-500" /> Queue Paused
+                  </>
+                ) : bulkJobProgress?.job?.status === 'extracting' ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin text-purple-600" /> Scanning &amp; Queueing Files...
+                  </>
+                ) : (
+                  <>
+                    <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
+                  </>
+                )}
+             </h3>
+             {bulkJobProgress?.job?.status === 'extracting' ? (
+               <span className="text-sm font-semibold text-purple-600">
+                 {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : 'Scanning...'}
+               </span>
+             ) : bulkJobProgress?.job?.total_files > 0 ? (
+               <span className={`text-sm font-semibold ${
+                 bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+               }`}>
+                 {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+               </span>
+             ) : null}
                </div>
                {(() => {
                   const failedCount = bulkJobProgress?.items_stats?.find(s => s.status === 'failed')?.count || 0;

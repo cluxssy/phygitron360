@@ -71,9 +71,10 @@ def complete_onboarding(
 ):
     temp_id = token
     
-    p_path = save_uploaded_file(photo_file, 'temp_onboarding', temp_id, 'pfp') if photo_file else ''
-    c_path = save_uploaded_file(cv_file, 'temp_onboarding', temp_id, 'cv') if cv_file else ''
-    i_path = save_uploaded_file(id_proof_file, 'temp_onboarding', temp_id, 'id') if id_proof_file else ''
+    # For unauthenticated completion, files go to a public temp directory until approved
+    p_path = save_uploaded_file(photo_file, 'public', 'deploy', 'temp_onboarding', temp_id, 'pfp') if photo_file else ''
+    c_path = save_uploaded_file(cv_file, 'public', 'deploy', 'temp_onboarding', temp_id, 'cv') if cv_file else ''
+    i_path = save_uploaded_file(id_proof_file, 'public', 'deploy', 'temp_onboarding', temp_id, 'id') if id_proof_file else ''
     
     emp_data = {
         "contact_number": contact_number,
@@ -133,9 +134,9 @@ def onboard_admin(
     tenant_id = current_user['tenant_id']
     username = current_user['username']
     
-    p_path = save_uploaded_file(photo_file, 'admin_onboarding', str(user_id), 'pfp') if photo_file else ''
-    c_path = save_uploaded_file(cv_file, 'admin_onboarding', str(user_id), 'cv') if cv_file else ''
-    i_path = save_uploaded_file(id_proof_file, 'admin_onboarding', str(user_id), 'id') if id_proof_file else ''
+    p_path = save_uploaded_file(photo_file, tenant_id, 'deploy', 'pfp', str(user_id), 'pfp') if photo_file else ''
+    c_path = save_uploaded_file(cv_file, tenant_id, 'deploy', 'resume', str(user_id), 'cv') if cv_file else ''
+    i_path = save_uploaded_file(id_proof_file, tenant_id, 'deploy', 'identification_docs', str(user_id), 'id') if id_proof_file else ''
     
     file_metadata = {
         "photo": p_path,
