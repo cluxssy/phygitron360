@@ -229,6 +229,7 @@ export default function SourceDashboard() {
         // Fetch a large number of candidates for the global directory view
         params.set('limit', 5000);
       }
+      // No limit when no role_id is selected - fetch all candidates
 
       const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
       const d = await r.json();
