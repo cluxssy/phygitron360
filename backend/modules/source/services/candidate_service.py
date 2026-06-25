@@ -824,6 +824,11 @@ class CandidateService:
                                         )
                                         print(f"[Worker-{worker_id}][{self.tenant_id}] SKIPPED item {item['id']} ({item['filename']}): Duplicate file hash.", flush=True)
                                         cur.execute("RELEASE SAVEPOINT check_item")
+                                        
+                                        # Cleanup duplicated file
+                                        if item.get("file_path") and os.path.exists(item["file_path"]):
+                                            try: os.remove(item["file_path"])
+                                            except Exception: pass
                                         continue
                                     cur.execute("RELEASE SAVEPOINT check_item")
                                     
@@ -931,6 +936,12 @@ class CandidateService:
                                         )
                                         print(f"[Worker-{worker_id}][{self.tenant_id}] SUCCESS item {item['id']} → candidate {result['candidate_id']}", flush=True)
                                         cur.execute("RELEASE SAVEPOINT item_insert")
+                                        
+                                        # Cleanup successfully processed file
+                                        if item.get("file_path") and os.path.exists(item["file_path"]):
+                                            try: os.remove(item["file_path"])
+                                            except Exception: pass
+                                            
                                     except Exception as e:
                                         cur.execute("ROLLBACK TO SAVEPOINT item_insert")
                                         err_str = str(e) or e.__class__.__name__
@@ -938,6 +949,11 @@ class CandidateService:
                                         self.repo.update_bulk_upload_job_item(
                                             item["id"], status="failed", error_message=err_str[:500], conn=conn, cur=cur
                                         )
+                                        
+                                        # Cleanup failed file to save disk space
+                                        if item.get("file_path") and os.path.exists(item["file_path"]):
+                                            try: os.remove(item["file_path"])
+                                            except Exception: pass
 
                                 # Commit all processed items in this sub-batch instantly so the frontend UI can see them!
                                 conn.commit()
@@ -1169,6 +1185,11 @@ class CandidateService:
 
     def cancel_bulk_upload_job(self, job_id: int) -> bool:
         self.repo.cancel_bulk_upload_job(job_id)
+        import shutil
+        import os
+        job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
+        if os.path.exists(job_dir):
+            shutil.rmtree(job_dir, ignore_errors=True)
         return True
 
     def pause_bulk_upload_job(self, job_id: int) -> bool:
