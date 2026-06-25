@@ -665,13 +665,12 @@ class CandidateRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                # Find a job that has pending or processing items
+                # Find the most recent job that hasn't completed, failed, or been cancelled
                 cur.execute(
-                    """SELECT j.* 
-                       FROM bulk_upload_jobs j
-                       LEFT JOIN bulk_upload_job_items i ON j.id = i.job_id
-                       WHERE i.status IN ('pending', 'processing') OR j.status = 'extracting'
-                       ORDER BY j.created_at DESC
+                    """SELECT * 
+                       FROM bulk_upload_jobs 
+                       WHERE status IN ('extracting', 'processing', 'paused')
+                       ORDER BY created_at DESC
                        LIMIT 1"""
                 )
                 row = cur.fetchone()

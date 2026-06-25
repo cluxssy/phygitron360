@@ -225,6 +225,9 @@ export default function SourceDashboard() {
       if (filters.role_id) {
         params.set('role_id', filters.role_id);
         params.set('limit', filters.limit);
+      } else {
+        // Fetch a large number of candidates for the global directory view
+        params.set('limit', 5000);
       }
       // No limit when no role_id is selected - fetch all candidates
 
@@ -253,6 +256,19 @@ export default function SourceDashboard() {
 
   useEffect(() => { fetchJobRoles(); }, [fetchJobRoles]);
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
+
+  // ── Prevent Accidental Tab Closure During Upload ───────────────────────────
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (uploading) {
+        e.preventDefault();
+        e.returnValue = ''; // Required for Chrome to show the prompt
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [uploading]);
+
   useEffect(() => {
     if (currentTab === 'home') {
       fetchActivities();
@@ -1844,9 +1860,66 @@ export default function SourceDashboard() {
         </Modal>
       )}
 
-    </div>
         </div>
       </div>
+    </div>
+
+      {/* Global Floating Progress Widget (when not on upload tab) */}
+      {(bulkJobId || uploading) && currentTab !== 'upload' && (
+        <div 
+          className="fixed bottom-6 right-6 z-50 w-80 bg-white rounded-xl shadow-xl border border-purple-200 p-4 cursor-pointer hover:shadow-2xl transition-all"
+          onClick={() => setTab('upload')}
+        >
+           <div className="flex justify-between items-center mb-2">
+             <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                {uploading ? (
+                  <><Upload size={12} className="text-purple-600 animate-bounce" /> Uploading ZIP...</>
+                ) : bulkJobProgress?.job?.status === 'paused' ? (
+                  <><Pause size={12} className="text-amber-500" /> Paused</>
+                ) : bulkJobProgress?.job?.status === 'extracting' ? (
+                  <><Loader2 size={12} className="animate-spin text-purple-600" /> Scanning ZIP</>
+                ) : (
+                  <><Loader2 size={12} className="animate-spin text-purple-600" /> Processing Resumes</>
+                )}
+             </h4>
+             {uploading ? (
+               <span className="text-xs font-bold text-purple-600">
+                 {Math.round(uploadProgress || 0)}%
+               </span>
+             ) : bulkJobProgress?.job?.status === 'extracting' ? (
+               <span className="text-xs font-semibold text-purple-600">
+                 {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : '...'}
+               </span>
+             ) : bulkJobProgress?.job?.total_files > 0 ? (
+               <span className={`text-xs font-bold ${
+                 bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+               }`}>
+                 {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+               </span>
+             ) : null}
+           </div>
+           
+           <div className="w-full bg-purple-100 h-1.5 rounded-full overflow-hidden">
+              {uploading ? (
+                <div 
+                  className="h-full bg-purple-600 transition-all duration-300"
+                  style={{ width: `${uploadProgress || 0}%` }}
+                ></div>
+              ) : bulkJobProgress?.job?.status === 'extracting' ? (
+                <div className="h-full bg-purple-400 animate-pulse w-full"></div>
+              ) : bulkJobProgress?.job?.total_files > 0 ? (
+                <div 
+                  className={`h-full transition-all duration-500 ${
+                    bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+                  }`} 
+                  style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+                ></div>
+              ) : null}
+           </div>
+           <p className="text-[10px] text-gray-400 mt-2 font-medium">Click to view details</p>
+        </div>
+      )}
+
     </div>
   );
 }
