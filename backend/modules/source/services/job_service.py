@@ -38,9 +38,20 @@ class JobService:
 
         # Fire background scoring task immediately after creation
         try:
-            from backend.modules.source.services.ats_tasks import score_all_candidates_for_role
-            score_all_candidates_for_role.delay(role_id, self.tenant_id)
-            logger.info(f"[ATS] Queued bulk scoring for new role {role_id} in tenant {self.tenant_id}")
+            import os
+            from backend.modules.source.services.ats_tasks import score_all_candidates_for_role, _run_score_all_candidates_for_role
+            
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            if "localhost" in redis_url:
+                import asyncio
+                # Run purely in background thread to avoid 10s Celery/Redis connection timeout
+                asyncio.get_running_loop().run_in_executor(
+                    None, _run_score_all_candidates_for_role, role_id, self.tenant_id
+                )
+                logger.info(f"[ATS] Queued bulk scoring as local thread for role {role_id} in tenant {self.tenant_id}")
+            else:
+                score_all_candidates_for_role.delay(role_id, self.tenant_id)
+                logger.info(f"[ATS] Queued bulk scoring via Celery for role {role_id} in tenant {self.tenant_id}")
         except Exception as exc:
             logger.warning(f"[ATS] Failed to queue scoring task for role {role_id}: {exc}")
 
@@ -59,9 +70,19 @@ class JobService:
         # Auto re-score all candidates if required_skills were changed
         if result and skills_updated:
             try:
-                from backend.modules.source.services.ats_tasks import score_all_candidates_for_role
-                score_all_candidates_for_role.delay(role_id, self.tenant_id)
-                logger.info(f"[ATS] Queued re-scoring for updated role {role_id} in tenant {self.tenant_id}")
+                import os
+                from backend.modules.source.services.ats_tasks import score_all_candidates_for_role, _run_score_all_candidates_for_role
+                
+                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+                if "localhost" in redis_url:
+                    import asyncio
+                    asyncio.get_running_loop().run_in_executor(
+                        None, _run_score_all_candidates_for_role, role_id, self.tenant_id
+                    )
+                    logger.info(f"[ATS] Queued re-scoring as local thread for updated role {role_id} in tenant {self.tenant_id}")
+                else:
+                    score_all_candidates_for_role.delay(role_id, self.tenant_id)
+                    logger.info(f"[ATS] Queued re-scoring via Celery for updated role {role_id} in tenant {self.tenant_id}")
             except Exception as exc:
                 logger.warning(f"[ATS] Failed to queue re-scoring task for role {role_id}: {exc}")
 
