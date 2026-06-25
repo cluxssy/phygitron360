@@ -149,6 +149,23 @@ def get_candidate_rankings(
     return {"success": True, "data": rankings}
 
 
+@router.get("/job-roles/{role_id}/score-status")
+def get_score_status(
+    role_id: int,
+    service: JobService = Depends(get_job_service)
+):
+    """Return when scores were last computed for this role and how many candidates are scored."""
+    last_scored_at = service.ai_score_repo.get_last_scored_at(role_id)
+    scored_count = service.ai_score_repo.get_scored_count(role_id)
+    return {
+        "success": True,
+        "data": {
+            "last_scored_at": last_scored_at.isoformat() if last_scored_at else None,
+            "scored_count": scored_count,
+        }
+    }
+
+
 @router.post("/job-roles/{role_id}/auto-rank")
 async def auto_rank_candidates(
     role_id: int,
@@ -157,14 +174,14 @@ async def auto_rank_candidates(
 ):
     """
     Trigger bulk ATS scoring for ALL candidates against a specific role.
-    Upserts scores into ai_scores table.
+    Fires a Celery background task — returns immediately.
     """
     try:
-        results = service.auto_rank_candidates(role_id)
+        from backend.modules.source.services.ats_tasks import score_all_candidates_for_role
+        score_all_candidates_for_role.delay(role_id, service.tenant_id)
         return {
             "success": True,
-            "message": f"Scored {len(results)} candidates",
-            "data": results,
+            "message": "Scoring started in background. Scores will update within ~30 seconds.",
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

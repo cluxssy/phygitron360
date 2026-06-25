@@ -387,6 +387,25 @@ class CandidateService:
     def revert_employee(self, employee_id: int) -> bool:
         return self.repo.revert_employee(employee_id)
 
+    @staticmethod
+    def _parse_skill_list(skills: Any) -> List[str]:
+        if not skills:
+            return []
+        import json
+        if isinstance(skills, str):
+            try:
+                parsed = json.loads(skills)
+                if isinstance(parsed, list):
+                    return [str(s) for s in parsed]
+                return [skills]
+            except Exception:
+                if "," in skills:
+                    return [s.strip() for s in skills.split(",") if s.strip()]
+                return [skills]
+        if isinstance(skills, list):
+            return [str(s) for s in skills]
+        return []
+
     # ── New Business Logic ───────────────────────────────────────────────────
 
     def search_candidates(
@@ -420,12 +439,12 @@ class CandidateService:
                 role_min_exp = role.get("min_experience") or 0
 
         for cand in candidates:
-            cand["primary_skills"] = cand.get("primary_skills") or []
-            cand["secondary_skills"] = cand.get("secondary_skills") or []
+            cand["primary_skills"] = self._parse_skill_list(cand.get("primary_skills"))
+            cand["secondary_skills"] = self._parse_skill_list(cand.get("secondary_skills"))
             cand["structured_skills"] = [{"name": s, "level": "intermediate"} for s in cand["primary_skills"]] + [{"name": s, "level": "beginner"} for s in cand["secondary_skills"]]
             cand["skills"] = cand["primary_skills"] + cand["secondary_skills"]
             
-            if role_id and req_skills:
+            if role_id is not None:
                 flat_skills = cand["structured_skills"]
                 fit = calculate_role_fit(
                     flat_skills,
@@ -451,8 +470,8 @@ class CandidateService:
             role_id = row.get("job_role_id")
             if role_id and (not row.get("insights") or not row["insights"].get("final_score")):
                 try:
-                    primary = row.get("primary_skills") or []
-                    secondary = row.get("secondary_skills") or []
+                    primary = self._parse_skill_list(row.get("primary_skills"))
+                    secondary = self._parse_skill_list(row.get("secondary_skills"))
                     flat_skills = [{"name": s, "level": "intermediate"} for s in primary] + [{"name": s, "level": "beginner"} for s in secondary]
                     
                     from backend.modules.source.repositories.job_role_repo import JobRoleRepository
@@ -488,8 +507,8 @@ class CandidateService:
         if not cand:
             return None
             
-        cand["primary_skills"] = cand.get("primary_skills") or []
-        cand["secondary_skills"] = cand.get("secondary_skills") or []
+        cand["primary_skills"] = self._parse_skill_list(cand.get("primary_skills"))
+        cand["secondary_skills"] = self._parse_skill_list(cand.get("secondary_skills"))
         cand["structured_skills"] = [{"name": s, "level": "intermediate"} for s in cand["primary_skills"]] + [{"name": s, "level": "beginner"} for s in cand["secondary_skills"]]
         cand["skills"] = cand["primary_skills"] + cand["secondary_skills"]
         cand["latest_offer"] = self.repo.get_candidate_latest_offer(candidate_id)
@@ -957,6 +976,12 @@ class CandidateService:
         else:
             candidate_id = self.repo.create_candidate(candidate_data, conn=conn, cur=cur)
             self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI', conn=conn, cur=cur)
+            # Fire background task to score new candidate against ALL active job roles
+            try:
+                from backend.modules.source.services.ats_tasks import score_new_candidate_for_all_roles
+                score_new_candidate_for_all_roles.delay(candidate_id, self.tenant_id)
+            except Exception as _ats_err:
+                logger.warning(f"[ATS] Failed to queue scoring for new candidate {candidate_id}: {_ats_err}")
 
         # Store confidence signals
         confidence_signals = ai_result.get("cs") or ai_result.get("confidence_signals", [])
@@ -971,6 +996,7 @@ class CandidateService:
             }, conn=conn, cur=cur)
 
         return {"candidate_id": candidate_id, "parsed_data": ai_result}
+
 
 
 

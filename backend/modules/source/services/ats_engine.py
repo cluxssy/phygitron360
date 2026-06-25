@@ -78,6 +78,16 @@ def normalise_required_skills(required_skills_raw: Optional[list], title: str = 
     2. Inferred from title/description using presets
     3. Last resort: tokenise the title
     """
+    import json
+    if isinstance(required_skills_raw, str):
+        try:
+            required_skills_raw = json.loads(required_skills_raw)
+        except Exception:
+            if "," in required_skills_raw:
+                required_skills_raw = [s.strip() for s in required_skills_raw.split(",") if s.strip()]
+            else:
+                required_skills_raw = [required_skills_raw]
+
     normalised = []
     raw = required_skills_raw or []
     for item in raw:
@@ -102,10 +112,11 @@ def normalise_required_skills(required_skills_raw: Optional[list], title: str = 
     if normalised:
         return normalised
 
-    haystack = f"{title or ''} {description or ''}".lower()
+    import re
+    haystack = f"{title or ''}".lower()
     inferred = []
     for keyword, skills in ROLE_SKILL_PRESETS.items():
-        if keyword in haystack:
+        if re.search(r'\b' + re.escape(keyword) + r'\b', haystack):
             inferred.extend(skills)
 
     if not inferred and title:

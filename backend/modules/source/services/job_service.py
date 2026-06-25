@@ -28,49 +28,44 @@ class JobService:
         required_skills = data.get("required_skills")
         description = data.get("description")
         title = data.get("title")
-        
-        if not required_skills and description:
-            try:
-                if hasattr(self.ai_agents, "extract_jd_skills"):
-                    required_skills = await self.ai_agents.extract_jd_skills(description)
-                else:
-                    required_skills = normalise_required_skills(None, title=title, description=description)
-            except Exception as exc:
-                logger.warning(f"AI skill extraction failed (non-fatal): {exc}")
-                required_skills = normalise_required_skills(None, title=title, description=description)
-                
+
+        # If no skills explicitly provided, try to infer from title only (no description)
+        if not required_skills:
+            required_skills = normalise_required_skills(None, title=title, description="")
+
         data["required_skills"] = required_skills or []
-        return self.repo.create_job_role(data)
+        role_id = self.repo.create_job_role(data)
+
+        # Fire background scoring task immediately after creation
+        try:
+            from backend.modules.source.services.ats_tasks import score_all_candidates_for_role
+            score_all_candidates_for_role.delay(role_id, self.tenant_id)
+            logger.info(f"[ATS] Queued bulk scoring for new role {role_id} in tenant {self.tenant_id}")
+        except Exception as exc:
+            logger.warning(f"[ATS] Failed to queue scoring task for role {role_id}: {exc}")
+
+        return role_id
 
     async def update_job_role(self, role_id: int, updates: Dict[str, Any]) -> bool:
-        if "description" in updates and "required_skills" not in updates:
-            desc = updates["description"]
-            # Fetch existing title if not in updates
-            title = updates.get("title")
-            if not title:
-                existing = self.repo.get_job_role_by_id(role_id)
-                title = existing.get("title", "") if existing else ""
-                
-            try:
-                if hasattr(self.ai_agents, "extract_jd_skills"):
-                    required_skills = await self.ai_agents.extract_jd_skills(desc)
-                else:
-                    from backend.modules.source.services.ats_engine import normalise_required_skills
-                    required_skills = normalise_required_skills(None, title=title, description=desc)
-                updates["required_skills"] = required_skills or []
-            except Exception as exc:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"AI skill extraction failed (non-fatal): {exc}")
-                from backend.modules.source.services.ats_engine import normalise_required_skills
-                updates["required_skills"] = normalise_required_skills(None, title=title, description=desc) or []
-                
+        skills_updated = "required_skills" in updates
+
         # The database repository expects a JSON string for the required_skills JSONB column
         if "required_skills" in updates and isinstance(updates["required_skills"], list):
             import json
             updates["required_skills"] = json.dumps(updates["required_skills"])
-            
-        return self.repo.update_job_role(role_id, updates)
+
+        result = self.repo.update_job_role(role_id, updates)
+
+        # Auto re-score all candidates if required_skills were changed
+        if result and skills_updated:
+            try:
+                from backend.modules.source.services.ats_tasks import score_all_candidates_for_role
+                score_all_candidates_for_role.delay(role_id, self.tenant_id)
+                logger.info(f"[ATS] Queued re-scoring for updated role {role_id} in tenant {self.tenant_id}")
+            except Exception as exc:
+                logger.warning(f"[ATS] Failed to queue re-scoring task for role {role_id}: {exc}")
+
+        return result
 
     def delete_job_role(self, role_id: int) -> bool:
         return self.repo.delete_job_role(role_id)
