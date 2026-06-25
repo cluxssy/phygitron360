@@ -405,10 +405,12 @@ def get_candidate_resume(
 
     file_path = row["resume_path"]
 
-    # If the resume is stored in S3, redirect directly to the S3 URL
+    # If the resume is stored in S3, generate a pre-signed URL (bucket is private)
     if file_path.startswith("https://") or file_path.startswith("http://"):
         from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=file_path)
+        from backend.common.services.storage_service import generate_presigned_url
+        presigned = generate_presigned_url(file_path, expiry_seconds=900)  # 15 min
+        return RedirectResponse(url=presigned)
 
     # Local disk fallback
     if not os.path.exists(file_path):

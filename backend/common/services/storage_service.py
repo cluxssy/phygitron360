@@ -116,6 +116,40 @@ def save_file_content(content: bytes, filename: str, content_type: str, tenant_i
         logger.error(f"[LocalDisk] Save failed for {filename}: {e}")
         return None
 
+def generate_presigned_url(s3_url: str, expiry_seconds: int = 900) -> str:
+    """
+    Given a full S3 HTTPS URL, generate a pre-signed URL valid for `expiry_seconds`.
+    Falls back to the original URL if S3 is not configured or generation fails.
+    """
+    if not _USE_S3:
+        return s3_url
+    try:
+        s3 = _get_s3()
+        # Extract the S3 key from the full URL
+        # URL format: https://<bucket>.s3.<region>.amazonaws.com/<key>
+        # or for endpoint: <endpoint>/<bucket>/<key>
+        if _S3_ENDPOINT:
+            prefix = f"{_S3_ENDPOINT}/{_S3_BUCKET}/"
+        else:
+            prefix = f"https://{_S3_BUCKET}.s3.{_S3_REGION}.amazonaws.com/"
+        
+        if not s3_url.startswith(prefix):
+            logger.warning(f"[S3] URL does not match expected prefix: {s3_url}")
+            return s3_url
+        
+        key = s3_url[len(prefix):]
+        presigned = s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': _S3_BUCKET, 'Key': key},
+            ExpiresIn=expiry_seconds
+        )
+        logger.info(f"[S3] Generated presigned URL for key: {key}")
+        return presigned
+    except Exception as e:
+        logger.error(f"[S3] Failed to generate presigned URL: {e}")
+        return s3_url
+
+
 def delete_tenant_directory(tenant_id: str):
     """Permanently delete a tenant's entire storage folder from both S3 and Local Disk."""
     if not tenant_id or tenant_id == "." or tenant_id == "/":
