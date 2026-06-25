@@ -126,6 +126,7 @@ class CandidateRepository:
                     current_designation = %s,
                     ai_summary = %s, linkedin_url = %s, portfolio_url = %s,
                     certifications = %s, primary_skills = %s, secondary_skills = %s,
+                    resume_path = COALESCE(%s, resume_path),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
             ''', (
@@ -140,6 +141,7 @@ class CandidateRepository:
                 json.dumps(data.get("certifications", [])),
                 data.get("primary_skills", []),
                 data.get("secondary_skills", []),
+                data.get("resume_path"),
                 candidate_id
             ))
 
