@@ -404,6 +404,13 @@ def get_candidate_resume(
         raise HTTPException(status_code=404, detail="Resume not found")
 
     file_path = row["resume_path"]
+
+    # If the resume is stored in S3, redirect directly to the S3 URL
+    if file_path.startswith("https://") or file_path.startswith("http://"):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=file_path)
+
+    # Local disk fallback
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Resume file missing from storage")
 

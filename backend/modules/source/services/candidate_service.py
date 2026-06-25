@@ -1067,14 +1067,17 @@ class CandidateService:
         if actual_content:
             ext = os.path.splitext(file_path)[1].lower() if file_path else ".bin"
             filename = f"{uuid.uuid4()}{ext}"
-            final_path = save_file_content(
+            saved_path = save_file_content(
                 content=actual_content,
                 filename=filename,
                 content_type="application/octet-stream",
                 tenant_id=self.tenant_id,
                 module_name="source",
                 data_type="resumes"
-            ) or file_path
+            )
+            if not saved_path:
+                raise Exception("Failed to write resume file to persistent storage (Local or S3)")
+            final_path = saved_path
 
         candidate_data = {
             "full_name": name or "Unknown Candidate",
