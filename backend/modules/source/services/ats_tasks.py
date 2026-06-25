@@ -35,13 +35,7 @@ def _parse_skill_list(skills):
     return []
 
 
-@celery_app.task(name="score_all_candidates_for_role", bind=True, max_retries=3)
-def score_all_candidates_for_role(self, role_id: int, tenant_id: str):
-    """
-    Score ALL candidates in a tenant against a single job role.
-    Runs in batches of BATCH_SIZE to avoid memory issues with large datasets.
-    ~15,000 resumes in ~30 seconds.
-    """
+def _run_score_all_candidates_for_role(role_id: int, tenant_id: str):
     from backend.core.database import get_db_connection
     from psycopg2.extras import RealDictCursor
 
@@ -136,11 +130,24 @@ def score_all_candidates_for_role(self, role_id: int, tenant_id: str):
         return {"status": "complete", "scored": scored, "total": total}
 
     except Exception as exc:
-        logger.error(f"[ATS] Bulk scoring failed for role {role_id}: {exc}")
         conn.rollback()
-        raise self.retry(exc=exc, countdown=30)
+        raise exc
     finally:
         conn.close()
+
+
+@celery_app.task(name="score_all_candidates_for_role", bind=True, max_retries=3)
+def score_all_candidates_for_role(self, role_id: int, tenant_id: str):
+    """
+    Score ALL candidates in a tenant against a single job role.
+    Runs in batches of BATCH_SIZE to avoid memory issues with large datasets.
+    ~15,000 resumes in ~30 seconds.
+    """
+    try:
+        return _run_score_all_candidates_for_role(role_id, tenant_id)
+    except Exception as exc:
+        logger.error(f"[ATS] Bulk scoring failed for role {role_id}: {exc}")
+        raise self.retry(exc=exc, countdown=30)
 
 
 @celery_app.task(name="score_new_candidate_for_all_roles", bind=True, max_retries=3)
