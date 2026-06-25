@@ -65,7 +65,9 @@ class AdminService:
         }
 
     def delete_tenant(self, tenant_id: str, actor: str):
+        from backend.common.services.storage_service import delete_tenant_directory
         self.repo.delete_tenant(tenant_id)
+        delete_tenant_directory(tenant_id)
         self.repo.log_action(actor, "DELETE_TENANT", f"Decommissioned enterprise workspace: {tenant_id}")
         return {"success": True}
 

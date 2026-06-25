@@ -60,9 +60,9 @@ async def create_employee(
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     
-    photo_path = save_uploaded_file(photo_file, 'pfps', code, 'pfp')
-    cv_path = save_uploaded_file(cv_file, 'cvs', code, 'cv')
-    id_proofs_path = save_uploaded_file(id_proof_file, 'id', code, 'id_proof')
+    photo_path = save_uploaded_file(photo_file, tenant_id, 'deploy', 'pfp', code, 'pfp')
+    cv_path = save_uploaded_file(cv_file, tenant_id, 'deploy', 'resume', code, 'cv')
+    id_proofs_path = save_uploaded_file(id_proof_file, tenant_id, 'deploy', 'identification_docs', code, 'id_proof')
 
     data = {
         "code": code, "name": name, "dob": dob, "phone": phone, "emergency": emergency,
@@ -104,11 +104,11 @@ async def upload_documents(
     updates = {}
     
     if photo_file:
-        updates['photo_path'] = save_uploaded_file(photo_file, 'pfps', employee_code, 'pfp')
+        updates['photo_path'] = save_uploaded_file(photo_file, tenant_id, 'deploy', 'pfp', employee_code, 'pfp')
     if cv_file:
-        updates['cv_path'] = save_uploaded_file(cv_file, 'cvs', employee_code, 'cv')
+        updates['cv_path'] = save_uploaded_file(cv_file, tenant_id, 'deploy', 'resume', employee_code, 'cv')
     if id_proof_file:
-        updates['id_proofs'] = save_uploaded_file(id_proof_file, 'id', employee_code, 'id_proof')
+        updates['id_proofs'] = save_uploaded_file(id_proof_file, tenant_id, 'deploy', 'identification_docs', employee_code, 'id_proof')
         
     if not updates:
         return {"message": "No files received"}

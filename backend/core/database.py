@@ -63,9 +63,19 @@ class PooledConnectionWrapper:
         self._conn.__exit__(exc_type, exc_val, exc_tb)
         self.close()
 
+import time
+from psycopg2.pool import PoolError
+
 def get_db_connection():
-    """Returns a connection from the ThreadedConnectionPool."""
+    """Returns a connection from the ThreadedConnectionPool with retry."""
     pool = get_db_pool()
+    for _ in range(150):  # Retry for up to 15 seconds
+        try:
+            conn = pool.getconn()
+            return PooledConnectionWrapper(conn, pool)
+        except PoolError:
+            time.sleep(0.1)
+    # If it still fails, let it raise the error naturally
     conn = pool.getconn()
     return PooledConnectionWrapper(conn, pool)
 
