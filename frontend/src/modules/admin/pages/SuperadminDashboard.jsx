@@ -77,9 +77,13 @@ export default function SuperadminDashboard() {
     e.preventDefault();
     if (!provisionForm.company_name.trim()) return toast.error('Company name is required.');
     if (provisionForm.company_name.trim().length < 2) return toast.error('Company name must be at least 2 characters.');
-    if (!isEmail(provisionForm.admin_email)) return toast.error('Enter a valid admin email address.');
-    const passwordError = validatePassword(provisionForm.admin_password);
-    if (passwordError) return toast.error(passwordError);
+    // Email - only validate if filled
+    if (provisionForm.admin_email && !isEmail(provisionForm.admin_email)) return toast.error('Enter a valid admin email address.');
+    // Password - only validate if filled
+    if (provisionForm.admin_password) {
+      const passwordError = validatePassword(provisionForm.admin_password);
+      if (passwordError) return toast.error(passwordError);
+    }
     setProvisioning(true);
     try {
       const res = await fetch('/api/admin/tenants', {
@@ -596,13 +600,13 @@ export default function SuperadminDashboard() {
               </div>
               <div>
                 <label style={S.label}>Admin Email</label>
-                <input required type="email" placeholder="admin@enterprise.com" style={S.input}
+                <input type="email" placeholder="admin@enterprise.com" style={S.input}
                   value={provisionForm.admin_email}
                   onChange={e => setProvisionForm({ ...provisionForm, admin_email: e.target.value })} />
               </div>
               <div>
                 <label style={S.label}>Root Password</label>
-                <input required type="password" placeholder="••••••••" style={S.input}
+                <input type="password" placeholder="••••••••" style={S.input}
                   value={provisionForm.admin_password}
                   onChange={e => setProvisionForm({ ...provisionForm, admin_password: e.target.value })} />
               </div>

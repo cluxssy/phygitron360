@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   Activity,
@@ -8,7 +9,9 @@ import {
   Clock,
   RefreshCw,
   AlertCircle,
-  MapPin
+  MapPin,
+  Package,
+  Bell
 } from 'lucide-react';
 
 import {
@@ -27,6 +30,8 @@ import {
   Legend
 } from 'recharts';
 
+import { useNotifications } from '../../../core/context/NotificationContext'; // ← ADD THIS
+
 const PALETTE = [
   '#8B5CF6', // primary lilac
   '#06B6D4', // cyan
@@ -37,6 +42,8 @@ const PALETTE = [
   '#EC4899', // pink
   '#6366F1'  // indigo
 ];
+
+const CHART_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#06B6D4', '#6366F1', '#EF4444'];
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -65,8 +72,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-const StatCard = ({ label, value, color, icon: Icon, sub }) => (
-  <div className="bg-white border border-[#ebe4ff] rounded-[2rem] p-6 shadow-[0_10px_40px_rgba(180,140,255,0.08)] relative overflow-hidden">
+const StatCard = ({ label, value, color, borderColor, icon: Icon, sub, onClick }) => (
+  <div 
+    onClick={onClick}
+    className={`bg-white border border-[#ebe4ff] rounded-[2rem] p-6 shadow-[0_10px_40px_rgba(180,140,255,0.08)] relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_rgba(124,58,237,0.08)] ${onClick ? 'cursor-pointer' : ''} border-t-4 ${borderColor}`}
+  >
     <div
       className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
       style={{
@@ -78,7 +88,7 @@ const StatCard = ({ label, value, color, icon: Icon, sub }) => (
     </div>
 
     <h3
-      className="text-5xl font-black leading-none mb-3"
+      className="text-4xl font-black leading-none mb-2"
       style={{ color }}
     >
       {value}
@@ -89,7 +99,7 @@ const StatCard = ({ label, value, color, icon: Icon, sub }) => (
     </p>
 
     {sub && (
-      <p className="text-[9px] text-black/30 mt-2 uppercase tracking-widest">
+      <p className="text-[9px] text-black/30 mt-2 uppercase tracking-widest flex items-center gap-1">
         {sub}
       </p>
     )}
@@ -122,6 +132,8 @@ const ChartCard = ({ title, children, className = '' }) => (
 );
 
 export default function DeployAnalytics() {
+  const navigate = useNavigate();
+  const { setShowNotifications } = useNotifications();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -152,6 +164,23 @@ export default function DeployAnalytics() {
   useEffect(() => {
     fetchStats();
   }, []);
+
+  // ── Card Click Handlers ──
+  const handleEmployeesClick = () => {
+    navigate('/deploy?tab=personnel');
+  };
+
+  const handleAttendanceClick = () => {
+    navigate('/deploy?tab=attendance');
+  };
+
+  const handleAssetsClick = () => {
+    navigate('/deploy?tab=assets');
+  };
+
+  const handleAlertsClick = () => {
+    setShowNotifications(true);
+  };
 
   if (loading) {
     return (
@@ -205,7 +234,6 @@ export default function DeployAnalytics() {
     <div className="space-y-8 animate-fade-in-up">
 
       {/* HEADER */}
-
       <div className="bg-[#f6f0ff] border border-[#ebe4ff] rounded-[2.5rem] p-10">
         <div className="flex justify-between items-end flex-wrap gap-6">
 
@@ -258,42 +286,56 @@ export default function DeployAnalytics() {
         </div>
       </div>
 
-      {/* KPI */}
-
+      {/* ── KPI CARDS ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
 
+        {/* 👥 Employees - Purple */}
         <StatCard
           label="Employees"
           value={counts.total ?? 0}
-          color="#7C3AED"
-          icon={Users}
-        />
-
-        <StatCard
-          label="Departments"
-          value={counts.teams ?? 0}
           color="#8B5CF6"
-          icon={Briefcase}
+          borderColor="border-t-purple-500"
+          icon={Users}
+          sub="Total Active Employees"
+          onClick={handleEmployeesClick}
         />
 
+        {/* 🟢 Attendance - Green */}
         <StatCard
           label="Attendance"
           value={`${counts.active ?? 0}%`}
-          color="#A855F7"
-          icon={Clock}
+          color="#10B981"
+          borderColor="border-t-emerald-500"
+          icon={Activity}
+          sub="Present Today / Attendance Rate"
+          onClick={handleAttendanceClick}
         />
 
+        {/* 📋 Assets - Blue */}
         <StatCard
-          label="Active Assets"
+          label="Assets"
           value={counts.designations ?? 0}
-          color="#9333EA"
-          icon={Activity}
+          color="#3B82F6"
+          borderColor="border-t-blue-500"
+          icon={Package}
+          sub="Total Assets Allocated"
+          onClick={handleAssetsClick}
+        />
+
+        {/* ⚠️ Alerts - red */}
+        <StatCard
+          label="Alerts"
+          value={counts.pending_approvals ?? 0}
+          color="#f50b0b"
+          borderColor="border-t-red-500"
+          icon={Bell}
+          sub="Pending Approvals / Pending Actions"
+          onClick={handleAlertsClick}
         />
 
       </div>
 
       {/* ROW 1 */}
-
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         <ChartCard title="Employment Status">
@@ -311,7 +353,7 @@ export default function DeployAnalytics() {
                 {statusData.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={PALETTE[i % PALETTE.length]}
+                    fill={CHART_COLORS[i % CHART_COLORS.length]}
                   />
                 ))}
               </Pie>
@@ -385,7 +427,6 @@ export default function DeployAnalytics() {
       </div>
 
       {/* ROW 2 */}
-
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         <ChartCard
@@ -432,7 +473,7 @@ export default function DeployAnalytics() {
                 {departmentData.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={PALETTE[i % PALETTE.length]}
+                    fill={CHART_COLORS[i % CHART_COLORS.length]}
                   />
                 ))}
               </Bar>
@@ -454,7 +495,7 @@ export default function DeployAnalytics() {
                 {locationData.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={PALETTE[i % PALETTE.length]}
+                    fill={CHART_COLORS[i % CHART_COLORS.length]}
                   />
                 ))}
               </Pie>
@@ -475,7 +516,6 @@ export default function DeployAnalytics() {
       </div>
 
       {/* ROW 3 */}
-
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         <ChartCard title="Top Skills">
@@ -512,7 +552,7 @@ export default function DeployAnalytics() {
                 {skillsData.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={PALETTE[i % PALETTE.length]}
+                    fill={CHART_COLORS[i % CHART_COLORS.length]}
                   />
                 ))}
               </Bar>
@@ -521,7 +561,7 @@ export default function DeployAnalytics() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Experience">
+        <ChartCard title="Experience Distribution">
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={experienceData}>
 
@@ -553,7 +593,7 @@ export default function DeployAnalytics() {
 
               <Bar
                 dataKey="value"
-                fill="#8B5CF6"
+                fill="#3B82F6"
                 radius={[6, 6, 0, 0]}
               />
 
@@ -561,7 +601,7 @@ export default function DeployAnalytics() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Tenure">
+        <ChartCard title="Tenure Distribution">
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={tenureData}>
 
@@ -593,7 +633,7 @@ export default function DeployAnalytics() {
 
               <Bar
                 dataKey="value"
-                fill="#7C3AED"
+                fill="#10B981"
                 radius={[6, 6, 0, 0]}
               />
 
@@ -604,7 +644,6 @@ export default function DeployAnalytics() {
       </div>
 
       {/* TABLE */}
-
       <div className="bg-white border border-[#ebe4ff] rounded-[2rem] overflow-hidden shadow-[0_10px_40px_rgba(180,140,255,0.08)]">
 
         <div className="px-8 py-6 border-b border-[#ebe4ff] flex items-center justify-between">

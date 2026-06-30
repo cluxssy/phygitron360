@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { X, Upload, Download, FileSpreadsheet } from 'lucide-react';
+import { X, Upload, Download, FileSpreadsheet, User, Briefcase, CreditCard, FileText, CheckCircle, ShieldCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
   MAX_FILE_SIZE,
@@ -9,15 +9,17 @@ import {
   isEmployeeCode,
   isNonNegativeNumber,
   isPhone,
+  isBankAccount,
+  isPan,
   validateFile,
 } from '../../../core/utils/validators';
 
 const ROLES = ['org_admin', 'manager', 'employee', 'candidate'];
 
-const Field = ({ label, k, type = 'text', options, form, set }) => (
+const Field = ({ label, k, type = 'text', options, form, set, required = false }) => (
   <div>
     <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">
-      {label}
+      {label} {required && <span className="text-red-500">*</span>}
     </label>
     {options ? (
       <select value={form[k]} onChange={e => set(k, e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-[#f8f5ff] text-black text-[13px] font-semibold px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all">
@@ -49,6 +51,14 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     location: '', designation: '', current_address: '', permanent_address: '',
     pf: 'No', mediclaim: 'No', notes: '', primary_skillset: '',
     secondary_skillset: '', experience_years: '',
+    bank_name: '', bank_account_no: '', pan_no: '',
+  });
+
+  // File uploads state
+  const [files, setFiles] = useState({
+    photo_file: null,
+    cv_file: null,
+    id_proof_file: null
   });
 
   // Bulk Upload State
@@ -57,27 +67,79 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
+  const handleFileChange = (e, type) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const fileRules = {
+      photo_file: { exts: ['.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.image, label: 'Profile photo' },
+      cv_file: { exts: ['.pdf'], size: MAX_FILE_SIZE.resume, label: 'Resume/CV' },
+      id_proof_file: { exts: ['.pdf', '.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.document, label: 'ID proof' },
+    };
+    
+    const rule = fileRules[type];
+    const error = rule ? validateFile(file, rule.exts, rule.size, rule.label) : '';
+    if (error) {
+      toast.error(error);
+      e.target.value = '';
+      return;
+    }
+    setFiles(prev => ({ ...prev, [type]: file }));
+  };
+
   const validateSingle = () => {
-    const required = [
-      ['Employee ID', form.code],
-      ['Full Name', form.name],
-      ['Email Address', form.email],
-      ['Phone Number', form.phone],
-      ['Date of Birth', form.dob],
-      ['Joining Date', form.doj],
-      ['Department', form.team],
-      ['Job Title', form.designation],
-      ['Work Location', form.location],
-    ];
-    const missing = required.find(([, value]) => !String(value || '').trim());
-    if (missing) return `${missing[0]} is required.`;
-    if (!isEmployeeCode(form.code)) return 'Employee ID must be 3-20 letters, numbers, hyphens, or underscores.';
-    if (!isEmail(form.email)) return 'Enter a valid email address.';
-    if (!isPhone(form.phone)) return 'Phone number must be 7-15 digits, optionally starting with +.';
-    if (form.emergency && !isPhone(form.emergency)) return 'Emergency contact must be 7-15 digits, optionally starting with +.';
-    if (!isAtLeastAge(form.dob, 18)) return 'Employee must be at least 18 years old.';
-    if (form.experience_years !== '' && !isNonNegativeNumber(form.experience_years)) return 'Experience must be 0 or greater.';
-    if (!ROLES.includes(form.role)) return 'Select a valid system access role.';
+    // ── ONLY NAME IS MANDATORY ──
+    if (!form.name || !form.name.trim()) {
+      return 'Full Name is required.';
+    }
+
+    // ── All other fields are optional, only validate if filled ──
+    
+    // Employee Code - only validate if filled
+    if (form.code && !isEmployeeCode(form.code)) {
+      return 'Employee ID must be 3-20 letters, numbers, hyphens, or underscores.';
+    }
+    
+    // Email - only validate if filled
+    if (form.email && !isEmail(form.email)) {
+      return 'Enter a valid email address.';
+    }
+    
+    // Phone - only validate if filled
+    if (form.phone && !isPhone(form.phone)) {
+      return 'Phone number must be 7-15 digits, optionally starting with +.';
+    }
+    
+    // Emergency contact - only validate if filled
+    if (form.emergency && !isPhone(form.emergency)) {
+      return 'Emergency contact must be 7-15 digits, optionally starting with +.';
+    }
+    
+    // DOB - only validate if filled
+    if (form.dob && !isAtLeastAge(form.dob, 18)) {
+      return 'Employee must be at least 18 years old.';
+    }
+    
+    // Experience years - only validate if filled
+    if (form.experience_years !== '' && !isNonNegativeNumber(form.experience_years)) {
+      return 'Experience must be 0 or greater.';
+    }
+    
+    // Role - only validate if filled
+    if (form.role && !ROLES.includes(form.role)) {
+      return 'Select a valid system access role.';
+    }
+    
+    // Bank Account - only validate if filled
+    if (form.bank_account_no && !isBankAccount(form.bank_account_no)) {
+      return 'Bank account must be 9-18 digits only.';
+    }
+    
+    // PAN - only validate if filled
+    if (form.pan_no && !isPan(form.pan_no)) {
+      return 'PAN must follow ABCDE1234F format.';
+    }
+    
     return '';
   };
 
@@ -87,12 +149,22 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       toast.error(validationError);
       return;
     }
+    
+    // ── CV is now optional ──
+    // No file validation required
+    
     setSubmitting(true);
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
         if (v) fd.append(k, v);
       });
+      
+      // Append files
+      Object.entries(files).forEach(([k, v]) => {
+        if (v) fd.append(k, v);
+      });
+      
       const res = await fetch('/api/employee', {
         method: 'POST',
         credentials: 'include',
@@ -193,17 +265,46 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       const dob = String(row["Date of Birth"] || '').trim();
       const doj = String(row["Date of Joining"] || '').trim();
       const exp = row["Experience Years"];
+      const bankAccount = String(row["Bank Account No"] || '').trim();
+      const pan = String(row["PAN No"] || '').trim();
 
-      if (!code || !name || !email) return `Row ${rowNo}: Employee Code, Name, and Email ID are mandatory.`;
-      if (!isEmployeeCode(code)) return `Row ${rowNo}: Employee Code must be 3-20 letters/numbers/hyphen/underscore.`;
-      if (!isEmail(email)) return `Row ${rowNo}: Enter a valid Email ID.`;
+      // ── ONLY NAME IS MANDATORY ──
+      if (!name) return `Row ${rowNo}: Name is mandatory.`;
+
+      // ── All other fields optional, only validate if filled ──
+      
+      if (code && !isEmployeeCode(code)) return `Row ${rowNo}: Employee Code must be 3-20 letters/numbers/hyphen/underscore.`;
+      
+      if (email && !isEmail(email)) return `Row ${rowNo}: Enter a valid Email ID.`;
+      
       if (phone && !isPhone(phone)) return `Row ${rowNo}: Contact Number must be 7-15 digits.`;
+      
       if (dob && !isAtLeastAge(dob, 18)) return `Row ${rowNo}: Date of Birth must confirm age 18 or above.`;
+      
       if (doj && Number.isNaN(new Date(doj).getTime())) return `Row ${rowNo}: Date of Joining is invalid.`;
-      if (exp !== undefined && exp !== '' && !isNonNegativeNumber(exp)) return `Row ${rowNo}: Experience Years must be 0 or greater.`;
+      
+      if (exp !== undefined && exp !== '' && !isNonNegativeNumber(exp)) {
+        return `Row ${rowNo}: Experience Years must be 0 or greater.`;
+      }
+      
+      if (bankAccount && !isBankAccount(bankAccount)) {
+        return `Row ${rowNo}: Bank account must be 9-18 digits only.`;
+      }
+      
+      if (pan && !isPan(pan)) {
+        return `Row ${rowNo}: PAN must follow ABCDE1234F format.`;
+      }
     }
     return '';
   };
+
+  // Step labels for the stepper
+  const stepLabels = [
+    { step: 1, icon: User, label: 'Personal' },
+    { step: 2, icon: Briefcase, label: 'Employment' },
+    { step: 3, icon: CreditCard, label: 'Financial' },
+    { step: 4, icon: FileText, label: 'Documents' },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-5" onClick={onClose}>
@@ -239,28 +340,36 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
         {activeTab === 'single' ? (
           <>
             <div className="flex gap-3 mb-8">
-              {[1, 2, 3].map(s => (
-                <div key={s} className={`flex-1 h-2 rounded-full transition-all duration-300 ${s <= step ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6]' : 'bg-[#ece7fa]'}`} />
+              {stepLabels.map((s) => (
+                <div key={s.step} className="flex-1">
+                  <div className={`h-2 rounded-full transition-all duration-300 ${s.step <= step ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6]' : 'bg-[#ece7fa]'}`} />
+                  <div className="flex items-center gap-2 mt-2">
+                    <s.icon size={12} className={`${s.step <= step ? 'text-[#8b5cf6]' : 'text-gray-400'}`} />
+                    <span className={`text-[8px] font-black uppercase tracking-widest ${s.step <= step ? 'text-[#8b5cf6]' : 'text-gray-400'}`}>{s.label}</span>
+                  </div>
+                </div>
               ))}
             </div>
 
             <div className="space-y-6">
+              {/* STEP 1: Personal Details */}
               {step === 1 && (
                 <div className="grid grid-cols-2 gap-6">
-                  <Field label="Employee ID *" k="code" form={form} set={set} />
-                  <Field label="Full Name *" k="name" form={form} set={set} />
-                  <Field label="Email Address *" k="email" type="email" form={form} set={set} />
-                  <Field label="Phone Number *" k="phone" form={form} set={set} />
-                  <Field label="Date of Birth *" k="dob" type="date" form={form} set={set} />
+                  <Field label="Employee ID" k="code" form={form} set={set} />
+                  <Field label="Full Name" k="name" form={form} set={set} required />
+                  <Field label="Email Address" k="email" type="email" form={form} set={set} />
+                  <Field label="Phone Number" k="phone" form={form} set={set} />
+                  <Field label="Date of Birth" k="dob" type="date" form={form} set={set} />
                   <Field label="Emergency Contact" k="emergency" form={form} set={set} />
                 </div>
               )}
 
+              {/* STEP 2: Employment Details */}
               {step === 2 && (
                 <div className="grid grid-cols-2 gap-6">
-                  <Field label="Joining Date *" k="doj" type="date" form={form} set={set} />
-                  <Field label="Department *" k="team" form={form} set={set} />
-                  <Field label="Job Title *" k="designation" form={form} set={set} />
+                  <Field label="Joining Date" k="doj" type="date" form={form} set={set} />
+                  <Field label="Department" k="team" form={form} set={set} />
+                  <Field label="Job Title" k="designation" form={form} set={set} />
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">Reporting Manager</label>
                     <select value={form.manager} onChange={e => set('manager', e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-[#f8f5ff] text-black text-[13px] font-semibold px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all">
@@ -268,22 +377,101 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                       {managers.map(m => <option key={m.code} value={m.code}>{m.name} ({m.role})</option>)}
                     </select>
                   </div>
-                  <Field label="Work Location *" k="location" form={form} set={set} />
+                  <Field label="Work Location" k="location" form={form} set={set} />
                   <Field label="Employment Type" k="type" options={['Full-time', 'Part-time', 'Contract', 'Intern']} form={form} set={set} />
                   <Field label="System Access Role" k="role" options={ROLES} form={form} set={set} />
                 </div>
               )}
 
+              {/* STEP 3: Financial & Additional Info */}
               {step === 3 && (
                 <div className="grid grid-cols-2 gap-6">
                   <Field label="Primary Skills" k="primary_skillset" form={form} set={set} />
                   <Field label="Secondary Skills" k="secondary_skillset" form={form} set={set} />
                   <Field label="Experience (Years)" k="experience_years" type="number" form={form} set={set} />
+                  <Field label="Bank Name" k="bank_name" form={form} set={set} />
+                  <Field label="Bank Account No." k="bank_account_no" form={form} set={set} />
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">
+                      PAN No.
+                    </label>
+                    <input 
+                      type="text" 
+                      value={form.pan_no} 
+                      onChange={e => set('pan_no', e.target.value.toUpperCase())} 
+                      className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all placeholder:text-[#b0a8c5] uppercase" 
+                      placeholder="ABCDE1234F"
+                    />
+                    <p className="text-[8px] text-[#8b5cf6] font-bold uppercase tracking-widest mt-1">Format: ABCDE1234F</p>
+                  </div>
                   <Field label="PF Enabled" k="pf" options={['No', 'Yes']} form={form} set={set} />
                   <Field label="Mediclaim Enabled" k="mediclaim" options={['No', 'Yes']} form={form} set={set} />
                   <div className="col-span-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">Additional Notes</label>
                     <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={4} className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] resize-none" />
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 4: Document Uploads */}
+              {step === 4 && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText size={16} className="text-[#8b5cf6]" />
+                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#8b5cf6]">Document Uploads (Optional)</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {/* Resume/CV - Optional */}
+                    <div className={`flex items-center gap-5 p-5 rounded-2xl border transition-all ${files.cv_file ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200 hover:bg-slate-100/50'}`}>
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-all ${files.cv_file ? 'bg-emerald-100 border-emerald-200 text-emerald-600' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
+                        {files.cv_file ? <Upload size={20} className="text-emerald-600" /> : <FileText size={20} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[11px] font-black uppercase tracking-widest text-slate-700">Resume / CV</p>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider truncate">{files.cv_file ? files.cv_file.name : 'PDF only (max 5MB)'}</p>
+                      </div>
+                      <label className="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-700 border border-slate-200 rounded-xl transition-all">
+                        {files.cv_file ? 'Replace' : 'Upload'}
+                        <input type="file" name="cv_file" onChange={e => handleFileChange(e, 'cv_file')} className="hidden" accept=".pdf" />
+                      </label>
+                    </div>
+
+                    {/* Profile Photo - Optional */}
+                    <div className={`flex items-center gap-5 p-5 rounded-2xl border transition-all ${files.photo_file ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200 hover:bg-slate-100/50'}`}>
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-all ${files.photo_file ? 'bg-emerald-100 border-emerald-200 text-emerald-600' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
+                        {files.photo_file ? <CheckCircle size={20} className="text-emerald-600" /> : <User size={20} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[11px] font-black uppercase tracking-widest text-slate-700">Profile Photo</p>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider truncate">{files.photo_file ? files.photo_file.name : 'JPG, JPEG, PNG (max 2MB)'}</p>
+                      </div>
+                      <label className="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-700 border border-slate-200 rounded-xl transition-all">
+                        {files.photo_file ? 'Replace' : 'Upload'}
+                        <input type="file" name="photo_file" onChange={e => handleFileChange(e, 'photo_file')} className="hidden" accept=".jpg,.jpeg,.png" />
+                      </label>
+                    </div>
+
+                    {/* ID Proof - Optional */}
+                    <div className={`flex items-center gap-5 p-5 rounded-2xl border transition-all ${files.id_proof_file ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200 hover:bg-slate-100/50'}`}>
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-all ${files.id_proof_file ? 'bg-emerald-100 border-emerald-200 text-emerald-600' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
+                        {files.id_proof_file ? <CheckCircle size={20} className="text-emerald-600" /> : <ShieldCheck size={20} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[11px] font-black uppercase tracking-widest text-slate-700">Government ID Proof</p>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider truncate">{files.id_proof_file ? files.id_proof_file.name : 'PDF, JPG, JPEG, PNG (max 5MB)'}</p>
+                      </div>
+                      <label className="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-700 border border-slate-200 rounded-xl transition-all">
+                        {files.id_proof_file ? 'Replace' : 'Upload'}
+                        <input type="file" name="id_proof_file" onChange={e => handleFileChange(e, 'id_proof_file')} className="hidden" accept=".pdf,.jpg,.jpeg,.png" />
+                      </label>
+                    </div>
                   </div>
                 </div>
               )}
@@ -293,7 +481,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
               {step > 1 && (
                 <button onClick={() => setStep(s => s - 1)} className="flex-1 py-4 rounded-2xl border border-[#e8defc] bg-white text-black text-[11px] font-black uppercase tracking-[0.25em] hover:bg-[#f5f1ff] transition-all">Back</button>
               )}
-              {step < 3 ? (
+              {step < 4 ? (
                 <button onClick={() => setStep(s => s + 1)} className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.25em] shadow-[0_12px_30px_rgba(180,140,255,0.28)] hover:scale-[1.01] transition-all">Continue</button>
               ) : (
                 <button onClick={submitSingle} disabled={submitting} className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.25em] shadow-[0_12px_30px_rgba(180,140,255,0.28)] hover:scale-[1.01] transition-all disabled:opacity-50">

@@ -133,4 +133,4 @@ export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
       </div>
     </div>
   );
-}
+} 

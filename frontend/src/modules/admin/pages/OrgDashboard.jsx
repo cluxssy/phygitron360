@@ -13,6 +13,9 @@ import { MODULE_CONFIG } from "../../../core/config/modules";
 
 import AdminPanel from "../components/AdminPanel";
 
+// ── Import the notification hook ──
+import { useNotifications } from "../../../core/context/NotificationContext";
+
 axios.defaults.withCredentials = true;
 
 const hubNameMap = {
@@ -22,7 +25,7 @@ const hubNameMap = {
   deploy: "Employee Central",
 };
 
-// Standardized palette for the Funnel Chart based on requested colors
+// Standardized palette for the Funnel Chart
 const PIE_PALETTE = ["#CC97FF", "#10B981", "#F59E0B", "#6366F1", "#8b5cf6"];
 
 export default function OrgDashboard() {
@@ -30,6 +33,9 @@ export default function OrgDashboard() {
   const location = useLocation();
 
   const { logout, user, hasPermission, hasRole } = useAuth();
+
+  // ── Use the global notification hook ──
+  const { setShowNotifications } = useNotifications();
 
   const [activeSideTab, setActiveSideTab] = useState("overview");
 
@@ -103,6 +109,28 @@ export default function OrgDashboard() {
     return "Organisation Admin";
   };
 
+  // ── Card Click Handlers ──
+  const handleCandidatesClick = () => {
+    navigate('/source?tab=directory');
+  };
+
+  const handleTrainingClick = () => {
+    navigate('/forge?tab=academy');
+  };
+
+  const handleVerifiedClick = () => {
+    navigate('/verify?tab=home');
+  };
+
+  const handleEmployeesClick = () => {
+    navigate('/deploy?tab=personnel');
+  };
+
+  const handleAlertsClick = () => {
+    console.log("Alerts card clicked - opening notifications");
+    setShowNotifications(true);
+  };
+
   // Funnel Pie Chart Logic
   const totalFunnel = funnel.reduce((acc, f) => acc + f.count, 0);
   let currentAngle = 0;
@@ -118,7 +146,7 @@ export default function OrgDashboard() {
 
   const pieBg = totalFunnel > 0 ? `conic-gradient(${conicStops})` : "#e5e7eb";
 
-  // New design setup for top cards containing local layout configurations 
+  // KPI Cards Configuration
   const kpiItems = [
     {
       label: "Candidates",
@@ -126,6 +154,7 @@ export default function OrgDashboard() {
       subtitle: "Total Candidates",
       accent: "#8b5cf6",
       bgIcon: "#f4ecff",
+      onClick: handleCandidatesClick,
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -141,6 +170,7 @@ export default function OrgDashboard() {
       subtitle: "In Training",
       accent: "#F59E0B",
       bgIcon: "#f5f3ff",
+      onClick: handleTrainingClick,
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
@@ -154,6 +184,7 @@ export default function OrgDashboard() {
       subtitle: "Verified & Ready",
       accent: "#10B981",
       bgIcon: "#e6f4ea",
+      onClick: handleVerifiedClick,
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -167,6 +198,7 @@ export default function OrgDashboard() {
       subtitle: "Active Employees",
       accent: "#e731ad",
       bgIcon: "#e8f0fe",
+      onClick: handleEmployeesClick,
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e731ad" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
@@ -180,6 +212,7 @@ export default function OrgDashboard() {
       subtitle: "Needs Attention",
       accent: "#e81f1f",
       bgIcon: "#fdf2f8",
+      onClick: handleAlertsClick,
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e81f1f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
@@ -220,7 +253,16 @@ export default function OrgDashboard() {
           </div>
         </div>
         <div className="top-right">
-          <img src={bellIcon} className="icon" alt="bell" />
+          {/* Bell icon - opens notification dropdown */}
+          <img 
+            src={bellIcon} 
+            className="icon cursor-pointer" 
+            alt="bell" 
+            onClick={() => {
+              console.log("Bell clicked - opening notifications");
+              setShowNotifications(true);
+            }}
+          />
           <img
             src={logoutIcon}
             className="icon logout-icon"
@@ -260,6 +302,14 @@ export default function OrgDashboard() {
               Users
             </button>
           )}
+          {/* {hasPermission?.("admin.users.manage") && (
+            <button
+              className={activeSideTab === "analytics" ? "active" : ""}
+              onClick={() => setActiveSideTab("analytics")}
+            >
+              Analytics
+            </button>
+          )} */}
         </div>
 
         {/* CONTENT */}
@@ -269,7 +319,7 @@ export default function OrgDashboard() {
             <>
               <h2>Welcome, {displayName}</h2>
 
-              {/* NEW COMMAND-CENTER STYLE KPI CARDS */}
+              {/* KPI CARDS */}
               <div
                 style={{
                   display: "grid",
@@ -304,6 +354,7 @@ export default function OrgDashboard() {
                       e.currentTarget.style.transform = "translateY(0)";
                       e.currentTarget.style.boxShadow = "0 4px 14px rgba(124,58,237,0.08)";
                     }}
+                    onClick={item.onClick}
                   >
                     {/* Left Icon Circle Container */}
                     <div
@@ -320,7 +371,7 @@ export default function OrgDashboard() {
                       {item.icon}
                     </div>
 
-                    {/* Decorative Dot Matrix Style 3 */}
+                    {/* Decorative Dot Matrix */}
                     <div 
                       className="card-dots"
                       style={{ 
@@ -337,7 +388,6 @@ export default function OrgDashboard() {
                       {"• • •\n• • •\n• • •"}
                     </div>
 
-                    {/* Typography Hierarchy Content */}
                     <p
                       style={{
                         fontSize: "11px",
@@ -466,7 +516,7 @@ export default function OrgDashboard() {
                 </div>
               </div>
 
-              {/* ROW 2: CORE TEAM OVERVIEW (HORIZONTALLY ELONGATED) */}
+              {/* ROW 2: CORE TEAM OVERVIEW */}
               <div className="section boxed" style={{ margin: 0, width: "100%" }}>
                 <h3 style={{ marginBottom: "20px" }}>Core Team Overview</h3>
                 <table style={{ width: "100%", textAlign: "left", borderCollapse: "collapse" }}>
@@ -532,13 +582,13 @@ export default function OrgDashboard() {
             <AdminPanel />
           )}
 
-          {/* ANALYTICS */}
+          {/* ANALYTICS
           {activeSideTab === "analytics" && (
             <div className="section boxed">
               <h2>Analytics</h2>
               <p>Workforce analytics dashboard coming next.</p>
             </div>
-          )}
+          )} */}
         </div>
       </div>
     </div>

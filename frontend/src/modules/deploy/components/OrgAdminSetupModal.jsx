@@ -107,6 +107,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
 
   const validateStep = () => {
     if (step === 1) {
+      // Required fields - must be filled
       if (!form.full_name || !form.dob || !form.contact_number || !emergencyName || !emergencyPhone || !form.bank_name || !form.bank_account_no || !form.pan_no) {
         toast.error("All personal, contact, and financial details are mandatory");
         return false;
