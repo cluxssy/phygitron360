@@ -59,7 +59,7 @@ resource "aws_route_table_association" "pub_2" {
 # ---------------------------------------------------------
 # Security Groups
 # ---------------------------------------------------------
-# ALB Security Group: Allows inbound HTTP from anywhere
+# ALB Security Group: Allows inbound HTTP and HTTPS from anywhere
 resource "aws_security_group" "alb_sg" {
   name        = "${var.project_name}-alb-sg"
   description = "Allow inbound HTTP"
@@ -68,6 +68,13 @@ resource "aws_security_group" "alb_sg" {
   ingress {
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
