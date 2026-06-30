@@ -48,53 +48,6 @@ export default function AssetsPanel({ mode = 'admin', user }) {
   const [saving, setSaving] = useState(false);
 
   /* =========================
-     LOAD EMPLOYEES
-  ========================= */
-
-  useEffect(() => {
-
-    const loadEmployees = async () => {
-
-      try {
-
-        const res = await fetch('/api/employees', {
-          credentials: 'include'
-        });
-
-        const data = await res.json();
-
-        const employeeList =
-          Array.isArray(data) ? data : [];
-
-        setEmployees(employeeList);
-
-        /* =========================
-           EMPLOYEE VIEW FIX
-           auto-load own assets
-        ========================= */
-
-        if (
-          mode === 'employee' &&
-          user?.employee_code
-        ) {
-
-          loadAssets(user.employee_code);
-
-        }
-
-      } catch {
-
-        toast.error('Failed to load employees');
-
-      }
-
-    };
-
-    loadEmployees();
-
-  }, []);
-
-  /* =========================
      LOAD ASSETS
   ========================= */
 
@@ -119,6 +72,9 @@ export default function AssetsPanel({ mode = 'admin', user }) {
       const data = await res.json();
 
       setAssets(data);
+      
+      // ── AUTO-SELECT THE EMPLOYEE IN THE DROPDOWN ──
+      setSelectedCode(code);
 
     } catch {
 
@@ -130,6 +86,50 @@ export default function AssetsPanel({ mode = 'admin', user }) {
 
     }
   };
+
+  /* =========================
+     LOAD EMPLOYEES
+  ========================= */
+
+  useEffect(() => {
+
+    const loadEmployees = async () => {
+
+      try {
+
+        const res = await fetch('/api/employees', {
+          credentials: 'include'
+        });
+
+        const data = await res.json();
+
+        const employeeList =
+          Array.isArray(data) ? data : [];
+
+        setEmployees(employeeList);
+
+        // ── CHECK FOR CODE PARAMETER ──
+        const params = new URLSearchParams(window.location.search);
+        const codeParam = params.get('code');
+        
+        if (mode === 'admin' && codeParam) {
+          // Auto-load the specific employee's assets
+          loadAssets(codeParam);
+        } else if (mode === 'employee' && user?.employee_code) {
+          loadAssets(user.employee_code);
+        }
+
+      } catch {
+
+        toast.error('Failed to load employees');
+
+      }
+
+    };
+
+    loadEmployees();
+
+  }, [mode, user?.employee_code]);
 
   /* =========================
      TOGGLE
@@ -351,7 +351,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
 
             {/* =========================
-                ASSIGNED
+                ASSIGNED ASSETS
             ========================= */}
 
             <div
@@ -444,38 +444,44 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                     >
 
                       {assets[field] ? (
-
-                        <CheckCircle
-                          size={18}
-                          className="text-white"
-                        />
-
-                      ) : (
-
-                        <XCircle
-                          size={18}
-                          className="text-[#7c3aed]"
-                        />
-
-                      )}
+                      <CheckCircle size={18} className="text-white" />
+                    ) : (
+                      // ── EMPTY BOX - NO CROSS SYMBOL ──
+                      <div className="w-5 h-5" />
+                    )}
 
                     </div>
 
-                    <span
-                      className={`
-                        text-[11px]
-                        font-black
-                        uppercase
-                        tracking-[0.12em]
-                        ${
-                          assets[field]
-                            ? 'text-black'
-                            : 'text-[#6b7280]'
-                        }
-                      `}
-                    >
-                      {label}
-                    </span>
+                    <div className="flex-1">
+                      <span
+                        className={`
+                          text-[11px]
+                          font-black
+                          uppercase
+                          tracking-[0.12em]
+                          ${
+                            assets[field]
+                              ? 'text-black'
+                              : 'text-[#6b7280]'
+                          }
+                        `}
+                      >
+                        {label}
+                      </span>
+
+                      {/* Professional Status Badge */}
+                      <div className="mt-1">
+                        {assets[field] ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[8px] font-black uppercase border border-emerald-200">
+                            <CheckCircle size={8} /> Allocated
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[8px] font-black uppercase border border-amber-200 shadow-sm">
+                                                Not Allocated
+                                            </span>
+                        )}
+                      </div>
+                    </div>
 
                   </button>
 
@@ -486,7 +492,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
             </div>
 
             {/* =========================
-                PERMISSIONS
+                EXIT PROCESS / CLEARANCE
             ========================= */}
 
             <div
@@ -579,38 +585,44 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                     >
 
                       {assets[field] ? (
-
-                        <CheckCircle
-                          size={18}
-                          className="text-white"
-                        />
-
-                      ) : (
-
-                        <XCircle
-                          size={18}
-                          className="text-[#7c3aed]"
-                        />
-
-                      )}
+                      <CheckCircle size={18} className="text-white" />
+                    ) : (
+                      // ── EMPTY BOX - NO CROSS SYMBOL ──
+                      <div className="w-5 h-5" />
+                    )}
 
                     </div>
 
-                    <span
-                      className={`
-                        text-[11px]
-                        font-black
-                        uppercase
-                        tracking-[0.12em]
-                        ${
-                          assets[field]
-                            ? 'text-black'
-                            : 'text-[#6b7280]'
-                        }
-                      `}
-                    >
-                      {label}
-                    </span>
+                    <div className="flex-1">
+                      <span
+                        className={`
+                          text-[11px]
+                          font-black
+                          uppercase
+                          tracking-[0.12em]
+                          ${
+                            assets[field]
+                              ? 'text-black'
+                              : 'text-[#6b7280]'
+                          }
+                        `}
+                      >
+                        {label}
+                      </span>
+
+                      {/* Professional Status Badge */}
+                      <div className="mt-1">
+                        {assets[field] ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[8px] font-black uppercase border border-emerald-200">
+                            <CheckCircle size={8} /> Resolved
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[8px] font-black uppercase border border-blue-200 shadow-sm">
+                            Pending Verification
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
                   </button>
 

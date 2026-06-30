@@ -13,14 +13,103 @@ import {
 import { useAuth } from '../core/auth/AuthContext';
 import OrgAdminSetupModal from '../modules/deploy/components/OrgAdminSetupModal';
 import { MODULE_CONFIG } from '../core/config/modules';
+import { NotificationProvider, useNotifications } from '../core/context/NotificationContext';
 
+// ── Notification Dropdown Component ──
+function NotificationDropdown() {
+  const { notifications, showNotifications, setShowNotifications, markRead, markAllRead } = useNotifications();
 
-export default function Layout({ children }) {
+  if (!showNotifications) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 z-[9998]" 
+        onClick={() => setShowNotifications(false)}
+      />
+      
+      {/* Dropdown positioned under bell icon */}
+      <div 
+        className="fixed z-[9999] bg-white rounded-2xl shadow-2xl w-96 max-h-[500px] overflow-hidden border border-[#ece4ff]"
+        style={{
+          top: '72px',
+          right: '100px',
+          transformOrigin: 'top right',
+        }}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-[#ece4ff] flex justify-between items-center bg-[#faf7ff]">
+          <h3 className="text-sm font-black text-black uppercase tracking-tighter flex items-center gap-2">
+            <Bell size={16} className="text-[#8b5cf6]" />
+            Notifications
+          </h3>
+          <div className="flex gap-2">
+            {notifications.length > 0 && (
+              <button
+                onClick={markAllRead}
+                className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] hover:text-[#7c3aed] transition-colors"
+              >
+                Mark all read
+              </button>
+            )}
+            <button
+              onClick={() => setShowNotifications(false)}
+              className="p-1 rounded-lg hover:bg-[#f5efff] transition-colors text-[#6b7280]"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto max-h-[400px]">
+          {notifications.length === 0 ? (
+            <div className="text-center py-10">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-[#f5efff] flex items-center justify-center">
+                <Bell size={20} className="text-[#b0a8c5]" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#b6b6c7]">No new notifications</p>
+              <p className="text-[10px] text-[#b6b6c7] mt-1">You're all caught up!</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#f5efff]">
+              {notifications.map((n, i) => (
+                <div
+                  key={n.id || i}
+                  className="p-4 hover:bg-[#faf7ff] transition-colors cursor-pointer group"
+                  onClick={() => markRead(n.id)}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 rounded-full bg-[#8b5cf6] mt-1.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-black truncate">{n.title || 'Notification'}</p>
+                      <p className="text-[11px] text-[#6b7280] mt-0.5 line-clamp-2">{n.message || n.body || 'No details'}</p>
+                      <span className="text-[9px] text-[#b0a8c5] font-bold uppercase tracking-widest mt-1 block">
+                        {n.created_at ? new Date(n.created_at).toLocaleDateString() : 'Just now'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Main Layout Content ──
+function LayoutContent({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, hasRole, hasPermission, refreshUser } = useAuth();
-  const [notifications, setNotifications] = useState([]);
-  const [showNotif, setShowNotif] = useState(false);
+  const { setShowNotifications, notifications } = useNotifications();
+
   const [deployView, setDeployView] = useState('employee');
 
   // ✅ Detect admin dashboard (LIGHT MODE)
@@ -31,53 +120,18 @@ export default function Layout({ children }) {
     location.pathname.startsWith('/verify') ||
     location.pathname.startsWith('/superadmin');
 
-  // ✅ NEW: Check if we're on the Forge page - hide sidebar for Learning Central
+  // ✅ Check if we're on the Forge page - hide sidebar for Learning Central
   const isForgePage = location.pathname.startsWith('/forge');
 
-  const canSwitchView = hasRole(['org_admin', 'manager', 'super_admin']);
   const hasAdminClearance = hasPermission('deploy.dashboard.view_admin');
 
   useEffect(() => {
     if (user) {
       setDeployView(hasAdminClearance ? 'admin' : 'employee');
-
-      const fetchNotifs = async () => {
-        try {
-          const res = await fetch('/api/notifications', { credentials: 'include' });
-          if (res.ok) {
-            const data = await res.json();
-            setNotifications(data || []);
-          }
-        } catch { }
-      };
-
-      fetchNotifs();
     }
   }, [user, hasAdminClearance]);
 
-  const markRead = async (id) => {
-    try {
-      await fetch(`/api/notifications/${id}/read`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    } catch { }
-  };
-
-  const markAllRead = async () => {
-    try {
-      await fetch(`/api/notifications/read-all`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      setNotifications([]);
-    } catch { }
-  };
-
-
-
-  // ===== MODULE CONFIG (UNCHANGED LOGIC) =====
+  // ===== MODULE CONFIG =====
   const allModules = [
     {
       id: 'dashboard',
@@ -138,7 +192,7 @@ export default function Layout({ children }) {
         deployView === 'admin'
           ? [
             { label: 'Analytics', icon: LayoutDashboard, search: '?tab=dashboard', default: true },
-            { label: 'Personnel', icon: Users, search: '?tab=team' },
+            { label: 'Personnel', icon: Users, search: '?tab=personnel' },
             { label: 'Assets', icon: Package, search: '?tab=allocations' },
           ]
           : [
@@ -176,7 +230,6 @@ export default function Layout({ children }) {
 
         path: m.path,
 
-        // THIS WAS MISSING
         icon: m.icon,
 
         options: m.options,
@@ -195,7 +248,7 @@ export default function Layout({ children }) {
       className={`flex h-screen w-full ${isAdminDashboard ? 'bg-white text-black' : 'bg-[#040812] text-white'
         }`}
     >
-      {/* ================= DARK SIDEBARS (DISABLED FOR ADMIN AND FORGE) ================= */}
+      {/* ================= DARK SIDEBARS ================= */}
       {!isAdminDashboard && !isForgePage && (
         <>
           {/* PRIMARY SIDEBAR */}
@@ -246,7 +299,10 @@ export default function Layout({ children }) {
         {children}
       </main>
 
-      {/* ================= BACKGROUND GLOW (DISABLED FOR ADMIN) ================= */}
+      {/* ================= GLOBAL NOTIFICATION DROPDOWN ================= */}
+      <NotificationDropdown />
+
+      {/* ================= BACKGROUND GLOW ================= */}
       {!isAdminDashboard && (
         <div className="fixed inset-0 pointer-events-none">
           <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-purple-500/10 blur-3xl rounded-full" />
@@ -258,5 +314,14 @@ export default function Layout({ children }) {
         <OrgAdminSetupModal user={user} onComplete={() => refreshUser()} />
       )}
     </div>
+  );
+}
+
+// ── Wrapper with Provider ──
+export default function Layout({ children }) {
+  return (
+    <NotificationProvider>
+      <LayoutContent>{children}</LayoutContent>
+    </NotificationProvider>
   );
 }

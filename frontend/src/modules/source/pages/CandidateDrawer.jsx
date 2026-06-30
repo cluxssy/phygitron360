@@ -277,15 +277,19 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
   const validateProfileEdit = () => {
     if (!editForm?.full_name?.trim()) return 'Full name is required.';
+    // Phone - only validate if filled
     if (editForm.phone && !isPhone(editForm.phone)) return 'Phone must be 7-15 digits, optionally starting with +.';
+    // Experience - only validate if filled
     if (editForm.total_experience_years !== undefined && editForm.total_experience_years !== '' && !isNonNegativeNumber(editForm.total_experience_years)) {
       return 'Total experience must be 0 or greater.';
     }
     if (editForm.expected_salary && !/^[0-9,.\sA-Za-z/-]+$/.test(editForm.expected_salary)) {
       return 'Expected salary contains unsupported characters.';
     }
-    if (!isValidUrl(editForm.linkedin_url)) return 'LinkedIn URL must start with http:// or https://.';
-    if (!isValidUrl(editForm.portfolio_url)) return 'Portfolio URL must start with http:// or https://.';
+    // LinkedIn URL - only validate if filled
+    if (editForm.linkedin_url && !isValidUrl(editForm.linkedin_url)) return 'LinkedIn URL must start with http:// or https://.';
+    // Portfolio URL - only validate if filled
+    if (editForm.portfolio_url && !isValidUrl(editForm.portfolio_url)) return 'Portfolio URL must start with http:// or https://.';
     const badSkill = (editForm.skills || []).find(s => s.years_of_use !== null && s.years_of_use !== '' && !isNonNegativeNumber(s.years_of_use));
     if (badSkill) return 'Skill years must be 0 or greater.';
     return '';

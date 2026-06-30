@@ -154,12 +154,12 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     assessment.questions.forEach((q, index) => {
       const answer = answers[q.id];
       
-      // Check if question requires an answer (all questions are required in this context)
-      if (!answer || (typeof answer === 'string' && !answer.trim())) {
+      // Only validate if answer exists (has content) or is a file
+      if (answer && (typeof answer === 'string' && !answer.trim())) {
         newErrors[q.id] = `Question ${index + 1} requires an answer`;
       }
       
-      // For file upload questions, validate file type/size
+      // For file upload questions, validate file type/size only if a file is uploaded
       if (q.question_type === 'file_upload') {
         if (answer instanceof File) {
           const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];

@@ -89,37 +89,37 @@ export default function MyProfile() {
 
   // ── Validation Functions ──
   const validateProfile = () => {
-    // Email validation
+    // Email validation - only if filled
     if (formData.email_id && !isValidEmail(formData.email_id)) {
       toast.error('Please enter a valid email address');
       return false;
     }
 
-    // Phone validation
+    // Phone validation - only if filled
     if (formData.contact_number && !isValidPhone(formData.contact_number)) {
       toast.error('Please enter a valid phone number (10 digits)');
       return false;
     }
 
-    // Emergency contact validation
+    // Emergency contact validation - only if filled
     if (formData.emergency_contact && !isValidPhone(formData.emergency_contact)) {
       toast.error('Emergency contact must be a valid phone number (10 digits)');
       return false;
     }
 
-    // PAN validation
+    // PAN validation - only if filled
     if (formData.pan_no && !isValidPAN(formData.pan_no)) {
       toast.error('PAN must follow ABCDE1234F format');
       return false;
     }
 
-    // Bank Account validation
+    // Bank Account validation - only if filled
     if (formData.bank_account_no && !isValidBankAccount(formData.bank_account_no)) {
       toast.error('Bank account must be 9-18 digits only');
       return false;
     }
 
-    // URL validations
+    // URL validations - only if filled
     if (formData.linkedin_url && !isValidURL(formData.linkedin_url)) {
       toast.error('Enter a valid LinkedIn URL');
       return false;

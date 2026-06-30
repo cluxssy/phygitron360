@@ -13,6 +13,7 @@ import {
   isFutureDate,
   isNonEmpty,
   isValidPhone,
+  isValidDate,
 } from '../../../core/utils/validators';
 
 const DESIGNATIONS = [
@@ -51,7 +52,7 @@ export default function OnboardingPanel() {
     location: '',
     notes: '',
     code: '',
-    doj: new Date().toISOString().split('T')[0]
+    doj: ''
   });
 
   useEffect(() => { 
@@ -177,9 +178,9 @@ export default function OnboardingPanel() {
     setSelectedApproval(approval);
     setApproveForm(prev => ({
       ...prev,
-      code: approval.employee_code,
+      code: approval.employee_code || '',
       location: approval.location || '',
-      doj: approval.doj || new Date().toISOString().split('T')[0]
+      doj: approval.doj || ''
     }));
   };
 
@@ -214,52 +215,60 @@ export default function OnboardingPanel() {
     e.preventDefault();
 
     // ── Validation ──
-    if (!approveForm.manager || !approveForm.location || !approveForm.code) {
-        toast.error("Please fill in all required information");
-        return;
+    // Only validate fields that have values
+    // Manager: only validate if filled
+    if (approveForm.manager && !isNonEmpty(approveForm.manager)) {
+      toast.error("Reporting manager name cannot be empty");
+      return;
     }
-
-    if (!isEmployeeCode(approveForm.code)) {
-        toast.error("Employee code must be 3-20 letters, numbers, hyphens, or underscores");
-        return;
+    
+    // Location: only validate if filled
+    if (approveForm.location && !isNonEmpty(approveForm.location)) {
+      toast.error("Location cannot be empty");
+      return;
     }
-
-    if (!approveForm.doj) {
-        toast.error("Date of joining is required");
-        return;
+    
+    // Employee Code: only validate if filled
+    if (approveForm.code && !isEmployeeCode(approveForm.code)) {
+      toast.error("Employee code must be 3-20 letters, numbers, hyphens, or underscores");
+      return;
     }
-
-    if (isFutureDate(approveForm.doj)) {
-        toast.error("Date of joining cannot be in the future");
+    
+    // DOJ: only validate if filled
+    if (approveForm.doj) {
+      if (!isValidDate(approveForm.doj)) {
+        toast.error("Date of joining is invalid");
         return;
+      }
+      
     }
 
     setSubmitting(true);
     try {
-        const formData = new FormData();
-        formData.append('new_employee_code', approveForm.code);
-        formData.append('doj', approveForm.doj);
-        formData.append('reporting_manager', approveForm.manager);
-        formData.append('employment_type', approveForm.type);
-        formData.append('pf_included', approveForm.pf);
-        formData.append('mediclaim_included', approveForm.mediclaim);
-        formData.append('location', approveForm.location);
-        formData.append('notes', approveForm.notes || '');
+      const formData = new FormData();
+      formData.append('new_employee_code', approveForm.code || '');
+      formData.append('doj', approveForm.doj || '');
+      formData.append('reporting_manager', approveForm.manager || '');
+      formData.append('employment_type', approveForm.type || 'Full Time');
+      formData.append('pf_included', approveForm.pf || 'No');
+      formData.append('mediclaim_included', approveForm.mediclaim || 'No');
+      formData.append('location', approveForm.location || '');
+      formData.append('notes', approveForm.notes || '');
 
-        const res = await fetch(`/api/onboarding/approve/${selectedApproval.employee_code}`, {
-            method: 'POST',
-            body: formData,
-            credentials: 'include'
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Activation failed');
-        toast.success("Personnel Active in Matrix");
-        setSelectedApproval(null);
-        loadApprovals();
+      const res = await fetch(`/api/onboarding/approve/${selectedApproval.employee_code}`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Activation failed');
+      toast.success("Personnel Active in Matrix");
+      setSelectedApproval(null);
+      loadApprovals();
     } catch (e) {
-        toast.error(e.message);
+      toast.error(e.message);
     } finally {
-        setSubmitting(false);
+      setSubmitting(false);
     }
   };
 
@@ -268,6 +277,20 @@ export default function OnboardingPanel() {
     'Completed': 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20',
     'Expired': 'bg-red-500/10 text-red-500 border border-red-500/20',
   };
+
+  const SectionHeader = ({ icon: Icon, label }) => (
+    <div className="flex items-center gap-3">
+      <Icon size={16} className={isLightMode ? 'text-[#8b5cf6]' : 'text-primary'} />
+      <span className={`text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>{label}</span>
+    </div>
+  );
+
+  const Field = ({ label, children }) => (
+    <div className="space-y-1.5">
+      <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>{label}</label>
+      {children}
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -680,241 +703,186 @@ export default function OnboardingPanel() {
                     {/* Basic Section */}
                     <div className="space-y-6">
                         <SectionHeader icon={FileText} label="Personal Vectors" />
-                        <div className={`space-y-4 p-6 rounded-3xl border ${isLightMode ? 'bg-[#faf7ff] border-[#ebe4ff]' : 'bg-white/5 border-white/5'}`}>
-                            <InfoCard label="Email Access" value={selectedApproval.email_id} icon={Mail} />
-                            <InfoCard label="Contact Frequency" value={selectedApproval.contact_number} icon={Phone} />
-                            <InfoCard label="Temporal Origin" value={selectedApproval.dob} icon={Clock} />
-                            <InfoCard label="Emergency Contact" value={selectedApproval.emergency_contact} icon={ShieldAlert} />
-                        </div>
-
-                        <SectionHeader icon={Briefcase} label="Skills & Experience" />
-                        <div className={`space-y-4 p-6 rounded-3xl border ${isLightMode ? 'bg-[#faf7ff] border-[#ebe4ff]' : 'bg-white/5 border-white/5'}`}>
-                            <div className="space-y-1">
-                                <p className={`text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>Primary Skill Assets</p>
-                                <p className={`text-xs leading-relaxed font-medium ${isLightMode ? 'text-black/80' : 'text-white/80'}`}>{selectedApproval.primary_skillset || 'No telemetry detected'}</p>
-                            </div>
-                            <div className="space-y-1 mt-4">
-                                <p className={`text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>Secondary Capabilities</p>
-                                <p className={`text-xs leading-relaxed ${isLightMode ? 'text-[#6b7280]' : 'text-white/50'}`}>{selectedApproval.secondary_skillset || 'None'}</p>
-                            </div>
+                        <div className={`space-y-4 p-6 rounded-3xl border ${
+                          isLightMode 
+                            ? 'bg-[#faf7ff] border-[#f1ebff]' 
+                            : 'bg-white/5 border-white/5'
+                        }`}>
+                          <Field label="Name">
+                            <p className={`text-sm font-bold ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.name}</p>
+                          </Field>
+                          <Field label="Email">
+                            <p className={`text-xs font-mono ${isLightMode ? 'text-[#6b7280]' : 'text-white/60'}`}>{selectedApproval.email_id}</p>
+                          </Field>
+                          <Field label="Employee Code">
+                            <p className={`text-xs font-mono font-bold ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{selectedApproval.employee_code}</p>
+                          </Field>
                         </div>
                     </div>
 
-                    {/* Geography & Education */}
+                    {/* Role Section */}
                     <div className="space-y-6">
-                        <SectionHeader icon={MapPin} label="Geographic Anchors" />
-                        <div className={`space-y-4 p-6 rounded-3xl border ${isLightMode ? 'bg-[#faf7ff] border-[#ebe4ff]' : 'bg-white/5 border-white/5'}`}>
-                            <div className="space-y-1">
-                                <p className={`text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>Current Base</p>
-                                <p className={`text-xs leading-relaxed ${isLightMode ? 'text-black/80' : 'text-white/70'}`}>{selectedApproval.current_address}</p>
-                            </div>
-                            <div className="space-y-1 mt-4">
-                                <p className={`text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>Permanent Point</p>
-                                <p className={`text-xs leading-relaxed ${isLightMode ? 'text-black/80' : 'text-white/70'}`}>{selectedApproval.permanent_address}</p>
-                            </div>
+                        <SectionHeader icon={Briefcase} label="Role Parameters" />
+                        <div className={`space-y-4 p-6 rounded-3xl border ${
+                          isLightMode 
+                            ? 'bg-[#faf7ff] border-[#f1ebff]' 
+                            : 'bg-white/5 border-white/5'
+                        }`}>
+                          <Field label="Designation">
+                            <p className={`text-sm font-bold ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.designation}</p>
+                          </Field>
+                          <Field label="Team / Department">
+                            <p className={`text-sm font-bold ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.team}</p>
+                          </Field>
+                          <Field label="Invite Code">
+                            <p className={`text-xs font-mono font-bold ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{selectedApproval.invite_code}</p>
+                          </Field>
                         </div>
-
-                        <SectionHeader icon={GraduationCap} label="Academic History Blocks" />
-                        <div className={`space-y-3 p-6 rounded-3xl border ${isLightMode ? 'bg-[#faf7ff] border-[#ebe4ff]' : 'bg-white/5 border-white/5'}`}>
-                            {(() => {
-                                let edu = selectedApproval.education_details;
-                                try {
-                                    if (typeof edu === 'string') edu = JSON.parse(edu);
-                                } catch { 
-                                    return <p className={`text-xs italic ${isLightMode ? 'text-[#6b7280]' : 'text-white/50'}`}>Invalid data format.</p>;
-                                }
-                                
-                                if (Array.isArray(edu) && edu.length > 0) {
-                                    return edu.map((e, idx) => (
-                                        <div key={idx} className={`pb-3 mb-3 border-b last:border-0 last:pb-0 last:mb-0 ${isLightMode ? 'border-[#ebe4ff]' : 'border-white/5'}`}>
-                                            <p className={`text-xs font-black uppercase ${isLightMode ? 'text-black' : 'text-white'}`}>{e.degree}</p>
-                                            <p className={`text-[10px] mt-1 uppercase tracking-widest italic ${isLightMode ? 'text-[#6b7280]' : 'text-white/40'}`}>{e.university} ({e.year})</p>
-                                            {e.percentage && <p className={`text-[10px] mt-1 font-black ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>Scoring: {e.percentage}</p>}
-                                        </div>
-                                    ));
-                                }
-                                return <p className={`text-xs italic ${isLightMode ? 'text-[#6b7280]' : 'text-white/50'}`}>No academic history detected.</p>;
-                            })()}
-                        </div>
-                    </div>
-                 </div>
-
-                 {/* Document Review */}
-                 <div className="space-y-6">
-                    <SectionHeader icon={Eye} label="Identity Artifacts" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[
-                           { label: 'Resume (CV)', path: selectedApproval.cv_path },
-                           { label: 'Identity Visual', path: selectedApproval.photo_path },
-                           { label: 'Official Credential', path: selectedApproval.id_proofs }
-                        ].map((d, i) => (
-                           <div key={i} className={`p-4 rounded-2xl border flex items-center justify-between group transition-all cursor-pointer ${
-                             isLightMode ? 'bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff]' : 'bg-white/5 border-white/5 hover:bg-white/10'
-                           }`}>
-                              <div className="flex items-center gap-3">
-                                 <FileText size={16} className={isLightMode ? 'text-[#8b5cf6]' : 'text-primary'} />
-                                 <p className={`text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'text-black/60' : 'text-white/40'}`}>{d.label}</p>
-                              </div>
-                               {d.path ? (
-                                 <a 
-                                   href={d.path.startsWith('http') ? d.path : `/${d.path.replace(/^\//, '')}`} 
-                                   target="_blank" 
-                                   rel="noreferrer" 
-                                   className={`p-2 rounded-lg transition-colors border ${
-                                     isLightMode 
-                                       ? 'text-[#8b5cf6] bg-white border-[#ebe4ff] hover:bg-[#faf7ff]' 
-                                       : 'text-primary bg-white/5 hover:text-white border-transparent'
-                                   }`}
-                                 >
-                                   <ExternalLink size={14}/>
-                                 </a>
-                               ) : (
-                                 <span className="text-error/50 text-[8px] font-black uppercase">Missing</span>
-                               )}
-                           </div>
-                        ))}
                     </div>
                  </div>
 
                  {/* Approval Form */}
-                 <div className={`mt-12 p-10 rounded-[40px] space-y-8 shadow-2xl ${
-                   isLightMode 
-                     ? 'bg-[#f0fdf4] border border-[#bbf7d0] shadow-emerald-500/5' 
-                     : 'bg-emerald-500/5 border border-emerald-500/10 shadow-emerald-500/5'
-                 }`}>
-                    <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${
-                          isLightMode ? 'bg-emerald-200 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'
-                        }`}>
-                           <ShieldAlert size={24} />
-                        </div>
-                        <div>
-                           <h3 className={`text-xl font-display font-black uppercase tracking-tighter ${isLightMode ? 'text-emerald-900' : 'text-white'}`}>Initiate Activation Protocol</h3>
-                           <p className={`text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'text-emerald-700' : 'text-emerald-400'}`}>Fill in employee information to complete setup</p>
-                        </div>
-                    </div>
-
-                    <form onSubmit={handleApprove} className="space-y-6">
+                 <div className="space-y-6">
+                    <SectionHeader icon={ShieldAlert} label="Approval Workflow" />
+                    <form onSubmit={handleApprove} className={`space-y-6 p-8 rounded-3xl border ${
+                      isLightMode 
+                        ? 'bg-[#faf7ff] border-[#f1ebff]' 
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                       {/* Row 1: Manager + Location */}
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <div className="space-y-2">
-                              <ComboBox 
-                                label="Reporting Manager"
-                                options={managers.map(m => ({ id: m.code, name: `${m.name} (${m.role})` }))}
-                                value={approveForm.manager}
-                                onChange={val => setApproveForm({...approveForm, manager: val})}
-                                placeholder="Select or type manager name..."
-                              />
-                           </div>
-                           <div className="space-y-2">
-                              <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-emerald-800' : 'text-white/30'}`}>Neural Employment Type</label>
-                              <select 
-                                value={approveForm.type}
-                                onChange={e => setApproveForm({...approveForm, type: e.target.value})}
-                                className={`w-full px-5 py-4 rounded-2xl text-xs outline-none transition-all ${
-                                  isLightMode 
-                                    ? 'bg-white border border-[#bbf7d0] text-black focus:border-emerald-500' 
-                                    : 'glass-panel border border-white/10 bg-black/40 text-white focus:border-emerald-500/40'
-                                }`}
-                              >
-                                 <option value="Full Time" className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>Full Time</option>
-                                 <option value="Contract" className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>Contract</option>
-                                 <option value="Internship" className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>Internship</option>
-                              </select>
-                           </div>
+                          <Field label="Reporting Manager">
+                            <ComboBox 
+                              options={managers}
+                              value={approveForm.manager}
+                              onChange={val => setApproveForm({...approveForm, manager: val})}
+                              placeholder="Select Manager..."
+                            />
+                          </Field>
+                          <Field label="Location">
+                            <ComboBox 
+                              options={locations}
+                              value={approveForm.location}
+                              onChange={val => setApproveForm({...approveForm, location: val})}
+                              placeholder="Select Location..."
+                            />
+                          </Field>
                        </div>
-                       
+
+                       {/* Row 2: Employee Code + DOJ */}
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <Field label="New Employee Code">
+                            <input 
+                              value={approveForm.code} 
+                              onChange={e => setApproveForm({...approveForm, code: e.target.value})}
+                              className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
+                                isLightMode 
+                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                              placeholder="e.g., EMP-001"
+                            />
+                          </Field>
+                          <Field label="Date of Joining">
+                            <input 
+                              type="date"
+                              value={approveForm.doj} 
+                              onChange={e => setApproveForm({...approveForm, doj: e.target.value})}
+                              className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
+                                isLightMode 
+                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                            />
+                          </Field>
+                       </div>
+
+                       {/* Row 3: Type + PF + Mediclaim */}
                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                           {['pf', 'mediclaim'].map(k => (
-                             <div key={k} className="space-y-2">
-                                <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-emerald-800' : 'text-white/30'}`}>{k.toUpperCase()} Enrollment</label>
-                                <select 
-                                  value={approveForm[k]}
-                                  onChange={e => setApproveForm({...approveForm, [k]: e.target.value})}
-                                  className={`w-full px-5 py-4 rounded-2xl text-xs outline-none transition-all ${
-                                    isLightMode 
-                                      ? 'bg-white border border-[#bbf7d0] text-black focus:border-emerald-500' 
-                                      : 'glass-panel border border-white/10 bg-black/40 text-white focus:border-emerald-500/40'
-                                  }`}
-                                >
-                                   <option value="No" className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>No</option>
-                                   <option value="Yes" className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>Yes</option>
-                                </select>
-                             </div>
-                           ))}
-                           <div className="space-y-2">
-                              <ComboBox 
-                                label="Location of Work"
-                                options={locations.length > 0 ? locations : ['Remote', 'On-Site', 'Hybrid']}
-                                value={approveForm.location}
-                                onChange={val => setApproveForm({...approveForm, location: val})}
-                                placeholder="Choose location..."
-                              />
-                           </div>
-                           <div className="space-y-2 col-span-1 md:col-span-2">
-                              <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-emerald-800' : 'text-white/30'}`}>Onboarding / Employee Code (Editable)</label>
-                              <input 
-                                value={approveForm.code}
-                                onChange={e => setApproveForm({...approveForm, code: e.target.value})}
-                                className={`w-full px-5 py-4 rounded-2xl text-xs outline-none font-mono transition-all uppercase ${
-                                  isLightMode 
-                                    ? 'bg-white border border-[#bbf7d0] text-[#8b5cf6] font-black focus:border-[#8b5cf6]' 
-                                    : 'glass-panel border border-white/10 bg-black/40 text-primary font-black focus:border-primary/40'
-                                }`}
-                              />
-                              <p className={`text-[8px] font-bold uppercase tracking-widest ml-1 ${isLightMode ? 'text-emerald-600' : 'text-white/30'}`}>Format: 3-20 letters, numbers, hyphens, or underscores</p>
-                           </div>
-                           <div className="space-y-2">
-                              <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-emerald-800' : 'text-white/30'}`}>Official Date of Joining (DOJ)</label>
-                              <input 
-                                type="date"
-                                value={approveForm.doj}
-                                onChange={e => setApproveForm({...approveForm, doj: e.target.value})}
-                                className={`w-full px-5 py-4 rounded-2xl text-xs outline-none transition-all ${
-                                  isLightMode 
-                                    ? 'bg-white border border-[#bbf7d0] text-black focus:border-emerald-500' 
-                                    : 'glass-panel border border-white/10 bg-black/40 text-white focus:border-emerald-500/40'
-                                }`}
-                              />
-                              <p className={`text-[8px] font-bold uppercase tracking-widest ml-1 ${isLightMode ? 'text-emerald-600' : 'text-white/30'}`}>Cannot be in the future</p>
-                           </div>
+                          <Field label="Employment Type">
+                            <select 
+                              value={approveForm.type}
+                              onChange={e => setApproveForm({...approveForm, type: e.target.value})}
+                              className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
+                                isLightMode 
+                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                            >
+                              {['Full Time', 'Part Time', 'Contract', 'Intern', 'Consultant'].map(t => (
+                                <option key={t} value={t} className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>{t}</option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="PF Included">
+                            <select 
+                              value={approveForm.pf}
+                              onChange={e => setApproveForm({...approveForm, pf: e.target.value})}
+                              className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
+                                isLightMode 
+                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                            >
+                              {['Yes', 'No'].map(t => (
+                                <option key={t} value={t} className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>{t}</option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Mediclaim Included">
+                            <select 
+                              value={approveForm.mediclaim}
+                              onChange={e => setApproveForm({...approveForm, mediclaim: e.target.value})}
+                              className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
+                                isLightMode 
+                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                            >
+                              {['Yes', 'No'].map(t => (
+                                <option key={t} value={t} className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>{t}</option>
+                              ))}
+                            </select>
+                          </Field>
                        </div>
 
-                       <div className="space-y-2">
-                           <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-emerald-800' : 'text-white/30'}`}>Internal Clearance Notes</label>
-                           <textarea 
-                             rows="3"
-                             value={approveForm.notes}
-                             onChange={e => setApproveForm({...approveForm, notes: e.target.value})}
-                             placeholder="Neural profile performance notes..."
-                             className={`w-full px-5 py-4 rounded-2xl text-xs outline-none resize-none transition-all ${
-                               isLightMode 
-                                 ? 'bg-white border border-[#bbf7d0] text-black focus:border-emerald-500' 
-                                 : 'glass-panel border border-white/10 bg-black/40 text-white focus:border-emerald-500/40'
-                             }`}
-                           />
-                       </div>
+                       {/* Notes */}
+                       <Field label="Additional Notes">
+                         <textarea 
+                           value={approveForm.notes}
+                           onChange={e => setApproveForm({...approveForm, notes: e.target.value})}
+                           className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all resize-none min-h-[80px] ${
+                             isLightMode 
+                               ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                               : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                           }`}
+                           placeholder="Any additional notes or remarks..."
+                         />
+                       </Field>
 
-                       <div className="flex gap-4 pt-4">
+                       {/* Actions */}
+                       <div className="flex gap-4 pt-6">
                           <button 
                             type="button"
                             onClick={() => setSelectedApproval(null)}
-                            className={`flex-1 py-5 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                               isLightMode 
-                                ? 'border border-[#bbf7d0] text-emerald-800 hover:bg-white' 
-                                : 'border border-white/10 text-white/30 hover:text-white'
+                                ? 'border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff] hover:text-black' 
+                                : 'border border-white/10 text-white/40 hover:text-white'
                             }`}
                           >
-                            Defer Approval
+                            Abort Workflow
                           </button>
                           <button 
-                            type="submit" disabled={submitting}
-                            className={`flex-1 py-5 rounded-3xl font-black text-[12px] uppercase tracking-[0.2em] transition-all ${
+                            type="submit" 
+                            disabled={submitting}
+                            className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all ${
                               isLightMode 
-                                ? 'bg-emerald-600 text-white shadow-lg hover:bg-emerald-700 shadow-emerald-600/10' 
-                                : 'bg-emerald-500 text-black shadow-2xl shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98]'
+                                ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg' 
+                                : 'bg-primary text-black shadow-xl shadow-primary/20'
                             }`}
                           >
-                            {submitting ? 'Activating Matrix...' : 'Activate Personnel'}
+                            {submitting ? 'Activating...' : 'Approve & Deploy'}
                           </button>
                        </div>
                     </form>
@@ -925,31 +893,4 @@ export default function OnboardingPanel() {
       )}
     </div>
   );
-}
-
-function SectionHeader({ icon: Icon, label }) {
-    const isLightMode = window.location.pathname.startsWith('/deploy');
-    return (
-        <div className={`flex items-center gap-3 border-b pb-4 mb-4 ${isLightMode ? 'border-[#f1ebff]' : 'border-white/5'}`}>
-            <Icon size={16} className={isLightMode ? 'text-[#8b5cf6]' : 'text-primary'} />
-            <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${isLightMode ? 'text-black' : 'text-white'}`}>{label}</span>
-        </div>
-    );
-}
-
-function InfoCard({ label, value, icon: Icon }) {
-    const isLightMode = window.location.pathname.startsWith('/deploy');
-    return (
-        <div className="flex items-start gap-4">
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-              isLightMode ? 'bg-[#f3e8ff] text-[#8b5cf6]' : 'bg-white/5 text-white/20'
-            }`}><Icon size={12}/></div>
-            <div>
-                <p className={`text-[8px] font-black uppercase tracking-widest mb-0.5 ${
-                  isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'
-                }`}>{label}</p>
-                <p className={`text-xs font-medium ${isLightMode ? 'text-black' : 'text-white/90'}`}>{value || '—'}</p>
-            </div>
-        </div>
-    );
 }

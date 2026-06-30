@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { useNotifications } from '../../../core/context/NotificationContext';
 import PerformancePanel from '../components/PerformancePanel';
 import AssetsPanel from '../components/AssetsPanel';
 import OnboardingPanel from '../components/OnboardingPanel';
@@ -24,7 +25,7 @@ import { getHubTabs } from "../../../core/navigation/hubTabs";
 export default function DeployDashboard() {
 
   const { user, hasPermission, hasRole, logout } = useAuth();
-
+  const { setShowNotifications } = useNotifications();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -170,8 +171,9 @@ export default function DeployDashboard() {
 
           <img
             src={bellIcon}
-            className="icon"
+            className="icon cursor-pointer"
             alt="bell"
+            onClick={() => setShowNotifications(true)}
           />
 
           <img
@@ -402,120 +404,116 @@ export default function DeployDashboard() {
 
         <div className="content">
 
-  {/* =========================================
-    DASHBOARD
-========================================= */}
+          {/* =========================================
+            DASHBOARD
+          ========================================= */}
 
-{deployView === 'management' &&
-  currentTab === 'dashboard' &&
-  canViewDashboard && (
+          {deployView === 'management' &&
+            currentTab === 'dashboard' &&
+            canViewDashboard && (
 
-  <DeployAnalytics
-    key="management-dashboard"
-    mode={panelMode}
-    user={user}
-  />
+            <DeployAnalytics
+              key="management-dashboard"
+              mode={panelMode}
+              user={user}
+            />
 
-)}
+          )}
 
-{deployView === 'employee' &&
-  currentTab === 'dashboard' &&
-  canViewDashboard && (
+          {deployView === 'employee' &&
+            currentTab === 'dashboard' &&
+            canViewDashboard && (
 
-  <EmployeeDashboard
-    key="employee-dashboard"
-    mode="employee"
-    user={user}
-  />
+            <EmployeeDashboard
+              key="employee-dashboard"
+              mode="employee"
+              user={user}
+            />
 
-)}
+          )}
 
+          {/* =========================================
+            MANAGEMENT PERSONNEL
+          ========================================= */}
 
-{/* =========================================
-    MANAGEMENT PERSONNEL
-========================================= */}
+          {deployView === 'management' &&
+            currentTab === 'personnel' &&
+            canViewProfile && (
 
-{deployView === 'management' &&
-  currentTab === 'personnel' &&
-  canViewProfile && (
+            <EmployeeDirectory
+              key="management-personnel"
+            />
 
-  <EmployeeDirectory
-    key="management-personnel"
-  />
+          )}
 
-)}
+          {/* =========================================
+            EMPLOYEE PROFILE
+          ========================================= */}
 
+          {deployView === 'employee' &&
+            currentTab === 'profile' && (
 
-{/* =========================================
-    EMPLOYEE PROFILE
-========================================= */}
+            <MyProfile
+              key="employee-profile"
+              mode="employee"
+              user={user}
+            />
 
-{deployView === 'employee' &&
-  currentTab === 'profile' && (
+          )}
 
-  <MyProfile
-    key="employee-profile"
-    mode="employee"
-    user={user}
-  />
+          {/* =========================================
+            MANAGEMENT PROFILE (Full View)
+          ========================================= */}
 
-)}
+          {deployView === 'management' &&
+            currentTab === 'profile' &&
+            canViewProfile && (
 
-{/* =========================================
-    MANAGEMENT PROFILE (Full View)
-========================================= */}
+            <EmployeeProfileFull
+              key="management-profile-full"
+              employeeCode={params.get('code')}
+              onBack={() => setTab('personnel')}
+            />
 
-{deployView === 'management' &&
-  currentTab === 'profile' &&
-  canViewProfile && (
+          )}
 
-  <EmployeeProfileFull
-    key="management-profile-full"
-    employeeCode={params.get('code')}
-    onBack={() => setTab('personnel')}
-  />
+          {/* =========================================
+            ATTENDANCE
+          ========================================= */}
 
-)}
+          {currentTab === 'attendance' &&
+            canViewAttendance && (
 
+            <AttendancePanel
+              key={`${deployView}-attendance`}
+              mode={
+                deployView === 'management'
+                  ? panelMode
+                  : 'employee'
+              }
+              user={user}
+            />
 
-{/* =========================================
-    ATTENDANCE
-========================================= */}
+          )}
 
-{currentTab === 'attendance' &&
-  canViewAttendance && (
+          {/* =========================================
+            PERFORMANCE
+          ========================================= */}
 
-  <AttendancePanel
-    key={`${deployView}-attendance`}
-    mode={
-      deployView === 'management'
-        ? panelMode
-        : 'employee'
-    }
-    user={user}
-  />
+          {currentTab === 'performance' && (
 
-)}
+            <PerformancePanel
+              key={`${deployView}-performance`}
+              isAdmin={deployView === 'management'}
+              mode={
+                deployView === 'management'
+                  ? panelMode
+                  : 'employee'
+              }
+              user={user}
+            />
 
-
-{/* =========================================
-    PERFORMANCE
-========================================= */}
-
-{currentTab === 'performance' && (
-
-  <PerformancePanel
-    key={`${deployView}-performance`}
-    isAdmin={deployView === 'management'}
-    mode={
-      deployView === 'management'
-        ? panelMode
-        : 'employee'
-    }
-    user={user}
-  />
-
-)}
+          )}
 
           {/* ASSETS */}
 
@@ -568,7 +566,7 @@ export default function DeployDashboard() {
         </div>
 
       </div>
-</div>
+    </div>
     
   );
 }

@@ -188,12 +188,16 @@ export default function PayrollPanel() {
       const label = r.employee_code || `record ${i + 1}`;
       if (!r.employee_code) return `Payroll ${label}: employee code is required.`;
       for (const field of moneyFields) {
-        if (r[field] !== undefined && r[field] !== null && !isNonNegativeNumber(r[field])) {
+        // Only validate if the field has a value
+        if (r[field] !== undefined && r[field] !== null && r[field] !== '' && !isNonNegativeNumber(r[field])) {
           return `${label}: ${field.replaceAll('_', ' ')} must be 0 or greater.`;
         }
       }
+      // Bank account - only validate if filled
       if (r.bank_account_no && !isBankAccount(r.bank_account_no)) return `${label}: bank account number should be 9-18 digits.`;
+      // PAN - only validate if filled
       if (r.pan_no && !isPan(r.pan_no)) return `${label}: PAN must follow ABCDE1234F format.`;
+      // Deductions check - only if both values exist
       if ((Number(r.total_deductions) || 0) > (Number(r.monthly_ctc) || Number(r.gross_ctc) || 0)) {
         return `${label}: deductions look higher than earnings. Please review before pushing.`;
       }
