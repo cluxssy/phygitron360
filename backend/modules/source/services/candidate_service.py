@@ -77,12 +77,11 @@ class CandidateService:
         if not email:
             email = f"unknown_{uuid.uuid4().hex[:8]}@phygitron.local"
             
-        # Extract primary / secondary skills from AI result or fallback to splitting skills
-        primary_skills = ai_result.get("p_sk") or ai_result.get("primary_skills", [])
-        secondary_skills = ai_result.get("s_sk") or ai_result.get("secondary_skills", [])
-        if not primary_skills and ai_result.get("skills"):
-            skills_raw = ai_result.get("skills", [])
-            primary_skills = [s.get("name") if isinstance(s, dict) else s for s in skills_raw]
+        # Extract ALL skills from AI result into primary_skills
+        primary_skills = ai_result.get("sk") or ai_result.get("skills") or ai_result.get("p_sk") or ai_result.get("primary_skills", [])
+        secondary_skills = []
+        if isinstance(primary_skills, list) and len(primary_skills) > 0 and isinstance(primary_skills[0], dict):
+            primary_skills = [s.get("name") or s.get("skill") for s in primary_skills]
 
         # Map experience from restructured format
         raw_experience = ai_result.get("exp") or ai_result.get("experience", [])
@@ -95,7 +94,7 @@ class CandidateService:
                     "start_date": exp.get("s") or exp.get("start_date", ""),
                     "end_date": exp.get("e") or exp.get("end_date", ""),
                     "is_current": exp.get("is_current") or (exp.get("e") == "Present" or exp.get("end_date") == "Present"),
-                    "description": exp.get("description", "")
+                    "description": exp.get("d") or exp.get("description", "")
                 })
             else:
                 experience.append(exp)
@@ -468,15 +467,23 @@ class CandidateService:
             cand["skills"] = cand["primary_skills"] + cand["secondary_skills"]
             
             if role_id is not None:
-                flat_skills = cand["structured_skills"]
-                fit = calculate_role_fit(
-                    flat_skills,
-                    req_skills,
-                    exp_years=int(cand.get("total_experience_years") or 0),
-                    min_exp=role_min_exp
-                )
-                cand["fit_score"] = fit["score"]
-                cand["ats_detail"] = fit
+                if cand.get("fit_score") is not None:
+                    if cand.get("ats_detail_json"):
+                        import json
+                        try:
+                            cand["ats_detail"] = json.loads(cand["ats_detail_json"])
+                        except:
+                            pass
+                else:
+                    flat_skills = cand["structured_skills"]
+                    fit = calculate_role_fit(
+                        flat_skills,
+                        req_skills,
+                        exp_years=int(cand.get("total_experience_years") or 0),
+                        min_exp=role_min_exp
+                    )
+                    cand["fit_score"] = fit["score"]
+                    cand["ats_detail"] = fit
             else:
                 cand["fit_score"] = compute_resume_ats_score(cand)
 
@@ -989,17 +996,15 @@ class CandidateService:
 
         name = ai_result.get("n") or ai_result.get("name")
 
-        # Extract primary / secondary skills from AI result or fallback to splitting skills
-        primary_skills = ai_result.get("p_sk") or ai_result.get("primary_skills") or []
-        secondary_skills = ai_result.get("s_sk") or ai_result.get("secondary_skills") or []
-        if not primary_skills and ai_result.get("skills"):
-            skills_raw = ai_result.get("skills") or []
-            if isinstance(skills_raw, list):
-                primary_skills = [s.get("name") if isinstance(s, dict) else str(s) for s in skills_raw]
-            elif isinstance(skills_raw, str):
-                primary_skills = [s.strip() for s in skills_raw.split(",")]
-            else:
-                primary_skills = []
+        # Extract ALL skills from AI result into primary_skills
+        primary_skills = ai_result.get("sk") or ai_result.get("skills") or ai_result.get("p_sk") or ai_result.get("primary_skills") or []
+        secondary_skills = []
+        if isinstance(primary_skills, list) and len(primary_skills) > 0 and isinstance(primary_skills[0], dict):
+            primary_skills = [s.get("name") or s.get("skill") for s in primary_skills]
+        elif isinstance(primary_skills, str):
+            primary_skills = [s.strip() for s in primary_skills.split(",")]
+        elif not isinstance(primary_skills, list):
+            primary_skills = []
 
         # Map experience from restructured format
         raw_experience = ai_result.get("exp") or ai_result.get("experience") or []
@@ -1015,7 +1020,7 @@ class CandidateService:
                     "start_date": exp.get("s") or exp.get("start_date", ""),
                     "end_date": exp.get("e") or exp.get("end_date", ""),
                     "is_current": exp.get("is_current") or (exp.get("e") == "Present" or exp.get("end_date") == "Present"),
-                    "description": exp.get("description", "")
+                    "description": exp.get("d") or exp.get("description", "")
                 })
             else:
                 experience.append(exp)

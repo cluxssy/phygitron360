@@ -194,7 +194,7 @@ export default function SourceDashboard() {
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
   const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, required_skills: [] });
-  const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'intermediate' });
+  const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'required' });
   const [scoreStatus, setScoreStatus] = useState({});
   const [inviteForm, setInviteForm] = useState({
     role_id: '',
@@ -559,14 +559,34 @@ export default function SourceDashboard() {
       min_experience: r.min_experience || 0,
       required_skills: Array.isArray(r.required_skills) ? r.required_skills : [],
     });
-    setNewSkillInput({ name: '', level: 'intermediate' });
+    setNewSkillInput({ name: '', level: 'required' });
     setShowNewRole(true);
+  };
+
+  const deleteJobRole = async (roleId) => {
+    if (!window.confirm("Are you sure you want to delete this job role? All AI scores and applications tied to this role will also be deleted. This cannot be undone.")) return;
+    try {
+      const res = await fetch(`/api/source/job-roles/${roleId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+      if (res.ok) {
+        toast.success('Job role deleted successfully');
+        fetchJobRoles();
+      } else {
+        toast.error('Failed to delete job role');
+      }
+    } catch (e) {
+      toast.error('Could not delete job role');
+      console.error(e);
+    }
   };
 
   const addSkillToRole = () => {
     const name = newSkillInput.name.trim();
     if (!name) return;
-    const already = newRole.required_skills.some(s => s.skill.toLowerCase() === name.toLowerCase());
+    const already = newRole.required_skills.some(s => (s.name || s.skill || '').toLowerCase() === name.toLowerCase());
     if (already) { toast.error('Skill already added'); return; }
     setNewRole(r => ({ ...r, required_skills: [...r.required_skills, { skill: name, level: newSkillInput.level }] }));
     setNewSkillInput(s => ({ ...s, name: '' }));
@@ -883,7 +903,7 @@ export default function SourceDashboard() {
 
           {currentTab === 'jobs' && (
             <button
-              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'intermediate' }); setShowNewRole(true); }}
+              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'required' }); setShowNewRole(true); }}
               className="
               px-7
               py-4
@@ -1164,9 +1184,14 @@ export default function SourceDashboard() {
                 <div key={r.id} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 flex flex-col">
                   <div className="flex w-full items-start justify-between mb-2">
                     <h3 className="text-lg font-semibold text-gray-800 pr-2">{r.title}</h3>
-                    <button onClick={() => openEditRole(r)} className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0">
-                      <Edit size={14} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openEditRole(r)} title="Edit role" className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0">
+                        <Edit size={14} />
+                      </button>
+                      <button onClick={() => deleteJobRole(r.id)} title="Delete role" className="p-1.5 rounded-lg bg-red-50 border border-red-200 text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors shrink-0">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-xs font-medium text-purple-600 mt-1 mb-2">Min Exp: {r.min_experience} yrs</p>
                   {/* Required Skills chips */}
@@ -1174,7 +1199,7 @@ export default function SourceDashboard() {
                     <div className="flex flex-wrap gap-1 mb-3">
                       {r.required_skills.slice(0, 6).map((s, i) => (
                         <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
-                          {s.skill || s}
+                          {s.name || s.skill || (typeof s === 'string' ? s : '')}
                         </span>
                       ))}
                       {r.required_skills.length > 6 && (
@@ -1729,7 +1754,7 @@ export default function SourceDashboard() {
                 <div className="flex flex-wrap gap-2 mb-3">
                   {newRole.required_skills.map((s, i) => (
                     <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                      {s.skill} <span className="text-purple-400">▸</span> {s.level}
+                      {s.name || s.skill} <span className="text-purple-400">▸</span> {s.level}
                       <button type="button" onClick={() => removeSkillFromRole(i)} className="ml-1 text-purple-400 hover:text-purple-700"><X size={10} /></button>
                     </span>
                   ))}
@@ -1750,10 +1775,8 @@ export default function SourceDashboard() {
                   value={newSkillInput.level}
                   onChange={e => setNewSkillInput(s => ({ ...s, level: e.target.value }))}
                 >
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                  <option value="expert">Expert</option>
+                  <option value="required">Required</option>
+                  <option value="optional">Optional</option>
                 </select>
                 <button
                   type="button"

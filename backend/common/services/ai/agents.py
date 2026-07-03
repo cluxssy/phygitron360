@@ -25,9 +25,8 @@ Schema:
     "ln": "LinkedIn URL",
     "pt": "Portfolio URL",
     "s": "AI Profile Summary", // Maximum 250 characters. No more.
-    "p_sk": ["Skill 1", "Skill 2", "Skill 3", "Skill 4"], // EXACTLY 4 main skills. No more, no less.
-    "s_sk": ["Skill 1", "Skill 2", "Skill 3", "Skill 4"], // EXACTLY 4 secondary skills. No more, no less. Cannot be empty.
-    "exp": [{"c": "Company Name", "r": "Role", "s": "Start Date YYYY-MM", "e": "End Date YYYY-MM"}], // Professional experience only. No other fields.
+    "sk": ["Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5"], // Extract EVERY single skill explicitly mentioned OR implicitly required by their job titles/descriptions (e.g. 'Software Engineer' implies programming). Do not leave any out.
+    "exp": [{"c": "Company Name", "r": "Role", "s": "Start Date", "e": "End Date", "d": "Concise summary of duties and technical tools/skills used"}], // Professional experience only.
     "edu": [{"d": "Degree Name", "c": "College Name", "s": "Start Date YYYY-MM", "e": "End Date YYYY-MM"}], // Education only. No other fields.
     "cert": [{"n": "Certification Name", "i": "Issuer", "y": 2024}], // Certifications
     "cs": ["Suspicious gap in 2020", "Frequent job hopping"] // Confidence signals or red flags (max 2 items)
@@ -35,13 +34,12 @@ Schema:
 }
 Rules:
 1. "s" (AI Profile Summary) MUST be maximum 250 characters.
-2. "p_sk" MUST contain EXACTLY 4 primary skills. No more, no less.
-3. "s_sk" MUST contain EXACTLY 4 secondary skills. No more, no less.
-4. "exp" elements MUST ONLY contain keys "c", "r", "s", and "e". No descriptions or other keys.
-5. "edu" elements MUST ONLY contain keys "d", "c", "s", and "e". No field of study or other keys.
-6. "cs" MUST contain at most 2 critical red flags or confidence signals. Specifically check for and flag any skills listed in the resume that are NEVER mentioned or used in their work experience/projects. If none, return [].
-7. Copy pre-extracted fields verbatim if present.
-8. You MUST return a key for EVERY <resume id="X"> provided. Do NOT mix up candidate details.
+2. "sk" MUST contain EVERY single skill extracted from the candidate's resume, including implicitly inferred skills from their experience/titles. Do not limit the count.
+3. "exp" elements MUST contain keys "c", "r", "s", "e", and "d". The "d" field MUST capture a concise summary of the duties and SPECIFIC technical tools/skills used.
+4. "edu" elements MUST ONLY contain keys "d", "c", "s", and "e". No field of study or other keys.
+5. "cs" MUST contain at most 2 critical red flags or confidence signals. Specifically check for and flag any skills listed in the resume that are NEVER mentioned or used in their work experience/projects. If none, return [].
+6. Copy pre-extracted fields verbatim if present.
+7. You MUST return a key for EVERY <resume id="X"> provided. Do NOT mix up candidate details.
 """
 
 ROLE_FIT_SYSTEM = """You are an expert technical recruiter and talent assessment AI. Your goal is to rigorously score a candidate's fit for a specific job role based on their skills, experience, and background.
@@ -56,6 +54,20 @@ Return this exact structure:
   "missing_skills": [],
   "partially_matched": [{"skill": "", "candidate_level": "", "required_level": ""}],
   "interview_questions": []
+}"""
+
+EXTRACT_JD_SKILLS_SYSTEM = """You are an expert technical recruiter AI.
+Your goal is to parse a raw Job Description (JD) and extract a comprehensive, normalized list of the required skills.
+CRITICAL RULE: Be smart about what is "required" versus "optional".
+- 'required': Primary programming languages (e.g. C++, Python, Node.js, SQL, Java), core frameworks (e.g. React, Spring Boot), and primary databases that are essential to the role. If a technology is a core part of the developer's daily stack, it MUST be required.
+- 'optional': Only use this for skills explicitly listed as "nice to have", OR for generic non-technical soft skills (e.g. Problem solving, Communication, Leadership), OR for generic daily tools (e.g. Slack, JIRA, Trello). 
+Break down broad requirements into specific measurable skills.
+Respond ONLY with valid JSON.
+Return this exact structure:
+{
+  "skills": [
+    {"name": "Skill Name", "level": "required or optional"}
+  ]
 }"""
 
 FEEDBACK_SYSTEM = """You are an assessment feedback AI. Generate personalised learning feedback.
@@ -133,6 +145,18 @@ class AIAgents:
             prompt=f"Act as an expert technical recruiter. Thoroughly analyze and score this candidate's fit for the job role based on the data provided. Be rigorous and objective. Rank the candidate from 1 to 100, where 100 is a perfect unicorn match.\n\n{prompt}",
             system_prompt=ROLE_FIT_SYSTEM
         )
+
+    async def extract_jd_skills(self, description: str, title: str = "") -> List[Dict[str, str]]:
+        """Extract a structured list of skills from a raw Job Description."""
+        prompt = json.dumps({
+            "job_title": title,
+            "job_description": description
+        })
+        result = await self.ai.generate_json(
+            prompt=f"Extract required skills from this Job Description:\n\n{prompt}",
+            system_prompt=EXTRACT_JD_SKILLS_SYSTEM
+        )
+        return result.get("skills", [])
 
     async def generate_assessment_feedback(self, questions: List[Dict], answers: Dict, scores: Dict, total_score: float, passed: bool) -> Dict[str, Any]:
         """Generate personalised learning feedback for an assessment."""

@@ -139,76 +139,114 @@ def normalise_required_skills(required_skills_raw: Optional[list], title: str = 
 def calculate_role_fit(
     cand_skills: List[Dict],
     req_skills: List[Dict],
-    exp_years: int = 0,
-    min_exp: int = 0
+    exp_years: float = 0.0,
+    min_exp: float = 0.0,
+    cand_experience_text: str = "",
+    **kwargs
 ) -> Dict[str, Any]:
-    """Calculate ATS role-fit score between a candidate's skills and job requirements."""
+    """Calculate ATS role-fit score between a candidate's skills and job requirements using matrix normalization."""
     if not req_skills:
         return {"score": 0.0, "matched_skills": [], "missing_skills": [], "partial_skills": []}
 
-    total_weight = 0.0
-    earned = 0.0
     matched = []
     missing = []
     partial = []
+    
+    max_possible_points = 0.0
+    earned_points = 0.0
 
     candidates = [
-        {"name": _clean_skill_name(s.get("name") or s.get("skill")), "level": _normalise_level(s.get("level"), "beginner")}
+        {"name": _clean_skill_name(s.get("name") or s.get("skill"))}
         for s in cand_skills
         if _clean_skill_name(s.get("name") or s.get("skill"))
     ]
+
+    import re
 
     for req in req_skills:
         req_name = _clean_skill_name(req.get("skill") or req.get("name"))
         if not req_name:
             continue
-        req_level = _normalise_level(req.get("level"))
-        req_weight = LEVEL_WEIGHTS[req_level]
-        total_weight += req_weight
+            
+        req_level = (req.get("level") or "required").lower()
+        is_required = req_level != "optional"
+        
+        # Calculate max possible points for this skill
+        max_pts = 5.0 if is_required else 3.0
+        max_possible_points += max_pts
 
-        best = None
-        best_points = 0.0
+        best_cand = None
         best_similarity = 0.0
         for cand in candidates:
-            similarity = _skill_similarity(req_name, cand["name"])
-            if similarity <= 0:
-                continue
-            # Soften the penalty if candidate has lower level than required
-            raw_ratio = LEVEL_WEIGHTS[cand["level"]] / req_weight
-            level_ratio = min(raw_ratio ** 0.5, 1.0)
-            
-            # Points awarded
-            points = req_weight * similarity * level_ratio
-            if points > best_points:
-                best = cand
-                best_points = points
-                best_similarity = similarity
+            sim = _skill_similarity(req_name, cand["name"])
+            if sim > best_similarity:
+                best_similarity = sim
+                best_cand = cand
 
-        earned += best_points
-        if not best:
-            missing.append(req_name)
-        elif best_similarity >= 0.8 and LEVEL_WEIGHTS[best["level"]] >= req_weight:
+        if best_similarity >= 0.8:
             matched.append(req_name)
-        else:
+
+            # Check if skill was demonstrated in experience text
+            in_experience = False
+            if cand_experience_text and re.search(
+                r'\b' + re.escape(best_cand["name"]) + r'\b',
+                cand_experience_text,
+                re.IGNORECASE
+            ):
+                in_experience = True
+
+            # 3-tier multiplier:
+            # - Demonstrated in work experience  → full points (5 req / 3 opt)
+            # - Fresher (0 exp) listing a skill  → near-full benefit of doubt (4 req / 2.5 opt)
+            # - Listed in skills section only     → partial credit (3 req / 2 opt)
+            if in_experience:
+                points = 5.0 if is_required else 3.0
+            elif exp_years == 0:
+                points = 4.0 if is_required else 2.5
+            else:
+                points = 3.0 if is_required else 2.0
+
+            earned_points += (points * best_similarity)
+
+        elif best_similarity > 0.4:
             partial.append({
                 "skill": req_name,
-                "candidate_skill": best["name"],
-                "candidate_level": best["level"],
-                "required_level": req_level,
+                "candidate_skill": best_cand["name"]
             })
+            # Award partial credit for near-matches too
+            partial_pts = 1.5 if is_required else 0.8
+            earned_points += (partial_pts * best_similarity)
+        else:
+            missing.append(req_name)
 
-    raw_score = (earned / total_weight * 100.0) if total_weight else 0.0
-    
-    # Boost the score with a gentle curve (so 64% raw becomes 80%, 81% raw becomes 90%)
-    score = (raw_score ** 0.5) * 10
-    
-    if min_exp and exp_years < min_exp:
-        # Soften experience penalty too
-        exp_ratio = max(exp_years, 0) / max(min_exp, 1)
-        score *= 0.85 + (0.15 * exp_ratio)
+    # Normalize skill score to a maximum of 80 points
+    if max_possible_points > 0:
+        skill_score = (earned_points / max_possible_points) * 80.0
+    else:
+        skill_score = 80.0
+
+    # Smooth sliding experience score (max 20 points)
+    # Avoids the brutal cliff where 4.9 yrs for a 5-yr role scores the same as 0 yrs
+    if min_exp <= 0:
+        # No experience requirement — full 20 points for anyone
+        exp_score = 20.0
+    elif exp_years <= 0:
+        exp_score = 2.0
+    elif exp_years < min_exp * 0.5:
+        exp_score = 8.0
+    elif exp_years < min_exp:
+        # Smooth ramp: e.g. 4 of 5 required yrs → 14 pts
+        ratio = exp_years / min_exp
+        exp_score = 8.0 + (ratio * 10.0)
+    elif exp_years == min_exp:
+        exp_score = 18.0
+    else:
+        exp_score = 20.0
+
+    final_score = skill_score + exp_score
 
     return {
-        "score": round(min(score, 100.0), 1),
+        "score": round(min(final_score, 100.0), 1),
         "matched_skills": matched,
         "missing_skills": missing,
         "partial_skills": partial,
@@ -220,7 +258,6 @@ def compute_resume_ats_score(candidate: Dict) -> float:
     num_skills = len(candidate.get("skills", []))
     exp = candidate.get("total_experience_years") or candidate.get("exp_years") or 0
     loc_points = 10 if candidate.get("location") else 0
-    resume_points = 10 if (candidate.get("resume_path") or candidate.get("resume_url")) else 0
     skill_points = min(num_skills * 5, 50)
-    exp_points = min(exp * 5, 30)
-    return skill_points + exp_points + loc_points + resume_points
+    exp_points = min(exp * 5, 40)
+    return skill_points + exp_points + loc_points

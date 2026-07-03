@@ -485,23 +485,12 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     </div>
 
                     <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Primary Skills (comma separated)</label>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Skills (comma separated)</label>
                       <input
                         type="text"
                         value={editForm.primary_skills}
                         onChange={e => setEditForm({ ...editForm, primary_skills: e.target.value })}
                         placeholder="e.g. React, Node.js, TypeScript"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Secondary Skills (comma separated)</label>
-                      <input
-                        type="text"
-                        value={editForm.secondary_skills}
-                        onChange={e => setEditForm({ ...editForm, secondary_skills: e.target.value })}
-                        placeholder="e.g. Git, Docker, AWS"
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
@@ -628,30 +617,14 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   </section>
                 )}
 
-                {/* Primary Skills */}
+                {/* Skills */}
                 <section>
-                  <SectionLabel icon={<Zap size={13} />} label="Primary Skills" />
+                  <SectionLabel icon={<Zap size={13} />} label="Skills" />
                   {data?.primary_skills?.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {data.primary_skills.map((s, i) => (
                         <div key={i} className="flex items-center pl-3 pr-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20">
                           <span className="text-[11px] font-bold text-primary">{s}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="glass-panel p-4 text-xs text-white/30 italic">None</div>
-                  )}
-                </section>
-
-                {/* Secondary Skills */}
-                <section>
-                  <SectionLabel icon={<Zap size={13} />} label="Secondary Skills" />
-                  {data?.secondary_skills?.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {data.secondary_skills.map((s, i) => (
-                        <div key={i} className="flex items-center pl-3 pr-3 py-1.5 rounded-xl bg-white/5 border border-white/5">
-                          <span className="text-[11px] font-bold text-white">{s}</span>
                         </div>
                       ))}
                     </div>

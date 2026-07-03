@@ -8,7 +8,7 @@ import json
 import logging
 from backend.core.celery_app import celery_app
 from backend.modules.source.services.ats_engine import (
-    normalise_required_skills, calculate_role_fit
+    normalise_required_skills, calculate_role_fit, compute_resume_ats_score
 )
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ def _run_score_all_candidates_for_role(role_id: int, tenant_id: str):
 
             while True:
                 cur.execute("""
-                    SELECT id, primary_skills, secondary_skills, total_experience_years
+                    SELECT id, primary_skills, secondary_skills, total_experience_years, location, resume_path, resume_url
                     FROM candidates
                     WHERE status NOT IN ('Archived', 'Rejected')
                     ORDER BY id
@@ -93,7 +93,21 @@ def _run_score_all_candidates_for_role(role_id: int, tenant_id: str):
                             [{"name": s, "level": "beginner"} for s in secondary]
                         )
                         exp_years = int(cand["total_experience_years"] or 0)
-                        fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp_years, min_exp=min_exp)
+                        
+                        cur.execute("SELECT company, designation, description FROM candidate_experience WHERE candidate_id = %s", (cand["id"],))
+                        exp_rows = cur.fetchall()
+                        cand_experience_text = " ".join([f"{e['company'] or ''} {e['designation'] or ''} {e['description'] or ''}" for e in exp_rows])
+                        
+                        cand_dict = {
+                            "skills": primary + secondary,
+                            "total_experience_years": exp_years,
+                            "location": cand.get("location"),
+                            "resume_path": cand.get("resume_path"),
+                            "resume_url": cand.get("resume_url")
+                        }
+                        resume_ats_score = compute_resume_ats_score(cand_dict)
+
+                        fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp_years, min_exp=min_exp, cand_experience_text=cand_experience_text, resume_ats_score=resume_ats_score)
                         score = fit["score"]
                         reasoning = json.dumps({
                             "matched": fit["matched_skills"],
@@ -177,6 +191,19 @@ def _run_score_new_candidate_for_all_roles(candidate_id: int, tenant_id: str):
                 [{"name": s, "level": "beginner"} for s in secondary]
             )
             exp_years = int(cand["total_experience_years"] or 0)
+            
+            cur.execute("SELECT company, designation, description FROM candidate_experience WHERE candidate_id = %s", (candidate_id,))
+            exp_rows = cur.fetchall()
+            cand_experience_text = " ".join([f"{e['company'] or ''} {e['designation'] or ''} {e['description'] or ''}" for e in exp_rows])
+            
+            cand_dict = {
+                "skills": primary + secondary,
+                "total_experience_years": exp_years,
+                "location": cand.get("location"),
+                "resume_path": cand.get("resume_path"),
+                "resume_url": cand.get("resume_url")
+            }
+            resume_ats_score = compute_resume_ats_score(cand_dict)
 
             # Fetch all active job roles
             cur.execute("SELECT id, title, description, required_skills, min_experience FROM job_roles")
@@ -193,7 +220,7 @@ def _run_score_new_candidate_for_all_roles(candidate_id: int, tenant_id: str):
                     if not req_skills:
                         continue
 
-                    fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp_years, min_exp=role.get("min_experience") or 0)
+                    fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp_years, min_exp=role.get("min_experience") or 0, cand_experience_text=cand_experience_text, resume_ats_score=resume_ats_score)
                     score = fit["score"]
                     reasoning = json.dumps({"matched": fit["matched_skills"], "missing": fit["missing_skills"]})
 
