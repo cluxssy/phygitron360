@@ -200,7 +200,7 @@ export default function SourceDashboard() {
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
   const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, required_skills: [] });
-  const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'required' });
+  const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'expert' });
   const [scoreStatus, setScoreStatus] = useState({});
   const [inviteForm, setInviteForm] = useState({
     role_id: '',
@@ -567,7 +567,7 @@ export default function SourceDashboard() {
       min_experience: r.min_experience || 0,
       required_skills: Array.isArray(r.required_skills) ? r.required_skills : [],
     });
-    setNewSkillInput({ name: '', level: 'required' });
+    setNewSkillInput({ name: '', level: 'expert' });
     setShowNewRole(true);
   };
 
@@ -913,7 +913,7 @@ export default function SourceDashboard() {
 
           {currentTab === 'jobs' && (
             <button
-              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'required' }); setShowNewRole(true); }}
+              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'expert' }); setShowNewRole(true); }}
               className="
               px-7
               py-4
@@ -1801,8 +1801,11 @@ export default function SourceDashboard() {
                   value={newSkillInput.level}
                   onChange={e => setNewSkillInput(s => ({ ...s, level: e.target.value }))}
                 >
-                  <option value="required">Required</option>
-                  <option value="optional">Optional</option>
+                  <option value="critical">Critical</option>
+                  <option value="expert">Expert</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="beginner">Beginner</option>
                 </select>
                 <button
                   type="button"

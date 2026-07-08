@@ -78,10 +78,14 @@ class CandidateService:
             email = f"unknown_{uuid.uuid4().hex[:8]}@phygitron.local"
             
         # Extract ALL skills from AI result into primary_skills
-        primary_skills = ai_result.get("sk") or ai_result.get("skills") or ai_result.get("p_sk") or ai_result.get("primary_skills", [])
+        # New format: [{"n": "Python", "l": "expert"}] — extract names, store levels separately
+        raw_sk = ai_result.get("sk") or ai_result.get("skills") or ai_result.get("p_sk") or ai_result.get("primary_skills", [])
         secondary_skills = []
-        if isinstance(primary_skills, list) and len(primary_skills) > 0 and isinstance(primary_skills[0], dict):
-            primary_skills = [s.get("name") or s.get("skill") for s in primary_skills]
+        if isinstance(raw_sk, list) and len(raw_sk) > 0 and isinstance(raw_sk[0], dict):
+            # New format with levels — extract name; level info stored via structured_skills at score time
+            primary_skills = [s.get("n") or s.get("name") or s.get("skill") for s in raw_sk if s.get("n") or s.get("name") or s.get("skill")]
+        else:
+            primary_skills = raw_sk if isinstance(raw_sk, list) else []
 
         # Map experience from restructured format
         raw_experience = ai_result.get("exp") or ai_result.get("experience", [])
@@ -463,7 +467,7 @@ class CandidateService:
         for cand in candidates:
             cand["primary_skills"] = self._parse_skill_list(cand.get("primary_skills"))
             cand["secondary_skills"] = self._parse_skill_list(cand.get("secondary_skills"))
-            cand["structured_skills"] = [{"name": s, "level": "intermediate"} for s in cand["primary_skills"]] + [{"name": s, "level": "beginner"} for s in cand["secondary_skills"]]
+            cand["structured_skills"] = [{"name": s, "level": "expert"} for s in cand["primary_skills"]] + [{"name": s, "level": "intermediate"} for s in cand["secondary_skills"]]
             cand["skills"] = cand["primary_skills"] + cand["secondary_skills"]
             
             if role_id is not None:
@@ -539,7 +543,7 @@ class CandidateService:
             
         cand["primary_skills"] = self._parse_skill_list(cand.get("primary_skills"))
         cand["secondary_skills"] = self._parse_skill_list(cand.get("secondary_skills"))
-        cand["structured_skills"] = [{"name": s, "level": "intermediate"} for s in cand["primary_skills"]] + [{"name": s, "level": "beginner"} for s in cand["secondary_skills"]]
+        cand["structured_skills"] = [{"name": s, "level": "expert"} for s in cand["primary_skills"]] + [{"name": s, "level": "intermediate"} for s in cand["secondary_skills"]]
         cand["skills"] = cand["primary_skills"] + cand["secondary_skills"]
         cand["latest_offer"] = self.repo.get_candidate_latest_offer(candidate_id)
         cand["resume_ats_score"] = compute_resume_ats_score(cand)
@@ -997,13 +1001,16 @@ class CandidateService:
         name = ai_result.get("n") or ai_result.get("name")
 
         # Extract ALL skills from AI result into primary_skills
-        primary_skills = ai_result.get("sk") or ai_result.get("skills") or ai_result.get("p_sk") or ai_result.get("primary_skills") or []
+        # New format: [{"n": "Python", "l": "expert"}] — extract names only, levels used at score time
+        raw_sk = ai_result.get("sk") or ai_result.get("skills") or ai_result.get("p_sk") or ai_result.get("primary_skills") or []
         secondary_skills = []
-        if isinstance(primary_skills, list) and len(primary_skills) > 0 and isinstance(primary_skills[0], dict):
-            primary_skills = [s.get("name") or s.get("skill") for s in primary_skills]
-        elif isinstance(primary_skills, str):
-            primary_skills = [s.strip() for s in primary_skills.split(",")]
-        elif not isinstance(primary_skills, list):
+        if isinstance(raw_sk, list) and len(raw_sk) > 0 and isinstance(raw_sk[0], dict):
+            primary_skills = [s.get("n") or s.get("name") or s.get("skill") for s in raw_sk if s.get("n") or s.get("name") or s.get("skill")]
+        elif isinstance(raw_sk, str):
+            primary_skills = [s.strip() for s in raw_sk.split(",")]
+        elif isinstance(raw_sk, list):
+            primary_skills = [s for s in raw_sk if s]
+        else:
             primary_skills = []
 
         # Map experience from restructured format

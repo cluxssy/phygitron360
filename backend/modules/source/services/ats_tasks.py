@@ -89,8 +89,8 @@ def _run_score_all_candidates_for_role(role_id: int, tenant_id: str):
                         primary = _parse_skill_list(cand["primary_skills"])
                         secondary = _parse_skill_list(cand["secondary_skills"])
                         cand_skills = (
-                            [{"name": s, "level": "intermediate"} for s in primary] +
-                            [{"name": s, "level": "beginner"} for s in secondary]
+                            [{"name": s, "level": "expert"} for s in primary] +
+                            [{"name": s, "level": "intermediate"} for s in secondary]
                         )
                         exp_years = int(cand["total_experience_years"] or 0)
                         
@@ -187,8 +187,8 @@ def _run_score_new_candidate_for_all_roles(candidate_id: int, tenant_id: str):
             primary = _parse_skill_list(cand["primary_skills"])
             secondary = _parse_skill_list(cand["secondary_skills"])
             cand_skills = (
-                [{"name": s, "level": "intermediate"} for s in primary] +
-                [{"name": s, "level": "beginner"} for s in secondary]
+                [{"name": s, "level": "expert"} for s in primary] +
+                [{"name": s, "level": "intermediate"} for s in secondary]
             )
             exp_years = int(cand["total_experience_years"] or 0)
             
