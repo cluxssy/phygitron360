@@ -3,22 +3,48 @@ Phygitron 360 — ATS Scoring Engine
 ===================================
 Pure Python deterministic skill-matching engine for candidate-to-role fit scoring.
 No external dependencies, no DB access — all logic is stateless and testable.
+
+Scoring Model (Excel Fuzzy Logic):
+- 5-tier skill levels: critical=5, expert=4, advanced=3, intermediate=2, beginner=1
+- Per-skill score = SQRT(candidate_level / required_level) * required_level
+- If candidate_level >= required_level -> full points (required_level)
+- Weights: mandatory_skills=5, optional_skills=1, experience=5
+- Final % = (mand_ratio*5 + opt_ratio*1 + exp_ratio*5) / 11 * 100
 """
 from typing import Optional, List, Dict, Any
+import math
 
-LEVEL_WEIGHTS = {"beginner": 1, "intermediate": 2, "advanced": 3, "expert": 4}
+# 5-tier level map
+LEVEL_WEIGHTS = {
+    "critical":     5,
+    "expert":       4,
+    "advanced":     3,
+    "intermediate": 2,
+    "beginner":     1,
+}
+
+_COMPAT_MAP = {
+    "required": "expert",
+    "optional": "intermediate",
+}
+
 NOISE_TOKENS = {"and", "or", "the", "of", "for", "with", "in", "at", "a", "an", "to", "on", "is", "are"}
 MIN_TOKEN_LEN = 1
 
 ROLE_SKILL_PRESETS = {
-    "cyber": ["Cyber Security", "Network Security", "SIEM", "Penetration Testing", "Linux", "Python"],
+    "cyber":    ["Cyber Security", "Network Security", "SIEM", "Penetration Testing", "Linux", "Python"],
     "security": ["Cyber Security", "Network Security", "SIEM", "Penetration Testing", "Linux", "Python"],
-    "ai": ["Python", "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch", "NLP"],
-    "ml": ["Python", "Machine Learning", "TensorFlow", "PyTorch", "Scikit-learn", "SQL"],
-    "data": ["Python", "SQL", "Pandas", "NumPy", "Power BI", "Machine Learning"],
+    "ai":       ["Python", "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch", "NLP"],
+    "ml":       ["Python", "Machine Learning", "TensorFlow", "PyTorch", "Scikit-learn", "SQL"],
+    "data":     ["Python", "SQL", "Pandas", "NumPy", "Power BI", "Machine Learning"],
     "frontend": ["JavaScript", "React", "HTML", "CSS", "TypeScript"],
-    "backend": ["Python", "FastAPI", "SQL", "API", "Docker"],
+    "backend":  ["Python", "FastAPI", "SQL", "API", "Docker"],
 }
+
+WEIGHT_MANDATORY  = 5
+WEIGHT_OPTIONAL   = 1
+WEIGHT_EXPERIENCE = 5
+WEIGHT_TOTAL      = WEIGHT_MANDATORY + WEIGHT_OPTIONAL + WEIGHT_EXPERIENCE  # 11
 
 
 def _clean_skill_name(value) -> str:
@@ -26,8 +52,10 @@ def _clean_skill_name(value) -> str:
 
 
 def _normalise_level(value, fallback="intermediate") -> str:
-    level = str(value or fallback).lower().strip()
-    return level if level in LEVEL_WEIGHTS else fallback
+    raw = str(value or fallback).lower().strip()
+    if raw in _COMPAT_MAP:
+        return _COMPAT_MAP[raw]
+    return raw if raw in LEVEL_WEIGHTS else fallback
 
 
 def _skill_tokens(value: str) -> set:
@@ -36,49 +64,43 @@ def _skill_tokens(value: str) -> set:
 
 
 def _skill_similarity(required: str, candidate: str) -> float:
-    """Return similarity score 0..1 between a required skill and a candidate's skill."""
     import re
-    req = " ".join(str(required or "").lower().split())
+    req  = " ".join(str(required  or "").lower().split())
     cand = " ".join(str(candidate or "").lower().split())
     if not req or not cand:
         return 0.0
-
     if req == cand:
         return 1.0
-
     pattern = r'\b' + re.escape(req) + r'\b'
     if re.search(pattern, cand) or re.search(r'\b' + re.escape(cand) + r'\b', req):
         return 0.95
-
-    req_tokens = _skill_tokens(req)
+    req_tokens  = _skill_tokens(req)
     cand_tokens = _skill_tokens(cand)
     if not req_tokens or not cand_tokens:
         return 0.0
-
-    overlap = req_tokens & cand_tokens
+    overlap  = req_tokens & cand_tokens
     if not overlap:
         return 0.0
-
     coverage = len(overlap) / len(req_tokens)
-    jaccard = len(overlap) / len(req_tokens | cand_tokens)
-
     if coverage >= 1.0:
         return 0.9
     if coverage >= 0.5:
         return 0.5 * coverage + 0.2
-
     return 0.1
 
 
+def _fuzzy_skill_score(cand_level_num: float, req_level_num: float) -> float:
+    if req_level_num <= 0:
+        return 0.0
+    if cand_level_num >= req_level_num:
+        return req_level_num
+    if cand_level_num <= 0:
+        return 0.0
+    return math.sqrt(cand_level_num / req_level_num) * req_level_num
+
+
 def normalise_required_skills(required_skills_raw: Optional[list], title: str = "", description: str = "") -> List[Dict]:
-    """
-    Convert raw required_skills data into a canonical list of {skill, level} dicts.
-    Priority:
-    1. Explicitly defined skills in required_skills field
-    2. Inferred from title/description using presets
-    3. Last resort: tokenise the title
-    """
-    import json
+    import json, re
     if isinstance(required_skills_raw, str):
         try:
             required_skills_raw = json.loads(required_skills_raw)
@@ -89,20 +111,12 @@ def normalise_required_skills(required_skills_raw: Optional[list], title: str = 
                 required_skills_raw = [required_skills_raw]
 
     normalised = []
-    raw = required_skills_raw or []
-    for item in raw:
+    for item in (required_skills_raw or []):
         if isinstance(item, str):
-            name = item.strip()
-            level = "intermediate"
+            name, level = item.strip(), "intermediate"
         elif isinstance(item, dict):
-            name = (
-                item.get("skill") or item.get("name") or
-                item.get("title") or item.get("normalized_name") or ""
-            ).strip()
-            level = (
-                item.get("level") or item.get("min_level") or
-                item.get("required_level") or "intermediate"
-            )
+            name  = (item.get("skill") or item.get("name") or item.get("title") or item.get("normalized_name") or "").strip()
+            level = (item.get("level") or item.get("min_level") or item.get("required_level") or "intermediate")
         else:
             continue
         name = _clean_skill_name(name)
@@ -112,7 +126,6 @@ def normalise_required_skills(required_skills_raw: Optional[list], title: str = 
     if normalised:
         return normalised
 
-    import re
     haystack = f"{title or ''}".lower()
     inferred = []
     for keyword, skills in ROLE_SKILL_PRESETS.items():
@@ -120,14 +133,9 @@ def normalise_required_skills(required_skills_raw: Optional[list], title: str = 
             inferred.extend(skills)
 
     if not inferred and title:
-        inferred = [
-            part.strip() for part in
-            title.replace("/", " ").replace("-", " ").split()
-            if len(part.strip()) > 2
-        ]
+        inferred = [p.strip() for p in title.replace("/", " ").replace("-", " ").split() if len(p.strip()) > 2]
 
-    seen = set()
-    fallback = []
+    seen, fallback = set(), []
     for skill in inferred:
         key = skill.lower()
         if key not in seen:
@@ -139,88 +147,89 @@ def normalise_required_skills(required_skills_raw: Optional[list], title: str = 
 def calculate_role_fit(
     cand_skills: List[Dict],
     req_skills: List[Dict],
-    exp_years: int = 0,
-    min_exp: int = 0
+    exp_years: float = 0.0,
+    min_exp: float = 0.0,
+    cand_experience_text: str = "",
+    **kwargs
 ) -> Dict[str, Any]:
-    """Calculate ATS role-fit score between a candidate's skills and job requirements."""
+    """
+    Calculate ATS role-fit score using the Excel SQRT fuzzy model.
+
+    Mandatory skills = levels critical/expert/advanced
+    Optional  skills = levels intermediate/beginner
+
+    Final % = (mand_ratio * 5 + opt_ratio * 1 + exp_ratio * 5) / 11 * 100
+    """
+    import re
+
     if not req_skills:
         return {"score": 0.0, "matched_skills": [], "missing_skills": [], "partial_skills": []}
 
-    total_weight = 0.0
-    earned = 0.0
-    matched = []
-    missing = []
-    partial = []
+    MANDATORY_LEVELS = {"critical", "expert", "advanced"}
+    mandatory_reqs = [r for r in req_skills if _normalise_level(r.get("level")) in MANDATORY_LEVELS]
+    optional_reqs  = [r for r in req_skills if _normalise_level(r.get("level")) not in MANDATORY_LEVELS]
 
-    candidates = [
-        {"name": _clean_skill_name(s.get("name") or s.get("skill")), "level": _normalise_level(s.get("level"), "beginner")}
-        for s in cand_skills
-        if _clean_skill_name(s.get("name") or s.get("skill"))
-    ]
+    cand_lookup: Dict[str, int] = {}
+    for s in cand_skills:
+        raw_name  = _clean_skill_name(s.get("name") or s.get("skill"))
+        raw_level = _normalise_level(s.get("level") or "intermediate")
+        if raw_name:
+            cand_lookup[raw_name] = LEVEL_WEIGHTS.get(raw_level, 2)
 
-    for req in req_skills:
-        req_name = _clean_skill_name(req.get("skill") or req.get("name"))
-        if not req_name:
-            continue
-        req_level = _normalise_level(req.get("level"))
-        req_weight = LEVEL_WEIGHTS[req_level]
-        total_weight += req_weight
-
-        best = None
-        best_points = 0.0
-        best_similarity = 0.0
-        for cand in candidates:
-            similarity = _skill_similarity(req_name, cand["name"])
-            if similarity <= 0:
+    def _score_group(req_group):
+        earned, max_pts = 0.0, 0.0
+        m, miss, p = [], [], []
+        for req in req_group:
+            req_name  = _clean_skill_name(req.get("skill") or req.get("name"))
+            req_level = _normalise_level(req.get("level") or "intermediate")
+            req_num   = LEVEL_WEIGHTS.get(req_level, 2)
+            if not req_name:
                 continue
-            # Soften the penalty if candidate has lower level than required
-            raw_ratio = LEVEL_WEIGHTS[cand["level"]] / req_weight
-            level_ratio = min(raw_ratio ** 0.5, 1.0)
-            
-            # Points awarded
-            points = req_weight * similarity * level_ratio
-            if points > best_points:
-                best = cand
-                best_points = points
-                best_similarity = similarity
+            max_pts += req_num
+            best_sim, best_cname, best_cnum = 0.0, None, 0
+            for cname, cnum in cand_lookup.items():
+                sim = _skill_similarity(req_name, cname)
+                if sim > best_sim:
+                    best_sim, best_cname, best_cnum = sim, cname, cnum
+            if best_sim >= 0.8:
+                in_exp = bool(
+                    cand_experience_text and best_cname and
+                    re.search(r'\b' + re.escape(best_cname) + r'\b', cand_experience_text, re.IGNORECASE)
+                )
+                effective = min(best_cnum + (1 if in_exp else 0), req_num)
+                earned += _fuzzy_skill_score(effective * best_sim, req_num)
+                m.append(req_name)
+            elif best_sim > 0.4:
+                effective = max(best_cnum // 2, 1)
+                earned += _fuzzy_skill_score(effective * best_sim, req_num)
+                p.append({"skill": req_name, "candidate_skill": best_cname})
+            else:
+                miss.append(req_name)
+        return earned, max_pts, m, miss, p
 
-        earned += best_points
-        if not best:
-            missing.append(req_name)
-        elif best_similarity >= 0.8 and LEVEL_WEIGHTS[best["level"]] >= req_weight:
-            matched.append(req_name)
-        else:
-            partial.append({
-                "skill": req_name,
-                "candidate_skill": best["name"],
-                "candidate_level": best["level"],
-                "required_level": req_level,
-            })
+    mand_earned, mand_max, mand_m, mand_miss, mand_p = _score_group(mandatory_reqs)
+    opt_earned,  opt_max,  opt_m,  opt_miss,  opt_p  = _score_group(optional_reqs)
 
-    raw_score = (earned / total_weight * 100.0) if total_weight else 0.0
-    
-    # Boost the score with a gentle curve (so 64% raw becomes 80%, 81% raw becomes 90%)
-    score = (raw_score ** 0.5) * 10
-    
-    if min_exp and exp_years < min_exp:
-        # Soften experience penalty too
-        exp_ratio = max(exp_years, 0) / max(min_exp, 1)
-        score *= 0.85 + (0.15 * exp_ratio)
+    mand_ratio = (mand_earned / mand_max) if mand_max > 0 else 1.0
+    opt_ratio  = (opt_earned  / opt_max)  if opt_max  > 0 else 1.0
+    exp_ratio  = min(exp_years / min_exp, 1.0) if min_exp > 0 else 1.0
+
+    weighted  = mand_ratio * WEIGHT_MANDATORY + opt_ratio * WEIGHT_OPTIONAL + exp_ratio * WEIGHT_EXPERIENCE
+    final_pct = (weighted / WEIGHT_TOTAL) * 100.0
 
     return {
-        "score": round(min(score, 100.0), 1),
-        "matched_skills": matched,
-        "missing_skills": missing,
-        "partial_skills": partial,
+        "score":          round(min(final_pct, 100.0), 1),
+        "matched_skills": mand_m + opt_m,
+        "missing_skills": mand_miss + opt_miss,
+        "partial_skills": mand_p + opt_p,
     }
 
 
 def compute_resume_ats_score(candidate: Dict) -> float:
     """Compute a simple ATS readiness score based on profile completeness."""
-    num_skills = len(candidate.get("skills", []))
-    exp = candidate.get("total_experience_years") or candidate.get("exp_years") or 0
-    loc_points = 10 if candidate.get("location") else 0
-    resume_points = 10 if (candidate.get("resume_path") or candidate.get("resume_url")) else 0
+    num_skills   = len(candidate.get("skills", []))
+    exp          = candidate.get("total_experience_years") or candidate.get("exp_years") or 0
+    loc_points   = 10 if candidate.get("location") else 0
     skill_points = min(num_skills * 5, 50)
-    exp_points = min(exp * 5, 30)
-    return skill_points + exp_points + loc_points + resume_points
+    exp_points   = min(exp * 5, 40)
+    return skill_points + exp_points + loc_points

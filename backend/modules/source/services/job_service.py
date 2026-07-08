@@ -7,7 +7,7 @@ from datetime import datetime
 from backend.modules.source.repositories.job_role_repo import JobRoleRepository
 from backend.modules.source.repositories.candidate_repo import CandidateRepository
 from backend.modules.source.repositories.ai_score_repo import AIScoreRepository
-from backend.modules.source.services.ats_engine import normalise_required_skills, calculate_role_fit
+from backend.modules.source.services.ats_engine import normalise_required_skills, calculate_role_fit, compute_resume_ats_score
 from backend.common.services.ai.agents import AIAgents
 from backend.core.email_service_extended import send_invite_email
 
@@ -29,9 +29,17 @@ class JobService:
         description = data.get("description")
         title = data.get("title")
 
-        # If no skills explicitly provided, try to infer from title only (no description)
+        # If no skills explicitly provided, try to infer from description using AI
         if not required_skills:
-            required_skills = normalise_required_skills(None, title=title, description="")
+            if description and description.strip():
+                try:
+                    required_skills = await self.ai_agents.extract_jd_skills(description=description, title=title or "")
+                except Exception as e:
+                    logger.warning(f"Failed to extract skills from JD via AI: {e}")
+            
+            # Fallback to static title presets if AI fails or no description
+            if not required_skills:
+                required_skills = normalise_required_skills(None, title=title, description="")
 
         data["required_skills"] = required_skills or []
         role_id = self.repo.create_job_role(data)
@@ -59,6 +67,19 @@ class JobService:
 
     async def update_job_role(self, role_id: int, updates: Dict[str, Any]) -> bool:
         skills_updated = "required_skills" in updates
+
+        # Auto-extract skills if description is provided but skills list is explicitly empty
+        if "description" in updates and updates.get("description", "").strip():
+            if "required_skills" in updates and not updates["required_skills"]:
+                try:
+                    extracted = await self.ai_agents.extract_jd_skills(
+                        description=updates["description"], 
+                        title=updates.get("title", "")
+                    )
+                    if extracted:
+                        updates["required_skills"] = extracted
+                except Exception as e:
+                    logger.warning(f"Failed to extract skills from JD via AI on update: {e}")
 
         # The database repository expects a JSON string for the required_skills JSONB column
         if "required_skills" in updates and isinstance(updates["required_skills"], list):
@@ -107,7 +128,20 @@ class JobService:
         secondary = (cand_db.get("secondary_skills") or []) if cand_db else []
         cand_skills = [{"name": s, "level": "intermediate"} for s in primary] + [{"name": s, "level": "beginner"} for s in secondary]
         
-        fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp, min_exp=min_exp)
+        cand_experience_text = ""
+        resume_ats_score = 0.0
+        if cand_db:
+            exp_list = cand_db.get("experience") or []
+            cand_experience_text = " ".join([
+                f"{e.get('company', '')} {e.get('designation', '')} {e.get('description', '')}"
+                for e in exp_list
+            ])
+            # Merge primary and secondary into 'skills' for the compute_resume_ats_score function which expects 'skills'
+            cand_db_for_scoring = dict(cand_db)
+            cand_db_for_scoring['skills'] = primary + secondary
+            resume_ats_score = compute_resume_ats_score(cand_db_for_scoring)
+        
+        fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp, min_exp=min_exp, cand_experience_text=cand_experience_text, resume_ats_score=resume_ats_score)
         
         reasoning = json.dumps({
             "matched": fit["matched_skills"],

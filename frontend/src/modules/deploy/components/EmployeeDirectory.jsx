@@ -294,6 +294,7 @@ setEmployees(employeeList);
           {
             label: 'Total',
             count: employees.length,
+            
             color: '#8B5CF6'
           },
           {

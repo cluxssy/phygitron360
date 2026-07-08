@@ -116,3 +116,8 @@ variable "company_name" {
   description = "Company Name"
   default     = "EWANDZ Digital"
 }
+
+variable "acm_certificate_arn" {
+  description = "The ARN of the ACM certificate to use for HTTPS on the ALB"
+  default     = ""
+}

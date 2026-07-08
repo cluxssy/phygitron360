@@ -419,29 +419,42 @@ class CandidateRepository:
                     params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
 
                 where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-                order_clause = "ORDER BY c.created_at DESC" if sort_by == "newest" else "ORDER BY c.total_experience_years DESC"
+                
+                if sort_by == "fit_score" and role_id:
+                    order_clause = "ORDER BY a.score DESC NULLS LAST, c.created_at DESC"
+                elif sort_by == "newest":
+                    order_clause = "ORDER BY c.created_at DESC"
+                else:
+                    order_clause = "ORDER BY c.total_experience_years DESC"
+
                 params.append(limit)
 
                 if role_id:
+                    joins = "LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s"
+                    joins += " LEFT JOIN ai_scores a ON c.id = a.entity_id AND a.entity_type = 'candidate' AND a.job_role_id = %s AND a.score_type = 'role_fit'"
+                    select_fields = "c.*, ca.status as job_status, a.score as fit_score, a.reasoning as ats_detail_json"
+                    
                     count_sql = f"""
                         SELECT COUNT(*) as total
                         FROM candidates c
-                        LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s
+                        {joins}
                         {where_clause}
                     """
-                    count_params = [role_id] + params[:-1]
+                    count_params = [role_id, role_id] + params[:-1]
+
                     cur.execute(count_sql, tuple(count_params))
                     total_count = cur.fetchone()['total']
 
                     sql = f"""
-                        SELECT c.*, ca.status as job_status
+                        SELECT {select_fields}
                         FROM candidates c
-                        LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s
+                        {joins}
                         {where_clause}
                         {order_clause}
                         LIMIT %s
                     """
-                    params.insert(0, role_id)
+                    params.insert(0, role_id) # for ai_scores join
+                    params.insert(0, role_id) # for candidate_applications join
                 else:
                     count_sql = f"""
                         SELECT COUNT(*) as total

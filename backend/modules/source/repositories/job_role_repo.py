@@ -107,19 +107,18 @@ class JobRoleRepository:
         finally:
             conn.close()
 
-    def update_job_role(self, role_id: int, updates: Dict[str, Any]) -> bool:
-        if not updates:
-            return True
+    def update_job_role(self, role_id: int, data: Dict[str, Any]) -> bool:
+        if not data:
+            return False
+            
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                set_clause = ", ".join(f"{k} = %s" for k in updates)
-                params = list(updates.values()) + [role_id]
-                cur.execute(
-                    f"UPDATE job_roles SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                    params,
-                )
+                set_clause = ", ".join([f"{k} = %s" for k in data.keys()])
+                values = list(data.values())
+                values.append(role_id)
+                cur.execute(f"UPDATE job_roles SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = %s", values)
                 conn.commit()
                 return cur.rowcount > 0
         finally:
@@ -130,8 +129,9 @@ class JobRoleRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                cur.execute("DELETE FROM candidate_invites WHERE job_role_id = %s", (role_id,))
+                # Delete dependent records (candidate_applications cascades automatically, but these don't)
                 cur.execute("DELETE FROM ai_scores WHERE job_role_id = %s", (role_id,))
+                cur.execute("DELETE FROM candidate_invites WHERE job_role_id = %s", (role_id,))
                 cur.execute("DELETE FROM job_roles WHERE id = %s", (role_id,))
                 deleted = cur.rowcount > 0
                 conn.commit()

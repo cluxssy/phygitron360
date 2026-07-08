@@ -16,6 +16,9 @@ import {
   validatePassword,
   isValidEmail,
   isNonEmpty,
+  isPhone,
+  isValidDate,
+  isFutureDate,
 } from '../../../core/utils/validators';
 
 const COUNTRY_CODES = [
@@ -104,52 +107,69 @@ export default function OnboardPage() {
       const errors = {};
       
       if (currentStep === 1) {
-          // Password validation
-          const passwordError = validatePassword(form.password);
-          if (passwordError) errors.password = passwordError;
+          // Password validation - only if filled
+          if (form.password) {
+              const passwordError = validatePassword(form.password);
+              if (passwordError) errors.password = passwordError;
+          }
           
-          // DOB / Age check
-          if (!form.dob) errors.dob = "Required";
-          else if (!isAtLeastAge(form.dob, 18)) errors.dob = "Must be at least 18 years old";
+          // DOB / Age check - only if filled
+          if (form.dob) {
+              if (!isValidDate(form.dob)) errors.dob = "Invalid date format";
+              else if (!isAtLeastAge(form.dob, 18)) errors.dob = "Must be at least 18 years old";
+          }
           
-          // Phone validation - strictly 10 digits
-          const phoneDigits = form.contact_number.replace(/\D/g, '');
-          if (!form.contact_number) {
-              errors.contact_number = "Contact number is required";
-          } else if (!/^\d{10}$/.test(phoneDigits)) {
-              errors.contact_number = "Must be exactly 10 digits (e.g. 9876543210)";
+          // Phone validation - only if filled
+          if (form.contact_number && !isPhone(form.contact_number)) {
+              errors.contact_number = "Must be 7-15 digits (e.g. 9876543210)";
           }
 
-          if (!emergencyName) {
-              errors.emergencyName = "Emergency contact name is required";
+          // Emergency contact name - only if filled
+          if (emergencyName && !isNonEmpty(emergencyName)) {
+              errors.emergencyName = "Name cannot be empty";
           }
           
-          const emergencyDigits = emergencyPhone.replace(/\D/g, '');
-          if (!emergencyPhone) {
-              errors.emergencyPhone = "Emergency phone is required";
-          } else if (!/^\d{10}$/.test(emergencyDigits)) {
-              errors.emergencyPhone = "Must be exactly 10 digits (e.g. 9876543210)";
+          // Emergency phone - only if filled
+          if (emergencyPhone && !isPhone(emergencyPhone)) {
+              errors.emergencyPhone = "Must be 7-15 digits (e.g. 9876543210)";
           }
       }
 
       if (currentStep === 2) {
-          if (!form.current_address) errors.current_address = "Required";
-          if (!form.permanent_address && !sameAsCurrent) errors.permanent_address = "Required";
-          if (!form.location) errors.location = "Required";
-          if (!form.primary_skills) errors.primary_skills = "Required";
-          if (!form.bank_name) errors.bank_name = "Required";
-          if (!form.bank_account_no) errors.bank_account_no = "Required";
-          else if (!isBankAccount(form.bank_account_no)) errors.bank_account_no = "9-18 digits only";
-          if (!form.pan_no) errors.pan_no = "Required";
-          else if (!isPan(form.pan_no)) errors.pan_no = "Use ABCDE1234F format";
+          // Address fields - only validate if filled
+          if (form.current_address && !isNonEmpty(form.current_address)) {
+              errors.current_address = "Address cannot be empty";
+          }
+          if (form.permanent_address && !sameAsCurrent && !isNonEmpty(form.permanent_address)) {
+              errors.permanent_address = "Address cannot be empty";
+          }
+          if (form.location && !isNonEmpty(form.location)) {
+              errors.location = "Location cannot be empty";
+          }
+          if (form.primary_skills && !isNonEmpty(form.primary_skills)) {
+              errors.primary_skills = "Skills cannot be empty";
+          }
+          if (form.bank_name && !isNonEmpty(form.bank_name)) {
+              errors.bank_name = "Bank name cannot be empty";
+          }
+          if (form.bank_account_no && !isBankAccount(form.bank_account_no)) {
+              errors.bank_account_no = "9-18 digits only";
+          }
+          if (form.pan_no && !isPan(form.pan_no)) {
+              errors.pan_no = "Use ABCDE1234F format";
+          }
       }
 
       if (currentStep === 3) {
           educationList.forEach((edu, idx) => {
-              if (!edu.degree || !edu.university || !edu.year) {
-                  errors[`edu_${idx}`] = "All fields required";
-              } else if (!/^\d{4}$/.test(String(edu.year).trim())) {
-                  errors[`edu_${idx}`] = "Year must be 4 digits";
+              // Only validate if at least one field has a value
+              const hasAnyValue = edu.degree || edu.university || edu.year || edu.percentage;
+              if (hasAnyValue) {
+                  if (!edu.degree || !edu.university || !edu.year) {
+                      errors[`edu_${idx}`] = "All fields required for this entry";
+                  } else if (!/^\d{4}$/.test(String(edu.year).trim())) {
+                      errors[`edu_${idx}`] = "Year must be 4 digits";
+                  }
               }
           });
       }
@@ -203,6 +223,8 @@ export default function OnboardPage() {
   const handleFileChange = (e) => {
       const { name, files: fList } = e.target;
       const file = fList[0];
+      if (!file) return;
+      
       const rules = {
           photo_file: { exts: ['.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.image, label: 'Profile photo' },
           cv_file: { exts: ['.pdf'], size: MAX_FILE_SIZE.resume, label: 'Resume/CV' },
@@ -244,27 +266,24 @@ export default function OnboardPage() {
        return;
     }
 
-    // Final file check
-    if (!files.cv_file || !files.photo_file || !files.id_proof_file) {
-        toast.error("All uploads (Resume/CV, Photo, and ID Proof) are mandatory");
-        return;
-    }
+    // File uploads are optional - only validate if files are provided
+    // If user wants to submit without files, that's allowed
 
     setSubmitting(true);
     const fd = new FormData();
     fd.append('token', token);
 
-    const finalContactNumber = `${phoneCountryCode} ${form.contact_number.trim()}`;
-    const finalEmergencyContact = `${emergencyName} - ${emergencyCountryCode} ${emergencyPhone.trim()}`;
+    const finalContactNumber = form.contact_number ? `${phoneCountryCode} ${form.contact_number.trim()}` : '';
+    const finalEmergencyContact = emergencyName && emergencyPhone ? `${emergencyName} - ${emergencyCountryCode} ${emergencyPhone.trim()}` : '';
 
     Object.keys(form).forEach(k => {
         if (k === 'contact_number') {
             fd.append(k, finalContactNumber);
         } else {
-            fd.append(k, form[k]);
+            fd.append(k, form[k] || '');
         }
     });
-    fd.append('emergency_contact', finalEmergencyContact);
+    fd.append('emergency_contact', finalEmergencyContact || '');
     fd.append('education_details', JSON.stringify(educationList));
     Object.keys(files).forEach(k => files[k] && fd.append(k, files[k]));
 
@@ -396,7 +415,7 @@ export default function OnboardPage() {
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Primary Contact with Country Code */}
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Contact number *</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Contact number</label>
                                <div className="flex gap-2">
                                  <select 
                                    value={phoneCountryCode} 
@@ -406,7 +425,6 @@ export default function OnboardPage() {
                                    {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-gray-900" style={{ color: '#000000' }}>{c.country}</option>)}
                                  </select>
                                  <input 
-                                   required
                                    type="tel"
                                    name="contact_number" 
                                    value={form.contact_number} 
@@ -420,9 +438,8 @@ export default function OnboardPage() {
 
                             {/* Emergency Contact Name */}
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Contact Name *</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Contact Name</label>
                                <input 
-                                 required 
                                  value={emergencyName} 
                                  onChange={e => setEmergencyName(e.target.value)} 
                                  className={`w-full glass-panel-input ${validationErrors.emergencyName ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
@@ -435,7 +452,7 @@ export default function OnboardPage() {
                          {/* Emergency Contact Phone with Country Code */}
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Emergency Contact Phone *</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Emergency Contact Phone</label>
                                <div className="flex gap-2">
                                  <select 
                                    value={emergencyCountryCode} 
@@ -445,7 +462,6 @@ export default function OnboardPage() {
                                    {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-gray-900" style={{ color: '#000000' }}>{c.country}</option>)}
                                  </select>
                                  <input 
-                                   required
                                    type="tel"
                                    value={emergencyPhone} 
                                    onChange={e => setEmergencyPhone(e.target.value)} 
@@ -506,19 +522,20 @@ export default function OnboardPage() {
 
                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-white/5 mt-4">
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Bank Name *</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Bank Name</label>
                                <input type="text" name="bank_name" value={form.bank_name} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.bank_name ? 'border-error/50' : 'border-white/5'}`} placeholder="e.g. HDFC Bank" />
                                {renderError('bank_name')}
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Bank Account No. *</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Bank Account No.</label>
                                <input type="text" name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.bank_account_no ? 'border-error/50' : 'border-white/5'}`} placeholder="9-18 digit account number" inputMode="numeric" />
                                {renderError('bank_account_no')}
+                               <p className="text-[8px] text-white/30 font-bold uppercase tracking-widest ml-1">Leave blank if not applicable</p>
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">PAN No. *</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">PAN No.</label>
                                <input type="text" name="pan_no" value={form.pan_no} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.pan_no ? 'border-error/50' : 'border-white/5'}`} placeholder="e.g. ABCDE1234F" style={{textTransform: 'uppercase'}} />
-                               {!validationErrors.pan_no && <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest mt-1 ml-1">PAN format: ABCDE1234F</p>}
+                               {!validationErrors.pan_no && <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest mt-1 ml-1">Leave blank if not applicable</p>}
                                {renderError('pan_no')}
                             </div>
                          </div>
@@ -557,6 +574,7 @@ export default function OnboardPage() {
                                  </div>
                              ))}
                          </div>
+                         <p className="text-[8px] text-white/30 font-bold uppercase tracking-widest ml-1">Fields are optional - only validate if filled</p>
                       </div>
                    )}
 
@@ -565,16 +583,16 @@ export default function OnboardPage() {
                       <div className="space-y-6 animate-fade-in-up">
                          <div className="flex items-center gap-2 mb-2">
                              <Upload size={16} className="text-primary" />
-                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Required Document Uploads (All Mandatory)</h3>
+                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Required Document Uploads</h3>
                          </div>
                          
                          <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-start gap-3 mb-6">
                              <Info size={16} className="text-primary mt-0.5 shrink-0" />
                              <div className="text-[11px] text-black/60 leading-relaxed">
-                                 <span className="font-bold text-black block mb-1">Upload Guidelines & Restrictions</span>
-                                 All uploads are <span className="text-error font-bold">strictly mandatory</span>. Supported file formats:
+                                 <span className="font-bold text-black block mb-1">Upload Guidelines</span>
+                                 All uploads are optional. If you choose to upload, please follow these format restrictions:
                                  <ul className="list-disc list-inside mt-1 space-y-0.5">
-                                     <li><strong>Resume/CV:</strong> PDF only (max 5MB, required for AI Parsing)</li>
+                                     <li><strong>Resume/CV:</strong> PDF only (max 5MB)</li>
                                      <li><strong>Profile Photo:</strong> JPG, JPEG, or PNG (max 2MB, clear facial shot)</li>
                                      <li><strong>ID Proof:</strong> PDF, JPG, JPEG, or PNG (max 5MB, government issued)</li>
                                  </ul>
@@ -583,9 +601,9 @@ export default function OnboardPage() {
 
                          <div className="space-y-4">
                             {[
-                                { k: 'cv_file', label: 'Resume / CV *', desc: 'Mandatory: Upload your latest resume (PDF)', icon: ShieldCheck, accept: '.pdf' },
-                                { k: 'photo_file', label: 'Photo *', desc: 'Mandatory: Clear passport size photo (JPG/PNG)', icon: UserPlus, accept: '.jpg,.jpeg,.png' },
-                                { k: 'id_proof_file', label: 'ID proof *', desc: 'Mandatory: Government issued identity proof (PDF/JPG/PNG)', icon: ShieldCheck, accept: '.pdf,.jpg,.jpeg,.png' }
+                                { k: 'cv_file', label: 'Resume / CV', desc: 'Upload your latest resume (PDF)', icon: ShieldCheck, accept: '.pdf' },
+                                { k: 'photo_file', label: 'Photo', desc: 'Passport size photo (JPG/PNG)', icon: UserPlus, accept: '.jpg,.jpeg,.png' },
+                                { k: 'id_proof_file', label: 'ID proof', desc: 'Government issued identity proof (PDF/JPG/PNG)', icon: ShieldCheck, accept: '.pdf,.jpg,.jpeg,.png' }
                             ].map((f, i) => (
                                <div key={i} className={`onboard-upload-row flex items-center gap-6 p-6 rounded-[22px] border transition-all ${files[f.k] ? 'is-complete' : 'is-empty'}`}>
                                   <div className={`onboard-upload-icon w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${files[f.k] ? 'is-complete' : 'is-empty'}`}>
@@ -594,9 +612,9 @@ export default function OnboardPage() {
                                   <div className="flex-1 min-w-0">
                                      <div className="flex items-center gap-2">
                                          <p className="text-[11px] font-black uppercase tracking-widest text-white">{f.label}</p>
-                                         {!files[f.k] && <div className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" title="Required" />}
                                      </div>
                                      <p className="text-[10px] text-white/30 mt-1 uppercase tracking-wider truncate">{files[f.k] ? files[f.k].name : f.desc}</p>
+                                     <p className="text-[8px] text-white/20 font-bold uppercase tracking-widest mt-1">Optional - upload only if available</p>
                                   </div>
                                   <label className="cursor-pointer px-5 py-2.5 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white border border-white/10 rounded-xl transition-all">
                                       {files[f.k] ? 'Replace' : 'Upload'}
@@ -636,7 +654,7 @@ export default function OnboardPage() {
         
         <div className="mt-10 flex items-center justify-center gap-6 opacity-30 text-[9px] font-black uppercase tracking-widest">
             <span className="flex items-center gap-2"><ShieldCheck size={12}/> Secure form</span>
-            <span className="flex items-center gap-2"><Info size={12}/> Resume parsing enabled</span>
+            <span className="flex items-center gap-2"><Info size={12}/> All fields optional</span>
         </div>
       </div>
 

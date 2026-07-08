@@ -76,27 +76,27 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const validateForm = () => {
         const newErrors = {};
 
-        // Email validation
+        // Email validation - only if filled
         if (formData.email_id && !isValidEmail(formData.email_id)) {
             newErrors.email_id = 'Please enter a valid email address';
         }
 
-        // Phone validation
+        // Phone validation - only if filled
         if (formData.contact_number && !isValidPhone(formData.contact_number)) {
             newErrors.contact_number = 'Please enter a valid phone number (10 digits)';
         }
 
-        // Emergency contact validation
+        // Emergency contact validation - only if filled
         if (formData.emergency_contact && !isValidPhone(formData.emergency_contact)) {
             newErrors.emergency_contact = 'Please enter a valid emergency contact number (10 digits)';
         }
 
-        // DOB validation - just check if valid date
-            if (formData.dob && !isValidDate(formData.dob)) {
-                newErrors.dob = 'Please enter a valid date of birth';
-            }
+        // DOB validation - only if filled
+        if (formData.dob && !isValidDate(formData.dob)) {
+            newErrors.dob = 'Please enter a valid date of birth';
+        }
 
-        // DOJ validation - cannot be before DOB
+        // DOJ validation - only if both DOJ and DOB are filled
         if (formData.doj && formData.dob) {
             if (!isValidDate(formData.doj)) {
                 newErrors.doj = 'Please enter a valid date of joining';
@@ -105,22 +105,22 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             }
         }
 
-        // Experience validation
+        // Experience validation - only if filled
         if (formData.experience_years && !isPositiveNumber(formData.experience_years)) {
             newErrors.experience_years = 'Experience years must be a positive number';
         }
 
-        // Bank Account validation
+        // Bank Account validation - only if filled
         if (formData.bank_account_no && !isValidBankAccount(formData.bank_account_no)) {
             newErrors.bank_account_no = 'Please enter a valid bank account number (digits only, 9-18 digits)';
         }
 
-        // PAN validation
+        // PAN validation - only if filled
         if (formData.pan_no && !isValidPAN(formData.pan_no)) {
             newErrors.pan_no = 'Please enter a valid PAN (e.g. ABCDE1234F)';
         }
 
-        // URL validations
+        // URL validations - only if filled
         if (formData.linkedin_url && !isValidURL(formData.linkedin_url)) {
             newErrors.linkedin_url = 'Please enter a valid LinkedIn URL';
         }
@@ -330,7 +330,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <HasPermission permission="deploy.employees.edit">
                             <button 
                                 onClick={() => setEditMode(true)}
-                                className="flex items-center gap-2 px-8 py-2 bg-white border border-[#ece4ff] shadow-sm border-[#e9defd] text-primary text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#7c3aed] hover:text-white transition-all"
+                                className="flex items-center gap-2 px-8 py-2 bg-white border border-[#ece4ff] shadow-sm border-[#e9defd] text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#7c3aed] hover:text-white transition-all"
                             >
                                 <Edit3 size={14} /> Edit Profile
                             </button>
@@ -511,7 +511,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={TrendingUp} title="Skills & Expertise" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 italic">Primary Vector Nodes</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-black/75 mb-4 italic">Primary SKILL</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.primary_skillset}
@@ -523,7 +523,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
                                         {(details.skill_matrix?.primary_skillset || '').split(',').map((s, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-gradient-to-r from-primary/10 to-primary/5 text-primary text-[10px] font-bold uppercase rounded-lg border border-primary/20 shadow-sm shadow-primary/10">
+                                            <span key={i} className="px-3 py-1.5 bg-gradient-to-r from-[#f7f3ff] to-[#faf7ff] text-black/75 text-[10px] font-bold uppercase rounded-lg border border-[#e9ddff] shadow-sm">
                                                 {s.trim()}
                                             </span>
                                         ))}
@@ -531,7 +531,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-black/75 mb-4 italic">Auxiliary Capability Blocks</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-black/75 mb-4 italic">secondary SKILL</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.secondary_skillset}
@@ -669,8 +669,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                                 <CheckCircle size={8} /> Allocated
                                             </span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-[#f4ecff] text-black rounded-full text-[8px] font-black uppercase border border-[#ddd6fe] shadow-sm">
-                                                Pending
+                                            <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[8px] font-black uppercase border border-amber-200 shadow-sm">
+                                                Not Allocated
                                             </span>
                                         )}
                                     </div>
@@ -701,12 +701,12 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                             {a.label}
                                         </span>
                                         {assets?.[a.key] ? (
-                                            <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[8px] font-black uppercase border border-amber-200 shadow-sm">
-                                                <CheckCircle size={8} /> Cleared
+                                            <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[8px] font-black uppercase border border-emerald-200 shadow-sm">
+                                                <CheckCircle size={8} /> Resolved
                                             </span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-[#f4ecff] text-black rounded-full text-[8px] font-black uppercase border border-[#ddd6fe] shadow-sm">
-                                                In Use
+                                            <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[8px] font-black uppercase border border-blue-200 shadow-sm">
+                                                Pending Verification
                                             </span>
                                         )}
                                     </div>
@@ -714,9 +714,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </div>
                         </div>
 
+                        {/* ── FIXED: Open Deployment Command Button ── */}
                         <div className="p-4 bg-[#faf7ff] border-t border-[#ece4ff]">
                             <button
-                                onClick={() => window.location.href = `/deploy?tab=allocations&code=${details.employee_code}`}
+                                onClick={() => window.location.href = `/deploy?tab=assets&code=${details.employee_code}`}
                                 className="w-full py-3 px-4 rounded-xl border border-[#d8c7ff] bg-white text-[#6d28d9] text-[9px] font-black uppercase tracking-[0.2em] hover:bg-[#7c3aed] hover:text-white hover:scale-[1.02] hover:shadow-lg hover:shadow-[#7c3aed]/20 transition-all"
                             >
                                 Open Deployment Command
@@ -752,7 +753,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Geographic Anchors */}
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={Landmark} title="Geographic Anchor Points" />
+                        <SectionHeader icon={Landmark} title="Location details" />
                         <div className="mt-6 space-y-6">
                             <div>
                                 <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
@@ -799,7 +800,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Financial Nodes */}
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={Landmark} title="Financial Nodes" />
+                        <SectionHeader icon={Landmark} title="Financial Info" />
                         <div className="mt-6 space-y-6">
                             <div>
                                 <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
@@ -892,7 +893,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Date of Birth */}
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={Calendar} title="Biological Timestamp" />
+                        <SectionHeader icon={Calendar} title="DOB" />
                         <div className="mt-6">
                             {editMode ? (
                                 <div>
