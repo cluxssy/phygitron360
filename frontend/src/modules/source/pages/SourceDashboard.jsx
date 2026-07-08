@@ -30,6 +30,9 @@ import {
   validateFile,
 } from '../../../core/utils/validators';
 
+// ── Import Notification Context ──
+import { useNotifications } from '../../../core/context/NotificationContext';
+
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
   if (s >= 80) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
@@ -58,6 +61,9 @@ export default function SourceDashboard() {
 
   const { user, hasPermission, logout } = useAuth();
   const displayName = user?.name || user?.email?.split('@')[0] || "User";
+
+  // ── Use Notification Context ──
+  const { setShowNotifications } = useNotifications();
 
   const appModules = getHubTabs({ hasPermission, hasRole });
 
@@ -226,10 +232,8 @@ export default function SourceDashboard() {
         params.set('role_id', filters.role_id);
         params.set('limit', filters.limit);
       } else {
-        // Fetch a large number of candidates for the global directory view
         params.set('limit', 5000);
       }
-      // No limit when no role_id is selected - fetch all candidates
 
       const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
       const d = await r.json();
@@ -262,7 +266,7 @@ export default function SourceDashboard() {
     const handleBeforeUnload = (e) => {
       if (uploading) {
         e.preventDefault();
-        e.returnValue = ''; // Required for Chrome to show the prompt
+        e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -316,8 +320,12 @@ export default function SourceDashboard() {
 
           if (job && (job.status === 'cancelled' || job.status === 'failed' || (job.total_files > 0 && totalProcessed >= job.total_files))) {
              setBulkJobId(null);
+             // ── Only show toast if we're on the upload tab or if there were files processed ──
              if (job.status === 'completed' || (job.total_files > 0 && totalProcessed >= job.total_files)) {
-                 toast.success('Bulk processing complete');
+                 // Only show toast if we're on upload tab or there was actual file processing
+                 if (currentTab === 'upload' || job.total_files > 0) {
+                   toast.success('Bulk processing complete');
+                 }
                  fetchCandidates();
              }
              setBulkJobProgress(null);
@@ -332,7 +340,7 @@ export default function SourceDashboard() {
     fetchProgress();
     const interval = setInterval(fetchProgress, 3000);
     return () => clearInterval(interval);
-  }, [bulkJobId, fetchCandidates]);
+  }, [bulkJobId, fetchCandidates, currentTab]);
 
   // ── Filter candidates client-side ──
   const filteredCandidates = candidates.filter(c => {
@@ -731,7 +739,7 @@ export default function SourceDashboard() {
   const anySelected = selectedIds.size > 0;
   const setTab = (tab) => navigate(`/source?tab=${tab}`);
 
-  // Calculate stats for home dashboard
+  // Calculate stats for dashboard
   const favouriteCount = candidates.filter(c => c.status?.toLowerCase() === 'favourite').length;
   const invitedCount = candidates.filter(c => c.status?.toLowerCase() === 'invited').length;
   const archivedCount = candidates.filter(c => c.status?.toLowerCase() === 'archived').length;
@@ -742,9 +750,6 @@ export default function SourceDashboard() {
   // Calculate today's stats
   const today = new Date().toISOString().split('T')[0];
   const resumesUploadedToday = candidates.filter(c => c.created_at?.startsWith(today)).length;
-  const invitationsSentToday = activities.filter(a => {
-    return a.created_at?.startsWith(today) && a.action?.toLowerCase().includes('invite');
-  }).length;
 
   return (
     <div className="dashboard-page light-theme-override" style={{ backgroundColor: '#FAF8FF' }}>
@@ -766,7 +771,12 @@ export default function SourceDashboard() {
           </div>
         </div>
         <div className="top-right">
-          <img src={bellIcon} className="icon" alt="bell" />
+          <img 
+            src={bellIcon} 
+            className="icon cursor-pointer" 
+            alt="bell" 
+            onClick={() => setShowNotifications(true)}
+          />
           <img
             src={logoutIcon}
             className="icon logout-icon"
@@ -794,7 +804,7 @@ export default function SourceDashboard() {
         </div>
         
         <div className="content" style={{ backgroundColor: '#FAF8FF', padding: '24px' }}>
-          <div className="flex flex-col gap-6 h-full">
+        <div className="flex flex-col gap-6">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 shrink-0">
@@ -965,53 +975,70 @@ export default function SourceDashboard() {
         </div>
       </div>
 
+      {/* ── KPI CARDS ── */}
+      {currentTab === 'home' && (
+        <div className="grid grid-cols-4 gap-4">
+          {/* 🟣 Candidates */}
+          <div 
+            className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-purple-600"
+            onClick={() => setTab('directory')}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <UsersIcon size={20} className="text-purple-600" />
+              <span className="text-xs font-medium text-purple-600">Total</span>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800">{totalCandidates}</h2>
+            <p className="text-sm text-gray-500 mt-1">Total Candidates</p>
+            </div>
+
+          {/* 🟠 Jobs */}
+          <div 
+            className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-amber-500"
+            onClick={() => setTab('jobs')}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <BriefcaseIcon size={20} className="text-amber-500" />
+              <span className="text-xs font-medium text-amber-500">Open</span>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800">{jobRoles.length}</h2>
+            <p className="text-sm text-gray-500 mt-1">Active Job Openings</p>
+            
+          </div>
+
+          {/* 🔵 Uploads */}
+          <div 
+            className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-blue-500"
+            onClick={() => setTab('upload')}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <Upload size={20} className="text-blue-500" />
+              <span className="text-xs font-medium text-blue-500">Today</span>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800">{resumesUploadedToday}</h2>
+            <p className="text-sm text-gray-500 mt-1">Files Uploaded Today</p>
+            
+          </div>
+
+          {/* 🩷 Approvals */}
+          <div 
+            className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-pink-500"
+            onClick={() => setTab('offers')}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <CheckCircleIcon size={20} className="text-pink-500" />
+              <span className="text-xs font-medium text-pink-500">Pending</span>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800">{0}</h2>
+            <p className="text-sm text-gray-500 mt-1">Pending Offer Approvals</p>
+            
+          </div>
+        </div>
+      )}
+
       {/* ── Main Tab Content ── */}
       {currentTab === 'home' ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
-          {/* Top Metrics Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 overflow-visible pt-2">
-            {/* Total Candidates - Purple */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border-t-4 border-t-purple-600 max-w-xs">
-              <div className="flex items-center justify-between mb-2">
-                <UsersIcon size={20} className="text-purple-600" />
-                <span className="text-xs font-medium text-purple-600">Total</span>
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800">{totalCandidates}</h2>
-              <p className="text-sm text-gray-500 mt-1">Total Candidates</p>
-            </div>
-
-            {/* Favourite - Amber/Orange */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border-t-4 border-t-amber-500 max-w-xs">
-              <div className="flex items-center justify-between mb-2">
-                <Star size={20} className="text-amber-500" />
-                <span className="text-xs font-medium text-amber-500">Favourite</span>
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800">{favouriteCount}</h2>
-              <p className="text-sm text-gray-500 mt-1">Shortlisted Candidates</p>
-            </div>
-
-            {/* Invited - Indigo */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border-t-4 border-t-indigo-500 max-w-xs">
-              <div className="flex items-center justify-between mb-2">
-                <MailIcon size={20} className="text-indigo-500" />
-                <span className="text-xs font-medium text-indigo-500">Invited</span>
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800">{invitedCount}</h2>
-              <p className="text-sm text-gray-500 mt-1">Active Invites</p>
-            </div>
-
-            {/* Archived - Gray */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border-t-4 border-t-[#e731ad] max-w-xs">
-              <div className="flex items-center justify-between mb-2">
-                <Archive size={20} className="text-[#e731ad]" />
-                <span className="text-xs font-medium text-[#e731ad]">Archived</span>
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800">{archivedCount}</h2>
-              <p className="text-sm text-gray-500 mt-1">Inactive Pool</p>
-            </div>
-          </div>
-
-          {/* Row 2: Activity and Today's Stats */}
+          {/* Row 1: Activity and Today's Stats */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
@@ -1026,7 +1053,7 @@ export default function SourceDashboard() {
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
                     <p className="text-xs font-medium text-gray-500">Invitations Sent Today</p>
-                    <p className="text-3xl font-bold text-amber-600 mt-2">{invitationsSentToday}</p>
+                    <p className="text-3xl font-bold text-amber-600 mt-2">{invitedCount}</p>
                     <p className="text-xs text-gray-400 mt-1">Updated today</p>
                   </div>
                 </div>
@@ -1115,7 +1142,7 @@ export default function SourceDashboard() {
             </div>
           </div>
 
-          {/* Row 3: Job Openings and Recruitment Summary */}
+          {/* Row 2: Job Openings and Recruitment Summary */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
@@ -1310,7 +1337,6 @@ export default function SourceDashboard() {
             <div className="bg-white w-full max-w-xl rounded-2xl p-6 border border-purple-200 shadow-sm relative overflow-hidden">
            <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
               {bulkJobProgress?.job?.status === 'extracting' ? (
-                // Indeterminate animated bar during the extracting phase
                 <div className="h-full bg-purple-400 animate-pulse" style={{ width: '100%' }} />
               ) : bulkJobProgress?.job?.total_files > 0 ? (
                 <div 

@@ -244,7 +244,8 @@ export default function AssessmentBuilder() {
         const validTests = (q.test_cases || []).filter(tc => String(tc.expected_output ?? '').trim());
         if (validTests.length < 3) return `${label}: coding questions need at least 3 expected outputs.`;
       }
-      if (q.question_type === 'written' && publish && !q.model_answer?.trim()) {
+      // Model answer - only validate on publish AND if it has a value (not empty)
+      if (q.question_type === 'written' && publish && q.model_answer && !q.model_answer.trim()) {
         return `${label}: add a model answer before publishing written questions.`;
       }
     }

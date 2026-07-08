@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Activity, CheckCircle } from 'lucide-react';
+import { Shield, Activity, CheckCircle, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { useLocation } from 'react-router-dom';
 
@@ -11,6 +11,7 @@ import AssessmentAnalytics from './AssessmentAnalytics';
 import CandidateDashboard from './CandidateDashboard';
 import QuestionBank from './QuestionBank';
 import LiveMonitor from './LiveMonitor';
+import AssessmentDashboard from './AssessmentDashboard';
 import { useNavigate } from 'react-router-dom';
 
 import "../../../styles/light-theme-override.css";
@@ -18,6 +19,7 @@ import logo from "../../../assets/phy360.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
+import { useNotifications } from '../../../core/context/NotificationContext';
 
 export default function VerifyDashboard() {
   const { hasRole } = useAuth();
@@ -25,8 +27,9 @@ export default function VerifyDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, hasPermission, logout } = useAuth();
+  const { setShowNotifications } = useNotifications();
   const params = new URLSearchParams(location.search);
-  const tab = params.get('tab') || (isAdmin ? 'manage' : 'candidate');
+  const tab = params.get('tab') || (isAdmin ? 'dashboard' : 'candidate');
   const asmId = params.get('id');
 
   const setTab = (t) => navigate(`/verify?tab=${t}`);
@@ -45,6 +48,7 @@ export default function VerifyDashboard() {
 
   const renderContent = () => {
     switch (tab) {
+      case 'dashboard': return <AssessmentDashboard />;
       case 'manage': return <ManageAssessments />;
       case 'builder': return <AssessmentBuilder />;
       case 'take': return <AssessmentTaker />;
@@ -57,11 +61,38 @@ export default function VerifyDashboard() {
     }
   };
 
-  // Check if we should show the header (only for manage tab)
-  const showHeader = tab === 'manage' || (tab === 'candidate' && !isAdmin);
+  // Show header for dashboard, manage, and candidate tabs
+  const showHeader = tab === 'dashboard' || tab === 'manage' || (tab === 'candidate' && !isAdmin);
+
+  // ── KPI Cards for Header (Admin) ──
+  const [headerStats, setHeaderStats] = React.useState({ total: 0, active: 0, submissions: 0 });
+  const [loadingStats, setLoadingStats] = React.useState(true);
+
+  React.useEffect(() => {
+    if (isAdmin && showHeader) {
+      const fetchHeaderStats = async () => {
+        try {
+          const [assessmentsRes, submissionsRes] = await Promise.all([
+            fetch('/api/verify/builder/assessments', { credentials: 'include' }),
+            fetch('/api/verify/submissions/recent', { credentials: 'include' })
+          ]);
+          const assessments = await assessmentsRes.json();
+          const submissions = await submissionsRes.json();
+          setHeaderStats({
+            total: (assessments.data || []).length,
+            active: (assessments.data || []).filter(a => a.status?.toLowerCase() === 'active').length,
+            submissions: (submissions.data || []).length
+          });
+        } catch { /* silent */ }
+        finally { setLoadingStats(false); }
+      };
+      fetchHeaderStats();
+    }
+  }, [isAdmin, showHeader]);
 
   return (
     <div className="dashboard-page light-theme-override" style={{ backgroundColor: '#FFFFFF' }}>
+      {/* TOPBAR - UNCHANGED */}
       <div className="topbar">
         <div className="top-left">
           <img src={logo} className="logo" alt="logo" />
@@ -80,7 +111,12 @@ export default function VerifyDashboard() {
           </div>
         </div>
         <div className="top-right">
-          <img src={bellIcon} className="icon" alt="bell" />
+          <img 
+            src={bellIcon} 
+            className="icon cursor-pointer" 
+            alt="bell" 
+            onClick={() => setShowNotifications(true)}
+          />
           <img
             src={logoutIcon}
             className="icon logout-icon"
@@ -97,53 +133,51 @@ export default function VerifyDashboard() {
         </div>
       </div>
 
-      <div className="dashboard-body" style={{ position: 'relative' }}>
-        {/* Hide the old sidebar that appears from parent layout */}
-        <style>{`
-          .dashboard-body > .sidebar:not(:has(button)) {
-            display: none !important;
-          }
-          .old-sidebar, 
-          .sidebar-old,
-          .sidebar:not(.verify-sidebar) {
-            display: none !important;
-          }
-          .dashboard-body > .content {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin-left: 0 !important;
-            padding-left: 24px !important;
-          }
-          .fixed.inset-0.pointer-events-none {
-            opacity: 0.15 !important;
-          }
-        `}</style>
-
-        {/* New Sidebar */}
-        <div className="sidebar verify-sidebar">
-          {isAdmin && <button className={tab === 'manage' ? 'active' : ''} onClick={() => setTab('manage')}>Manage</button>}
-          {isAdmin && <button className={tab === 'builder' ? 'active' : ''} onClick={() => setTab('builder')}>Builder</button>}
-          {isAdmin && <button className={tab === 'bank' ? 'active' : ''} onClick={() => setTab('bank')}>Question Bank</button>}
-          {isAdmin && <button className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>Analytics</button>}
-          {!isAdmin && <button className={tab === 'candidate' ? 'active' : ''} onClick={() => setTab('candidate')}>My Assessments</button>}
+      {/* BODY */}
+      <div className="dashboard-body">
+        {/* SIDEBAR - UNCHANGED STRUCTURE */}
+        <div className="sidebar">
+          {isAdmin && (
+            <>
+              <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>
+                Dashboard
+              </button>
+              <button className={tab === 'manage' ? 'active' : ''} onClick={() => setTab('manage')}>Manage</button>
+              <button className={tab === 'builder' ? 'active' : ''} onClick={() => setTab('builder')}>Builder</button>
+              <button className={tab === 'bank' ? 'active' : ''} onClick={() => setTab('bank')}>Question Bank</button>
+              <button className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>Analytics</button>
+            </>
+          )}
+          {!isAdmin && (
+            <>
+              <button className={tab === 'candidate' ? 'active' : ''} onClick={() => setTab('candidate')}>
+                <LayoutDashboard size={14} className="inline mr-2" /> Dashboard
+              </button>
+              <button className={tab === 'candidate' ? 'active' : ''} onClick={() => setTab('candidate')}>My Assessments</button>
+            </>
+          )}
         </div>
         
-        <div className="content" style={{ backgroundColor: '#FFFFFF', padding: '24px', flex: 1 }}>
+        {/* CONTENT - UNCHANGED */}
+        <div className="content" style={{ backgroundColor: '#FFFFFF', padding: '24px' }}>
           <div className="flex flex-col gap-6">
-            {/* Header - Only shown in manage tab (or candidate tab for non-admin) */}
+            {/* Header */}
             {showHeader && (
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">ASSESSMENT CENTRAL</p>
                 <div className="flex items-center justify-between">
                   <div>
                     <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-                      Skills Assessment
+                      {tab === 'dashboard' ? 'Dashboard' : 'Skills Assessment'}
                     </h1>
                     <p className="text-sm text-gray-500 mt-1">
-                      Create, manage, and evaluate skills assessments for candidates and employees.
+                      {tab === 'dashboard' 
+                        ? 'Overview of all assessment activities and performance metrics'
+                        : 'Create, manage, and evaluate skills assessments for candidates and employees.'
+                      }
                     </p>
                   </div>
-                  {isAdmin && (
+                  {isAdmin && tab !== 'dashboard' && (
                     <button 
                       onClick={() => setTab('builder')}
                       className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors duration-150 shadow-sm"
