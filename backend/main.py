@@ -81,6 +81,14 @@ async def start_background_workers():
     db.main_loop = asyncio.get_running_loop()
     from backend.core.database import get_db_connection, create_tables
 
+    # First, ensure the public schema and master tables exist
+    try:
+        create_tables(schema_name='public')
+        print("[Startup] Public schema migration OK", flush=True)
+    except Exception as e:
+        print(f"[Startup] Public schema migration FAILED: {e}", flush=True)
+
+    # Now we can safely query the tenants table
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -93,9 +101,10 @@ async def start_background_workers():
     print(f"[Startup] Running schema migration for {len(tenant_ids)} tenants: {tenant_ids}", flush=True)
 
     # Run create_tables() for every tenant as an idempotent migration.
-    # This ensures any tables added to new code versions (e.g. bulk_upload_jobs)
-    # are created in schemas that were provisioned before the code update.
     for t_id in tenant_ids:
+        # Skip public as we already did it
+        if t_id == 'public':
+            continue
         try:
             create_tables(schema_name=t_id)
             print(f"[Startup] Schema migration OK for {t_id}", flush=True)
