@@ -137,7 +137,7 @@ export default function CandidateDashboard() {
               const isActionable = s === 'pending' || s === 'started';
               const isCompleted = s === 'submitted' || s === 'graded';
               return (
-                <div key={a.id} className={`bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4 ${isActionable ? 'hover:border-purple-300' : ''} transition-colors`}>
+                <div key={a.assignment_id} className={`bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4 ${isActionable ? 'hover:border-purple-300' : ''} transition-colors`}>
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
                     isActionable ? 'bg-purple-100 text-purple-600' :
                     isCompleted ? 'bg-emerald-100 text-emerald-600' :
@@ -207,7 +207,7 @@ export default function CandidateDashboard() {
               const pct = Math.round(r.percentage_score ?? r.score ?? 0);
               const passed = r.passed;
               return (
-                <div key={r.id} className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all">
+                <div key={r.result_id} className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all">
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="font-semibold text-gray-800 text-sm truncate">{r.assessment_title || 'Assessment'}</h4>
                     <span className={`px-2 py-0.5 rounded-md border text-[10px] font-medium uppercase tracking-wider shrink-0 ${

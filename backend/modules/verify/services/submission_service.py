@@ -62,6 +62,9 @@ class SubmissionService:
     def get_leaderboard(self, asm_id: int) -> List[Dict[str, Any]]:
         return self.repo.get_leaderboard(asm_id)
 
+    def get_recent_submissions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        return self.repo.get_recent_submissions(limit)
+
     def get_my_results(self, user_id: int) -> List[Dict[str, Any]]:
         return self.repo.get_my_results(user_id)
 

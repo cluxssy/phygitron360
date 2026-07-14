@@ -1,137 +1,540 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Users, Award, ShieldAlert, Clock, Loader2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Award, ShieldAlert, Clock, Loader2, ChevronDown, ChevronUp, AlertTriangle, Play, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-export default function AssessmentAnalytics({ assessmentId }) {
+export default function AssessmentAnalytics({ assessmentId: initialAssessmentId }) {
+  const [assessmentsList, setAssessmentsList] = useState([]);
+  const [usersList, setUsersList] = useState([]);
+  
+  const [selectedView, setSelectedView] = useState(initialAssessmentId ? 'assessment' : null);
+  const [selectedId, setSelectedId] = useState(initialAssessmentId || null);
+
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [userHistory, setUserHistory] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState(null);
+  const [resultDetailsCache, setResultDetailsCache] = useState({});
+  const [loadingDetailsId, setLoadingDetailsId] = useState(null);
+  const [lightboxImage, setLightboxImage] = useState(null);
 
+  // Fetch dropdown lists on mount
   useEffect(() => {
-    if (!assessmentId) return;
-    setLoading(true);
-    fetch(`/api/verify/builder/assessments/${assessmentId}/stats`)
+    fetch('/api/verify/builder/assessments', { credentials: 'include' })
       .then(r => r.json())
-      .then(d => {
-        if (d.success) setStats(d.data);
-        else toast.error('Failed to load analytics');
-      })
-      .catch(() => toast.error('Error loading analytics'))
-      .finally(() => setLoading(false));
-  }, [assessmentId]);
+      .then(d => { if (d.success) setAssessmentsList(d.data); });
+      
+    fetch('/api/verify/assignments/assignable-users', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (d.success) setUsersList(d.data); });
+  }, []);
 
-  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
-  if (!stats) return <div className="p-10 text-center text-gray-400">No data available</div>;
+  // Fetch data when selection changes
+  useEffect(() => {
+    if (!selectedView || !selectedId) {
+      setStats(null);
+      setUserHistory(null);
+      return;
+    }
+    
+    setLoading(true);
+    setExpandedRowId(null);
 
-  const { metrics, performance, top_performers } = stats;
+    if (selectedView === 'assessment') {
+      Promise.all([
+        fetch(`/api/verify/builder/assessments/${selectedId}/stats`, { credentials: 'include' }).then(r => r.json()),
+        fetch(`/api/verify/submissions/assessments/${selectedId}/results`, { credentials: 'include' }).then(r => r.json()),
+        fetch(`/api/verify/assignments/${selectedId}/candidates`, { credentials: 'include' }).then(r => r.json())
+      ]).then(([statsRes, leadRes, candRes]) => {
+          if (statsRes.success) {
+            const data = statsRes.data || {};
+            // Format to match old structure
+            setStats({
+              metrics: {
+                total_assigned: candRes.success ? (candRes.data || []).length : 0,
+                total_submitted: data.total_submissions || 0,
+                total_passed: data.passed_count || 0,
+                total_malpractice: data.malpractice_count || 0
+              },
+              performance: {
+                pass_rate_pct: data.total_submissions > 0 ? ((data.passed_count || 0) / data.total_submissions) * 100 : 0,
+                average_score: data.average_score || 0,
+                average_time_taken: 0 // Not available in current backend query
+              }
+            });
+            setLeaderboard(leadRes.success ? leadRes.data : []);
+          } else toast.error('Failed to load assessment analytics');
+        })
+        .catch(() => toast.error('Error loading analytics'))
+        .finally(() => setLoading(false));
+    } else if (selectedView === 'user') {
+      fetch(`/api/verify/submissions/user/${selectedId}/results`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) setUserHistory(d.data);
+          else toast.error('Failed to load user history');
+        })
+        .catch(() => toast.error('Error loading history'))
+        .finally(() => setLoading(false));
+    }
+  }, [selectedView, selectedId]);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-xl font-bold text-gray-800">Analytics</h3>
-          <p className="text-sm text-gray-500 mt-1">Real-time performance metrics</p>
-        </div>
-        <button className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors">
-          Export CSV
-        </button>
-      </div>
+  const handleAssessmentChange = (e) => {
+    const val = e.target.value;
+    if (val) {
+      setSelectedView('assessment');
+      setSelectedId(val);
+    } else {
+      setSelectedView(null);
+      setSelectedId(null);
+    }
+  };
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Users size={16} className="text-purple-400" />
-            <p className="text-xs font-medium text-gray-500">Assigned</p>
-          </div>
-          <p className="text-3xl font-bold text-gray-800">{metrics.total_assigned}</p>
-        </div>
-        
-        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp size={16} className="text-purple-400" />
-            <p className="text-xs font-medium text-gray-500">Submitted</p>
-          </div>
-          <p className="text-3xl font-bold text-gray-800">{metrics.total_submitted}</p>
-        </div>
-        
-        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Award size={16} className="text-emerald-500" />
-            <p className="text-xs font-medium text-gray-500">Passed</p>
-          </div>
-          <p className="text-3xl font-bold text-emerald-600">{metrics.total_passed}</p>
-        </div>
-        
-        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldAlert size={16} className="text-rose-500" />
-            <p className="text-xs font-medium text-gray-500">Flagged</p>
-          </div>
-          <p className="text-3xl font-bold text-rose-600">{metrics.total_malpractice}</p>
-        </div>
-      </div>
+  const handleUserChange = (e) => {
+    const val = e.target.value;
+    if (val) {
+      setSelectedView('user');
+      setSelectedId(val);
+    } else {
+      setSelectedView(null);
+      setSelectedId(null);
+    }
+  };
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Averages */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Averages</h4>
-          <div className="space-y-6">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Pass Rate</p>
-              <span className="text-3xl font-bold text-gray-800">{performance.pass_rate_pct.toFixed(1)}%</span>
+  const toggleRow = async (resultId) => {
+    if (expandedRowId === resultId) {
+      setExpandedRowId(null);
+      return;
+    }
+    setExpandedRowId(resultId);
+    
+    if (!resultDetailsCache[resultId]) {
+      setLoadingDetailsId(resultId);
+      try {
+        const res = await fetch(`/api/verify/submissions/results/${resultId}`, { credentials: 'include' });
+        const data = await res.json();
+        if (data.success) {
+          setResultDetailsCache(prev => ({ ...prev, [resultId]: data.data }));
+        }
+      } catch (err) {
+        toast.error('Failed to load proctoring evidence');
+      } finally {
+        setLoadingDetailsId(null);
+      }
+    }
+  };
+
+  // --- Render Functions ---
+
+  const renderAssessmentStats = () => {
+    if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
+    if (!stats) return <div className="p-10 text-center text-gray-400">No data available</div>;
+
+    const { metrics, performance } = stats;
+
+    return (
+      <div className="space-y-6 animate-fade-in-up">
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <Users size={16} className="text-purple-400" />
+              <p className="text-xs font-medium text-gray-500">Assigned</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Average Score</p>
-              <span className="text-3xl font-bold text-purple-600">{performance.average_score.toFixed(1)}%</span>
+            <p className="text-3xl font-bold text-gray-800">{metrics.total_assigned}</p>
+          </div>
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={16} className="text-purple-400" />
+              <p className="text-xs font-medium text-gray-500">Submitted</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Average Time</p>
-              <div className="flex items-center gap-2">
-                <Clock size={20} className="text-gray-400" />
-                <span className="text-2xl font-bold text-gray-800">{Math.floor(performance.average_time_taken / 60)}m {Math.floor(performance.average_time_taken % 60)}s</span>
+            <p className="text-3xl font-bold text-gray-800">{metrics.total_submitted}</p>
+          </div>
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <Award size={16} className="text-emerald-500" />
+              <p className="text-xs font-medium text-gray-500">Passed</p>
+            </div>
+            <p className="text-3xl font-bold text-emerald-600">{metrics.total_passed}</p>
+          </div>
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldAlert size={16} className="text-rose-500" />
+              <p className="text-xs font-medium text-gray-500">Flagged</p>
+            </div>
+            <p className="text-3xl font-bold text-rose-600">{metrics.total_malpractice}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Averages</h4>
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Pass Rate</p>
+                <span className="text-3xl font-bold text-gray-800">{performance.pass_rate_pct.toFixed(1)}%</span>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Average Score</p>
+                <span className="text-3xl font-bold text-purple-600">{performance.average_score.toFixed(1)}%</span>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Average Time</p>
+                <div className="flex items-center gap-2">
+                  <Clock size={20} className="text-gray-400" />
+                  <span className="text-2xl font-bold text-gray-800">{Math.floor(performance.average_time_taken / 60)}m {Math.floor(performance.average_time_taken % 60)}s</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Leaderboard */}
-        <div className="md:col-span-2 bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4 flex items-center gap-2">
-            <BarChart3 size={14} className="text-purple-600" /> Top Performers
-          </h4>
-          
-          {top_performers.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-sm text-gray-400 italic">No submissions yet</div>
-          ) : (
-            <div className="space-y-3">
-              {top_performers.map((p, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                      i === 0 ? 'bg-amber-100 text-amber-700' : 
-                      i === 1 ? 'bg-gray-200 text-gray-600' : 
-                      i === 2 ? 'bg-amber-100 text-amber-600' : 
-                      'bg-gray-100 text-gray-400'
-                    }`}>
-                      #{i + 1}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">{p.user_name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{new Date(p.created_at).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-xl font-bold ${p.is_malpractice ? 'text-rose-600' : 'text-purple-600'}`}>
-                      {Math.round(p.total_score)}%
-                    </p>
-                    {p.is_malpractice && <p className="text-[10px] font-semibold text-rose-600 uppercase tracking-wider">Flagged</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="md:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <h4 className="p-4 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+              <BarChart3 size={14} className="text-purple-600" /> Assessment Submissions
+            </h4>
+            {leaderboard.length === 0 ? (
+              <div className="flex items-center justify-center h-32 text-sm text-gray-400 italic">No submissions yet</div>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3">Candidate</th>
+                    <th className="px-4 py-3">Score</th>
+                    <th className="px-4 py-3">Passed?</th>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3 text-center">Flagged</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {leaderboard.map(item => (
+                    <React.Fragment key={item.id}>
+                      <tr 
+                        onClick={() => toggleRow(item.id)}
+                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${expandedRowId === item.id ? 'bg-gray-50' : ''}`}
+                      >
+                        <td className="px-4 py-3 font-medium text-gray-800">{item.display_name || item.user_name || `User ${item.user_id}`}</td>
+                        <td className="px-4 py-3 font-bold text-purple-600">{item.score != null ? `${Math.round(item.score)}%` : '—'}</td>
+                        <td className="px-4 py-3">
+                          {item.pass_status === 'passed' ? <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">Yes</span> : 
+                           item.pass_status === 'failed' ? <span className="text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded">No</span> : 
+                           <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">{item.submitted_at ? new Date(item.submitted_at).toLocaleDateString() : '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          {item.is_malpractice ? <ShieldAlert size={16} className="text-rose-500 inline" /> : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button className="text-gray-400 hover:text-purple-600">
+                            {expandedRowId === item.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </button>
+                        </td>
+                      </tr>
+                      
+                      {/* Expanded Evidence Panel */}
+                      {expandedRowId === item.id && (
+                        <tr>
+                          <td colSpan="6" className="p-0 border-b-2 border-purple-100">
+                            <div className="bg-purple-50/50 p-6 shadow-inner">
+                              {loadingDetailsId === item.id ? (
+                                <div className="flex justify-center p-4"><Loader2 className="animate-spin text-purple-600" /></div>
+                              ) : (
+                                renderEvidencePanel(resultDetailsCache[item.id])
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       </div>
+    );
+  };
+
+  const renderUserHistory = () => {
+    if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
+    if (!userHistory || userHistory.length === 0) return <div className="p-10 text-center text-gray-400 border border-dashed border-gray-300 rounded-xl">No test history available for this user.</div>;
+
+    // Calculate user aggregates
+    const totalTaken = userHistory.length;
+    const passed = userHistory.filter(h => h.pass_status === 'passed').length;
+    const avgScore = userHistory.reduce((acc, h) => acc + (h.score || 0), 0) / totalTaken;
+    const totalFlags = userHistory.filter(h => h.is_malpractice).length;
+
+    return (
+      <div className="space-y-6 animate-fade-in-up">
+        {/* User Summary Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-500 mb-1">Assessments Taken</p>
+            <p className="text-2xl font-bold text-gray-800">{totalTaken}</p>
+          </div>
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-500 mb-1">Average Score</p>
+            <p className="text-2xl font-bold text-purple-600">{avgScore.toFixed(1)}%</p>
+          </div>
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-500 mb-1">Pass Rate</p>
+            <p className="text-2xl font-bold text-emerald-600">{((passed/totalTaken)*100).toFixed(1)}%</p>
+          </div>
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-500 mb-1">Malpractice Flags</p>
+            <p className="text-2xl font-bold text-rose-600">{totalFlags}</p>
+          </div>
+        </div>
+
+        {/* History Table */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+              <tr>
+                <th className="px-4 py-3">Assessment</th>
+                <th className="px-4 py-3">Score</th>
+                <th className="px-4 py-3">Passed?</th>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3 text-center">Flagged</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {userHistory.map(item => (
+                <React.Fragment key={item.result_id}>
+                  <tr 
+                    onClick={() => toggleRow(item.result_id)}
+                    className={`cursor-pointer hover:bg-gray-50 transition-colors ${expandedRowId === item.result_id ? 'bg-gray-50' : ''}`}
+                  >
+                    <td className="px-4 py-3 font-medium text-gray-800">{item.title}</td>
+                    <td className="px-4 py-3 font-bold text-purple-600">{item.score != null ? `${Math.round(item.score)}%` : '—'}</td>
+                    <td className="px-4 py-3">
+                      {item.pass_status === 'passed' ? <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">Yes</span> : 
+                       item.pass_status === 'failed' ? <span className="text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded">No</span> : 
+                       <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">{new Date(item.submitted_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-center">
+                      {item.is_malpractice ? <ShieldAlert size={16} className="text-rose-500 inline" /> : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button className="text-gray-400 hover:text-purple-600">
+                        {expandedRowId === item.result_id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
+                    </td>
+                  </tr>
+                  
+                  {/* Expanded Evidence Panel */}
+                  {expandedRowId === item.result_id && (
+                    <tr>
+                      <td colSpan="6" className="p-0 border-b-2 border-purple-100">
+                        <div className="bg-purple-50/50 p-6 shadow-inner">
+                          {loadingDetailsId === item.result_id ? (
+                            <div className="flex justify-center p-4"><Loader2 className="animate-spin text-purple-600" /></div>
+                          ) : (
+                            renderEvidencePanel(resultDetailsCache[item.result_id])
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const renderEvidencePanel = (details) => {
+    if (!details) return <div className="text-rose-500 text-sm">Failed to load details</div>;
+    
+    const flags = details.flags || [];
+    if (flags.length === 0 && !details.is_malpractice) {
+      return (
+        <div className="text-center py-6">
+          <Award size={32} className="text-emerald-400 mx-auto mb-2" />
+          <p className="text-gray-600 text-sm font-medium">Clean session. No proctoring events recorded.</p>
+        </div>
+      );
+    }
+
+    // Sort flags chronologically (assuming ID correlates or use timestamp from details if present)
+    const screenshots = flags.filter(f => f.flag_type === 'screenshot');
+    const audioClips = flags.filter(f => f.flag_type === 'audio_snippet');
+    const violations = flags.filter(f => f.flag_type !== 'screenshot' && f.flag_type !== 'audio_snippet');
+
+    return (
+      <div className="space-y-6">
+        <h4 className="font-bold text-gray-800 flex items-center gap-2">
+          <ShieldAlert className="text-purple-600" size={18} /> Proctoring Evidence Report
+        </h4>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Violation Log */}
+          <div className="lg:col-span-1 bg-white rounded-xl border border-rose-100 shadow-sm p-4">
+            <h5 className="text-xs font-semibold text-rose-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <AlertTriangle size={14} /> Violation Log
+            </h5>
+            {violations.length === 0 ? (
+              <p className="text-xs text-gray-500 italic">No direct violations flagged.</p>
+            ) : (
+              <ul className="space-y-3">
+                {violations.map(v => {
+                  let data = {};
+                  try {
+                    data = typeof v.details === 'string' ? JSON.parse(v.details) : (v.details || {});
+                  } catch(e) {}
+                  
+                  // Handle legacy data where flag_type was the violation name
+                  const eventName = data.violation || data.details || v.flag_type;
+                  const timeStr = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date(v.created_at).toLocaleTimeString();
+
+                  return (
+                    <li key={v.id} className="text-sm p-2 bg-rose-50 rounded-lg border border-rose-100">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-bold text-rose-800 uppercase text-xs">{eventName.replace(/_/g, ' ')}</span>
+                      </div>
+                      <p className="text-xs text-rose-600">{timeStr}</p>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Media Evidence */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Screenshots */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <h5 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <ImageIcon size={14} /> Screen Captures
+              </h5>
+              {screenshots.length === 0 ? (
+                <p className="text-xs text-gray-500 italic">No screenshots available.</p>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {screenshots.map(s => {
+                    let src = '';
+                    try {
+                      const data = typeof s.details === 'string' ? JSON.parse(s.details) : s.details;
+                      src = data.image || data;
+                    } catch(e) {}
+                    
+                    return (
+                      <div 
+                        key={s.id} 
+                        className="aspect-video bg-gray-900 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all group relative"
+                        onClick={() => setLightboxImage({ src, type: 'Screenshot', time: s.created_at })}
+                      >
+                        <img src={src} alt="Snapshot" className="w-full h-full object-cover opacity-80 group-hover:opacity-100" />
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Audio Snippets */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <h5 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Play size={14} /> Audio Recordings
+              </h5>
+              {audioClips.length === 0 ? (
+                <p className="text-xs text-gray-500 italic">No audio recorded.</p>
+              ) : (
+                <div className="space-y-3">
+                  {audioClips.map(a => {
+                    let src = '';
+                    try {
+                      const data = typeof a.details === 'string' ? JSON.parse(a.details) : a.details;
+                      src = data.audio || data;
+                    } catch(e) {}
+                    
+                    return (
+                      <div key={a.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                        <audio controls src={src} className="h-8 w-full max-w-sm" />
+                        <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(a.created_at).toLocaleTimeString()}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Search Header */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row items-center gap-4">
+        <div className="flex-1 w-full">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Search by Assessment</label>
+          <select 
+            value={selectedView === 'assessment' ? selectedId || '' : ''}
+            onChange={handleAssessmentChange}
+            className="w-full border-gray-300 rounded-xl shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm"
+          >
+            <option value="">-- Select Assessment --</option>
+            {assessmentsList.map(a => (
+              <option key={a.id} value={a.id}>{a.title} ({a.status})</option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="hidden md:block text-gray-300 font-bold">OR</div>
+        
+        <div className="flex-1 w-full">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Search by Test Giver</label>
+          <select 
+            value={selectedView === 'user' ? selectedId || '' : ''}
+            onChange={handleUserChange}
+            className="w-full border-gray-300 rounded-xl shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm"
+          >
+            <option value="">-- Select Candidate/Employee --</option>
+            {usersList.map(u => (
+              <option key={u.id} value={u.id}>{u.name || u.email || u.username} ({u.role})</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      {!selectedView && (
+        <div className="flex flex-col items-center justify-center p-20 text-center border border-dashed border-gray-300 rounded-2xl bg-gray-50">
+          <BarChart3 size={48} className="text-gray-300 mb-4" />
+          <h3 className="text-lg font-bold text-gray-700">Global Reporting Hub</h3>
+          <p className="text-gray-500 max-w-sm mt-2 text-sm">Select an assessment to view overall performance metrics, or select a specific user to review their testing history and proctoring evidence.</p>
+        </div>
+      )}
+
+      {selectedView === 'assessment' && renderAssessmentStats()}
+      {selectedView === 'user' && renderUserHistory()}
+
+      {/* Lightbox Modal */}
+      {lightboxImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setLightboxImage(null)}>
+          <div className="max-w-5xl w-full flex flex-col items-center" onClick={e => e.stopPropagation()}>
+            <img src={lightboxImage.src} alt="Evidence" className="max-h-[85vh] object-contain rounded-lg shadow-2xl border border-gray-800" />
+            <div className="mt-4 flex justify-between w-full max-w-lg text-white font-medium">
+              <span>{lightboxImage.type}</span>
+              <span>{new Date(lightboxImage.time).toLocaleString()}</span>
+            </div>
+            <button 
+              className="mt-6 px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-xl transition-colors"
+              onClick={() => setLightboxImage(null)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

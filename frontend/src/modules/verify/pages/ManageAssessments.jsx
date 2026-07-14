@@ -38,18 +38,39 @@ function Modal({ onClose, title, children }) {
 }
 
 function AssignModal({ assessment, onClose }) {
-  const [userIds, setUserIds] = useState('');
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  
   const [questionIds, setQuestionIds] = useState('');
   const [deadline, setDeadline] = useState('');
   const [generateVariants, setGenerateVariants] = useState(false);
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const r = await fetch('/api/verify/assignments/assignable-users', { credentials: 'include' });
+        const d = await r.json();
+        if (r.ok) {
+          setUsers(d.data || []);
+        } else {
+          toast.error(d.detail || 'Failed to fetch users');
+        }
+      } catch {
+        toast.error('Network error fetching users');
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!userIds.trim()) return toast.error('Enter at least one user ID');
-    const ids = userIds.split(',').map(s => parseInt(s.trim())).filter(Boolean);
-    if (!ids.length) return toast.error('Invalid user IDs');
+    if (selectedIds.length === 0) return toast.error('Select at least one user');
     const qIds = questionIds ? questionIds.split(',').map(s => parseInt(s.trim())).filter(Boolean) : null;
     
     setSubmitting(true);
@@ -59,7 +80,7 @@ function AssignModal({ assessment, onClose }) {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ 
-          user_ids: ids, 
+          user_ids: selectedIds, 
           deadline: deadline || null, 
           generate_variants: generateVariants,
           question_ids: qIds && qIds.length ? qIds : null,
@@ -68,7 +89,7 @@ function AssignModal({ assessment, onClose }) {
       });
       const d = await r.json();
       if (r.ok) {
-        toast.success(`Assigned to ${ids.length} candidate(s)`);
+        toast.success(`Assigned to ${selectedIds.length} candidate(s)`);
         onClose();
       } else {
         toast.error(d.detail || 'Assignment failed');
@@ -77,19 +98,67 @@ function AssignModal({ assessment, onClose }) {
     finally { setSubmitting(false); }
   };
 
+  const toggleUser = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(uid => uid !== id) : [...prev, id]);
+  };
+
+  const filteredUsers = users.filter(u => 
+    u.username.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (u.role && u.role.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   return (
     <Modal onClose={onClose} title={`Assign: ${assessment.title}`}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-600">User IDs (comma-separated)</label>
-          <input
-            type="text"
-            placeholder="e.g. 1, 2, 3"
-            className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
-            value={userIds}
-            onChange={e => setUserIds(e.target.value)}
-          />
-          <p className="text-xs text-gray-400 mt-0.5">Enter the numeric IDs of candidates to assign</p>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-gray-600">Select Candidates ({selectedIds.length} selected)</label>
+          </div>
+          
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+              <Search size={14} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search by username or role..."
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition-all mb-2"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+            <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
+              {loadingUsers ? (
+                <div className="flex items-center justify-center py-6 text-gray-400">
+                  <Loader2 size={18} className="animate-spin" />
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="py-4 text-center text-xs text-gray-500">No users found</div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {filteredUsers.map(u => (
+                    <label 
+                      key={u.id} 
+                      className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${selectedIds.includes(u.id) ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-gray-100'}`}
+                    >
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                        checked={selectedIds.includes(u.id)}
+                        onChange={() => toggleUser(u.id)}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-800">{u.username}</span>
+                        <span className="text-xs text-gray-500 capitalize">{u.role}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gray-600">Deadline (optional)</label>

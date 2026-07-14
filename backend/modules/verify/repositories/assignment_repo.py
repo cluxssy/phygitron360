@@ -10,6 +10,21 @@ class AssignmentRepository:
     def _set_search_path(self, cur):
         cur.execute(f'SET search_path TO "{self.tenant_id}"')
 
+    def get_assignable_users(self) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT id, username, role, is_active 
+                    FROM users 
+                    WHERE role != 'candidate' AND is_active = 1
+                    ORDER BY username ASC
+                ''')
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
     def get_user_assignments(self, user_id: int) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
@@ -108,6 +123,32 @@ class AssignmentRepository:
                     ORDER BY aa.created_at DESC
                     """,
                     (asm_id,),
+                )
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def get_recent_assignments(self, limit: int = 10) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """
+                    SELECT
+                        aa.id              AS assignment_id,
+                        u.id               AS user_id,
+                        u.username         AS email,
+                        a.title            AS assessment_title,
+                        aa.status,
+                        aa.created_at      AS assigned_at
+                    FROM assessment_assignments aa
+                    JOIN users u ON u.id = aa.user_id
+                    JOIN assessments a ON a.id = aa.assessment_id
+                    ORDER BY aa.created_at DESC
+                    LIMIT %s
+                    """,
+                    (limit,)
                 )
                 return [dict(r) for r in cur.fetchall()]
         finally:

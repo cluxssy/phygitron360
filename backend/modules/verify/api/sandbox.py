@@ -136,160 +136,302 @@ def _normalize_compare_value(value: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Batch harness code injection
+# Entry-point extraction (AST-based)
 # ---------------------------------------------------------------------------
 
-_PY_HARNESS_SUFFIX = r'''
-import json as _json, sys as _sys, ast as _ast, traceback as _tb
+def _extract_python_entry(code: str):
+    """Return (func_name, class_name) of the last defined function in the code."""
+    func_matches = list(re.finditer(r"^\s*def\s+([a-zA-Z0-9_]+)\s*\(", code, re.MULTILINE))
+    if not func_matches:
+        return None, None
+    class_matches = list(re.finditer(r"^\s*class\s+([a-zA-Z0-9_]+)\s*[\(:]" , code, re.MULTILINE))
+    func_name = func_matches[-1].group(1)
+    class_name = class_matches[-1].group(1) if class_matches else None
+    return func_name, class_name
 
-_TEST_CASES = _json.loads(r"""{tests_json}""")
-def _norm(v):
-    v = str(v).strip()
-    try: return _json.dumps(_json.loads(v), separators=(',', ':'))
-    except Exception: pass
-    try: return _json.dumps(_ast.literal_eval(v), separators=(',', ':'))
-    except Exception: pass
-    return v.lower().strip()
 
-def _run_tests():
-    results = []
-    for tc in _TEST_CASES:
-        inp = tc.get('input', '')
-        exp = _norm(tc.get('expected_output', ''))
+def _extract_javascript_entry(code: str):
+    """Return the last defined function name in JS code."""
+    patterns = [
+        r"function\s+([a-zA-Z0-9_]+)\s*\(",
+        r"const\s+([a-zA-Z0-9_]+)\s*=\s*\(",
+        r"const\s+([a-zA-Z0-9_]+)\s*=\s*function\s*\(",
+        r"var\s+([a-zA-Z0-9_]+)\s*=\s*function\s*\(",
+        r"let\s+([a-zA-Z0-9_]+)\s*=\s*function\s*\(",
+        r"var\s+([a-zA-Z0-9_]+)\s*=\s*\(",
+        r"let\s+([a-zA-Z0-9_]+)\s*=\s*\(",
+    ]
+    matches = []
+    for pattern in patterns:
+        matches.extend(re.finditer(pattern, code))
+    if not matches:
+        return None
+    return matches[-1].group(1)
+
+
+def _supports_batch_harness(code: str, language: str) -> bool:
+    if language == "python":
+        return _extract_python_entry(code)[0] is not None
+    if language == "javascript":
+        return _extract_javascript_entry(code) is not None
+    return False
+
+
+# ---------------------------------------------------------------------------
+# LeetCode-style harness code injection
+# ---------------------------------------------------------------------------
+
+def wrap_code_for_execution(code: str, language: str, test_cases: list = None) -> str:
+    """
+    Inject a batch harness into the candidate's code.
+
+    Python / JS with a detectable function:
+      - Extracts the entry function (and class if present).
+      - Parses the multi-line input into positional args.
+      - Calls the function directly and serialises the return value.
+      - Prints BATCH_RESULTS_START / END delimiters for parsing.
+
+    Falls back to the original code if no entry point is detected
+    (plain stdin/stdout scripts are run per-test-case individually).
+    """
+    test_cases = test_cases or []
+
+    if language == "python":
+        func_name, class_name = _extract_python_entry(code)
+        if not func_name:
+            return code
+
+        tests_literal = _compact_json(test_cases)
+        wrapper = f"""
+import json, ast, traceback
+
+__TEST_CASES = json.loads(r'''{tests_literal}''')
+__ENTRY_FUNC = "{func_name}"
+__ENTRY_CLASS = {repr(class_name)}
+
+def _split_inline_args(raw):
+    parts = []
+    current = []
+    depth = 0
+    in_string = False
+    string_char = ""
+
+    for ch in str(raw):
+        if in_string:
+            current.append(ch)
+            if ch == string_char:
+                in_string = False
+            continue
+
+        if ch in {{"'", '"'}}:
+            in_string = True
+            string_char = ch
+            current.append(ch)
+            continue
+
+        if ch in {{"[", "{{", "("}}:
+            depth += 1
+        elif ch in {{"]", "}}", ")"}} and depth > 0:
+            depth -= 1
+
+        if ch == "," and depth == 0:
+            part = "".join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+            continue
+
+        current.append(ch)
+
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+def _clean_inline_arg(raw):
+    import re
+    return re.sub(r"^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*", "", str(raw)).strip()
+
+def __parse_value(raw):
+    if not isinstance(raw, str):
+        return raw
+    text = raw.strip()
+    if not text:
+        return None
+    for parser in (json.loads, ast.literal_eval):
         try:
-            import io
-            _old_stdin = _sys.stdin
-            _sys.stdin = io.StringIO(inp + '\n')
-            _out_buf = io.StringIO()
-            _old_stdout = _sys.stdout
-            _sys.stdout = _out_buf
+            return parser(text)
+        except Exception:
+            continue
+    return text
+
+def __parse_args(raw):
+    # Parse a multi-line or comma-separated input string into a list of Python values.
+    # Supports:
+    #   - Multi-line: each line is one argument (LeetCode-style, e.g. '[2,7,11,15]\\n9')
+    #   - Inline comma-separated: 'nums=[2,7], target=9'
+    #   - Single value: '9'
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        args = raw.get("args")
+        if isinstance(args, list):
+            return args
+        return [raw]
+    if raw is None:
+        return []
+    text = str(raw).strip()
+    if not text:
+        return []
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) > 1:
+        # Multi-line = each line is one argument
+        return [__parse_value(line) for line in lines]
+    inline_parts = [_clean_inline_arg(part) for part in _split_inline_args(lines[0])]
+    if len(inline_parts) > 1:
+        return [__parse_value(part) for part in inline_parts]
+    value = __parse_value(lines[0])
+    if isinstance(value, dict) and isinstance(value.get("args"), list):
+        return value["args"]
+    if value is None:
+        return []
+    return [value]
+
+def __normalize_output(value):
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+def __resolve_target():
+    target = None
+    if __ENTRY_CLASS:
+        cls = globals().get(__ENTRY_CLASS)
+        if cls:
             try:
-                # Re-run main logic
-                exec(_USER_CODE, _globals_copy)
-            finally:
-                _sys.stdin = _old_stdin
-                _sys.stdout = _old_stdout
-            actual = _norm(_out_buf.getvalue())
-            passed = (actual == exp)
-            results.append({'passed': passed, 'actual': actual, 'expected': exp, 'input': inp, 'error': None})
-        except Exception as e:
-            results.append({'passed': False, 'actual': '', 'expected': exp, 'input': inp, 'error': str(e)})
-    print("{batch_start}")
-    print(_json.dumps(results))
-    print("{batch_end}")
+                target = getattr(cls(), __ENTRY_FUNC, None)
+            except Exception:
+                target = None
+    if target is None:
+        target = globals().get(__ENTRY_FUNC)
+    return target
 
-_USER_CODE = {user_code_repr}
-_globals_copy = dict(globals())
-_run_tests()
-'''.replace("{batch_start}", BATCH_RESULTS_START).replace("{batch_end}", BATCH_RESULTS_END)
+def __run_batch_harness():
+    results = []
+    target = __resolve_target()
+    if not callable(target):
+        for _tc in __TEST_CASES:
+            results.append({{"stdout": "", "stderr": f"Entrypoint '{{__ENTRY_FUNC}}' not found in submitted code."}})
+        print("{BATCH_RESULTS_START}")
+        print(json.dumps(results))
+        print("{BATCH_RESULTS_END}")
+        return
 
-_JS_HARNESS_TEMPLATE = r"""
-const _readline = require('readline');
-const _fs = require('fs');
-const _testCases = {tests_json};
+    for tc in __TEST_CASES:
+        try:
+            args = __parse_args(tc.get("input"))
+            res = target(*args)
+            results.append({{"stdout": __normalize_output(res), "stderr": ""}})
+        except Exception:
+            results.append({{"stdout": "", "stderr": traceback.format_exc()}})
 
-async function _runTests() {{
-    const results = [];
-    for (const tc of _testCases) {{
-        const inp = tc.input || '';
-        const exp = _norm(tc.expected_output || '');
-        try {{
-            // Capture stdout
-            let _out = '';
-            const _origWrite = process.stdout.write.bind(process.stdout);
-            process.stdout.write = (chunk) => {{ _out += chunk; return true; }};
-            // Simulate stdin
-            let _lineIdx = 0;
-            const _lines = inp.split('\n');
-            const _origRL = _readline.createInterface;
-            try {{
-                await _runUserCode(inp);
-            }} finally {{
-                process.stdout.write = _origWrite;
-            }}
-            const actual = _norm(_out);
-            results.push({{ passed: actual === exp, actual, expected: exp, input: inp, error: null }});
-        }} catch(e) {{
-            results.push({{ passed: false, actual: '', expected: exp, input: inp, error: e.message }});
-        }}
-    }}
-    console.log('{batch_start}');
-    console.log(JSON.stringify(results));
-    console.log('{batch_end}');
-}}
+    print("{BATCH_RESULTS_START}")
+    print(json.dumps(results))
+    print("{BATCH_RESULTS_END}")
 
-function _norm(v) {{
-    v = String(v).trim();
-    try {{ return JSON.stringify(JSON.parse(v)); }} catch(e) {{}}
-    return v.toLowerCase().trim();
-}}
-
-_runTests().catch(e => console.error(e));
-""".replace("{batch_start}", BATCH_RESULTS_START).replace("{batch_end}", BATCH_RESULTS_END)
-
-
-def _wrap_python_for_batch(code: str, test_cases: List[Dict]) -> str:
-    tests_json = json.dumps(test_cases)
-    user_code_repr = repr(code)
-    suffix = _PY_HARNESS_SUFFIX.replace("{tests_json}", tests_json).replace("{user_code_repr}", user_code_repr)
-    return code + "\n\n" + suffix
-
-
-def _wrap_java_solution(code: str, test_cases: List[Dict]) -> str:
-    """Wrap a Java Solution class with a Main that provides test input via stdin."""
-    lines = []
-    for tc in test_cases:
-        input_val = tc["input"].replace("\n", "\\n").replace('"', '\\"')
-        expected_val = tc["expected_output"].strip().replace('"', '\\"')
-        lines.append(f'runTest("{input_val}", "{expected_val}");')
-    tests_lines = "\n".join(lines)
-    wrapper = f"""
-import java.util.*;
-import java.io.*;
-
-{code}
-
-class Main {{
-    static java.util.List<String> results = new java.util.ArrayList<>();
-
-    static void runTest(String input, String expected) {{
-        InputStream origIn = System.in;
-        PrintStream origOut = System.out;
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        try {{
-            System.setIn(new ByteArrayInputStream(input.replace("\\\\n","\\n").getBytes()));
-            System.setOut(new PrintStream(bos));
-            // Re-create Solution and call main
-            Solution sol = new Solution();
-            // Try invoking solution.main if it exists, otherwise just run it
-        }} catch(Exception e) {{
-            System.setOut(origOut);
-            System.out.println("{{\\\"passed\\\":false,\\\"error\\\":\\\"" + e.getMessage() + "\\\"}}");
-            return;
-        }} finally {{
-            System.setIn(origIn);
-            System.setOut(origOut);
-        }}
-        String actual = bos.toString().trim();
-        boolean passed = actual.equals(expected.trim());
-        System.out.println("{{\\\"passed\\\":" + passed + ",\\\"actual\\\":\\\"" + actual + "\\\",\\\"expected\\\":\\\"" + expected + "\\\"}}");
-    }}
-
-    public static void main(String[] args) {{
-        System.out.println("{BATCH_RESULTS_START}");
-        java.util.List<Object> allResults = new java.util.ArrayList<>();
-        // For Java we run each test as stdin piped to the full class
-        // This simplified version reports the structure
-        System.out.println("[]");
-        System.out.println("{BATCH_RESULTS_END}");
-    }}
-}}
+__run_batch_harness()
 """
-    return wrapper
+        # Prepend 'from typing import *' so List, Optional, Dict etc. are available
+        return "from typing import *\n" + code + "\n" + wrapper
 
+    if language == "javascript":
+        func_name = _extract_javascript_entry(code)
+        if not func_name:
+            return code
+        tests_literal = _compact_json(test_cases)
+        wrapper = f"""
+const __TEST_CASES = JSON.parse(String.raw`{tests_literal}`);
+const __ENTRY_FUNC = "{func_name}";
 
-def _wrap_cpp_solution(code: str, test_cases: List[Dict]) -> str:
-    """For C++ just return as-is; Judge0 handles stdin per test run."""
+function __parseValue(raw) {{
+  if (typeof raw !== "string") return raw;
+  const text = raw.trim();
+  if (!text) return null;
+  try {{ return JSON.parse(text); }} catch (e) {{}}
+  return text;
+}}
+
+function __splitInlineArgs(raw) {{
+  const parts = [];
+  let current = "";
+  let depth = 0;
+  let inString = false;
+  let stringChar = "";
+  for (const ch of String(raw)) {{
+    if (inString) {{ current += ch; if (ch === stringChar) inString = false; continue; }}
+    if (ch === "'" || ch === '"') {{ inString = true; stringChar = ch; current += ch; continue; }}
+    if ("[{{(".includes(ch)) depth += 1;
+    else if ("]}})".includes(ch) && depth > 0) depth -= 1;
+    if (ch === "," && depth === 0) {{ const part = current.trim(); if (part) parts.push(part); current = ""; continue; }}
+    current += ch;
+  }}
+  const tail = current.trim();
+  if (tail) parts.push(tail);
+  return parts;
+}}
+
+function __parseArgs(raw) {{
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {{ if (Array.isArray(raw.args)) return raw.args; return [raw]; }}
+  if (raw == null) return [];
+  const text = String(raw).trim();
+  if (!text) return [];
+  const lines = text.split("\\n").map(l => l.trim()).filter(Boolean);
+  if (lines.length > 1) return lines.map(__parseValue);
+  const inlineParts = __splitInlineArgs(lines[0]);
+  if (inlineParts.length > 1) return inlineParts.map(__parseValue);
+  const value = __parseValue(lines[0]);
+  if (value && typeof value === "object" && Array.isArray(value.args)) return value.args;
+  if (value == null) return [];
+  return [value];
+}}
+
+function __normalizeOutput(value) {{
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  return JSON.stringify(value);
+}}
+
+async function __runBatchHarness() {{
+  const results = [];
+  const target = (typeof {func_name} !== "undefined") ? {func_name} : null;
+  if (!target || typeof target !== "function") {{
+    for (const tc of __TEST_CASES) results.push({{ stdout: "", stderr: `Entrypoint '{func_name}' not found` }});
+    console.log("{BATCH_RESULTS_START}");
+    console.log(JSON.stringify(results));
+    console.log("{BATCH_RESULTS_END}");
+    return;
+  }}
+  for (const tc of __TEST_CASES) {{
+    try {{
+      const args = __parseArgs(tc.input);
+      const res = target(...args);
+      results.push({{ stdout: __normalizeOutput(res), stderr: "" }});
+    }} catch (e) {{
+      results.push({{ stdout: "", stderr: String(e && e.stack ? e.stack : e) }});
+    }}
+  }}
+  console.log("{BATCH_RESULTS_START}");
+  console.log(JSON.stringify(results));
+  console.log("{BATCH_RESULTS_END}");
+}}
+
+__runBatchHarness();
+"""
+        return code + "\n" + wrapper
+
+    # Java / C++ — no harness wrapping; run per-test-case via Judge0
     return code
 
 
@@ -498,24 +640,40 @@ def _parse_batch_results(stdout: str) -> Optional[List[Dict]]:
 async def _run_test_cases(language: str, code: str, test_cases: List[Dict]) -> Dict:
     """
     Run all test cases and return structured results.
-    For Python/JS: inject batch harness and parse markers.
-    For Java/C++: run each test case individually against Judge0.
+
+    For Python/JS with a detectable function:
+      - Injects the LeetCode-style batch harness (wrap_code_for_execution).
+      - Parses BATCH_RESULTS markers from stdout.
+      - Each result contains {passed, actual, expected, input, error}.
+
+    For Java/C++ (and stdin/stdout scripts with no detectable function):
+      - Runs each test case individually, piping input via stdin.
     """
     if not test_cases:
         return {"run": {}, "test_results": []}
 
-    if language == "python":
-        wrapped = _wrap_python_for_batch(code, test_cases)
+    if _supports_batch_harness(code, language):
+        wrapped = wrap_code_for_execution(code, language, test_cases)
         run_result = await _execute_code(language, wrapped, "")
-        batch = _parse_batch_results(run_result.get("stdout", ""))
+        stdout = run_result.get("stdout", "")
+        batch = _parse_batch_results(stdout)
         if batch is not None:
-            return {"run": run_result, "test_results": batch}
-        # Fallback: run each individually
-    elif language == "javascript":
-        # For JS, run each test case individually (simpler)
-        pass
+            structured = []
+            for idx, tc in enumerate(test_cases):
+                raw = batch[idx] if idx < len(batch) else {}
+                actual = _normalize_output_text(raw.get("stdout", ""))
+                expected = _normalize_output_text(tc.get("expected_output", ""))
+                structured.append({
+                    "passed": _normalize_compare_value(actual) == _normalize_compare_value(expected),
+                    "actual": actual,
+                    "expected": expected,
+                    "input": tc.get("input", ""),
+                    "error": raw.get("stderr") or None,
+                })
+            return {"run": run_result, "test_results": structured}
+        # Harness ran but markers not found — fall through to per-test-case
 
-    # Per-test-case fallback (all languages)
+    # Per-test-case fallback (Java/C++ and stdin/stdout scripts)
     test_results = []
     for tc in test_cases:
         run = await _execute_code(language, code, tc.get("input", ""))
@@ -535,8 +693,6 @@ async def _run_test_cases(language: str, code: str, test_cases: List[Dict]) -> D
 
 # ---------------------------------------------------------------------------
 # Endpoints
-# ---------------------------------------------------------------------------
-
 @router.post("/execute")
 async def execute_code(
     body: ExecuteRequest,
@@ -579,16 +735,19 @@ async def generate_coding_meta(
     for a given coding question.
     """
     ai = AIAgents()
-    system = (
-        "You are an expert technical interviewer. Given a coding question, "
-        "generate a Python starter code template, 3 test cases with expected outputs, "
-        "and the best programming language. Respond ONLY with JSON."
-    )
-    prompt = (
-        f"Coding question: {body.question_text}\n"
-        f"Difficulty: {body.difficulty}\n\n"
-        "Return JSON: {\"starter_code\": \"...\", \"test_cases\": [{\"input\": \"...\", \"expected_output\": \"...\"}], \"programming_language\": \"python\"}"
-    )
+    system = "You are a coding question metadata generator."
+    prompt = f"""Analyze this coding question and generate metadata for a LeetCode-style environment.
+Question: {body.question_text}
+
+Respond ONLY with a JSON object containing:
+- "starter_code": A basic Python function signature with an indented placeholder body like `# Write your code here` followed by `pass`.
+- "test_cases": Exactly 3 objects, each with "input" and "expected_output".
+  CRITICAL: In "input", each argument for the function MUST be on its own line.
+  - If an argument is a list/array, format it as a JSON array (e.g. [1, 2, 3]) on one line.
+  - If an argument is a number or string, put it on its own line.
+  - Every "expected_output" must be the exact return value or stdout text.
+- "programming_language": Set to "python".
+"""
     try:
         result = await ai.ai.generate_json(prompt, system)
         return {"success": True, "data": result}

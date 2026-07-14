@@ -34,14 +34,19 @@ class AssessmentService:
 
     async def generate_coding_meta(self, topic: str, difficulty: str = "medium") -> Dict[str, Any]:
         """Use AI to generate a complete coding question with starter code and test cases."""
-        system_prompt = """You are an expert technical interviewer. Generate a coding assessment question.
-Respond ONLY with JSON matching this structure:
-{
-  "question_text": "Detailed problem description",
-  "starter_code": "def solution(n):\n    pass",
-  "model_answer": "def solution(n):\n    return n * 2",
-  "test_cases": [{"input": "2", "expected_output": "4"}],
-  "programming_language": "python"
-}"""
-        prompt = f"Generate a {difficulty} coding question about {topic}."
+        system_prompt = "You are a coding question metadata generator."
+        prompt = f"""Analyze this coding question and generate metadata for a LeetCode-style environment.
+Question: Generate a {difficulty} coding question about {topic}.
+
+Respond ONLY with a JSON object containing:
+- "question_text": Detailed problem description.
+- "starter_code": A basic Python function signature with an indented placeholder body like `# Write your code here` followed by `pass`.
+- "model_answer": A working python solution.
+- "test_cases": Exactly 3 objects, each with "input" and "expected_output".
+  CRITICAL: In "input", each argument for the function MUST be on its own line.
+  - If an argument is a list/array, format it as a JSON array (e.g. [1, 2, 3]) on one line.
+  - If an argument is a number or string, put it on its own line.
+  - Every "expected_output" must be the exact return value or stdout text.
+- "programming_language": Set to "python".
+"""
         return await self.ai_agents.ai.generate_json(prompt, system_prompt)
