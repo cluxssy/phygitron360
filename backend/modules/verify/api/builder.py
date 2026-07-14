@@ -20,9 +20,13 @@ from backend.core.database import DATA_DIR
 from backend.core.dependencies import get_current_user, require_permission
 from backend.common.services.ai.agents import AIAgents
 from backend.modules.verify.services.assessment_service import AssessmentService
+from backend.modules.verify.services.submission_service import SubmissionService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/verify/builder", tags=["Verify - Builder"])
+
+def get_submission_service(current_user: dict = Depends(get_current_user)) -> SubmissionService:
+    return SubmissionService(tenant_id=current_user.get("tenant_id", "public"))
 
 # ---------------------------------------------------------------------------
 # Optional S3 support
@@ -142,7 +146,7 @@ async def create_assessment(
 
     data = body.dict()
     data["created_by"] = current_user["id"]
-    data["org_id"] = current_user.get("tenant_id")
+    data["org_id"] = current_user.get("org_id")
     
     try:
         asm_id = service.create_assessment(data)
@@ -150,6 +154,16 @@ async def create_assessment(
     except Exception as e:
         logger.error(f"create_assessment error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/assessments/{asm_id}/stats")
+def get_assessment_stats(
+    asm_id: int,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    sub_service: SubmissionService = Depends(get_submission_service)
+):
+    """Get analytics for a specific assessment."""
+    stats = sub_service.get_assessment_analytics(asm_id)
+    return {"success": True, "data": stats}
 
 # ---------------------------------------------------------------------------
 # 2. GET /assessments — list assessments (with question count)

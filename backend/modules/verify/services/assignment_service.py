@@ -22,6 +22,12 @@ class AssignmentService:
     def get_assignment_candidates(self, asm_id: int) -> List[Dict[str, Any]]:
         return self.repo.get_assignment_candidates(asm_id)
 
+    def get_recent_assignments(self, limit: int = 10) -> List[Dict[str, Any]]:
+        return self.repo.get_recent_assignments(limit)
+
+    def get_assignable_users(self) -> List[Dict[str, Any]]:
+        return self.repo.get_assignable_users()
+
     async def assign_assessment(
         self, asm_id: int, user_ids: List[int], assigned_by: int, 
         deadline: Optional[str] = None, generate_variants: bool = False,

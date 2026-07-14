@@ -19,8 +19,8 @@ class QuestionBankRepository:
                     INSERT INTO question_bank (
                         question_text, question_type, options, correct_answer,
                         model_answer, starter_code, test_cases, programming_language,
-                        accepted_file_types, marks, tags, images, created_by
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        accepted_file_types, marks, tags, images, topic, created_by
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 ''', (
                     data["question_text"],
@@ -35,6 +35,7 @@ class QuestionBankRepository:
                     data.get("marks", 1.0),
                     json.dumps(data.get("tags", [])),
                     json.dumps(data.get("images", [])),
+                    data.get("topic"),
                     data.get("created_by")
                 ))
                 new_id = cur.fetchone()[0]
@@ -49,10 +50,10 @@ class QuestionBankRepository:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 
-                updates = []
+                updates = ["updated_at = NOW()"]
                 values = []
                 for field in ["question_text", "question_type", "correct_answer", "model_answer", 
-                              "starter_code", "programming_language", "accepted_file_types", "marks"]:
+                              "starter_code", "programming_language", "accepted_file_types", "marks", "topic"]:
                     if field in data:
                         updates.append(f"{field} = %s")
                         values.append(data[field])
@@ -93,7 +94,7 @@ class QuestionBankRepository:
         finally:
             conn.close()
 
-    def list_questions(self, tags: Optional[List[str]] = None, q_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_questions(self, tags: Optional[List[str]] = None, q_type: Optional[str] = None, topic: Optional[str] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -105,6 +106,10 @@ class QuestionBankRepository:
                     query += " AND question_type = %s"
                     params.append(q_type)
                     
+                if topic:
+                    query += " AND topic = %s"
+                    params.append(topic)
+                    
                 if tags:
                     query += " AND tags ?| array[%s]"
                     params.append(tags) # Postgres JSONB ?| operator checks if any of the given array strings exist as top-level keys/elements
@@ -112,5 +117,19 @@ class QuestionBankRepository:
                 query += " ORDER BY created_at DESC"
                 cur.execute(query, tuple(params))
                 return [dict(row) for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def get_question_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT * FROM question_bank 
+                    WHERE id = %s AND is_deleted = FALSE
+                ''', (question_id,))
+                row = cur.fetchone()
+                return dict(row) if row else None
         finally:
             conn.close()

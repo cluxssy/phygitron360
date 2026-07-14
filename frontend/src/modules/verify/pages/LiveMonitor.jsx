@@ -97,8 +97,8 @@ export default function LiveMonitor() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {candidates.map(c => (
-                  <tr key={c.id}>
-                    <td className="px-4 py-3 font-medium text-gray-800">{c.candidate_name || c.candidate_email}</td>
+                  <tr key={c.assignment_id || c.user_id}>
+                    <td className="px-4 py-3 font-medium text-gray-800">{c.name || c.email}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded text-xs font-semibold uppercase tracking-wider ${
                         c.status === 'in_progress' ? 'bg-amber-50 text-amber-600' :
@@ -137,7 +137,7 @@ export default function LiveMonitor() {
             ) : (
               events.map((ev, i) => {
                 const isStrike = ev.event_type === 'strike_recorded';
-                const cName = candidates.find(c => c.user_id === ev.user_id)?.candidate_name || `User ${ev.user_id}`;
+                const cName = candidates.find(c => c.user_id === ev.user_id)?.name || `User ${ev.user_id}`;
                 return (
                   <div key={i} className={`p-2 rounded border ${isStrike ? 'bg-rose-950/30 border-rose-900/50 text-rose-400' : 'bg-gray-800/50 border-gray-700/50 text-emerald-400'}`}>
                     <div className="flex justify-between mb-1 opacity-70">

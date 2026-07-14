@@ -172,7 +172,7 @@ class SubmissionRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute('''
-                    SELECT r.*, a.show_result_immediately 
+                    SELECT r.*, a.show_result_immediately, a.title as assessment_title, a.pass_score 
                     FROM assessment_results r 
                     JOIN assessments a ON a.id = r.assessment_id 
                     WHERE r.id = %s
@@ -181,9 +181,35 @@ class SubmissionRepository:
                 if not row: return None
                 result = dict(row)
                 
+                # Format assessment block for frontend
+                result['assessment'] = {
+                    'id': result['assessment_id'],
+                    'title': result['assessment_title'],
+                    'pass_score': result['pass_score'],
+                    'show_result_immediately': result['show_result_immediately']
+                }
+                
                 cur.execute("SELECT * FROM proctoring_flags WHERE assessment_result_id = %s", (result_id,))
                 result['flags'] = [dict(r) for r in cur.fetchall()]
                 return result
+        finally:
+            conn.close()
+
+    def get_recent_submissions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT r.id, r.assessment_id, a.title as assessment_title, 
+                           u.username, r.score, r.pass_status, r.submitted_at
+                    FROM assessment_results r
+                    JOIN assessments a ON a.id = r.assessment_id
+                    JOIN users u ON u.id = r.user_id
+                    ORDER BY r.submitted_at DESC
+                    LIMIT %s
+                ''', (limit,))
+                return [dict(r) for r in cur.fetchall()]
         finally:
             conn.close()
 

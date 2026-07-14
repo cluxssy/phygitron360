@@ -51,6 +51,16 @@ async def submit_assessment(
         logger.error(f"submit_assessment error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/recent")
+def list_recent_submissions(
+    limit: int = 10,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    service: SubmissionService = Depends(get_submission_service),
+):
+    """List recent submissions across the org."""
+    rows = service.get_recent_submissions(limit)
+    return {"success": True, "data": rows}
+
 # ---------------------------------------------------------------------------
 # 2. GET /my-results — list all results for current user
 # ---------------------------------------------------------------------------

@@ -48,6 +48,29 @@ def list_my_tests(
     return {"success": True, "data": rows}
 
 # ---------------------------------------------------------------------------
+# 1.5 GET /assignable-users — list users that can be assigned tests
+# ---------------------------------------------------------------------------
+
+@router.get("/assignable-users")
+def list_assignable_users(
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    service: AssignmentService = Depends(get_assignment_service),
+):
+    """List all active non-candidate users in the tenant."""
+    rows = service.get_assignable_users()
+    return {"success": True, "data": rows}
+
+@router.get("/recent")
+def list_recent_assignments(
+    limit: int = 10,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    service: AssignmentService = Depends(get_assignment_service),
+):
+    """List recent assignments across the org."""
+    rows = service.get_recent_assignments(limit)
+    return {"success": True, "data": rows}
+
+# ---------------------------------------------------------------------------
 # 2. POST /{asm_id}/assign — bulk assign users to an assessment
 # ---------------------------------------------------------------------------
 
@@ -100,7 +123,7 @@ def list_candidates(
 # ---------------------------------------------------------------------------
 
 @router.post("/{asm_id}/start-session")
-def start_assessment_session(
+async def start_assessment_session(
     asm_id: int,
     current_user: dict = Depends(get_current_user),
     service: AssignmentService = Depends(get_assignment_service),
@@ -120,7 +143,7 @@ def start_assessment_session(
 # ---------------------------------------------------------------------------
 
 @router.post("/{asm_id}/record-strike")
-def record_proctoring_strike(
+async def record_proctoring_strike(
     asm_id: int,
     current_user: dict = Depends(get_current_user),
     service: AssignmentService = Depends(get_assignment_service),

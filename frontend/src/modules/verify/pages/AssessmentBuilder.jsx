@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { verifyApi } from '../../../core/api/verifyApi';
 import {
   Plus, Loader2, Save, Send, UploadCloud, Link as LinkIcon,
   Image as ImageIcon, Play, CheckCircle, Trash2, ArrowUp, ArrowDown,
@@ -28,6 +29,31 @@ export default function AssessmentBuilder() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generatingFor, setGeneratingFor] = useState(null);
+
+  const handleAutoGenerate = async (index) => {
+    const q = questions[index];
+    if (!q.question_text?.trim()) { toast.error('Please enter the question text first'); return; }
+    
+    setGeneratingFor(index);
+    try {
+      const res = await verifyApi.aiGenerateCode({ question_text: q.question_text });
+      const { starter_code, test_cases } = res.data?.data || res.data || {};
+      
+      const newQs = [...questions];
+      newQs[index] = { 
+        ...q, 
+        starter_code: starter_code || q.starter_code,
+        test_cases: test_cases || q.test_cases
+      };
+      setQuestions(newQs);
+      toast.success('Generated! Please review and edit if needed.');
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'AI generation failed');
+    } finally {
+      setGeneratingFor(null);
+    }
+  };
 
   // Settings
   const [title, setTitle] = useState('');
@@ -451,8 +477,8 @@ export default function AssessmentBuilder() {
                               <option value="java">Java</option>
                               <option value="cpp">C++</option>
                             </select>
-                            <button className="flex items-center gap-2 text-xs font-medium text-purple-600 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-200 hover:bg-purple-100">
-                              <Wand2 size={12} /> Generate Template
+                            <button onClick={() => handleAutoGenerate(i)} disabled={generatingFor === i} className="flex items-center gap-2 text-xs font-medium text-purple-600 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-200 hover:bg-purple-100 disabled:opacity-50">
+                              {generatingFor === i ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />} Generate Template
                             </button>
                           </div>
                           <div>

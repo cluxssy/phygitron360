@@ -508,9 +508,11 @@ def create_tables(schema_name='public'):
                 marks DECIMAL(6,2) DEFAULT 1.0,
                 tags JSONB DEFAULT '[]'::jsonb,
                 images JSONB DEFAULT '[]'::jsonb,
+                topic TEXT DEFAULT NULL,
                 is_deleted BOOLEAN DEFAULT FALSE,
                 created_by INTEGER REFERENCES users(id),
-                created_at TIMESTAMPTZ DEFAULT NOW()
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
             )
         ''')
 
