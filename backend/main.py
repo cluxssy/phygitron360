@@ -151,7 +151,7 @@ app.include_router(verify_submissions_router, dependencies=[Depends(require_modu
 app.include_router(verify_sandbox_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_queries_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_question_bank_router, dependencies=[Depends(require_module("verify"))])
-app.include_router(verify_live_monitor_router, dependencies=[Depends(require_module("verify"))])
+app.include_router(verify_live_monitor_router)
 
 
 if __name__ == "__main__":

@@ -61,4 +61,5 @@ CONFIDENTIAL/
 data/
 coll/
 
-.antigravitycli
+.antigravityclibackend/test.env
+backend/test.env

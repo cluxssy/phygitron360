@@ -799,6 +799,7 @@ class CandidateService:
                             # Chunk items into sub-batches of 25 for AI prompting to prevent API timeouts
                             # (Fetches 50 from queue, sends to AI in 2 chunks of 25)
                             for i in range(0, len(items), 25):
+                                await asyncio.sleep(0.01) # Yield to event loop
                                 sub_batch = items[i:i+25]
                                 
                                 # Check if job is paused or cancelled (so we don't keep parsing in-memory items)
@@ -818,6 +819,7 @@ class CandidateService:
                                 valid_items = []
                                 
                                 for item in sub_batch:
+                                    await asyncio.sleep(0.01) # Yield to event loop
                                     job_id = item.get("job_id")
                                     
                                     # Check for job cancellation
@@ -910,6 +912,7 @@ class CandidateService:
 
                                 # 4. Process each returned item in the batch
                                 for item, pre, item_id_str in valid_items:
+                                    await asyncio.sleep(0.01) # Yield to event loop
                                     ai_result = ai_result_map.get(item_id_str)
                                     
                                     cur.execute("SAVEPOINT item_insert")

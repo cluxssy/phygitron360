@@ -18,6 +18,9 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
   const [loadingDetailsId, setLoadingDetailsId] = useState(null);
   const [lightboxImage, setLightboxImage] = useState(null);
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
+
   // Fetch dropdown lists on mount
   useEffect(() => {
     fetch('/api/verify/builder/assessments', { credentials: 'include' })
@@ -39,6 +42,8 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
     
     setLoading(true);
     setExpandedRowId(null);
+    setSearchTerm('');
+    setDateFilter('all');
 
     if (selectedView === 'assessment') {
       Promise.all([
@@ -48,7 +53,7 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
       ]).then(([statsRes, leadRes, candRes]) => {
           if (statsRes.success) {
             const data = statsRes.data || {};
-            // Format to match old structure
+            // Keep stats around if we want base reference, but we will calculate dynamically now
             setStats({
               metrics: {
                 total_assigned: candRes.success ? (candRes.data || []).length : 0,
@@ -130,7 +135,39 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
     if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
     if (!stats) return <div className="p-10 text-center text-gray-400">No data available</div>;
 
-    const { metrics, performance } = stats;
+    // Apply filters
+    const now = new Date();
+    const filteredSubmissions = leaderboard.filter(item => {
+      const name = item.display_name || item.user_name || `User ${item.user_id}`;
+      if (searchTerm && !name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+
+      if (dateFilter !== 'all' && item.submitted_at) {
+        const subDate = new Date(item.submitted_at);
+        if (dateFilter === 'today') {
+          if (subDate.toDateString() !== now.toDateString()) return false;
+        } else if (dateFilter === '7days') {
+          const sevenDaysAgo = new Date(now);
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          if (subDate < sevenDaysAgo) return false;
+        } else if (dateFilter === '30days') {
+          const thirtyDaysAgo = new Date(now);
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          if (subDate < thirtyDaysAgo) return false;
+        }
+      }
+      return true;
+    });
+
+    // Dynamically calculate metrics
+    const totalAssigned = stats.metrics.total_assigned; // Keeps global context
+    const filteredSubmitted = filteredSubmissions.length;
+    const filteredPassed = filteredSubmissions.filter(s => s.pass_status === 'passed').length;
+    const filteredMalpractice = filteredSubmissions.filter(s => s.is_malpractice).length;
+    const filteredAvgScore = filteredSubmitted > 0 ? filteredSubmissions.reduce((acc, s) => acc + (s.score || 0), 0) / filteredSubmitted : 0;
+    const filteredPassRate = filteredSubmitted > 0 ? (filteredPassed / filteredSubmitted) * 100 : 0;
+    
+    const validTimes = filteredSubmissions.filter(s => s.time_taken_seconds && s.time_taken_seconds > 0);
+    const filteredAvgTime = validTimes.length > 0 ? validTimes.reduce((acc, s) => acc + s.time_taken_seconds, 0) / validTimes.length : 0;
 
     return (
       <div className="space-y-6 animate-fade-in-up">
@@ -139,116 +176,141 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
           <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <Users size={16} className="text-purple-400" />
-              <p className="text-xs font-medium text-gray-500">Assigned</p>
+              <p className="text-xs font-medium text-gray-500">Total Assigned</p>
             </div>
-            <p className="text-3xl font-bold text-gray-800">{metrics.total_assigned}</p>
+            <p className="text-3xl font-bold text-gray-800">{totalAssigned}</p>
           </div>
           <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp size={16} className="text-purple-400" />
-              <p className="text-xs font-medium text-gray-500">Submitted</p>
+              <p className="text-xs font-medium text-gray-500">Submitted (Filtered)</p>
             </div>
-            <p className="text-3xl font-bold text-gray-800">{metrics.total_submitted}</p>
+            <p className="text-3xl font-bold text-gray-800">{filteredSubmitted}</p>
           </div>
           <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <Award size={16} className="text-emerald-500" />
-              <p className="text-xs font-medium text-gray-500">Passed</p>
+              <p className="text-xs font-medium text-gray-500">Passed (Filtered)</p>
             </div>
-            <p className="text-3xl font-bold text-emerald-600">{metrics.total_passed}</p>
+            <p className="text-3xl font-bold text-emerald-600">{filteredPassed}</p>
           </div>
           <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <ShieldAlert size={16} className="text-rose-500" />
-              <p className="text-xs font-medium text-gray-500">Flagged</p>
+              <p className="text-xs font-medium text-gray-500">Flagged (Filtered)</p>
             </div>
-            <p className="text-3xl font-bold text-rose-600">{metrics.total_malpractice}</p>
+            <p className="text-3xl font-bold text-rose-600">{filteredMalpractice}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Averages</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Averages (Filtered)</h4>
             <div className="space-y-6">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Pass Rate</p>
-                <span className="text-3xl font-bold text-gray-800">{performance.pass_rate_pct.toFixed(1)}%</span>
+                <span className="text-3xl font-bold text-gray-800">{filteredPassRate.toFixed(1)}%</span>
               </div>
               <div>
                 <p className="text-sm text-gray-500 mb-1">Average Score</p>
-                <span className="text-3xl font-bold text-purple-600">{performance.average_score.toFixed(1)}%</span>
+                <span className="text-3xl font-bold text-purple-600">{filteredAvgScore.toFixed(1)}%</span>
               </div>
               <div>
                 <p className="text-sm text-gray-500 mb-1">Average Time</p>
                 <div className="flex items-center gap-2">
                   <Clock size={20} className="text-gray-400" />
-                  <span className="text-2xl font-bold text-gray-800">{Math.floor(performance.average_time_taken / 60)}m {Math.floor(performance.average_time_taken % 60)}s</span>
+                  <span className="text-2xl font-bold text-gray-800">{Math.floor(filteredAvgTime / 60)}m {Math.floor(filteredAvgTime % 60)}s</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="md:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <h4 className="p-4 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 flex items-center gap-2">
-              <BarChart3 size={14} className="text-purple-600" /> Assessment Submissions
-            </h4>
-            {leaderboard.length === 0 ? (
-              <div className="flex items-center justify-center h-32 text-sm text-gray-400 italic">No submissions yet</div>
+          <div className="md:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                <BarChart3 size={14} className="text-purple-600" /> Assessment Submissions
+              </h4>
+              
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input 
+                  type="text" 
+                  placeholder="Search candidate..." 
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 w-full sm:w-48 outline-none"
+                />
+                <select 
+                  value={dateFilter}
+                  onChange={e => setDateFilter(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 outline-none"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="30days">Last 30 Days</option>
+                </select>
+              </div>
+            </div>
+
+            {filteredSubmissions.length === 0 ? (
+              <div className="flex items-center justify-center h-32 text-sm text-gray-400 italic">No submissions match your filters</div>
             ) : (
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3">Candidate</th>
-                    <th className="px-4 py-3">Score</th>
-                    <th className="px-4 py-3">Passed?</th>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3 text-center">Flagged</th>
-                    <th className="px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {leaderboard.map(item => (
-                    <React.Fragment key={item.id}>
-                      <tr 
-                        onClick={() => toggleRow(item.id)}
-                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${expandedRowId === item.id ? 'bg-gray-50' : ''}`}
-                      >
-                        <td className="px-4 py-3 font-medium text-gray-800">{item.display_name || item.user_name || `User ${item.user_id}`}</td>
-                        <td className="px-4 py-3 font-bold text-purple-600">{item.score != null ? `${Math.round(item.score)}%` : '—'}</td>
-                        <td className="px-4 py-3">
-                          {item.pass_status === 'passed' ? <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">Yes</span> : 
-                           item.pass_status === 'failed' ? <span className="text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded">No</span> : 
-                           <span className="text-gray-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-gray-500">{item.submitted_at ? new Date(item.submitted_at).toLocaleDateString() : '—'}</td>
-                        <td className="px-4 py-3 text-center">
-                          {item.is_malpractice ? <ShieldAlert size={16} className="text-rose-500 inline" /> : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button className="text-gray-400 hover:text-purple-600">
-                            {expandedRowId === item.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </button>
-                        </td>
-                      </tr>
-                      
-                      {/* Expanded Evidence Panel */}
-                      {expandedRowId === item.id && (
-                        <tr>
-                          <td colSpan="6" className="p-0 border-b-2 border-purple-100">
-                            <div className="bg-purple-50/50 p-6 shadow-inner">
-                              {loadingDetailsId === item.id ? (
-                                <div className="flex justify-center p-4"><Loader2 className="animate-spin text-purple-600" /></div>
-                              ) : (
-                                renderEvidencePanel(resultDetailsCache[item.id])
-                              )}
-                            </div>
+              <div className="overflow-auto max-h-[500px]">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3">Candidate</th>
+                      <th className="px-4 py-3">Score</th>
+                      <th className="px-4 py-3">Passed?</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3 text-center">Flagged</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredSubmissions.map(item => (
+                      <React.Fragment key={item.id}>
+                        <tr 
+                          onClick={() => toggleRow(item.id)}
+                          className={`cursor-pointer hover:bg-gray-50 transition-colors ${expandedRowId === item.id ? 'bg-gray-50' : ''}`}
+                        >
+                          <td className="px-4 py-3 font-medium text-gray-800">{item.display_name || item.user_name || `User ${item.user_id}`}</td>
+                          <td className="px-4 py-3 font-bold text-purple-600">{item.score != null ? `${Math.round(item.score)}%` : '—'}</td>
+                          <td className="px-4 py-3">
+                            {item.pass_status === 'passed' ? <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">Yes</span> : 
+                             item.pass_status === 'failed' ? <span className="text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded">No</span> : 
+                             <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">{item.submitted_at ? new Date(item.submitted_at).toLocaleDateString() : '—'}</td>
+                          <td className="px-4 py-3 text-center">
+                            {item.is_malpractice ? <ShieldAlert size={16} className="text-rose-500 inline" /> : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button className="text-gray-400 hover:text-purple-600">
+                              {expandedRowId === item.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                            </button>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
+                        
+                        {/* Expanded Evidence Panel */}
+                        {expandedRowId === item.id && (
+                          <tr>
+                            <td colSpan="6" className="p-0 border-b-2 border-purple-100">
+                              <div className="bg-purple-50/50 p-6 shadow-inner">
+                                {loadingDetailsId === item.id ? (
+                                  <div className="flex justify-center p-4"><Loader2 className="animate-spin text-purple-600" /></div>
+                                ) : (
+                                  renderEvidencePanel(resultDetailsCache[item.id])
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
