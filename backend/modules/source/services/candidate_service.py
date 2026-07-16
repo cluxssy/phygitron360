@@ -849,9 +849,16 @@ class CandidateService:
                                     extracted_text = item.get("extracted_text") or ""
                                     if not extracted_text and item.get("file_path") and os.path.exists(item["file_path"]):
                                         ext = os.path.splitext(item["filename"])[1].lower()
-                                        extracted_text = await loop.run_in_executor(
-                                            None, self._extract_text, item["file_path"], ext
-                                        )
+                                        try:
+                                            extracted_text = await loop.run_in_executor(
+                                                None, self._extract_text, item["file_path"], ext
+                                            )
+                                        except Exception as e:
+                                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR extracting text for {item['filename']}: {e}", flush=True)
+                                            self.repo.update_bulk_upload_job_item(
+                                                item["id"], status="failed", error_message=str(e)[:500], conn=conn, cur=cur
+                                            )
+                                            continue
 
                                     if not extracted_text.strip():
                                         self.repo.update_bulk_upload_job_item(
