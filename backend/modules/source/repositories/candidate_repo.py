@@ -97,17 +97,18 @@ class CandidateRepository:
         should_close = False
         if conn is None:
             conn = get_db_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
             should_close = True
             
         try:
-            self._set_search_path(cur)
-            cur.execute("SELECT * FROM candidates WHERE email = %s", (email,))
-            row = cur.fetchone()
-            return dict(row) if row else None
+            # Always use a RealDictCursor for this SELECT so dict(row) is safe,
+            # regardless of what cursor type the caller is using on the shared conn.
+            with conn.cursor(cursor_factory=RealDictCursor) as dict_cur:
+                self._set_search_path(dict_cur)
+                dict_cur.execute("SELECT * FROM candidates WHERE email = %s", (email,))
+                row = dict_cur.fetchone()
+                return dict(row) if row else None
         finally:
             if should_close:
-                cur.close()
                 conn.close()
 
     def update_candidate(self, candidate_id: int, data: Dict[str, Any], conn=None, cur=None) -> bool:
