@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 BASE_UPLOADS_DIR = os.path.join(DATA_DIR, 'uploads')
 
 # S3 config — read once at import time
-_S3_BUCKET   = os.environ.get('AWS_S3_BUCKET', '')
+_S3_BUCKET   = os.environ.get('AWS_S3_BUCKET_NAME') or os.environ.get('AWS_S3_BUCKET', '')
 _S3_REGION   = os.environ.get('AWS_S3_REGION', 'us-east-1')
 _S3_ENDPOINT = os.environ.get('AWS_S3_ENDPOINT_URL', '')   # for LocalStack: http://localhost:4566
 _USE_S3      = bool(_S3_BUCKET)
