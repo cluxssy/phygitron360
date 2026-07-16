@@ -46,13 +46,10 @@ resource "digitalocean_app" "phygitron" {
         deploy_on_push = true
       }
 
-      source_dir    = "frontend"
-      build_command = "npm install && npm run build"
-      output_dir    = "dist"
-
-      routes {
-        path = "/"
-      }
+      source_dir        = "frontend"
+      build_command     = "npm install && npm run build"
+      output_dir        = "dist"
+      catchall_document = "index.html"
     }
 
     # ------------------------------------------------------------------
@@ -62,7 +59,7 @@ resource "digitalocean_app" "phygitron" {
     service {
       name               = "backend"
       instance_count     = 1
-      instance_size_slug = "apps-d-1vcpu-2gb"
+      instance_size_slug = "apps-s-1vcpu-2gb"
 
       github {
         repo           = var.github_repo
@@ -71,19 +68,21 @@ resource "digitalocean_app" "phygitron" {
       }
 
       dockerfile_path = "backend/Dockerfile"
+      run_command     = "sh -c 'uvicorn backend.main:app --host 0.0.0.0 --port $${PORT:-8000} --workers 1'"
       source_dir      = "backend"
       http_port       = 8000
 
-      # Route API and backend paths to this service
-      routes { path = "/api" }
-      routes { path = "/docs" }
-      routes { path = "/openapi.json" }
-      routes { path = "/uploads" }
+
+
+      health_check {
+        http_path             = "/api/health"
+        initial_delay_seconds = 60
+      }
 
       # ---- Database Connection ----
       env {
         key   = "DB_HOST"
-        value = digitalocean_database_cluster.postgres.private_host
+        value = digitalocean_database_cluster.postgres.host
         scope = "RUN_TIME"
         type  = "SECRET"
       }
@@ -109,10 +108,17 @@ resource "digitalocean_app" "phygitron" {
         type  = "SECRET"
       }
 
+      # Required for DO Managed Postgres
+      env {
+        key   = "PGSSLMODE"
+        value = "require"
+        scope = "RUN_TIME"
+      }
+
       # ---- Redis (Celery Broker) ----
       env {
         key   = "REDIS_URL"
-        value = "rediss://${digitalocean_database_cluster.redis.host}:${digitalocean_database_cluster.redis.port}/0?ssl_cert_reqs=none"
+        value = "rediss://${digitalocean_database_cluster.redis.user}:${digitalocean_database_cluster.redis.password}@${digitalocean_database_cluster.redis.host}:${digitalocean_database_cluster.redis.port}/0?ssl_cert_reqs=none"
         scope = "RUN_TIME"
         type  = "SECRET"
       }
@@ -291,7 +297,7 @@ resource "digitalocean_app" "phygitron" {
 
       env {
         key   = "DB_HOST"
-        value = digitalocean_database_cluster.postgres.private_host
+        value = digitalocean_database_cluster.postgres.host
         scope = "RUN_TIME"
         type  = "SECRET"
       }
@@ -316,9 +322,16 @@ resource "digitalocean_app" "phygitron" {
         scope = "RUN_TIME"
         type  = "SECRET"
       }
+
+      # Required for DO Managed Postgres
+      env {
+        key   = "PGSSLMODE"
+        value = "require"
+        scope = "RUN_TIME"
+      }
       env {
         key   = "REDIS_URL"
-        value = "rediss://${digitalocean_database_cluster.redis.host}:${digitalocean_database_cluster.redis.port}/0?ssl_cert_reqs=none"
+        value = "rediss://${digitalocean_database_cluster.redis.user}:${digitalocean_database_cluster.redis.password}@${digitalocean_database_cluster.redis.host}:${digitalocean_database_cluster.redis.port}/0?ssl_cert_reqs=none"
         scope = "RUN_TIME"
         type  = "SECRET"
       }
@@ -412,6 +425,63 @@ resource "digitalocean_app" "phygitron" {
         key   = "AWS_DEFAULT_REGION"
         value = "fra1"
         scope = "RUN_TIME"
+      }
+    }
+
+    ingress {
+      rule {
+        component {
+          name = "frontend"
+        }
+        match {
+          path {
+            prefix = "/"
+          }
+        }
+      }
+      rule {
+        component {
+          name                 = "backend"
+          preserve_path_prefix = true
+        }
+        match {
+          path {
+            prefix = "/api"
+          }
+        }
+      }
+      rule {
+        component {
+          name                 = "backend"
+          preserve_path_prefix = true
+        }
+        match {
+          path {
+            prefix = "/docs"
+          }
+        }
+      }
+      rule {
+        component {
+          name                 = "backend"
+          preserve_path_prefix = true
+        }
+        match {
+          path {
+            prefix = "/openapi.json"
+          }
+        }
+      }
+      rule {
+        component {
+          name                 = "backend"
+          preserve_path_prefix = true
+        }
+        match {
+          path {
+            prefix = "/uploads"
+          }
+        }
       }
     }
   }
