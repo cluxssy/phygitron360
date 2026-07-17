@@ -66,46 +66,23 @@ function AdminGate() {
 }
 
 function VerifyAccessRoute({ children }) {
-  const { user, loading, hasPermission } = useAuth();
-  const [checkingAssignment, setCheckingAssignment] = useState(false);
-  const [hasAssignment, setHasAssignment] = useState(false);
-  const [assignmentChecked, setAssignmentChecked] = useState(false);
-  const roles = (user?.roles || [user?.role]).filter(Boolean).map((role) => String(role).toLowerCase());
-  const isEmployee = roles.includes('employee');
-  const moduleEnabled = (user?.modules_enabled || []).some((module) => String(module).toLowerCase() === 'verify');
-  const hasModuleAccess = hasPermission('module.verify.access');
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <HorizontalLoader fullScreen label="Loading workspace..." />;
+  }
+  
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
 
-  useEffect(() => {
-    if (!user || hasModuleAccess || !isEmployee || !moduleEnabled) return;
+  // Force password change check
+  if (user.password_must_change) {
+    return <Navigate to="/force-change-password" replace />;
+  }
 
-    let active = true;
-    setCheckingAssignment(true);
-    setAssignmentChecked(false);
-    fetch('/api/verify/assignments/my-tests', { credentials: 'include' })
-      .then(async (response) => {
-        if (!response.ok) return [];
-        const body = await response.json();
-        return Array.isArray(body?.data) ? body.data : body;
-      })
-      .then((assignments) => {
-        if (active) setHasAssignment(Array.isArray(assignments) && assignments.length > 0);
-      })
-      .catch(() => { if (active) setHasAssignment(false); })
-      .finally(() => {
-        if (active) {
-          setCheckingAssignment(false);
-          setAssignmentChecked(true);
-        }
-      });
-
-    return () => { active = false; };
-  }, [user, hasModuleAccess, isEmployee, moduleEnabled]);
-
-  if (loading || checkingAssignment || (user && !hasModuleAccess && isEmployee && moduleEnabled && !assignmentChecked)) return null;
-  if (!user) return <Navigate to="/" replace />;
-  if (user.password_must_change) return <Navigate to="/force-change-password" replace />;
-  if (hasModuleAccess || (isEmployee && moduleEnabled && hasAssignment)) return children;
-  return <Navigate to="/deploy" replace />;
+  // Everyone is allowed in. Admins will see 'management' view, Employees will see 'personal' view natively.
+  return children;
 }
 
 export default function App() {
