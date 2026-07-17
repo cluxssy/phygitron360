@@ -1,11 +1,12 @@
-import React from 'react';
-import { Routes, Route, Navigate } from "react-router-dom"; // ✅ added Navigate
+import React, { useEffect, useState } from 'react';
+import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from './core/auth/AuthContext';
 import { Toaster } from 'react-hot-toast';
+import TooltipProvider from './core/components/TooltipProvider';
+import HorizontalLoader from './core/components/HorizontalLoader';
 
 import Layout from './components/Layout';
 import LandingPage from "./modules/landing/pages/LandingPage";
-import LoginPage from './modules/landing/pages/LoginPage';
 import ForgotPasswordPage from './modules/landing/pages/ForgotPasswordPage';
 import ResetPasswordPage from './modules/landing/pages/ResetPasswordPage';
 import OnboardPage from './modules/landing/pages/OnboardPage';
@@ -26,18 +27,11 @@ function ProtectedRoute({ children, requiredPermission, requiredModule }) {
   const { user, loading, hasPermission } = useAuth();
   
   if (loading) {
-  return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#f5f5f5]">
-      <div className="w-12 h-12 border-4 border-[#7c5cff] border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[3px]">
-        Loading Workspace...
-      </p>
-    </div>
-  );
-}
+    return <HorizontalLoader fullScreen label="Loading workspace..." />;
+  }
   
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // Force password change check
@@ -71,88 +65,135 @@ function AdminGate() {
   return <Navigate to="/deploy" replace />;
 }
 
+function VerifyAccessRoute({ children }) {
+  const { user, loading, hasPermission } = useAuth();
+  const [checkingAssignment, setCheckingAssignment] = useState(false);
+  const [hasAssignment, setHasAssignment] = useState(false);
+  const [assignmentChecked, setAssignmentChecked] = useState(false);
+  const roles = (user?.roles || [user?.role]).filter(Boolean).map((role) => String(role).toLowerCase());
+  const isEmployee = roles.includes('employee');
+  const moduleEnabled = (user?.modules_enabled || []).some((module) => String(module).toLowerCase() === 'verify');
+  const hasModuleAccess = hasPermission('module.verify.access');
+
+  useEffect(() => {
+    if (!user || hasModuleAccess || !isEmployee || !moduleEnabled) return;
+
+    let active = true;
+    setCheckingAssignment(true);
+    setAssignmentChecked(false);
+    fetch('/api/verify/assignments/my-tests', { credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const body = await response.json();
+        return Array.isArray(body?.data) ? body.data : body;
+      })
+      .then((assignments) => {
+        if (active) setHasAssignment(Array.isArray(assignments) && assignments.length > 0);
+      })
+      .catch(() => { if (active) setHasAssignment(false); })
+      .finally(() => {
+        if (active) {
+          setCheckingAssignment(false);
+          setAssignmentChecked(true);
+        }
+      });
+
+    return () => { active = false; };
+  }, [user, hasModuleAccess, isEmployee, moduleEnabled]);
+
+  if (loading || checkingAssignment || (user && !hasModuleAccess && isEmployee && moduleEnabled && !assignmentChecked)) return null;
+  if (!user) return <Navigate to="/" replace />;
+  if (user.password_must_change) return <Navigate to="/force-change-password" replace />;
+  if (hasModuleAccess || (isEmployee && moduleEnabled && hasAssignment)) return children;
+  return <Navigate to="/deploy" replace />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
-      <Toaster position="top-right" />
+      <TooltipProvider>
+        <Toaster position="top-right" />
 
-      <Routes>
-        {/* Landing & Auth */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/force-change-password" element={<ForceChangePasswordPage />} />
-        <Route path="/onboard" element={<OnboardPage />} />
+        <Routes>
+          {/* Landing & Auth */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/force-change-password" element={<ForceChangePasswordPage />} />
+          <Route path="/onboard" element={<OnboardPage />} />
 
-        {/* Dashboards */}
-        <Route 
-          path="/superadmin" 
-          element={
-            <ProtectedRoute requiredPermission="manage_system">
-              <Layout><SuperadminDashboard /></Layout>
-            </ProtectedRoute>
-          } 
-        />
+          {/* Dashboards */}
+          <Route 
+            path="/superadmin" 
+            element={
+              <ProtectedRoute requiredPermission="manage_system">
+                <Layout><SuperadminDashboard /></Layout>
+              </ProtectedRoute>
+            } 
+          />
 
-        <Route 
-          path="/admin" 
-          element={
-            <ProtectedRoute>
-              <Layout><AdminGate /></Layout>
-            </ProtectedRoute>
-          } 
-        />
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute>
+                <Layout><AdminGate /></Layout>
+              </ProtectedRoute>
+            } 
+          />
 
-        <Route 
-          path="/source" 
-          element={
-            <ProtectedRoute requiredModule="source">
-              <Layout><SourceDashboard /></Layout>
-            </ProtectedRoute>
-          } 
-        />
+          {/* ── ABOUT ROUTE REMOVED ── */}
+          {/* <Route path="/about" element={<About />} /> */}
 
-        <Route 
-          path="/verify" 
-          element={
-            <ProtectedRoute requiredModule="verify">
-              <Layout><VerifyDashboard /></Layout>
-            </ProtectedRoute>
-          } 
-        />
+          <Route 
+            path="/source" 
+            element={
+              <ProtectedRoute requiredModule="source">
+                <Layout><SourceDashboard /></Layout>
+              </ProtectedRoute>
+            } 
+          />
 
-        <Route 
-          path="/forge" 
-          element={
-            <ProtectedRoute requiredModule="forge">
-              <Layout><ForgeDashboard /></Layout>
-            </ProtectedRoute>
-          } 
-        />
+          <Route 
+            path="/verify" 
+            element={
+              <VerifyAccessRoute>
+                <Layout><VerifyDashboard /></Layout>
+              </VerifyAccessRoute>
+            } 
+          />
 
-        <Route 
-          path="/deploy" 
-          element={
-            <ProtectedRoute requiredModule="deploy">
-              <Layout><DeployDashboard /></Layout>
-            </ProtectedRoute>
-          } 
-        />
+          <Route 
+            path="/forge" 
+            element={
+              <ProtectedRoute requiredModule="forge">
+                <Layout><ForgeDashboard /></Layout>
+              </ProtectedRoute>
+            } 
+          />
 
-        <Route 
-          path="/trainee" 
-          element={
-            <ProtectedRoute>
-              <TraineeDashboard />
-            </ProtectedRoute>
-          } 
-        />
+          <Route 
+            path="/deploy" 
+            element={
+              <ProtectedRoute requiredModule="deploy">
+                <Layout><DeployDashboard /></Layout>
+              </ProtectedRoute>
+            } 
+          />
 
-        {/* Fallbacks */}
-        <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route 
+            path="/trainee" 
+            element={
+              <ProtectedRoute>
+                <TraineeDashboard />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Fallbacks */}
+          <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </TooltipProvider>
     </AuthProvider>
   );
 }

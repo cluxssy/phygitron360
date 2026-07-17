@@ -4,9 +4,10 @@ import {
   UserPlus, Mail, CheckCircle, Clock, Trash2, Plus, 
   FileText, Briefcase, GraduationCap, MapPin, Phone, 
   ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink,
-  Copy, Link, Ban
+  Copy, Link, Ban, Save
 } from 'lucide-react';
 import ComboBox from '../../../core/components/ComboBox';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import {
   isEmail,
   isEmployeeCode,
@@ -27,11 +28,37 @@ const DEPARTMENTS = [
     'Human Resources', 'Finance', 'Operations', 'Quality Assurance'
 ];
 
+// Hoisted OUTSIDE OnboardingPanel so React keeps a stable component reference
+// across re-renders.
+const SectionHeader = ({ icon: Icon, label, isLightMode }) => (
+  <div className="flex items-center gap-3">
+    <Icon size={16} className={isLightMode ? 'text-[#8b5cf6]' : 'text-primary'} />
+    <span className={`text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>{label}</span>
+  </div>
+);
+
+const FIELD_TOOLTIPS = {
+  'Employee Code': 'Unique employee identifier used across HR and payroll records.',
+  'New Employee Code': 'Unique employee identifier assigned when this person is deployed.',
+  'Reporting Manager': 'The manager this employee reports to.',
+  'Access Role': 'Controls what this user can view and manage in the workspace.',
+  'PF Included': 'Choose whether Provident Fund contributions apply to this employee.',
+  'Mediclaim Included': 'Choose whether this employee is covered by mediclaim.',
+};
+
+const Field = ({ label, children, isLightMode }) => (
+  <div className="space-y-1.5">
+    <label data-tooltip={FIELD_TOOLTIPS[label]} className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>{label}</label>
+    {children}
+  </div>
+);
+
 export default function OnboardingPanel() {
   const [activeTab, setActiveTab] = useState('invites');
   const [invites, setInvites] = useState([]);
   const [approvals, setApprovals] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [activeManagers, setActiveManagers] = useState([]);
   const [locations, setLocations] = useState([]);
   const [dynDesignations, setDynDesignations] = useState([]);
   const [dynDepartments, setDynDepartments] = useState([]);
@@ -40,6 +67,7 @@ export default function OnboardingPanel() {
   const [selectedApproval, setSelectedApproval] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', role: 'employee', department: '', designation: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [editApprovalForm, setEditApprovalForm] = useState(null);
 
   const isLightMode = window.location.pathname.startsWith('/deploy');
 
@@ -65,14 +93,81 @@ export default function OnboardingPanel() {
 
   const loadOptions = async () => {
     try {
-        const res = await fetch('/api/options', { credentials: 'include' });
-        const data = await res.json();
-        setManagers(data.managers || []);
-        setLocations(data.locations || []);
-        setDynDesignations(data.designations || []);
-        setDynDepartments(data.departments || []);
-    } catch {
-        toast.error("Failed to sync structural dependencies");
+      // ── Fetch both options and employees ──
+      const [optionsRes, employeesRes] = await Promise.all([
+        fetch('/api/options', { credentials: 'include' }),
+        fetch('/api/employees', { credentials: 'include' })
+      ]);
+
+      const optionsData = await optionsRes.json();
+      const employeesData = await employeesRes.json();
+
+      const allManagers = optionsData.managers || [];
+      const employeeList = Array.isArray(employeesData) ? employeesData : [];
+
+      // ── FILTER ACTIVE EMPLOYEES (SAME LOGIC AS ASSETS PANEL) ──
+      const activeEmployees = employeeList.filter(emp => 
+        emp.employment_status === 'Active' || 
+        emp.employment_status === 'active' ||
+        emp.is_active === 1 ||
+        emp.is_active === true ||
+        emp.is_active === '1' ||
+        emp.is_active === 'true'
+      );
+
+      // ── FILTER MANAGERS AND ORG_ADMINS FROM ACTIVE EMPLOYEES ──
+      const activeManagersFiltered = activeEmployees.filter(emp => {
+        const role = String(emp?.role || emp?.user_role || emp?.role_name || '').trim().toLowerCase();
+        return role === 'manager' || role === 'org_admin' || role === 'organisationadmin' || role === 'org-admin' || role === 'admin';
+      });
+
+      // ── Build a Set of active manager employee codes ──
+      const activeManagerCodes = new Set(
+        activeManagersFiltered
+          .map(emp => emp?.employee_code)
+          .filter(Boolean)
+      );
+
+      // ── Filter the options managers to only those in the active set ──
+      const finalActiveManagers = allManagers.filter(m => {
+        const managerCode = m?.employee_code || m?.code || m?.emp_code;
+        if (managerCode) {
+          return activeManagerCodes.has(managerCode);
+        }
+
+        // Fallback: match by email
+        const managerEmail = m?.email || m?.email_id || '';
+        if (managerEmail) {
+          return activeManagersFiltered.some(emp => 
+            (emp?.email || emp?.email_id || '').toLowerCase() === managerEmail.toLowerCase()
+          );
+        }
+
+        // Fallback: match by name
+        const managerName = String(m?.name || m?.label || '').trim().toLowerCase();
+        if (managerName) {
+          return activeManagersFiltered.some(emp => {
+            const empName = String(emp?.name || emp?.full_name || emp?.employee_name || '').trim().toLowerCase();
+            return empName === managerName;
+          });
+        }
+
+        return false;
+      });
+
+      console.log('📊 Active employees:', activeEmployees.length);
+      console.log('📊 Active managers/org_admins:', activeManagersFiltered.length);
+      console.log('📊 Filtered active managers for dropdown:', finalActiveManagers.length);
+
+      setManagers(allManagers);
+      setActiveManagers(finalActiveManagers);
+      setLocations(optionsData.locations || []);
+      setDynDesignations(optionsData.designations || []);
+      setDynDepartments(optionsData.departments || []);
+
+    } catch (error) {
+      console.error('Error loading options:', error);
+      toast.error("Failed to sync structural dependencies");
     }
   };
 
@@ -176,6 +271,15 @@ export default function OnboardingPanel() {
 
   const openApprovalReview = (approval) => {
     setSelectedApproval(approval);
+    // Initialize edit form with approval data
+    setEditApprovalForm({
+      name: approval.name || '',
+      email: approval.email_id || '',
+      employee_code: approval.employee_code || '',
+      designation: approval.designation || '',
+      team: approval.team || '',
+      invite_code: approval.invite_code || '',
+    });
     setApproveForm(prev => ({
       ...prev,
       code: approval.employee_code || '',
@@ -208,6 +312,40 @@ export default function OnboardingPanel() {
       openApprovalReview(approval);
     } catch {
       toast.error('Failed to load onboarding approval');
+    }
+  };
+
+  const handleSaveApprovalEdit = async () => {
+    // Validate fields
+    if (!editApprovalForm.name?.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (editApprovalForm.email && !isEmail(editApprovalForm.email)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    if (editApprovalForm.employee_code && !isEmployeeCode(editApprovalForm.employee_code)) {
+      toast.error("Employee code must be 3-20 letters, numbers, hyphens, or underscores");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/onboarding/approval/${selectedApproval.employee_code}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editApprovalForm)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Update failed');
+      toast.success('Approval details updated successfully');
+      // Refresh approvals
+      loadApprovals();
+      // Update selected approval with new data
+      setSelectedApproval(prev => ({ ...prev, ...editApprovalForm }));
+    } catch (e) {
+      toast.error(e.message);
     }
   };
 
@@ -278,27 +416,13 @@ export default function OnboardingPanel() {
     'Expired': 'bg-red-500/10 text-red-500 border border-red-500/20',
   };
 
-  const SectionHeader = ({ icon: Icon, label }) => (
-    <div className="flex items-center gap-3">
-      <Icon size={16} className={isLightMode ? 'text-[#8b5cf6]' : 'text-primary'} />
-      <span className={`text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>{label}</span>
-    </div>
-  );
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1.5">
-      <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>{label}</label>
-      {children}
-    </div>
-  );
-
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header & Tabs */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
         <div>
-          <p className={`text-[10px] font-black uppercase tracking-[0.4em] mb-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>Onboarding Management</p>
-          <h2 className={`text-3xl font-display font-black uppercase tracking-tighter italic ${isLightMode ? 'text-black' : 'text-white'}`}>Onboarding Hub</h2>
+          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">Onboarding Management</p>
+          <h2 className="text-5xl font-black text-black tracking-tight leading-none">Onboarding Panel</h2>
         </div>
         
         <div className={`flex gap-2 p-1.5 rounded-2xl border ${isLightMode ? 'bg-[#f5efff] border-[#ece2ff]' : 'bg-white/5 border-white/5'}`}>
@@ -306,38 +430,34 @@ export default function OnboardingPanel() {
               onClick={() => setActiveTab('invites')}
               className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 activeTab === 'invites' 
-                  ? (isLightMode ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-md' : 'bg-primary text-black shadow-lg shadow-primary/20') 
+                  ? (isLightMode ? 'bg-[#7c3aed] text-white shadow-md' : 'bg-primary text-black shadow-lg shadow-primary/20') 
                   : (isLightMode ? 'text-[#6b7280] hover:text-black' : 'text-white/40 hover:text-white')
               }`}
             >
                Outbound Invites
             </button>
             <button 
-              onClick={() => setActiveTab('approvals')}
-              className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${
-                activeTab === 'approvals' 
-                  ? (isLightMode ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-md' : 'bg-primary text-black shadow-lg shadow-primary/20') 
-                  : (isLightMode ? 'text-[#6b7280] hover:text-black' : 'text-white/40 hover:text-white')
-              }`}
-            >
-               Pending Approvals
-               {approvals.length > 0 && (
-                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-error text-[8px] font-black text-white animate-pulse">
-                   {approvals.length}
-                 </span>
-               )}
-            </button>
+            onClick={() => setActiveTab('approvals')}
+            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${
+              activeTab === 'approvals' 
+                ? (isLightMode ? 'bg-[#7c3aed] text-white shadow-md' : 'bg-primary text-black shadow-lg shadow-primary/20') 
+                : (isLightMode ? 'text-[#6b7280] hover:text-black' : 'text-white/40 hover:text-white')
+            }`}
+          >
+            Pending Approvals
+            {approvals.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white animate-pulse shadow-md shadow-red-500/30">
+                {approvals.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 grayscale opacity-50">
-            <div className={`w-12 h-12 border-3 border-t-transparent rounded-full animate-spin mb-4 ${isLightMode ? 'border-[#8b5cf6]' : 'border-primary'}`} />
-            <p className={`text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>Synchronizing Persistence Layer...</p>
-        </div>
+        <HorizontalLoader label="Synchronizing Persistence Layer..." />
       ) : activeTab === 'invites' ? (
         <div className="space-y-6 animate-fade-in-up">
-           {/* Invites Toolbar */}
            <div className={`flex justify-between items-center p-6 rounded-[2rem] border ${
              isLightMode 
                ? 'bg-white border-[#ebe4ff] shadow-[0_10px_40px_rgba(180,140,255,0.06)]' 
@@ -359,7 +479,7 @@ export default function OnboardingPanel() {
                 onClick={() => setShowForm(true)}
                 className={`flex items-center gap-3 px-8 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all ${
                   isLightMode 
-                    ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-[0_10px_30px_rgba(139,92,246,0.15)] hover:opacity-95' 
+                    ? 'bg-[#7c3aed] text-white shadow-[0_10px_30px_rgba(139,92,246,0.15)] hover:opacity-95' 
                     : 'bg-primary text-black hover:bg-white'
                 }`}
               >
@@ -373,100 +493,100 @@ export default function OnboardingPanel() {
                : 'glass-panel border-white/5'
            }`}>
              <table className="w-full text-left">
-               <thead className={`border-b ${isLightMode ? 'bg-[#faf7ff] border-[#f1ebff]' : 'bg-white/5 border-white/10'}`}>
-                 <tr>
-                   {['Identity', 'Designation', 'Access Role', 'Current Status', 'Initiated', 'Action'].map(h => (
-                     <th key={h} className={`px-6 py-5 text-[9px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>{h}</th>
-                   ))}
-                 </tr>
-               </thead>
-               <tbody className={`divide-y ${isLightMode ? 'divide-[#f1ebff]' : 'divide-white/5'}`}>
-                 {invites.length === 0 ? (
-                   <tr>
-                     <td colSpan={6} className={`px-6 py-20 text-center text-[10px] uppercase font-black tracking-widest ${isLightMode ? 'text-[#b6b6c7]' : 'text-white/20'}`}>
-                       No active invite sequences in current sector
-                     </td>
-                   </tr>
-                 ) : invites.map((inv, i) => (
-                   <tr key={inv.id || i} className={`transition-colors group ${isLightMode ? 'hover:bg-[#faf7ff]' : 'hover:bg-white/[0.02]'}`}>
-                     <td className="px-6 py-4">
-                        <p className={`text-sm font-bold ${isLightMode ? 'text-black' : 'text-white'}`}>{inv.name}</p>
-                        <p className={`text-[10px] font-mono mt-1 ${isLightMode ? 'text-[#6b7280]' : 'text-white/40'}`}>{inv.email}</p>
-                     </td>
-                     <td className="px-6 py-4">
-                        <p className={`text-xs font-medium ${isLightMode ? 'text-black/80' : 'text-white/70'}`}>{inv.designation || 'N/A'}</p>
-                        <p className={`text-[9px] uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>{inv.department || 'General'}</p>
-                     </td>
-                     <td className="px-6 py-4">
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{inv.role}</span>
-                     </td>
-                     <td className="px-6 py-4">
-                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${inviteStatusStyle[inv.status] || 'bg-white/5 text-white/30'}`}>
-                          {inv.status}
-                        </span>
-                     </td>
-                     <td className={`px-6 py-4 text-[10px] font-mono ${isLightMode ? 'text-[#6b7280]' : 'text-white/20'}`}>
-                        {new Date(inv.created_at).toLocaleDateString()}
-                     </td>
-                      <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          {inv.status === 'Completed' && (
-                            <button
-                              onClick={() => manageCompletedInvite(inv)}
-                              className={`px-4 py-2 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all ${
-                                isLightMode
-                                  ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]'
-                                  : 'text-white/40 bg-white/5 border-white/5 hover:text-primary hover:bg-white/10'
-                              }`}
-                            >
-                              Manage
-                            </button>
-                          )}
-                          {inv.status === 'Pending' && (
-                            <>
-                            <button 
-                              onClick={() => copyInviteLink(inv.token)} 
-                              title="Copy Invite Link"
-                              className={`p-2 rounded-lg border transition-all ${
-                                isLightMode 
-                                  ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]' 
-                                  : 'text-white/40 bg-white/5 border-white/5 hover:text-primary hover:bg-white/10'
-                              }`}
-                            >
-                               <Link size={14} />
-                            </button>
-                            <button 
-                              onClick={() => revokeInvite(inv.id)} 
-                              title="Revoke Invite"
-                              className={`p-2 rounded-lg border transition-all ${
-                                isLightMode 
-                                  ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
-                                  : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
-                              }`}
-                            >
-                               <Ban size={14} />
-                            </button>
-                            </>
-                          )}
-                          {inv.status === 'Revoked' && (
-                            <button 
-                              onClick={() => hardDeleteInvite(inv.id)} 
-                              title="Delete Log"
-                              className={`p-2 rounded-lg border transition-all ${
-                                isLightMode 
-                                  ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
-                                  : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
-                              }`}
-                            >
-                               <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
+  <thead className={`border-b ${isLightMode ? 'bg-[#faf7ff] border-[#f1ebff]' : 'bg-white/5 border-white/10'}`}>
+    <tr>
+      {['Identity', 'Designation', 'Access Role', 'Current Status', 'Initiated', 'Action'].map(h => (
+        <th key={h} className={`px-6 py-5 text-[11px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b8ba3]' : 'text-white/30'}`}>{h}</th>
+      ))}
+    </tr>
+  </thead>
+  <tbody className={`divide-y ${isLightMode ? 'divide-[#f1ebff]' : 'divide-white/5'}`}>
+    {invites.length === 0 ? (
+      <tr>
+        <td colSpan={6} className={`px-6 py-20 text-center text-[11px] uppercase font-black tracking-widest ${isLightMode ? 'text-[#b6b6c7]' : 'text-white/20'}`}>
+          No active invite sequences in current sector
+        </td>
+      </tr>
+    ) : invites.map((inv, i) => (
+      <tr key={inv.id || i} className={`transition-colors group ${isLightMode ? 'hover:bg-[#faf7ff]' : 'hover:bg-white/[0.02]'}`}>
+        <td className="px-6 py-5">
+          <p className={`text-base font-bold ${isLightMode ? 'text-black' : 'text-white'}`}>{inv.name}</p>
+          <p className={`text-[11px] font-mono mt-1 ${isLightMode ? 'text-[#4b5563]' : 'text-white/50'}`}>{inv.email}</p>
+        </td>
+        <td className="px-6 py-5">
+          <p className={`text-sm font-medium ${isLightMode ? 'text-black/80' : 'text-white/70'}`}>{inv.designation || 'N/A'}</p>
+          <p className={`text-[10px] uppercase tracking-widest ${isLightMode ? 'text-[#4b5563]' : 'text-white/40'}`}>{inv.department || 'General'}</p>
+        </td>
+        <td className="px-6 py-5">
+          <span className={`text-[11px] font-black uppercase tracking-widest ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{inv.role}</span>
+        </td>
+        <td className="px-6 py-5">
+          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${inviteStatusStyle[inv.status] || 'bg-white/5 text-white/30'}`}>
+            {inv.status}
+          </span>
+        </td>
+        <td className={`px-6 py-5 text-[11px] font-mono ${isLightMode ? 'text-[#4b5563]' : 'text-white/30'}`}>
+          {new Date(inv.created_at).toLocaleDateString()}
+        </td>
+        <td className="px-6 py-5">
+          <div className="flex gap-2">
+            {inv.status === 'Completed' && (
+              <button
+                onClick={() => manageCompletedInvite(inv)}
+                className={`px-4 py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
+                  isLightMode
+                    ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]'
+                    : 'text-white/40 bg-white/5 border-white/5 hover:text-primary hover:bg-white/10'
+                }`}
+              >
+                Manage
+              </button>
+            )}
+            {inv.status === 'Pending' && (
+              <>
+                <button 
+                  onClick={() => copyInviteLink(inv.token)} 
+                  title="Copy Invite Link"
+                  className={`p-2 rounded-lg border transition-all ${
+                    isLightMode 
+                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]' 
+                      : 'text-white/40 bg-white/5 border-white/5 hover:text-primary hover:bg-white/10'
+                  }`}
+                >
+                  <Link size={14} />
+                </button>
+                <button 
+                  onClick={() => revokeInvite(inv.id)} 
+                  title="Revoke Invite"
+                  className={`p-2 rounded-lg border transition-all ${
+                    isLightMode 
+                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
+                      : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
+                  }`}
+                >
+                  <Ban size={14} />
+                </button>
+              </>
+            )}
+            {inv.status === 'Revoked' && (
+              <button 
+                onClick={() => hardDeleteInvite(inv.id)} 
+                title="Delete Log"
+                className={`p-2 rounded-lg border transition-all ${
+                  isLightMode 
+                    ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
+                    : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
+                }`}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
            </div>
         </div>
       ) : (
@@ -657,7 +777,7 @@ export default function OnboardingPanel() {
         </div>
       )}
 
-      {/* Approval & Review Drawer (The "Detail View") */}
+      {/* Approval & Review Drawer */}
       {selectedApproval && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/40 backdrop-blur-sm">
            <div className={`w-full max-w-3xl h-full border-l animate-slide-in-right overflow-y-auto pr-2 custom-scrollbar ${
@@ -686,56 +806,103 @@ export default function OnboardingPanel() {
                            <p className={`font-black text-xs uppercase tracking-[0.3em] mt-2 italic ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{selectedApproval.designation} // {selectedApproval.team}</p>
                         </div>
                     </div>
-                    <button 
-                      onClick={() => setSelectedApproval(null)} 
-                      className={`p-3 rounded-2xl transition-all ${
-                        isLightMode 
-                          ? 'bg-[#faf7ff] border border-[#ebe4ff] text-[#6b7280] hover:bg-red-50 hover:text-red-500' 
-                          : 'bg-white/5 text-white/30 hover:text-error hover:bg-error/10'
-                      }`}
-                    >
-                      Abort Review
-                    </button>
+                    <div className="flex items-center gap-3">
+                       <button 
+                         onClick={handleSaveApprovalEdit}
+                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                           isLightMode 
+                             ? 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed] shadow-lg shadow-[#8b5cf6]/20' 
+                             : 'bg-primary text-black hover:bg-white shadow-lg shadow-primary/20'
+                         }`}
+                       >
+                         <Save size={14} /> Save Changes
+                       </button>
+                       <button 
+                         onClick={() => setSelectedApproval(null)} 
+                         className={`p-3 rounded-2xl transition-all ${
+                           isLightMode 
+                             ? 'bg-[#faf7ff] border border-[#ebe4ff] text-[#6b7280] hover:bg-red-50 hover:text-red-500' 
+                             : 'bg-white/5 text-white/30 hover:text-error hover:bg-error/10'
+                         }`}
+                       >
+                         Abort Review
+                       </button>
+                    </div>
                  </div>
 
                  {/* Information Grid */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Basic Section */}
                     <div className="space-y-6">
-                        <SectionHeader icon={FileText} label="Personal Vectors" />
+                        <SectionHeader icon={FileText} label="Personal Vectors" isLightMode={isLightMode} />
                         <div className={`space-y-4 p-6 rounded-3xl border ${
                           isLightMode 
                             ? 'bg-[#faf7ff] border-[#f1ebff]' 
                             : 'bg-white/5 border-white/5'
                         }`}>
-                          <Field label="Name">
-                            <p className={`text-sm font-bold ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.name}</p>
+                          <Field label="Name" isLightMode={isLightMode}>
+                            <input 
+                              type="text"
+                              value={editApprovalForm?.name || ''}
+                              onChange={e => setEditApprovalForm(prev => ({ ...prev, name: e.target.value }))}
+                              className={`w-full text-sm font-bold px-4 py-2 rounded-xl outline-none transition-all ${
+                                isLightMode 
+                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                              placeholder="Enter full name"
+                            />
                           </Field>
-                          <Field label="Email">
-                            <p className={`text-xs font-mono ${isLightMode ? 'text-[#6b7280]' : 'text-white/60'}`}>{selectedApproval.email_id}</p>
-                          </Field>
-                          <Field label="Employee Code">
-                            <p className={`text-xs font-mono font-bold ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{selectedApproval.employee_code}</p>
+                          <Field label="Email" isLightMode={isLightMode}>
+                            <input 
+                              type="email"
+                              value={editApprovalForm?.email || ''}
+                              onChange={e => setEditApprovalForm(prev => ({ ...prev, email: e.target.value }))}
+                              className={`w-full text-xs font-mono px-4 py-2 rounded-xl outline-none transition-all ${
+                                isLightMode 
+                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                              placeholder="Enter email address"
+                            />
                           </Field>
                         </div>
                     </div>
 
-                    {/* Role Section */}
                     <div className="space-y-6">
-                        <SectionHeader icon={Briefcase} label="Role Parameters" />
+                        <SectionHeader icon={Briefcase} label="Role Parameters" isLightMode={isLightMode} />
                         <div className={`space-y-4 p-6 rounded-3xl border ${
                           isLightMode 
                             ? 'bg-[#faf7ff] border-[#f1ebff]' 
                             : 'bg-white/5 border-white/5'
                         }`}>
-                          <Field label="Designation">
-                            <p className={`text-sm font-bold ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.designation}</p>
+                          <Field label="Designation" isLightMode={isLightMode}>
+                            <ComboBox 
+                              options={dynDesignations.length > 0 ? dynDesignations : DESIGNATIONS}
+                              value={editApprovalForm?.designation || ''}
+                              onChange={val => setEditApprovalForm(prev => ({ ...prev, designation: val }))}
+                              placeholder="Select Designation..."
+                            />
                           </Field>
-                          <Field label="Team / Department">
-                            <p className={`text-sm font-bold ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.team}</p>
+                          <Field label="Team / Department" isLightMode={isLightMode}>
+                            <ComboBox 
+                              options={dynDepartments.length > 0 ? dynDepartments : DEPARTMENTS}
+                              value={editApprovalForm?.team || ''}
+                              onChange={val => setEditApprovalForm(prev => ({ ...prev, team: val }))}
+                              placeholder="Select Department..."
+                            />
                           </Field>
-                          <Field label="Invite Code">
-                            <p className={`text-xs font-mono font-bold ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{selectedApproval.invite_code}</p>
+                          <Field label="Invite Code" isLightMode={isLightMode}>
+                            <input 
+                              type="text"
+                              value={editApprovalForm?.invite_code || ''}
+                              onChange={e => setEditApprovalForm(prev => ({ ...prev, invite_code: e.target.value }))}
+                              className={`w-full text-xs font-mono font-bold px-4 py-2 rounded-xl outline-none transition-all ${
+                                isLightMode 
+                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                              placeholder="Invite code"
+                            />
                           </Field>
                         </div>
                     </div>
@@ -743,23 +910,22 @@ export default function OnboardingPanel() {
 
                  {/* Approval Form */}
                  <div className="space-y-6">
-                    <SectionHeader icon={ShieldAlert} label="Approval Workflow" />
+                    <SectionHeader icon={ShieldAlert} label="Approval Workflow" isLightMode={isLightMode} />
                     <form onSubmit={handleApprove} className={`space-y-6 p-8 rounded-3xl border ${
                       isLightMode 
                         ? 'bg-[#faf7ff] border-[#f1ebff]' 
                         : 'bg-white/5 border-white/5'
                     }`}>
-                       {/* Row 1: Manager + Location */}
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <Field label="Reporting Manager">
+                          <Field label="Reporting Manager" isLightMode={isLightMode}>
                             <ComboBox 
-                              options={managers}
+                              options={activeManagers}
                               value={approveForm.manager}
                               onChange={val => setApproveForm({...approveForm, manager: val})}
                               placeholder="Select Manager..."
                             />
                           </Field>
-                          <Field label="Location">
+                          <Field label="Location" isLightMode={isLightMode}>
                             <ComboBox 
                               options={locations}
                               value={approveForm.location}
@@ -769,9 +935,8 @@ export default function OnboardingPanel() {
                           </Field>
                        </div>
 
-                       {/* Row 2: Employee Code + DOJ */}
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <Field label="New Employee Code">
+                          <Field label="New Employee Code" isLightMode={isLightMode}>
                             <input 
                               value={approveForm.code} 
                               onChange={e => setApproveForm({...approveForm, code: e.target.value})}
@@ -783,7 +948,7 @@ export default function OnboardingPanel() {
                               placeholder="e.g., EMP-001"
                             />
                           </Field>
-                          <Field label="Date of Joining">
+                          <Field label="Date of Joining" isLightMode={isLightMode}>
                             <input 
                               type="date"
                               value={approveForm.doj} 
@@ -797,9 +962,8 @@ export default function OnboardingPanel() {
                           </Field>
                        </div>
 
-                       {/* Row 3: Type + PF + Mediclaim */}
                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          <Field label="Employment Type">
+                          <Field label="Employment Type" isLightMode={isLightMode}>
                             <select 
                               value={approveForm.type}
                               onChange={e => setApproveForm({...approveForm, type: e.target.value})}
@@ -814,7 +978,7 @@ export default function OnboardingPanel() {
                               ))}
                             </select>
                           </Field>
-                          <Field label="PF Included">
+                          <Field label="PF Included" isLightMode={isLightMode}>
                             <select 
                               value={approveForm.pf}
                               onChange={e => setApproveForm({...approveForm, pf: e.target.value})}
@@ -829,7 +993,7 @@ export default function OnboardingPanel() {
                               ))}
                             </select>
                           </Field>
-                          <Field label="Mediclaim Included">
+                          <Field label="Mediclaim Included" isLightMode={isLightMode}>
                             <select 
                               value={approveForm.mediclaim}
                               onChange={e => setApproveForm({...approveForm, mediclaim: e.target.value})}
@@ -846,8 +1010,7 @@ export default function OnboardingPanel() {
                           </Field>
                        </div>
 
-                       {/* Notes */}
-                       <Field label="Additional Notes">
+                       <Field label="Additional Notes" isLightMode={isLightMode}>
                          <textarea 
                            value={approveForm.notes}
                            onChange={e => setApproveForm({...approveForm, notes: e.target.value})}
@@ -860,7 +1023,6 @@ export default function OnboardingPanel() {
                          />
                        </Field>
 
-                       {/* Actions */}
                        <div className="flex gap-4 pt-6">
                           <button 
                             type="button"

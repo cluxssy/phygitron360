@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Download, Calendar, ChevronDown, DollarSign, TrendingDown, TrendingUp, FileText, X, PieChart as PieChartIcon } from 'lucide-react';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
 const MONTH_NAMES = {
   1: 'January', 2: 'February', 3: 'March', 4: 'April',
@@ -118,11 +119,8 @@ export default function MyPayrollPanel() {
 
   const panelBase = "bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_8px_32px_rgba(180,140,255,0.08)]";
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-48">
-      <div className="w-8 h-8 border-2 border-[#8b5cf6] border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  // ── LOADING - REPLACED WITH HORIZONTAL LOADER ──
+  if (loading) return <HorizontalLoader label="Loading payslips..." />;
 
   return (
     <div className="w-full space-y-6 animate-fade-in-up pb-10">

@@ -4,8 +4,6 @@ import "../styles/landing.css";
 import PlatformSection from "../components/PlatformSection";
 import FeatureGrid from "../components/FeatureGrid";
 import InsightsSection from "../components/InsightsSection";
-import PartnersSection from "../components/PartnersSection";
-import TestimonialSection from "../components/TestimonialSection";
 import Footer from "../components/Footer";
 export default function LandingPage() {
   return (
@@ -15,8 +13,6 @@ export default function LandingPage() {
       <PlatformSection />
       <FeatureGrid />
       <InsightsSection />
-      <PartnersSection />
-      <TestimonialSection />
       <Footer />
     </>
   );

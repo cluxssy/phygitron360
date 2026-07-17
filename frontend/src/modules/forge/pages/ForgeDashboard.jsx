@@ -8,10 +8,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import logo from "../../../assets/phy360.png";
+import ewandzLogo from "../../../assets/EWANDZ.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
-
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 export default function ForgeDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -76,7 +77,8 @@ export default function ForgeDashboard() {
             src={logoutIcon}
             className="icon logout-icon"
             alt="logout"
-            onClick={() => { logout(); navigate('/login'); }}
+            aria-label="Log out"
+            onClick={() => { logout(); navigate('/'); }}
           />
           <div className="profile-wrap">
             <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>
@@ -114,8 +116,8 @@ export default function ForgeDashboard() {
           }
         `}</style>
 
-        {/* New Sidebar - Without Icons */}
-        <div className="sidebar forge-sidebar">
+        {/* New Sidebar - Without Icons and Tooltips */}
+        <div className="sidebar forge-sidebar" data-no-tooltip>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>
             Dashboard
           </button>
@@ -125,6 +127,9 @@ export default function ForgeDashboard() {
           <button className={currentTab === 'my-learning' ? 'active' : ''} onClick={() => setTab('my-learning')}>
             My Learning
           </button>
+          <div className="sidebar-brand">
+            <img src={ewandzLogo} alt="Ewandz" />
+          </div>
         </div>
 
         {/* Main Content */}

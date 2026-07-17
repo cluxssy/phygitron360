@@ -949,4 +949,3 @@ class CandidateRepository:
                 return results
         finally:
             conn.close()
-

@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   FileText, CheckCircle, XCircle, AlertCircle, Send,
-  Clock, Loader2, RefreshCw, Briefcase, DollarSign, MapPin, Calendar, Mail, MessageSquare, ExternalLink
+  Clock, Loader2, RefreshCw, Briefcase, DollarSign, MapPin, Calendar, Mail, MessageSquare, ExternalLink, Download
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { Link } from 'react-router-dom';
 
 const OFFER_STATUS_STYLE = {
-  pending:           'bg-amber-400/10 text-amber-400 border-amber-400/30',
-  approved:          'bg-emerald-400/10 text-emerald-400 border-emerald-400/30',
-  changes_requested: 'bg-orange-400/10 text-orange-400 border-orange-400/30',
-  sent:              'bg-indigo-400/10 text-indigo-400 border-indigo-400/30',
-  rejected:          'bg-rose-400/10 text-rose-400 border-rose-400/30',
+  pending:           'bg-amber-100 text-amber-700 border-amber-200',
+  approved:          'bg-emerald-100 text-emerald-700 border-emerald-200',
+  changes_requested: 'bg-orange-100 text-orange-700 border-orange-200',
+  sent:              'bg-violet-100 text-violet-700 border-violet-200',
+  rejected:          'bg-rose-100 text-rose-700 border-rose-200',
 };
 
 const OFFER_STATUS_ICON = {
@@ -26,7 +26,7 @@ const OFFER_STATUS_ICON = {
 function StatusBadge({ status }) {
   const s = (status || 'pending').toLowerCase();
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest ${OFFER_STATUS_STYLE[s] || 'bg-white/5 text-white/40 border-white/10'}`}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-semibold tracking-widest ${OFFER_STATUS_STYLE[s] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
       {OFFER_STATUS_ICON[s]} {s.replace('_', ' ')}
     </span>
   );
@@ -48,6 +48,27 @@ export default function OfferApprovals() {
   const [editForm, setEditForm] = useState(null);
   const [actionFeedback, setActionFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const downloadOfferPdf = async (offer) => {
+    try {
+      const response = await fetch(`/api/source/offers/${offer.id}/preview`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error();
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `offer_${offer.candidate_name || offer.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      toast.error('Failed to download offer PDF');
+    }
+  };
 
   // Unwrap nested offer_content structure from DB: { content: { offer_content: {...} } }
   const unwrapContent = (raw) => {
@@ -182,15 +203,16 @@ export default function OfferApprovals() {
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6 h-full bg-slate-50 p-6">
 
       {/* Filter Bar */}
-      <div className="flex items-center justify-end gap-4 shrink-0">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 rounded-[32px] border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-semibold uppercase tracking-widest text-slate-500">Filter</span>
           <select 
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-black uppercase tracking-wider outline-none focus:border-purple-400 transition-colors"
+            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 uppercase tracking-wider outline-none focus:border-violet-400 transition-colors"
           >
             <option className="bg-white text-black" value="pending">Pending Review</option>
             <option className="bg-white text-black" value="changes_requested">Changes Requested</option>
@@ -211,18 +233,18 @@ export default function OfferApprovals() {
 
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-white/40">
-            <Loader2 size={32} className="animate-spin text-primary" />
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-400">
+            <Loader2 size={32} className="animate-spin text-slate-400" />
             <span className="text-xs font-bold uppercase tracking-widest">Loading offers...</span>
           </div>
         ) : offers.length === 0 ? (
-          <div className="glass-panel flex flex-col items-center justify-center gap-4 py-24 text-center mx-auto max-w-2xl">
-            <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-white/20">
+          <div className="flex flex-col items-center justify-center gap-4 py-24 text-center mx-auto max-w-2xl rounded-[32px] border border-slate-200 bg-white shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
               <Clock size={32} />
             </div>
             <div>
-              <p className="text-lg font-black text-white">No {filterStatus !== 'all' ? filterStatus.replace('_', ' ') : ''} offers found</p>
-              <p className="text-sm font-medium text-white/30 mt-1">
+              <p className="text-lg font-black text-slate-900">No {filterStatus !== 'all' ? filterStatus.replace('_', ' ') : ''} offers found</p>
+              <p className="text-sm font-medium text-slate-500 mt-1">
                 {isManager 
                   ? 'Generate offers from candidate profiles to see them here.' 
                   : 'There are no offers matching this status waiting for your review.'}
@@ -247,11 +269,11 @@ export default function OfferApprovals() {
               let parsedContent = unwrapContent(current.offer_content);
 
               return (
-                <div key={offer.id} className={`glass-panel p-0 overflow-hidden border-2 transition-colors ${isEditing ? 'border-primary/50' : 'border-gray-100 hover:border-primary/20'}`}>
-                  <div className="flex flex-col xl:flex-row min-h-[300px]">
+                <div key={offer.id} className={`bg-white rounded-[28px] p-0 overflow-hidden border shadow-sm transition-colors ${isEditing ? 'border-primary/50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <div className="flex flex-col xl:flex-row min-h-[320px]">
                     
                     {/* Left Panel: Summary Grid */}
-                    <div className="flex-1 p-8 border-b xl:border-b-0 xl:border-r border-gray-100">
+                    <div className="flex-1 p-8 border-b xl:border-b-0 xl:border-r border-slate-200 bg-white">
                       <div className="flex items-start justify-between mb-8">
                         <div>
                           <h4 className="text-2xl font-display font-black text-black tracking-tight">{offer.candidate_name || '—'}</h4>
@@ -260,7 +282,7 @@ export default function OfferApprovals() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Link to={`/source/directory/${offer.candidate_id}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-[10px] font-black uppercase tracking-widest">
+                          <Link to={`/source/directory/${offer.candidate_id}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors text-[10px] font-semibold uppercase tracking-widest">
                             <ExternalLink size={12} /> View Profile
                           </Link>
                           
@@ -276,9 +298,9 @@ export default function OfferApprovals() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         {/* Role */}
-                        <div className="flex gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                        <div className="flex gap-4 p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
                           <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
                             <Briefcase size={20} />
                           </div>
@@ -297,7 +319,7 @@ export default function OfferApprovals() {
                         </div>
 
                         {/* Comp */}
-                        <div className="flex gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                        <div className="flex gap-4 p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
                           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
                             <DollarSign size={20} />
                           </div>
@@ -316,7 +338,7 @@ export default function OfferApprovals() {
                         </div>
 
                         {/* Date */}
-                        <div className="flex gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                        <div className="flex gap-4 p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
                           <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
                             <Calendar size={20} />
                           </div>
@@ -336,7 +358,7 @@ export default function OfferApprovals() {
                         </div>
 
                         {/* Location */}
-                        <div className="flex gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                        <div className="flex gap-4 p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
                           <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center shrink-0">
                             <MapPin size={20} />
                           </div>
@@ -357,23 +379,32 @@ export default function OfferApprovals() {
                     </div>
 
                     {/* Right Panel: Content Review & Actions */}
-                    <div className="w-full xl:w-[500px] bg-gray-50 p-8 flex flex-col h-full border-t xl:border-t-0 xl:border-l border-gray-100">
+                    <div className="w-full xl:w-[500px] bg-white p-8 flex flex-col h-full border-t xl:border-t-0 xl:border-l border-slate-200">
                       <div className="flex items-center justify-between mb-4">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
                           <FileText size={14} /> Offer Letter Document
                         </div>
                         {!isEditing && (
-                          <a 
-                            href={`/api/source/offers/${offer.id}/preview`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-[10px] font-black uppercase tracking-widest"
-                          >
-                            <ExternalLink size={12} /> Preview PDF
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={`/api/source/offers/${offer.id}/preview`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors text-[10px] font-semibold uppercase tracking-widest"
+                            >
+                              <ExternalLink size={12} /> Preview PDF
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => downloadOfferPdf(offer)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors text-[10px] font-semibold uppercase tracking-widest"
+                            >
+                              <Download size={12} /> Download
+                            </button>
+                          </div>
                         )}
                       </div>
-                      <div className="flex-1 bg-white border border-gray-100 rounded-2xl p-6 overflow-y-auto shadow-inner text-sm text-gray-700">
+                      <div className="flex-1 bg-slate-50 border border-slate-200 rounded-3xl p-6 overflow-y-auto shadow-sm text-sm text-slate-700">
                         {isEditing ? (
                           <div className="flex flex-col gap-4">
                             <div>
@@ -429,7 +460,7 @@ export default function OfferApprovals() {
 
                       {/* Feedback Warning (if present) */}
                       {!isEditing && offer.feedback && (
-                        <div className="mt-4 p-4 rounded-xl bg-orange-400/10 border border-orange-400/30 text-orange-400 flex items-start gap-3">
+                        <div className="mt-4 p-4 rounded-3xl bg-orange-50 border border-orange-200 text-orange-700 flex items-start gap-3">
                           <MessageSquare size={16} className="shrink-0 mt-0.5" />
                           <div>
                             <div className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-80">Feedback / Requested Changes</div>
@@ -439,13 +470,13 @@ export default function OfferApprovals() {
                       )}
 
                       {/* Action Bar */}
-                      <div className="mt-6 pt-6 border-t border-white/5">
+                      <div className="mt-6 pt-6 border-t border-slate-200">
                         {isEditing ? (
-                          <div className="flex gap-3">
-                            <button onClick={handleUpdate} disabled={isSubmitting} className="flex-1 py-3 rounded-xl bg-primary text-black font-black uppercase tracking-widest text-xs hover:bg-primary-hover transition-colors flex items-center justify-center gap-2">
+                          <div className="flex flex-col gap-3 sm:flex-row">
+                            <button onClick={handleUpdate} disabled={isSubmitting} className="flex-1 py-3 rounded-2xl bg-indigo-600 text-white font-semibold uppercase tracking-widest text-xs hover:bg-indigo-500 transition-colors flex items-center justify-center gap-2">
                               {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />} Save Changes
                             </button>
-                            <button onClick={() => setEditingId(null)} className="flex-1 py-3 rounded-xl bg-white/5 text-white/60 font-black uppercase tracking-widest text-xs hover:text-white hover:bg-white/10 transition-colors">
+                            <button onClick={() => setEditingId(null)} className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-700 font-semibold uppercase tracking-widest text-xs hover:bg-slate-200 transition-colors">
                               Cancel
                             </button>
                           </div>
@@ -453,21 +484,21 @@ export default function OfferApprovals() {
                           <div className="flex flex-col gap-4">
                             <div>
                               <textarea
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white/20 resize-none placeholder-white/30"
+                                className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-700 outline-none focus:border-violet-300 resize-none placeholder-slate-400"
                                 rows={2}
                                 placeholder="Feedback (if requesting changes or rejecting)..."
                                 value={actionFeedback}
                                 onChange={e => setActionFeedback(e.target.value)}
                               />
                             </div>
-                            <div className="flex gap-2">
-                              <button onClick={() => doAction(offer.id, 'approve')} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl bg-emerald-400/10 text-emerald-400 font-black uppercase tracking-widest text-[10px] hover:bg-emerald-400/20 transition-colors flex items-center justify-center gap-1.5 border border-emerald-400/20">
+                            <div className="flex flex-col gap-3 sm:flex-row">
+                              <button onClick={() => doAction(offer.id, 'approve')} disabled={isSubmitting} className="flex-1 py-3 rounded-2xl bg-emerald-600 text-white font-semibold uppercase tracking-widest text-[10px] hover:bg-emerald-500 transition-colors flex items-center justify-center gap-2">
                                 <CheckCircle size={14} /> Approve
                               </button>
-                              <button onClick={() => handleRequestChanges(offer.id)} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl bg-orange-400/10 text-orange-400 font-black uppercase tracking-widest text-[10px] hover:bg-orange-400/20 transition-colors flex items-center justify-center gap-1.5 border border-orange-400/20">
+                              <button onClick={() => handleRequestChanges(offer.id)} disabled={isSubmitting} className="flex-1 py-3 rounded-2xl bg-orange-50 text-orange-600 font-semibold uppercase tracking-widest text-[10px] hover:bg-orange-100 transition-colors flex items-center justify-center gap-2 border border-orange-200">
                                 <AlertCircle size={14} /> Req Changes
                               </button>
-                              <button onClick={() => doAction(offer.id, 'reject', actionFeedback)} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl bg-rose-400/10 text-rose-400 font-black uppercase tracking-widest text-[10px] hover:bg-rose-400/20 transition-colors flex items-center justify-center gap-1.5 border border-rose-400/20">
+                              <button onClick={() => doAction(offer.id, 'reject', actionFeedback)} disabled={isSubmitting} className="flex-1 py-3 rounded-2xl bg-rose-50 text-rose-600 font-semibold uppercase tracking-widest text-[10px] hover:bg-rose-100 transition-colors flex items-center justify-center gap-2 border border-rose-200">
                                 <XCircle size={14} /> Reject
                               </button>
                             </div>
@@ -477,7 +508,7 @@ export default function OfferApprovals() {
                             {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Dispatch Offer
                           </button>
                         ) : (
-                          <div className="text-center px-4 py-3 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-widest text-white/30">
+                          <div className="text-center px-4 py-3 rounded-3xl bg-slate-100 border border-slate-200 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
                             No actions available for your role in current status
                           </div>
                         )}
