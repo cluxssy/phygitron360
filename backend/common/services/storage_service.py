@@ -50,11 +50,15 @@ def save_uploaded_file(uploaded_file: UploadFile, tenant_id: str, module_name: s
     if _USE_S3:
         try:
             uploaded_file.file.seek(0)          # rewind in case already read
+            extra_args = {'ContentType': uploaded_file.content_type or 'application/octet-stream'}
+            if data_type in ['pfp', 'photo', 'logo', 'company_logo', 'temp_onboarding']:
+                extra_args['ACL'] = 'public-read'
+                
             _get_s3().upload_fileobj(
                 uploaded_file.file,
                 _S3_BUCKET,
                 relative_path,
-                ExtraArgs={'ContentType': uploaded_file.content_type or 'application/octet-stream'},
+                ExtraArgs=extra_args,
             )
             if _S3_ENDPOINT:                    # LocalStack — build URL manually
                 url = f"{_S3_ENDPOINT}/{_S3_BUCKET}/{relative_path}"
@@ -87,11 +91,15 @@ def save_file_content(content: bytes, filename: str, content_type: str, tenant_i
     if _USE_S3:
         try:
             from io import BytesIO
+            extra_args = {'ContentType': content_type}
+            if data_type in ['pfp', 'photo', 'logo', 'company_logo', 'temp_onboarding']:
+                extra_args['ACL'] = 'public-read'
+                
             _get_s3().upload_fileobj(
                 BytesIO(content),
                 _S3_BUCKET,
                 relative_path,
-                ExtraArgs={'ContentType': content_type},
+                ExtraArgs=extra_args,
             )
             if _S3_ENDPOINT:
                 url = f"{_S3_ENDPOINT}/{_S3_BUCKET}/{relative_path}"

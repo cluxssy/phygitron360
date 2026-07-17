@@ -28,6 +28,13 @@ class EmployeeService:
         if not employee:
             return None
             
+        # Securely generate temporary access URLs for private documents
+        from backend.common.services.storage_service import generate_presigned_url
+        if employee.get('cv_path'):
+            employee['cv_path'] = generate_presigned_url(employee['cv_path'])
+        if employee.get('id_proofs'):
+            employee['id_proofs'] = generate_presigned_url(employee['id_proofs'])
+            
         # Enrich with other data
         employee['skill_matrix'] = self.repo.get_skill_matrix(employee_code, self.tenant_id)
         employee['assets'] = self.asset_repo.get_assets_for_employee(employee_code, self.tenant_id) if hasattr(self.asset_repo, 'get_assets_for_employee') else self.repo.get_assets(employee_code, self.tenant_id)
