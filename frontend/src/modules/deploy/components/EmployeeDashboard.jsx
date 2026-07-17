@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity, Calendar, TrendingUp, Award, RefreshCw,
@@ -333,12 +334,7 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
     return MOCK_PERF_TREND;
   }, [perfHistory, selectedPerfType]);
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center h-96 gap-4 animate-pulse">
-      <div className="w-12 h-12 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
-      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7C3AED]">Loading Dashboard</p>
-    </div>
-  );
+  if (loading) return <HorizontalLoader label="Loading dashboard..." />;
 
   if (!profile) return (
     <div className="flex flex-col items-center justify-center h-96 gap-4">
@@ -444,7 +440,8 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
               <div className={`w-20 h-20 rounded-[1.8rem] bg-gradient-to-br from-[#7C3AED] to-[#A78BFA] text-white text-3xl font-black items-center justify-center shadow-lg shadow-[#7c3aed]/20 ${emp.photo_path ? 'hidden' : 'flex'}`}>
                 {emp.name ? emp.name.charAt(0).toUpperCase() : user?.name?.charAt(0).toUpperCase() || 'E'}
               </div>
-              <span className="absolute bottom-1 right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
+              {/* ✅ FIXED: Online status indicator - circle with rounded-full */}
+              <span className="absolute bottom-1 right-1 w-4 h-4 shrink-0 aspect-square bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
             </div>
             
             <div>
@@ -698,19 +695,19 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
                   className="flex items-center justify-between p-4 border border-[#f5f1ff] bg-[#faf8ff]/50 rounded-2xl hover:border-[#ebe4ff] hover:bg-[#faf8ff] transition-all duration-300"
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`w-2.5 h-2.5 rounded-full ${
+                    <div className={`w-2.5 h-2.5 rounded-full ${(
                       leave.status === 'Approved' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 
                       leave.status === 'Rejected' ? 'bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 
                       'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                    }`} />
+                    )}`} />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-black text-black">{leave.leave_type} Leave</span>
-                        <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                        <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${(
                           leave.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-600' :
                           leave.status === 'Rejected' ? 'bg-rose-500/10 text-rose-600' :
                           'bg-amber-500/10 text-amber-600'
-                        }`}>
+                        )}`}>
                           {leave.status}
                         </span>
                       </div>

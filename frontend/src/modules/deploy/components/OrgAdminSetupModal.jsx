@@ -117,44 +117,45 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
         return false;
       }
       
-      const phoneDigitsRegex = /^\d{7,15}$/;
-      if (!phoneDigitsRegex.test(form.contact_number.trim())) {
+      if (form.contact_number && !phoneDigitsRegex.test(form.contact_number.trim())) {
         toast.error("Primary Contact must be a valid number of digits (7-15 digits)");
         return false;
       }
-      if (!phoneDigitsRegex.test(emergencyPhone.trim())) {
+      
+      if (emergencyPhone && !phoneDigitsRegex.test(emergencyPhone.trim())) {
         toast.error("Emergency Contact must be a valid number of digits (7-15 digits)");
         return false;
       }
-      if (!isBankAccount(form.bank_account_no)) {
+      
+      if (form.bank_account_no && !isBankAccount(form.bank_account_no)) {
         toast.error("Bank account number must be 9-18 digits only");
         return false;
       }
-      if (!isPan(form.pan_no)) {
+      
+      if (form.pan_no && !isPan(form.pan_no)) {
         toast.error("PAN must follow ABCDE1234F format");
         return false;
       }
     }
 
     if (step === 2) {
-      if (!form.current_location || !form.city || !form.state || !form.pincode) {
-        toast.error("All address fields are mandatory");
-        return false;
-      }
-      if (!isPincode(form.pincode)) {
+      if (form.pincode && !isPincode(form.pincode)) {
         toast.error("Pincode must be a valid 6 digit Indian pincode");
         return false;
       }
     }
 
     if (step === 3) {
-      if (educationList.some(e => !e.degree || !e.university || !e.cgpa || !e.year)) {
-        toast.error("Complete all academic records. All fields are mandatory");
-        return false;
-      }
-      if (educationList.some(e => !/^\d{4}$/.test(String(e.year).trim()))) {
-        toast.error("Graduation year must be 4 digits, e.g. 2022");
-        return false;
+      // Only validate education fields if at least one is filled
+      if (educationList.some(e => e.degree || e.university || e.cgpa || e.year)) {
+        if (educationList.some(e => !e.degree || !e.university || !e.cgpa || !e.year)) {
+          toast.error("Complete all fields in education records");
+          return false;
+        }
+        if (educationList.some(e => !/^\d{4}$/.test(String(e.year).trim()))) {
+          toast.error("Graduation year must be 4 digits, e.g. 2022");
+          return false;
+        }
       }
     }
 
@@ -169,12 +170,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
       return;
     }
 
-    // Verify all uploads are present (everything is mandatory)
-    if (!files.photo_file || !files.cv_file || !files.id_proof_file) {
-      toast.error("All uploads (Photo, CV/Resume, and ID Proof) are mandatory");
-      return;
-    }
-
+    // All uploads are now optional
     setLoading(true);
 
     const fd = new FormData();
@@ -253,93 +249,105 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
             <div className="space-y-5">
               <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck size={16} className="text-primary" />
-                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Personal & Contact Info (All Mandatory)</h3>
+                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Personal & Contact Info (Optional)</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Full Name *</label>
-                  <input required name="full_name" value={form.full_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="Enter your full name" />
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Full Name</label>
+                  <input name="full_name" value={form.full_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="Enter your full name" />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Date of Birth *</label>
-                  <input required type="date" name="dob" value={form.dob} onChange={handleChange} className="w-full glass-panel-input" />
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Date of Birth</label>
+                  <input type="date" name="dob" value={form.dob} onChange={handleChange} className="w-full glass-panel-input" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Primary Contact with Country Code */}
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center gap-1"><Phone size={10} /> Primary Contact *</label>
-                  <div className="flex gap-2">
-                    <select 
-                      value={phoneCountryCode} 
-                      onChange={e => setPhoneCountryCode(e.target.value)} 
-                      className="bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 outline-none focus:border-primary/40 transition-colors w-28"
-                    >
-                      {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-slate-800">{c.country}</option>)}
-                    </select>
-                    <input 
-                      required
-                      type="tel"
-                      name="contact_number" 
-                      value={form.contact_number} 
-                      onChange={handleChange} 
-                      className="flex-1 glass-panel-input" 
-                      placeholder="98765 43210" 
-                    />
-                  </div>
-                </div>
-
-                {/* Emergency Contact Name */}
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Emergency Contact Name *</label>
-                  <input 
-                    required 
-                    value={emergencyName} 
-                    onChange={e => setEmergencyName(e.target.value)} 
-                    className="w-full glass-panel-input" 
-                    placeholder="e.g. Jane Doe (Relation)" 
-                  />
-                </div>
-              </div>
-
-              {/* Emergency Contact Phone with Country Code */}
+              {/* PRIMARY CONTACT */}
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center gap-1"><Phone size={10} /> Emergency Contact Phone *</label>
-                <div className="flex gap-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center gap-1">
+                  <Phone size={10} /> Primary Contact
+                </label>
+                <div className="flex gap-2 w-full">
                   <select 
-                    value={emergencyCountryCode} 
-                    onChange={e => setEmergencyCountryCode(e.target.value)} 
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 outline-none focus:border-primary/40 transition-colors w-28"
+                    value={phoneCountryCode} 
+                    onChange={e => setPhoneCountryCode(e.target.value)} 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 outline-none focus:border-primary/40 transition-colors w-[100px] min-w-[100px] shrink-0"
                   >
-                    {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-slate-800">{c.country}</option>)}
+                    {COUNTRY_CODES.map(c => (
+                      <option key={c.code} value={c.code} className="bg-white text-slate-800">
+                        {c.country}
+                      </option>
+                    ))}
                   </select>
                   <input 
-                    required
                     type="tel"
-                    value={emergencyPhone} 
-                    onChange={e => setEmergencyPhone(e.target.value)} 
-                    className="flex-1 glass-panel-input" 
+                    name="contact_number" 
+                    value={form.contact_number} 
+                    onChange={handleChange} 
+                    className="flex-1 glass-panel-input py-2 px-3" 
                     placeholder="98765 43210" 
                   />
                 </div>
               </div>
 
+              {/* EMERGENCY CONTACT SECTION */}
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <h4 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Emergency Contact Details</h4>
+                
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">
+                    Contact Name
+                  </label>
+                  <input 
+                    value={emergencyName} 
+                    onChange={e => setEmergencyName(e.target.value)} 
+                    className="w-full glass-panel-input" 
+                    placeholder="e.g. Jane Doe" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center gap-1">
+                    <Phone size={10} /> Contact Number
+                  </label>
+                  <div className="flex gap-2 w-full">
+                    <select 
+                      value={emergencyCountryCode} 
+                      onChange={e => setEmergencyCountryCode(e.target.value)} 
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 outline-none focus:border-primary/40 transition-colors w-[100px] min-w-[100px] shrink-0"
+                    >
+                      {COUNTRY_CODES.map(c => (
+                        <option key={c.code} value={c.code} className="bg-white text-slate-800">
+                          {c.country}
+                        </option>
+                      ))}
+                    </select>
+                    <input 
+                      type="tel"
+                      value={emergencyPhone} 
+                      onChange={e => setEmergencyPhone(e.target.value)} 
+                      className="flex-1 glass-panel-input" 
+                      placeholder="98765 43210" 
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-4 border-t border-slate-100">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Name *</label>
-                  <input required name="bank_name" value={form.bank_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="e.g. HDFC Bank" />
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Name</label>
+                  <input name="bank_name" value={form.bank_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="e.g. HDFC Bank" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Account No. *</label>
-                  <input required name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="9-18 digits only" inputMode="numeric" />
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Account No.</label>
+                  <input name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="9-18 digits only" inputMode="numeric" />
                   <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest ml-1">Digits only, usually 9-18 digits</p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">PAN No. *</label>
-                  <input required name="pan_no" value={form.pan_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="ABCDE1234F" style={{textTransform: 'uppercase'}} />
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">PAN No.</label>
+                  <input name="pan_no" value={form.pan_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="ABCDE1234F" style={{textTransform: 'uppercase'}} />
                   <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest ml-1">Format: ABCDE1234F</p>
                 </div>
               </div>
@@ -347,7 +355,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4 border-t border-slate-100">
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center justify-between">
-                    <span>PF Included? *</span>
+                    <span>PF Included?</span>
                   </label>
                   <select name="pf_included" value={form.pf_included} onChange={handleChange} className="w-full glass-panel-input cursor-pointer">
                     <option value="No">No</option>
@@ -356,7 +364,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center justify-between">
-                    <span>Mediclaim Included? *</span>
+                    <span>Mediclaim Included?</span>
                   </label>
                   <select name="mediclaim_included" value={form.mediclaim_included} onChange={handleChange} className="w-full glass-panel-input cursor-pointer">
                     <option value="No">No</option>
@@ -372,26 +380,26 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
             <div className="space-y-5">
               <div className="flex items-center gap-2 mb-2">
                 <MapPin size={16} className="text-primary" />
-                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Location Details (All Mandatory)</h3>
+                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Location Details (Optional)</h3>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Current Address Street *</label>
-                <input required placeholder="Street address, building, apartment" value={form.current_location} onChange={e => setForm({...form, current_location: e.target.value})} className="w-full glass-panel-input"/>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Current Address Street</label>
+                <input placeholder="Street address, building, apartment" value={form.current_location} onChange={e => setForm({...form, current_location: e.target.value})} className="w-full glass-panel-input"/>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">City *</label>
-                  <input required placeholder="e.g. Bangalore" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="w-full glass-panel-input"/>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">City</label>
+                  <input placeholder="e.g. Bangalore" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="w-full glass-panel-input"/>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">State *</label>
-                  <input required placeholder="e.g. Karnataka" value={form.state} onChange={e => setForm({...form, state: e.target.value})} className="w-full glass-panel-input"/>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">State</label>
+                  <input placeholder="e.g. Karnataka" value={form.state} onChange={e => setForm({...form, state: e.target.value})} className="w-full glass-panel-input"/>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Pincode *</label>
-                  <input required placeholder="6 digits, e.g. 560001" value={form.pincode} onChange={e => setForm({...form, pincode: e.target.value})} className="w-full glass-panel-input" inputMode="numeric"/>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Pincode</label>
+                  <input placeholder="6 digits, e.g. 560001" value={form.pincode} onChange={e => setForm({...form, pincode: e.target.value})} className="w-full glass-panel-input" inputMode="numeric"/>
                 </div>
               </div>
             </div>
@@ -422,23 +430,23 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Degree *</label>
-                        <input required placeholder="e.g. B.Tech / MBA" value={edu.degree} onChange={e => updateEducation(i, 'degree', e.target.value)} className="w-full glass-panel-input text-[11px] py-2.5 bg-slate-50" />
+                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Degree</label>
+                        <input placeholder="e.g. B.Tech / MBA" value={edu.degree} onChange={e => updateEducation(i, 'degree', e.target.value)} className="w-full glass-panel-input text-[11px] py-2.5 bg-slate-50" />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">University / College *</label>
-                        <input required placeholder="e.g. IIT Delhi" value={edu.university} onChange={e => updateEducation(i, 'university', e.target.value)} className="w-full glass-panel-input text-[11px] py-2.5 bg-slate-50" />
+                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">University / College</label>
+                        <input placeholder="e.g. IIT Delhi" value={edu.university} onChange={e => updateEducation(i, 'university', e.target.value)} className="w-full glass-panel-input text-[11px] py-2.5 bg-slate-50" />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">CGPA / Marks % *</label>
-                        <input required placeholder="e.g. 8.5 or 85%" value={edu.cgpa} onChange={e => updateEducation(i, 'cgpa', e.target.value)} className="w-full glass-panel-input text-[11px] py-2.5 bg-slate-50" />
+                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">CGPA / Marks %</label>
+                        <input placeholder="e.g. 8.5 or 85%" value={edu.cgpa} onChange={e => updateEducation(i, 'cgpa', e.target.value)} className="w-full glass-panel-input text-[11px] py-2.5 bg-slate-50" />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Graduation Year *</label>
-                        <input required placeholder="e.g. 2022" value={edu.year} onChange={e => updateEducation(i, 'year', e.target.value)} className="w-full glass-panel-input text-[11px] py-2.5 bg-slate-50" />
+                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Graduation Year</label>
+                        <input placeholder="e.g. 2022" value={edu.year} onChange={e => updateEducation(i, 'year', e.target.value)} className="w-full glass-panel-input text-[11px] py-2.5 bg-slate-50" />
                       </div>
                     </div>
                   </div>
@@ -463,7 +471,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
             <div className="space-y-5">
               <div className="flex items-center gap-2 mb-2">
                 <Upload size={16} className="text-primary" />
-                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Required Document Uploads (All Mandatory)</h3>
+                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Document Uploads (Optional)</h3>
               </div>
 
               {/* Guidelines Box */}
@@ -471,20 +479,20 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 <ShieldCheck size={16} className="text-primary mt-0.5 shrink-0" />
                 <div className="text-[11px] text-slate-600 leading-relaxed">
                   <span className="font-bold text-slate-800 block mb-1">Upload Guidelines & Restrictions</span>
-                  All uploads are <span className="text-primary font-bold">strictly mandatory</span>. Supported file formats:
+                  All uploads are optional. Supported file formats:
                   <ul className="list-disc list-inside mt-1 space-y-0.5">
-                    <li><strong>Resume/CV:</strong> PDF only (max 5MB, required for AI Parsing)</li>
-                    <li><strong>Profile Photo:</strong> JPG, JPEG, or PNG (max 2MB, clear facial shot)</li>
-                    <li><strong>ID Proof:</strong> PDF, JPG, JPEG, or PNG (max 5MB, government issued)</li>
+                    <li><strong>Resume/CV:</strong> PDF only (max 5MB)</li>
+                    <li><strong>Profile Photo:</strong> JPG, JPEG, or PNG (max 2MB)</li>
+                    <li><strong>ID Proof:</strong> PDF, JPG, JPEG, or PNG (max 5MB)</li>
                   </ul>
                 </div>
               </div>
 
               <div className="space-y-4">
                 {[
-                  { k: 'photo_file', label: 'Profile Photo *', desc: 'Mandatory: Clear face photo (JPG/PNG)', icon: UserPlus, accept: '.jpg,.jpeg,.png' },
-                  { k: 'cv_file', label: 'Resume / CV *', desc: 'Mandatory: Latest curriculum vitae (PDF)', icon: FileText, accept: '.pdf' },
-                  { k: 'id_proof_file', label: 'Government ID Proof *', desc: 'Mandatory: Passport/Aadhaar/PAN (PDF/JPG/PNG)', icon: ShieldCheck, accept: '.pdf,.jpg,.jpeg,.png' }
+                  { k: 'photo_file', label: 'Profile Photo', desc: 'Optional: Clear face photo (JPG/PNG)', icon: UserPlus, accept: '.jpg,.jpeg,.png' },
+                  { k: 'cv_file', label: 'Resume / CV', desc: 'Optional: Latest curriculum vitae (PDF)', icon: FileText, accept: '.pdf' },
+                  { k: 'id_proof_file', label: 'Government ID Proof', desc: 'Optional: Passport/Aadhaar/PAN (PDF/JPG/PNG)', icon: ShieldCheck, accept: '.pdf,.jpg,.jpeg,.png' }
                 ].map((f, i) => (
                   <div key={i} className={`flex items-center gap-5 p-5 rounded-2xl border transition-all ${files[f.k] ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200 hover:bg-slate-100/50'}`}>
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-all ${files[f.k] ? 'bg-emerald-100 border-emerald-200 text-emerald-600' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
@@ -493,13 +501,12 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-[11px] font-black uppercase tracking-widest text-slate-700">{f.label}</p>
-                        {!files[f.k] && <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />}
                       </div>
                       <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider truncate">{files[f.k] ? files[f.k].name : f.desc}</p>
                     </div>
                     <label className="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-700 border border-slate-200 rounded-xl transition-all">
                       {files[f.k] ? 'Replace' : 'Upload'}
-                      <input required={!files[f.k]} type="file" name={f.k} onChange={handleFileChange} className="hidden" accept={f.accept} />
+                      <input type="file" name={f.k} onChange={handleFileChange} className="hidden" accept={f.accept} />
                     </label>
                   </div>
                 ))}

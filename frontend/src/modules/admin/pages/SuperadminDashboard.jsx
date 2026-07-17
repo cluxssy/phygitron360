@@ -301,7 +301,8 @@ export default function SuperadminDashboard() {
             src={logoutIcon}
             className="icon logout-icon"
             alt="logout"
-            onClick={() => { logout(); navigate('/login'); }}
+            aria-label="Log out"
+            onClick={() => { logout(); navigate('/'); }}
           />
           <div className="profile-wrap">
             <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>

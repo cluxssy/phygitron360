@@ -1,5 +1,7 @@
 from typing import List, Dict, Any, Optional
 import json
+import random
+from datetime import datetime
 from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
@@ -133,6 +135,18 @@ class EmployeeRepository:
         try:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
+            
+            # Generate employee code if not provided
+            employee_code = data.get('code')
+            if not employee_code:
+                employee_code = f"EMP{random.randint(1000, 9999)}"
+                # Ensure the generated code doesn't already exist
+                cur.execute("SELECT 1 FROM employees WHERE employee_code = %s", (employee_code,))
+                while cur.fetchone():
+                    employee_code = f"EMP{random.randint(1000, 9999)}"
+                    cur.execute("SELECT 1 FROM employees WHERE employee_code = %s", (employee_code,))
+            
+            # Set defaults for ALL fields
             cur.execute('''
                 INSERT INTO employees (
                     employee_code, name, dob, contact_number, emergency_contact, email_id, doj, 
@@ -144,25 +158,46 @@ class EmployeeRepository:
                     employment_status
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
-                data['code'], data['name'], data['dob'], data['phone'], data['emergency'], 
-                data['email'], data['doj'], data['team'], data.get('designation', ''), data['type'], 
-                data['manager'], data['location'], data['current_address'], data['permanent_address'],
+                employee_code,
+                data.get('name', 'Unknown'),
+                data.get('dob', None),
+                data.get('phone', None),
+                data.get('emergency', None),
+                data.get('email', None),
+                data.get('doj', datetime.now().strftime('%Y-%m-%d')),
+                data.get('team', None),
+                data.get('designation', None),
+                data.get('type', 'Full-time'),
+                data.get('manager', None),
+                data.get('location', None),
+                data.get('current_address', None),
+                data.get('permanent_address', None),
                 json.dumps(data.get('education_details', [])),
-                data['pf'], data['mediclaim'], 
-                data['photo_path'], data['cv_path'], data['id_proofs'], data['notes'],
-                data.get('bank_name'), data.get('bank_account_no'), data.get('pan_no'),
+                data.get('pf', 'No'),
+                data.get('mediclaim', 'No'),
+                data.get('photo_path', None),
+                data.get('cv_path', None),
+                data.get('id_proofs', None),
+                data.get('notes', None),
+                data.get('bank_name', None),
+                data.get('bank_account_no', None),
+                data.get('pan_no', None),
                 data.get('employment_status', 'Active')
             ))
             
-            # Skill Matrix
+            # Skill Matrix - with defaults
             cur.execute('''
                 INSERT INTO skill_matrix (
                     employee_code, candidate_name, primary_skillset,
                     secondary_skillset, experience_years, cv_upload
                 ) VALUES (%s, %s, %s, %s, %s, %s)
             ''', (
-                data['code'], data['name'], data['primary_skillset'], data['secondary_skillset'],
-                data['experience_years'], data['cv_path']
+                employee_code,
+                data.get('name', 'Unknown'),
+                data.get('primary_skillset', None),
+                data.get('secondary_skillset', None),
+                data.get('experience_years', 0),
+                data.get('cv_path', None)
             ))
             
             conn.commit()
@@ -174,6 +209,16 @@ class EmployeeRepository:
         try:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
+            
+            # Use provided code or generate one
+            new_code = data.get('code')
+            if not new_code:
+                new_code = f"EMP{random.randint(1000, 9999)}"
+                cur.execute("SELECT 1 FROM employees WHERE employee_code = %s", (new_code,))
+                while cur.fetchone():
+                    new_code = f"EMP{random.randint(1000, 9999)}"
+                    cur.execute("SELECT 1 FROM employees WHERE employee_code = %s", (new_code,))
+            
             cur.execute('''
                 UPDATE employees
                 SET employee_code = %s,
@@ -205,13 +250,29 @@ class EmployeeRepository:
                     clearance_status = NULL
                 WHERE employee_code = %s
             ''', (
-                data['code'], data['name'], data['dob'], data['phone'], data['emergency'], 
-                data['doj'], data['team'], data.get('designation', ''), data['type'], 
-                data['manager'], data['location'], data['current_address'], data['permanent_address'],
+                new_code,
+                data.get('name', 'Unknown'),
+                data.get('dob', None),
+                data.get('phone', None),
+                data.get('emergency', None),
+                data.get('doj', datetime.now().strftime('%Y-%m-%d')),
+                data.get('team', None),
+                data.get('designation', None),
+                data.get('type', 'Full-time'),
+                data.get('manager', None),
+                data.get('location', None),
+                data.get('current_address', None),
+                data.get('permanent_address', None),
                 json.dumps(data.get('education_details', [])),
-                data['pf'], data['mediclaim'], 
-                data['photo_path'], data['cv_path'], data['id_proofs'], data['notes'],
-                data.get('bank_name'), data.get('bank_account_no'), data.get('pan_no'),
+                data.get('pf', 'No'),
+                data.get('mediclaim', 'No'),
+                data.get('photo_path', None),
+                data.get('cv_path', None),
+                data.get('id_proofs', None),
+                data.get('notes', None),
+                data.get('bank_name', None),
+                data.get('bank_account_no', None),
+                data.get('pan_no', None),
                 data.get('employment_status', 'Active'),
                 old_employee_code
             ))
@@ -221,8 +282,12 @@ class EmployeeRepository:
                 SET candidate_name = %s, primary_skillset = %s, secondary_skillset = %s, experience_years = %s, cv_upload = %s
                 WHERE employee_code = %s
             ''', (
-                data['name'], data['primary_skillset'], data['secondary_skillset'],
-                data['experience_years'], data['cv_path'], data['code']
+                data.get('name', 'Unknown'),
+                data.get('primary_skillset', None),
+                data.get('secondary_skillset', None),
+                data.get('experience_years', 0),
+                data.get('cv_path', None),
+                new_code
             ))
             conn.commit()
         finally:
@@ -361,4 +426,3 @@ class EmployeeRepository:
             conn.commit()
         finally:
             conn.close()
-

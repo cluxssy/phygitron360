@@ -69,8 +69,19 @@ class CandidateService:
         # 3. Parse with AI Engine (Using advanced AIAgents)
         ai_result = await self.ai_agents.parse_resume(extracted_text)
         name = ai_result.get("n") or ai_result.get("name")
+        
+        # MODIFIED: Use fallback instead of raising error if AI can't parse
         if not ai_result or not name:
-            raise ValueError("AI could not parse useful data from this resume")
+            # Use filename to infer name as fallback
+            inferred_name = self._extract_name_from_filename(filename)
+            name = inferred_name or "Unknown Candidate"
+            # Ensure ai_result is at least an empty dict for later processing
+            if not ai_result:
+                ai_result = {}
+            # Set the name in ai_result to prevent further issues
+            ai_result["n"] = name
+            ai_result["name"] = name
+            logger.warning(f"AI could not parse useful data from resume, using fallback name: {name}")
 
         # 4. Create or Update Candidate Record
         email = ai_result.get("e") or ai_result.get("email")
@@ -924,13 +935,15 @@ class CandidateService:
                                     
                                     cur.execute("SAVEPOINT item_insert")
                                     try:
+                                        # MODIFIED: Use fallback for missing AI result instead of failing
                                         if not ai_result or not isinstance(ai_result, dict) or (not ai_result.get("n") and not ai_result.get("exp") and not ai_result.get("p_sk")):
-                                            print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on item {item['id']}: AI omitted or returned empty parse result.", flush=True)
-                                            self.repo.update_bulk_upload_job_item(
-                                                item["id"], status="failed", error_message="AI omitted or returned empty parse result.", conn=conn, cur=cur
-                                            )
-                                            cur.execute("RELEASE SAVEPOINT item_insert")
-                                            continue
+                                            print(f"[Worker-{worker_id}][{self.tenant_id}] WARNING: AI omitted or returned empty parse result for item {item['id']}. Using fallback.", flush=True)
+                                            # Create minimal ai_result with filename-based name
+                                            inferred_name = self._extract_name_from_filename(item.get("filename", ""))
+                                            ai_result = {
+                                                "n": inferred_name or "Unknown Candidate",
+                                                "name": inferred_name or "Unknown Candidate"
+                                            }
                                             
                                         # Post-inject pre-extracted fields if the LLM skipped them
                                         for field, value in pre.items():

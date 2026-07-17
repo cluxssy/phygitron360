@@ -1,68 +1,108 @@
-import bgPattern from "../../../assets/bg-pattern.png";
+import talentIcon from "../../../assets/talent_hub_black.png";
+import learningIcon from "../../../assets/learning_hub_black.png";
+import assessmentIcon from "../../../assets/assessment_hub_black.png";
+import employeeIcon from "../../../assets/employee_hub_black.png";
 
-const features = [
+const hubs = [
   {
-    title: "Market Sentiment and Needs Analysis",
-    desc: "We predict technological changeover points and gauge the technology market trends from a human skills standpoint. We use Design Thinking practices and methods and tools like the Delphi Method, Growth Curves, and Horizon Scanning. These demand insights are combined with Demographic and Sociological Analyses and Opportunity Identification techniques to chart out the strategy and course for the subsequent talent sourcing, development and skilling, and deployment.",
+    icon: talentIcon,
+    title: "Talent Central",
+    desc: "Create a stronger talent pipeline with engaging, personalized learning.",
+    capabilities: [
+      "Skill Development",
+      "Personalized Learning",
+      "Learning Analytics",
+      "Engagement Tracking",
+    ],
   },
   {
-    title: "AI-based Talent Sourcing",
-  desc: "We use AI-based advanced decision-making engine to identify and source talent locally as well as from across the globe, including even the most unconventional or overlooked sources and talent pools.",
+    icon: learningIcon,
+    title: "Learning Central",
+    desc: "Make data-driven hiring decisions backed by evidence.",
+    capabilities: [
+      "AI Talent Sourcing",
+      "Candidate Matching",
+      "Recruitment Analytics",
+      "Diversity Insights",
+    ],
   },
   {
-    title: "Automated Assessment",
-    desc: "Our automated skill-based evaluation and analytics, with proctoring features, enables easy assessment of skills and aptitude for various digital and technology domains. In addition, interviews are included to gauge attitude, aptitude, skills, and fitment for deployment for an organization’s specific and unique business needs.",
+    icon: assessmentIcon,
+    title: "Assessment Central",
+    desc: "Turn learning into business impact with AI-powered assessments.",
+    capabilities: [
+      "AI Assessments",
+      "Skill Gap Analysis",
+      "Proctoring & Integrity",
+      "Actionable Reports",
+    ],
   },
   {
-    title: "Digital Powerhouse: Skilling and Development",
-    desc: "Our skilling and development programs, which are a mix of several interventions (self-paced digital, instructor-led, practice, and on-the-job), prepares the talent pool to be effectively deployed and be high-performing members of the digital powerhouse of organizations.",
-  },
-  {
-    title: "Engagement",
-    desc: "Our talent engagement initiatives include hackathons and innovation contests, run periodically on various digital platforms.",
-  },
-  {
-    title: "Diversity and Equity",
-    desc: "Phygitron’s anonymity features at the initial screening stage will help organizations source profiles purely on merit and ensure bias-free screening .",
+    icon: employeeIcon,
+    title: "Employee Central",
+    desc: "Run workforce operations smoothly and efficiently.",
+    capabilities: [
+      "Workforce Management",
+      "Performance Analytics",
+      "Employee Engagement",
+      "Diversity & Equity",
+    ],
+    iconClass: "w-11 h-11",
+    iconStyle: { filter: "brightness(0) saturate(100%)" },
   },
 ];
 
 const FeatureGrid = () => {
   return (
-    <section className="feature-section">
+    <section className="relative w-full bg-white py-20 md:py-24">
+      <div className="mx-auto w-full max-w-[1100px] px-6 lg:px-10">
 
-      {/* BACKGROUND PATTERN */}
-      <div
-        className="feature-bg"
-        style={{ backgroundImage: `url(${bgPattern})` }}
-      />
-
-      <div className="feature-container">
-
-        {/* HEADER */}
-        <div className="feature-header">
-          <h2>
-            Transforming Talent Into <br />
-            Competitive Advantage
+        {/* ── HEADER ── */}
+        <div className="text-center mb-14 md:mb-16">
+          <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 leading-tight">
+            One Platform.
+            <br className="hidden sm:block" />
+            Four Powerful Workforce Engines.
           </h2>
-
-          <p>
-            From intelligent sourcing and skill assessment to workforce development,
-            engagement, and equitable hiring, Phygitron 360 helps organizations build
-            future-ready teams with precision and speed.
+          <p className="text-gray-500 text-[15px] max-w-[620px] mx-auto mt-4 leading-relaxed">
+            From hiring and onboarding to skill validation, learning, and
+            workforce management, Phygitron360 delivers an intelligent,
+            connected ecosystem for building future-ready organizations.
           </p>
         </div>
 
-        {/* GRID */}
-        <div className="feature-grid">
-          {features.map((item, i) => (
-            <div key={i} className="feature-card">
-              <div className="feature-bar" />
+        {/* ── 2x2 GRID OF CARDS ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:gap-8">
+          {hubs.map((hub) => (
+            <div
+              key={hub.title}
+              className="relative bg-[#D9D9D9] rounded-xl p-8 md:p-10 transition-transform duration-300 ease-out hover:scale-[1.02]"
+            >
+              <img
+                src={hub.icon}
+                alt=""
+                className={`${hub.iconClass || "w-8 h-8"} mb-4`}
+                style={hub.iconStyle}
+              />
 
-              <div className="feature-body">
-                <h3>{item.title}</h3>
-                <p>{item.desc}</p>
-              </div>
+              <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
+                {hub.title}
+              </h3>
+
+              <p className="text-gray-600 text-sm leading-relaxed mb-4 max-w-[380px]">
+                {hub.desc}
+              </p>
+
+              <ul className="space-y-1.5">
+                {hub.capabilities.map((cap) => (
+                  <li
+                    key={cap}
+                    className="text-gray-700 text-sm leading-relaxed"
+                  >
+                    • {cap}
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>

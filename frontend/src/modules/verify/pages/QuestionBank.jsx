@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Loader2, RefreshCw, Filter, Trash2, Edit3, Search, UploadCloud, Library, Folder, Link as LinkIcon, FolderOpen, Tag, X, FileJson, Copy, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
 const QTYPES = [
   { value: 'mcq', label: 'Multiple Choice' },

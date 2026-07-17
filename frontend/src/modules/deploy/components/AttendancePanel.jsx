@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle } from 'lucide-react';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
 export default function AttendancePanel({ mode }) {
   const { user } = useAuth();
@@ -23,7 +24,7 @@ export default function AttendancePanel({ mode }) {
   const [workLog, setWorkLog] = useState('');
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [adminTab, setAdminTab] = useState('today');
-  
+  const [activeEmployees, setActiveEmployees] = useState([]);
   const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '', leave_type: 'Leave', reason: '', start_day_type: 'Full Day', end_day_type: 'Full Day' });
   const [attendanceSummary, setAttendanceSummary] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -34,12 +35,15 @@ export default function AttendancePanel({ mode }) {
   const [editForm, setEditForm] = useState({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
 
   // New States
-  const [selectedLog, setSelectedLog] = useState(null); // For employee log details modal
+  const [selectedLog, setSelectedLog] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchedEmployeeHistory, setSearchedEmployeeHistory] = useState([]);
   const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);  
   
   const panelStyle =
   "bg-white border border-[#ebe4ff] rounded-[2.5rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)]";
@@ -64,6 +68,16 @@ export default function AttendancePanel({ mode }) {
     }
   }, [adminTab, selectedMonth, selectedYear, isAdmin]);
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+  
   const fetchSummary = async () => {
       try {
           const res = await fetch(`/api/attendance/admin/summary?year=${selectedYear}&month=${selectedMonth}`, { credentials: 'include' });
@@ -77,45 +91,61 @@ export default function AttendancePanel({ mode }) {
   };
 
   const loadData = async () => {
-    setLoading(true);
-    try {
-      if (user?.employee_code) {
-          const [s, h, b, ml] = await Promise.all([
-            fetch('/api/attendance/status', { credentials: 'include' }).then(r => r.json()),
-            fetch('/api/attendance/history', { credentials: 'include' }).then(r => r.json()),
-            fetch('/api/attendance/leave/balance', { credentials: 'include' }).then(r => r.json()),
-            fetch('/api/attendance/leave/my-requests', { credentials: 'include' }).then(r => r.json()),
-          ]);
-          setStatus(s);
-          setHistory(Array.isArray(h) ? h : []);
-          setLeaveBalance(b);
-          setMyLeaves(Array.isArray(ml) ? ml : []);
-      }
-
-      if (isAdmin) {
-        const [al, dl, el, cq] = await Promise.all([
-          fetch('/api/attendance/leave/all-requests', { credentials: 'include' }).then(r => r.json()),
-          fetch('/api/attendance/admin/today', { credentials: 'include' }).then(r => r.json()),
-          fetch('/api/attendance/admin/employees', { credentials: 'include' }).then(r => r.json()),
-          fetch('/api/attendance/correction/pending', { credentials: 'include' }).then(r => r.json()).catch(() => []),
+  setLoading(true);
+  try {
+    if (user?.employee_code) {
+        const [s, h, b, ml] = await Promise.all([
+          fetch('/api/attendance/status', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/attendance/history', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/attendance/leave/balance', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/attendance/leave/my-requests', { credentials: 'include' }).then(r => r.json()),
         ]);
-        setAllLeaves(Array.isArray(al) ? al : []);
-        setDailyLog(Array.isArray(dl) ? dl : []);
-        setEmployees(Array.isArray(el) ? el : []);
-        setCorrectionQueue(Array.isArray(cq) ? cq : []);
-      }
-    } catch (e) { 
-        toast.error(e.message || 'Failed to load attendance data'); 
-    } finally { 
-        setLoading(false); 
+        setStatus(s);
+        setHistory(Array.isArray(h) ? h : []);
+        setLeaveBalance(b);
+        setMyLeaves(Array.isArray(ml) ? ml : []);
     }
-  };
+
+    if (isAdmin) {
+      const [al, dl, el, cq] = await Promise.all([
+        fetch('/api/attendance/leave/all-requests', { credentials: 'include' }).then(r => r.json()),
+        fetch('/api/attendance/admin/today', { credentials: 'include' }).then(r => r.json()),
+        // ── USE THE SAME EMPLOYEE API AS ASSETS PANEL ──
+        fetch('/api/employees', { credentials: 'include' }).then(r => r.json()),
+        fetch('/api/attendance/correction/pending', { credentials: 'include' }).then(r => r.json()).catch(() => []),
+      ]);
+      setAllLeaves(Array.isArray(al) ? al : []);
+      setDailyLog(Array.isArray(dl) ? dl : []);
+      
+      // ── FILTER ACTIVE EMPLOYEES (SAME LOGIC AS ASSETS PANEL) ──
+      const employeeList = Array.isArray(el) ? el : [];
+      const active = employeeList.filter(emp => 
+        emp.employment_status === 'Active' || 
+        emp.employment_status === 'active' ||
+        emp.is_active === 1 ||
+        emp.is_active === true
+      );
+      
+      console.log('All employees:', employeeList.length);
+      console.log('Active employees:', active.length);
+      
+      setEmployees(employeeList);
+      // ── Store active employees for the dropdown ──
+      setActiveEmployees(active);
+      setCorrectionQueue(Array.isArray(cq) ? cq : []);
+    }
+  } catch (e) { 
+      toast.error(e.message || 'Failed to load attendance data'); 
+  } finally { 
+      setLoading(false); 
+  }
+};
 
   const clockIn = async () => {
     try {
       const now = new Date();
-      const local_date = now.toLocaleDateString('en-CA'); // YYYY-MM-DD
-      const local_time = now.toTimeString().split(' ')[0]; // HH:MM:SS
+      const local_date = now.toLocaleDateString('en-CA');
+      const local_time = now.toTimeString().split(' ')[0];
       
       const res = await fetch('/api/attendance/clock-in', { 
           method: 'POST', 
@@ -271,7 +301,7 @@ export default function AttendancePanel({ mode }) {
   let totalHalfDay = 0;
   let totalAbsent = 0;
 
-  const localTodayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  const localTodayStr = new Date().toLocaleDateString('en-CA');
   
   attendanceSummary.forEach(emp => {
     if (emp && Array.isArray(emp.days)) {
@@ -306,14 +336,24 @@ export default function AttendancePanel({ mode }) {
     }
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-48">
-      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <HorizontalLoader label="Loading attendance..." />;
 
   return (
     <div className="space-y-6">
+      
+      {/* ── HERO SECTION ── */}
+      <div className="rounded-[2.5rem] border border-[#ebe7ff] bg-[#f7f3ff] px-10 py-10">
+        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">
+          Attendance Management
+        </p>
+        <h1 className="text-5xl font-black text-black tracking-tight leading-none">
+          Attendance Panel
+        </h1>
+        <p className="text-sm text-gray-500 mt-2">
+          {isAdmin ? 'Manage and monitor employee attendance across the organization' : 'Track your attendance, leaves, and manage your schedule'}
+        </p>
+      </div>
+
       {/* Clock In/Out Widget */}
       {isEmployee && (
         <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] p-8 border-white/5 relative overflow-hidden">
@@ -592,7 +632,6 @@ export default function AttendancePanel({ mode }) {
           {/* TEAM MATRIX HEATMAP TAB */}
           {adminTab === 'heatmap' && (
               <div className="space-y-4 animate-fade-in-up">
-                  {/* Dashboard Statistics Above Heatmap - Updated Alignment to Matrix Colors */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {[
                           { label: 'Present Today', count: totalPresent, bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
@@ -614,7 +653,6 @@ export default function AttendancePanel({ mode }) {
                       ))}
                   </div>
 
-                  {/* Heatmap Grid Layout */}
                   <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-x-auto">
                       <table className="w-full text-left border-collapse min-w-[1200px]">
                           <thead>
@@ -650,7 +688,7 @@ export default function AttendancePanel({ mode }) {
                                               };
                                               extraClass = "animate-pulse";
                                           } else if (d.status.startsWith('Half Day Leave')) {
-                                              cellStyle = { backgroundColor: '#8B5CF6' }; // Purple for clear UX contrast
+                                              cellStyle = { backgroundColor: '#8B5CF6' };
                                           } else if (d.status.startsWith('Half Day')) {
                                               cellStyle = { backgroundColor: '#F59E0B' };
                                           } else if (d.status === 'Absent') {
@@ -678,7 +716,6 @@ export default function AttendancePanel({ mode }) {
                           </tbody>
                       </table>
 
-                      {/* Legend with Chip Format */}
                       <div className="px-6 py-4 border-t border-[#ece2ff] flex flex-wrap gap-3 bg-[#faf9ff]">
                           {[
                               { label: 'Present', dotColor: '#22C55E', bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
@@ -706,167 +743,222 @@ export default function AttendancePanel({ mode }) {
           )}
 
           {adminTab === 'search' && (
-              <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden animate-fade-in-up p-8">
-                  <div className="max-w-xl mx-auto space-y-6">
-                      <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#8b8ba3]">
-                              <Search size={16} />
-                          </div>
-                          <select 
-                              value={selectedEmployee?.employee_code || ''}
-                              onChange={(e) => {
-                                  const emp = employees.find(emp => emp.employee_code === e.target.value);
-                                  setSelectedEmployee(emp);
-                                  searchEmployeeRecords(emp?.employee_code);
-                              }}
-                              className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm px-10 py-4 rounded-2xl focus:outline-none focus:border-[#c084fc] transition-all appearance-none"
-                          >
-                              <option value="">Select personnel to inspect...</option>
-                              {employees.map(e => (
-                                  <option key={e.employee_code} value={e.employee_code}>
-                                      {e.name} ({e.employee_code})
-                                  </option>
-                              ))}
-                          </select>
-                      </div>
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden animate-fade-in-up p-8">
+                <div className="max-w-xl mx-auto space-y-6">
+                <div className="relative max-w-md" ref={dropdownRef}>
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#8b8ba3]">
+                    <Search size={16} />
+                    </div>
+                    <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => {
+                        setQuery(e.target.value);
+                        setIsOpen(true);
+                    }}
+                    onFocus={() => {
+                        setQuery('');
+                        setIsOpen(true);
+                    }}
+                    placeholder={selectedEmployee ? `${selectedEmployee.name || selectedEmployee.full_name} (${selectedEmployee.employee_code})` : "Select personnel to inspect..."}
+                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm pl-12 pr-10 py-3 rounded-2xl focus:outline-none focus:border-[#c084fc] transition-all cursor-pointer"
+                    />
+                    <button
+                    type="button"
+                    onClick={() => {
+                        if (!isOpen) setQuery('');
+                        setIsOpen(o => !o);
+                    }}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#8b8ba3]"
+                    >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                    </button>
 
-                      {isSearching ? (
-                          <div className="flex justify-center p-10"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
-                      ) : selectedEmployee ? (
-                          <div className="grid grid-cols-1 gap-6 mt-8">
-                              <div className="flex items-center gap-4 bg-[#f5efff] p-4 rounded-2xl border border-[#ece2ff]">
-                                  <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-primary font-black text-xl">
-                                      {selectedEmployee.name.charAt(0)}
-                                  </div>
-                                  <div>
-                                      <h3 className="font-bold text-black uppercase italic">{selectedEmployee.name}</h3>
-                                      <p className="text-[10px] text-[#8b8ba3] font-mono">{selectedEmployee.employee_code}</p>
-                                  </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  <div className="bg-white border border-[#ece2ff] rounded-2xl overflow-hidden flex flex-col h-80">
-                                      <div className="px-5 py-4 border-b border-[#ece2ff] bg-[#faf7ff]">
-                                          <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Log History</h4>
-                                      </div>
-                                      <div className="overflow-y-auto divide-y divide-[#ece2ff] flex-1">
-                                          {searchedEmployeeHistory.length === 0 ? <p className="p-6 text-center text-[10px] text-[#b6b6c7] font-black uppercase italic">No records</p> : searchedEmployeeHistory.map((h, i) => (
-                                              <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog(h)}>
-                                                  <div className="flex justify-between items-center">
-                                                      <div>
-                                                          <p className="text-[11px] font-bold text-black">{new Date(h.date).toLocaleDateString()}</p>
-                                                          <p className="text-[9px] text-[#8b8ba3] font-mono">{h.clock_in} - {h.clock_out || '??'}</p>
-                                                      </div>
-                                                      <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{h.status}</span>
-                                                  </div>
-                                              </div>
-                                          ))}
-                                      </div>
-                                  </div>
-                                  
-                                  <div className="bg-white border border-[#ece2ff] rounded-2xl overflow-hidden flex flex-col h-80">
-                                      <div className="px-5 py-4 border-b border-[#ece2ff] bg-[#faf7ff]">
-                                          <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Leave History</h4>
-                                      </div>
-                                      <div className="overflow-y-auto divide-y divide-[#ece2ff] flex-1">
-                                          {searchedEmployeeLeaves.length === 0 ? <p className="p-6 text-center text-[10px] text-[#b6b6c7] font-black uppercase italic">No records</p> : searchedEmployeeLeaves.map((l, i) => (
-                                              <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
-                                                  <div className="flex justify-between items-center">
-                                                      <div>
-                                                          <p className="text-[11px] font-bold text-black">{l.leave_type} {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
-                                                          <p className="text-[9px] text-[#8b8ba3] font-mono">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
-                                                      </div>
-                                                      <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500' : l.status === 'Rejected' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>{l.status || 'Pending'}</span>
-                                                  </div>
-                                              </div>
-                                          ))}
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
-                      ) : (
-                          <div className="text-center py-10 opacity-30">
-                              <Search size={48} className="mx-auto mb-4 text-[#8b8ba3]" />
-                              <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Select personnel to view matrix</p>
-                          </div>
-                      )}
-                  </div>
-              </div>
-          )}
+                    {isOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-[#ebe4ff] rounded-2xl shadow-lg max-h-64 overflow-y-auto z-50">
+                        {activeEmployees
+                        .filter(e => {
+                            if (!query.trim()) return true;
+                            const matchesSearch = 
+                            (e.name || e.full_name || '').toLowerCase().includes(query.toLowerCase()) ||
+                            (e.employee_code || '').toLowerCase().includes(query.toLowerCase());
+                            return matchesSearch;
+                        })
+                        .map(e => (
+                            <div
+                            key={e.employee_code || e.id}
+                            onClick={() => {
+                                setSelectedEmployee(e);
+                                searchEmployeeRecords(e.employee_code);
+                                setQuery('');
+                                setIsOpen(false);
+                            }}
+                            className="px-4 py-2 text-sm text-black hover:bg-[#faf7ff] cursor-pointer"
+                            >
+                            {e.name || e.full_name} ({e.employee_code})
+                            </div>
+                        ))}
+                        {activeEmployees.filter(e => {
+                        if (!query.trim()) return true;
+                        const matchesSearch = 
+                            (e.name || e.full_name || '').toLowerCase().includes(query.toLowerCase()) ||
+                            (e.employee_code || '').toLowerCase().includes(query.toLowerCase());
+                        return matchesSearch;
+                        }).length === 0 && (
+                        <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                            No active employees found
+                        </div>
+                        )}
+                    </div>
+                    )}
+                </div>
+
+                {isSearching ? (
+                    <div className="flex justify-center p-10">
+                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                ) : selectedEmployee ? (
+                    <div className="grid grid-cols-1 gap-6 mt-8">
+                    <div className="flex items-center gap-4 bg-[#f5efff] p-4 rounded-2xl border border-[#ece2ff]">
+                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-primary font-black text-xl">
+                        {selectedEmployee.name.charAt(0)}
+                        </div>
+                        <div>
+                        <h3 className="font-bold text-black uppercase italic">{selectedEmployee.name}</h3>
+                        <p className="text-[10px] text-[#8b8ba3] font-mono">{selectedEmployee.employee_code}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white border border-[#ece2ff] rounded-2xl overflow-hidden flex flex-col h-80">
+                        <div className="px-5 py-4 border-b border-[#ece2ff] bg-[#faf7ff]">
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Log History</h4>
+                        </div>
+                        <div className="overflow-y-auto divide-y divide-[#ece2ff] flex-1">
+                            {searchedEmployeeHistory.length === 0 ? 
+                            <p className="p-6 text-center text-[10px] text-[#b6b6c7] font-black uppercase italic">No records</p> : 
+                            searchedEmployeeHistory.map((h, i) => (
+                                <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog(h)}>
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                    <p className="text-[11px] font-bold text-black">{new Date(h.date).toLocaleDateString()}</p>
+                                    <p className="text-[9px] text-[#8b8ba3] font-mono">{h.clock_in} - {h.clock_out || '??'}</p>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{h.status}</span>
+                                </div>
+                                </div>
+                            ))
+                            }
+                        </div>
+                        </div>
+                        
+                        <div className="bg-white border border-[#ece2ff] rounded-2xl overflow-hidden flex flex-col h-80">
+                        <div className="px-5 py-4 border-b border-[#ece2ff] bg-[#faf7ff]">
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Leave History</h4>
+                        </div>
+                        <div className="overflow-y-auto divide-y divide-[#ece2ff] flex-1">
+                            {searchedEmployeeLeaves.length === 0 ? 
+                            <p className="p-6 text-center text-[10px] text-[#b6b6c7] font-black uppercase italic">No records</p> : 
+                            searchedEmployeeLeaves.map((l, i) => (
+                                <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                    <p className="text-[11px] font-bold text-black">{l.leave_type} {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
+                                    <p className="text-[9px] text-[#8b8ba3] font-mono">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500' : l.status === 'Rejected' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>{l.status || 'Pending'}</span>
+                                </div>
+                                </div>
+                            ))
+                            }
+                        </div>
+                        </div>
+                    </div>
+                    </div>
+                ) : (
+                    <div className="text-center py-10 opacity-30">
+                    <Search size={48} className="mx-auto mb-4 text-[#8b8ba3]" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Select personnel to view matrix</p>
+                    </div>
+                )}
+                </div>
+            </div>
+            )}
         </div>
       )}
 
-
       {/* History Grids */}
       {!isAdmin && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Attendance History */}
-        <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Attendance History */}
+          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
             <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff] flex justify-between items-center">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
-                    <BarChart3 size={14} className="text-[#8b5cf6]" /> Log History
-                </h3>
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
+                <BarChart3 size={14} className="text-[#8b5cf6]" /> Log History
+              </h3>
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-[#ece2ff] scrollbar-hide">
-                {history.length === 0 ? (
-                    <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No logs decrypted</p>
-                ) : history.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog(h)}>
-                        <div>
-                            <p className="text-xs font-black text-black italic">{new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                            <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">Session: {h.clock_in} - {h.clock_out || '??'}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
-                                h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                            }`}>{h.status}</span>
-                            {h.status === 'Absent' && isWithinLast7Days(h.date) && (
-                                submittedCorrections.has(h.date) ? (
-                                    <span className="px-3 py-1 rounded text-[8px] font-black uppercase bg-amber-500/10 text-amber-500">Correction Pending</span>
-                                ) : (
-                                    <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setCorrectionForm({ ...correctionForm, date: h.date, clock_in: h.clock_in || '', clock_out: h.clock_out || '' });
-                                            setShowCorrectionForm(true);
-                                        }}
-                                        className="px-3 py-1 rounded text-[8px] font-black uppercase bg-[#f5efff] text-[#8b5cf6] border border-[#ebe4ff] hover:bg-[#8b5cf6] hover:text-white transition-all"
-                                    >
-                                        Request Correction
-                                    </button>
-                                )
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-
-        {/* Absence History */}
-        <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
-          <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff] flex justify-between items-center">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
-                <Calendar size={14} className="text-secondary" /> Request History
-            </h3>
-          </div>
-          <div className="max-h-80 overflow-y-auto divide-y divide-[#ece2ff] scrollbar-hide">
-            {myLeaves.length === 0 ? (
-                <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No requests filed</p>
-            ) : myLeaves.map((l, i) => (
-              <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
-                <div>
-                  <p className="text-xs font-black text-black italic">{l.leave_type} Protocol {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
-                  <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
+              {history.length === 0 ? (
+                <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No logs decrypted</p>
+              ) : history.map((h, i) => (
+                <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog(h)}>
+                  <div>
+                    <p className="text-xs font-black text-black italic">{new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                    <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">Session: {h.clock_in} - {h.clock_out || '??'}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
+                      h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                    }`}>{h.status}</span>
+                    {h.status === 'Absent' && isWithinLast7Days(h.date) && (
+                      submittedCorrections.has(h.date) ? (
+                        <span className="px-3 py-1 rounded text-[8px] font-black uppercase bg-amber-500/10 text-amber-500">Correction Pending</span>
+                      ) : (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCorrectionForm({ ...correctionForm, date: h.date, clock_in: h.clock_in || '', clock_out: h.clock_out || '' });
+                            setShowCorrectionForm(true);
+                          }}
+                          className="px-3 py-1 rounded text-[8px] font-black uppercase bg-[#f5efff] text-[#8b5cf6] border border-[#ebe4ff] hover:bg-[#8b5cf6] hover:text-white transition-all"
+                        >
+                          Request Correction
+                        </button>
+                      )
+                    )}
+                  </div>
                 </div>
-                <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
-                  l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400' :
-                  l.status === 'Rejected' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
-                }`}>{l.status || 'Pending'}</span>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          {/* Absence History */}
+          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff] flex justify-between items-center">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
+                <Calendar size={14} className="text-secondary" /> Request History
+              </h3>
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-[#ece2ff] scrollbar-hide">
+              {myLeaves.length === 0 ? (
+                <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No requests filed</p>
+              ) : myLeaves.map((l, i) => (
+                <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
+                  <div>
+                    <p className="text-xs font-black text-black italic">{l.leave_type} Protocol {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
+                    <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
+                  </div>
+                  <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
+                    l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400' :
+                    l.status === 'Rejected' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
+                  }`}>{l.status || 'Pending'}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* Correction Request Modal */}
@@ -1146,6 +1238,7 @@ export default function AttendancePanel({ mode }) {
           </form>
         </div>
       )}
+      
       {/* Clock Out Modal */}
       {showClockOutModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl animate-fade-in p-4">

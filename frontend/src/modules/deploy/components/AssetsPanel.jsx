@@ -7,6 +7,7 @@ import {
   Laptop,
   ShieldCheck
 } from 'lucide-react';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
 const ASSET_LABELS = {
   ob_laptop: 'Laptop',
@@ -38,6 +39,7 @@ const CLEARANCE_LABELS = {
 export default function AssetsPanel({ mode = 'admin', user }) {
 
   const [employees, setEmployees] = useState([]);
+  const [activeEmployees, setActiveEmployees] = useState([]);
 
   const [selectedCode, setSelectedCode] = useState('');
 
@@ -103,18 +105,31 @@ export default function AssetsPanel({ mode = 'admin', user }) {
 
         const data = await res.json();
 
-        const employeeList =
-          Array.isArray(data) ? data : [];
+        const employeeList = Array.isArray(data) ? data : [];
 
         setEmployees(employeeList);
+
+        // ── FILTER ONLY ACTIVE EMPLOYEES ──
+        const active = employeeList.filter(emp => 
+          emp.employment_status === 'Active' || 
+          emp.employment_status === 'active' ||
+          emp.is_active === 1 ||
+          emp.is_active === true
+        );
+        setActiveEmployees(active);
 
         // ── CHECK FOR CODE PARAMETER ──
         const params = new URLSearchParams(window.location.search);
         const codeParam = params.get('code');
         
         if (mode === 'admin' && codeParam) {
-          // Auto-load the specific employee's assets
-          loadAssets(codeParam);
+          // Check if the employee is active before loading
+          const employeeExists = active.some(emp => emp.employee_code === codeParam);
+          if (employeeExists) {
+            loadAssets(codeParam);
+          } else {
+            toast.error('Employee not found or inactive');
+          }
         } else if (mode === 'employee' && user?.employee_code) {
           loadAssets(user.employee_code);
         }
@@ -238,28 +253,12 @@ export default function AssetsPanel({ mode = 'admin', user }) {
         <div className="flex-1">
 
           <p
-            className="
-              text-[10px]
-              font-black
-              uppercase
-              tracking-[0.28em]
-              text-[#7c3aed]
-              mb-3
-            "
+            className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3"
           >
             Employee Asset Management
           </p>
 
-          <h2
-            className="
-              text-4xl
-              font-black
-              text-black
-              tracking-tight
-              leading-none
-              mb-5
-            "
-          >
+          <h2 className="text-5xl font-black text-black tracking-tight leading-none ">
             {
               mode === 'employee'
                 ? 'My Assets'
@@ -267,7 +266,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
             }
           </h2>
 
-          {/* ADMIN SELECT ONLY */}
+          {/* ADMIN SELECT ONLY - FILTERED ACTIVE EMPLOYEES */}
 
           {mode === 'admin' && (
 
@@ -294,10 +293,10 @@ export default function AssetsPanel({ mode = 'admin', user }) {
             >
 
               <option value="">
-                Select employee
+                Select active employee
               </option>
 
-              {employees.map(e => (
+              {activeEmployees.map(e => (
 
                 <option
                   key={e.employee_code}
@@ -312,32 +311,23 @@ export default function AssetsPanel({ mode = 'admin', user }) {
 
           )}
 
+          {/* ── Show message if no active employees ── */}
+          {mode === 'admin' && activeEmployees.length === 0 && !loading && (
+            <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-2">
+              No active employees found
+            </p>
+          )}
+
         </div>
 
       </div>
 
       {/* =========================
-          LOADER
+          LOADER - REPLACED WITH HORIZONTAL LOADER
       ========================= */}
 
       {loading && (
-
-        <div className="flex items-center justify-center h-52">
-
-          <div
-            className="
-              w-12
-              h-12
-              border-[3px]
-              border-[#8b5cf6]
-              border-t-transparent
-              rounded-full
-              animate-spin
-            "
-          />
-
-        </div>
-
+        <HorizontalLoader label="Loading assets..." />
       )}
 
       {/* =========================
@@ -476,9 +466,9 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                             <CheckCircle size={8} /> Allocated
                           </span>
                         ) : (
-                          <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[8px] font-black uppercase border border-amber-200 shadow-sm">
-                                                Not Allocated
-                                            </span>
+                          <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[8px] font-black uppercase border border-red-200 shadow-sm">
+                            Not Allocated
+                          </span>
                         )}
                       </div>
                     </div>

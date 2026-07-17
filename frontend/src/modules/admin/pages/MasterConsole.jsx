@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { toast } from 'react-hot-toast';
+import ewandzLogo from "../../../assets/EWANDZ.png";
 
 export default function MasterConsole() {
   const { user } = useAuth();
@@ -154,6 +155,11 @@ export default function MasterConsole() {
 
       <div className="pb-12 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant opacity-20">
          Phygitron 360 Platform // Standard Mission Hub
+      </div>
+
+      {/* EWANDZ Logo at bottom of sidebar */}
+      <div className="sidebar-brand" style={{ position: 'fixed', bottom: '20px', left: '20px', zIndex: 10 }}>
+        <img src={ewandzLogo} alt="Ewandz" style={{ height: '30px', width: 'auto' }} />
       </div>
     </div>
   );

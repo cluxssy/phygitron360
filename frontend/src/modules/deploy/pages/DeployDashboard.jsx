@@ -17,6 +17,7 @@ import InternalOpportunitiesPanel from '../components/InternalOpportunitiesPanel
 import "../styles/deploy.css";
 
 import logo from "../../../assets/phy360.png";
+import ewandzLogo from "../../../assets/EWANDZ.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 
@@ -173,6 +174,7 @@ export default function DeployDashboard() {
             src={bellIcon}
             className="icon cursor-pointer"
             alt="bell"
+            aria-label="Open notifications"
             onClick={() => setShowNotifications(true)}
           />
 
@@ -180,9 +182,10 @@ export default function DeployDashboard() {
             src={logoutIcon}
             className="icon logout-icon"
             alt="logout"
+            aria-label="Log out"
             onClick={() => {
               logout();
-              navigate('/login');
+              navigate('/');
             }}
           />
 
@@ -218,7 +221,7 @@ export default function DeployDashboard() {
             SIDEBAR
         ========================================= */}
 
-        <div className="sidebar">
+        <div className="sidebar" data-no-tooltip>
 
           {/* VIEW TOGGLE */}
 
@@ -355,8 +358,7 @@ export default function DeployDashboard() {
                 Dashboard
               </button>
 
-              <button
-                className={currentTab === 'profile' ? 'active' : ''}
+              <button                className={currentTab === 'profile' ? 'active' : ''}
                 onClick={() => setTab('profile')}
               >
                 My Profile
@@ -395,6 +397,10 @@ export default function DeployDashboard() {
             </>
 
           )}
+
+          <div className="sidebar-brand">
+            <img src={ewandzLogo} alt="Ewandz" />
+          </div>
 
         </div>
 

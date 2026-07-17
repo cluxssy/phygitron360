@@ -21,6 +21,7 @@ import InviteStatus from './InviteStatus';
 
 import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
+import ewandzLogo from "../../../assets/EWANDZ.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
@@ -49,6 +50,18 @@ const STATUS_STYLE = {
   new:         'bg-gray-50 text-gray-700 border-gray-200',
   archived:    'bg-gray-100 text-gray-600 border-gray-200',
 };
+
+// ── Professional tag color schemes (one color per role) ──
+const TAG_COLORS = [
+  { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
+  { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
+  { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
+  { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
+  { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
+  { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200', dot: 'bg-cyan-500' },
+  { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', dot: 'bg-violet-500' },
+];
 
 const initFilters = { pool: 'all', location: '', min_exp: 0, sort_by: 'newest', role_id: '', limit: 20 };
 
@@ -182,6 +195,9 @@ export default function SourceDashboard() {
   const [activities, setActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
+  // Pending offer approvals KPI state
+  const [pendingOffersCount, setPendingOffersCount] = useState(0);
+
   // Modals
   const [showUpload, setShowUpload] = useState(false);
   const [showNewRole, setShowNewRole] = useState(false);
@@ -199,6 +215,7 @@ export default function SourceDashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
+  const [bulkUploadTriggered, setBulkUploadTriggered] = useState(false);
   const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, required_skills: [] });
   const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'expert' });
   const [scoreStatus, setScoreStatus] = useState({});
@@ -258,6 +275,19 @@ export default function SourceDashboard() {
     finally { setLoadingActivities(false); }
   }, []);
 
+  // Fetches the count of offers awaiting approval, used by the "Pending Offer Approvals" KPI card.
+  // Adjust the endpoint/path below to match whatever your backend actually exposes
+  // (check OfferApprovals.jsx — it likely already calls the real endpoint for this data).
+  const fetchPendingOffers = useCallback(async () => {
+      try {
+        const r = await fetch('/api/source/offers?status=pending', { credentials: 'include' });
+        const d = await r.json();
+        if (r.ok) {
+          setPendingOffersCount((d.data || []).length);
+        }
+      } catch { /* silent */ }
+    }, []);
+
   useEffect(() => { fetchJobRoles(); }, [fetchJobRoles]);
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 
@@ -276,31 +306,22 @@ export default function SourceDashboard() {
   useEffect(() => {
     if (currentTab === 'home') {
       fetchActivities();
+      fetchPendingOffers();
     }
-  }, [currentTab, fetchActivities]);
+  }, [currentTab, fetchActivities, fetchPendingOffers]);
 
   const fetchActiveJob = useCallback(async () => {
+    if (!bulkJobId) return;
     try {
-      const r = await fetch('/api/source/candidates/bulk-upload/active');
-      if (r.ok) {
-        const d = await r.json();
-        if (d.success && d.data && d.data.job) {
-          setBulkJobId(d.data.job.id);
-          setBulkJobProgress(d.data);
-        } else if (d.success && !d.data) {
-          setBulkJobId(null);
-          setBulkJobProgress(null);
-        }
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`);
+      const d = await r.json();
+      if (r.ok && d.success) {
+        setBulkJobProgress(d.data);
       }
     } catch (err) {
-      console.error('Failed to fetch active bulk upload job', err);
+      console.error('Failed to refresh active bulk upload job', err);
     }
-  }, []);
-
-  // Resume tracking an active bulk upload job if we refresh the page
-  useEffect(() => {
-    fetchActiveJob();
-  }, [fetchActiveJob]);
+  }, [bulkJobId]);
 
   // Poll bulk upload progress
   useEffect(() => {
@@ -320,15 +341,12 @@ export default function SourceDashboard() {
 
           if (job && (job.status === 'cancelled' || job.status === 'failed' || (job.total_files > 0 && totalProcessed >= job.total_files))) {
              setBulkJobId(null);
-             // ── Only show toast if we're on the upload tab or if there were files processed ──
-             if (job.status === 'completed' || (job.total_files > 0 && totalProcessed >= job.total_files)) {
-                 // Only show toast if we're on upload tab or there was actual file processing
-                 if (currentTab === 'upload' || job.total_files > 0) {
-                   toast.success('Bulk processing complete');
-                 }
+             setBulkJobProgress(null);
+             if (bulkUploadTriggered && (job.status === 'completed' || (job.total_files > 0 && totalProcessed >= job.total_files))) {
+                 toast.success('Bulk processing complete');
                  fetchCandidates();
              }
-             setBulkJobProgress(null);
+             setBulkUploadTriggered(false);
              return;
           }
         }
@@ -340,7 +358,7 @@ export default function SourceDashboard() {
     fetchProgress();
     const interval = setInterval(fetchProgress, 3000);
     return () => clearInterval(interval);
-  }, [bulkJobId, fetchCandidates, currentTab]);
+  }, [bulkJobId, bulkUploadTriggered, fetchCandidates, currentTab]);
 
   // ── Filter candidates client-side ──
   const filteredCandidates = candidates.filter(c => {
@@ -388,64 +406,71 @@ export default function SourceDashboard() {
     e.preventDefault();
     const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
     if (!files || files.length === 0) return;
+
     setUploading(true);
     const fd = new FormData();
     const validExtensions = ['.pdf', '.doc', '.docx', '.txt', '.zip'];
     let validCount = 0;
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const error = validateFile(file, validExtensions, null, file.name);
-        if (error) {
-            toast.error(error);
-            setUploading(false);
-            if (e.target) e.target.value = '';
-            return;
-        }
-        const cleanFile = new File([file], file.name, { type: file.type });
-        fd.append('files', cleanFile);
-        validCount++;
-    }
-    if (validCount === 0) {
-        toast.error('No supported files found (PDF, DOCX, TXT, ZIP)');
-        setUploading(false);
-        if (e.target) e.target.value = '';
-        return;
-    }
-    try {
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/source/candidates/bulk-upload');
-        xhr.withCredentials = true;
-        
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percentComplete = (event.loaded / event.total) * 100;
-            setUploadProgress(percentComplete);
-          }
-        };
+    let invalidFiles = [];
 
-        xhr.onload = () => {
-          try {
-            const d = JSON.parse(xhr.responseText);
-            if (xhr.status >= 200 && xhr.status < 300) {
-              toast.success(d.message || `Queued ${validCount} file(s) for AI processing!`);
-              if (d.data?.job_id) {
-                setBulkJobId(d.data.job_id);
-                setBulkJobProgress(null);
-              }
-              setShowUpload(false);
-              resolve();
-            } else {
-              toast.error(d.detail || 'Upload failed');
-              reject(new Error(d.detail || 'Upload failed'));
-            }
-          } catch { reject(new Error('Invalid server response')); }
-        };
-        xhr.onerror = () => reject(new Error('Network error during upload'));
-        xhr.send(fd);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      if (file.size < 1024) {
+        invalidFiles.push(`${file.name} (too small: ${file.size} bytes)`);
+        continue;
+      }
+
+      const ext = '.' + file.name.split('.').pop().toLowerCase();
+      if (!validExtensions.includes(ext)) {
+        invalidFiles.push(`${file.name} (unsupported format)`);
+        continue;
+      }
+
+      const cleanFile = new File([file], file.name, { type: file.type });
+      fd.append('files', cleanFile);
+      validCount++;
+    }
+
+    if (invalidFiles.length > 0) {
+      toast.error(`Skipped ${invalidFiles.length} invalid file(s): ${invalidFiles.join(', ')}`);
+    }
+
+    if (validCount === 0) {
+      toast.error('No valid files found. Please upload PDF, DOCX, TXT, or ZIP files with content.');
+      setUploading(false);
+      if (e.target) e.target.value = '';
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/source/candidates/bulk-upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: fd
       });
-    } catch (err) { toast.error('Upload error: ' + (err?.message || 'Unknown')); }
-    finally { setUploading(false); if (e.target) e.target.value = ''; }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Upload failed');
+      }
+
+      toast.success(`Queued ${validCount} file(s) for processing!`);
+
+      if (data.data?.job_id) {
+        setBulkUploadTriggered(true);
+        setBulkJobId(data.data.job_id);
+        setBulkJobProgress(null);
+      }
+
+      setShowUpload(false);
+    } catch (err) {
+      toast.error('Upload error: ' + (err?.message || 'Unknown'));
+    } finally {
+      setUploading(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   const handleDragOver = (e) => {
@@ -473,6 +498,7 @@ export default function SourceDashboard() {
         toast.success('Queue cancelled successfully');
         setBulkJobId(null);
         setBulkJobProgress(null);
+        setBulkUploadTriggered(false);
       } else {
         toast.error('Failed to cancel queue');
       }
@@ -781,7 +807,7 @@ export default function SourceDashboard() {
             src={logoutIcon}
             className="icon logout-icon"
             alt="logout"
-            onClick={() => { logout(); navigate('/login'); }}
+            onClick={() => { logout(); navigate('/'); }}
           />
           <div className="profile-wrap">
             <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>
@@ -794,13 +820,16 @@ export default function SourceDashboard() {
       </div>
 
       <div className="dashboard-body">
-        <div className="sidebar">
+        <div className="sidebar" data-no-tooltip>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>Home</button>
-          <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>
           <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>
+          <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>
           <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>
           <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>
           <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Pipeline</button>
+          <div className="sidebar-brand">
+            <img src={ewandzLogo} alt="Ewandz" />
+          </div>
         </div>
         
         <div className="content" style={{ backgroundColor: '#FAF8FF', padding: '24px' }}>
@@ -825,7 +854,7 @@ export default function SourceDashboard() {
             ) : currentTab === 'jobs' ? (
               <>Job Roles</>
             ) : currentTab === 'home' ? (
-              <>Talent Acquisition Dashboard</>
+              <>Talent Central Dashboard</>
             ) : currentTab === 'offers' ? (
               <>Offer Management</>
             ) : currentTab === 'active' ? (
@@ -851,6 +880,7 @@ export default function SourceDashboard() {
           {(currentTab === 'directory' || currentTab === 'home' || currentTab === 'jobs') && (
             <button
               onClick={() => { fetchCandidates(); fetchJobRoles(); }}
+              aria-label="Refresh"
               className="p-2.5 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors duration-150"
             >
               <RefreshCw size={16} />
@@ -869,6 +899,7 @@ export default function SourceDashboard() {
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+                  title="Search"  // ← Add this
                 />
                 {searchTerm && (
                   <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600">
@@ -886,7 +917,7 @@ export default function SourceDashboard() {
               >
                 <Filter size={15} /> Filters
               </button>
-              <button
+              {/* <button
                 onClick={() => setShowUpload(true)}
                 className="
               px-7
@@ -907,7 +938,7 @@ export default function SourceDashboard() {
             "
               >
                 <Upload size={15} /> Upload Resume
-              </button>
+              </button> */}
             </>
           )}
 
@@ -917,19 +948,15 @@ export default function SourceDashboard() {
               className="
               px-7
               py-4
-              rounded-2xl
-              bg-gradient-to-r
-              from-[#8b5cf6]
-              to-[#c084fc]
-              text-white
+              
+              bg-[#7c3aed] 
+              !text-white 
               text-sm
-              font-black
+              font-black 
               tracking-wide
-              flex
-              items-center
-              gap-3
-              shadow-lg
-              shadow-purple-200
+              flex items-center 
+              gap-3 shadow-lg 
+              shadow-[#7c3aed]/20
             "
             >
               <Plus size={15} /> Add Job Role
@@ -975,25 +1002,23 @@ export default function SourceDashboard() {
         </div>
       </div>
 
-      {/* ── KPI CARDS ── */}
+      {/* ── KPI CARDS ── (Purple, Yellow, Green, Pink) */}
       {currentTab === 'home' && (
         <div className="grid grid-cols-4 gap-4">
-          {/* 🟣 Candidates */}
-          <div 
-            className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-purple-600"
-            onClick={() => setTab('directory')}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <UsersIcon size={20} className="text-purple-600" />
-              <span className="text-xs font-medium text-purple-600">Total</span>
-            </div>
-            <h2 className="text-3xl font-bold text-gray-800">{totalCandidates}</h2>
-            <p className="text-sm text-gray-500 mt-1">Total Candidates</p>
-            </div>
+        <div 
+          className="bg-white border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-purple-600"
+          onClick={() => setTab('directory')}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <UsersIcon size={20} className="text-purple-600" />
+            <span className="text-xs font-medium text-purple-600">Total</span>
+          </div>
+          <h2 className="text-3xl font-bold text-gray-800">{totalCandidates}</h2>
+          <p className="text-sm text-gray-500 mt-1">Total Candidates</p>
+        </div>
 
-          {/* 🟠 Jobs */}
           <div 
-            className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-amber-500"
+            className="bg-white p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-amber-500"
             onClick={() => setTab('jobs')}
           >
             <div className="flex items-center justify-between mb-2">
@@ -1002,35 +1027,30 @@ export default function SourceDashboard() {
             </div>
             <h2 className="text-3xl font-bold text-gray-800">{jobRoles.length}</h2>
             <p className="text-sm text-gray-500 mt-1">Active Job Openings</p>
-            
           </div>
 
-          {/* 🔵 Uploads */}
           <div 
-            className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-blue-500"
+            className="bg-white p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-emerald-500"
             onClick={() => setTab('upload')}
           >
             <div className="flex items-center justify-between mb-2">
-              <Upload size={20} className="text-blue-500" />
-              <span className="text-xs font-medium text-blue-500">Today</span>
+              <Upload size={20} className="text-emerald-500" />
+              <span className="text-xs font-medium text-emerald-500">Today</span>
             </div>
             <h2 className="text-3xl font-bold text-gray-800">{resumesUploadedToday}</h2>
             <p className="text-sm text-gray-500 mt-1">Files Uploaded Today</p>
-            
           </div>
 
-          {/* 🩷 Approvals */}
           <div 
-            className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-pink-500"
+            className="bg-white p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-pink-500"
             onClick={() => setTab('offers')}
           >
             <div className="flex items-center justify-between mb-2">
               <CheckCircleIcon size={20} className="text-pink-500" />
               <span className="text-xs font-medium text-pink-500">Pending</span>
             </div>
-            <h2 className="text-3xl font-bold text-gray-800">{0}</h2>
+            <h2 className="text-3xl font-bold text-gray-800">{pendingOffersCount}</h2>
             <p className="text-sm text-gray-500 mt-1">Pending Offer Approvals</p>
-            
           </div>
         </div>
       )}
@@ -1052,33 +1072,59 @@ export default function SourceDashboard() {
                     <p className="text-xs text-gray-400 mt-1">Updated today</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
-                    <p className="text-xs font-medium text-gray-500">Invitations Sent Today</p>
-                    <p className="text-3xl font-bold text-amber-600 mt-2">{invitedCount}</p>
-                    <p className="text-xs text-gray-400 mt-1">Updated today</p>
-                  </div>
+                  <p className="text-xs font-medium text-gray-500">Invitations Sent Today</p>
+                  <p className="text-3xl font-bold text-amber-600 mt-2">
+                    {activities.filter(act => {
+                      if (!act.action?.toLowerCase().includes('invite')) return false;
+                      if (!act.created_at) return false;
+                      const date = new Date(act.created_at);
+                      const today = new Date();
+                      return date.getDate() === today.getDate() &&
+                            date.getMonth() === today.getMonth() &&
+                            date.getFullYear() === today.getFullYear();
+                    }).length}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Updated today</p>
+                </div>
                 </div>
                 <div className="mt-6 pt-4 border-t border-gray-100">
-                  <p className="text-xs font-medium text-gray-500 mb-3">Weekly Activity</p>
-                  <div className="flex items-end justify-between h-24 gap-2">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
-                      const dayIndex = new Date().getDay();
-                      const isToday = i === dayIndex - 1;
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <p className="text-xs font-medium text-gray-500 mb-3">Weekly Activity</p>
+                <div className="space-y-2">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
+                    const dayCount = candidates.filter(c => {
+                      if (!c.created_at) return false;
+                      const date = new Date(c.created_at);
+                      return date.getDay() === i + 1;
+                    }).length;
+                    
+                    const maxVal = Math.max(1, ...['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((_, idx) => 
+                      candidates.filter(c => {
+                        if (!c.created_at) return false;
+                        const date = new Date(c.created_at);
+                        return date.getDay() === idx + 1;
+                      }).length
+                    ));
+                    
+                    const width = maxVal > 0 ? (dayCount / maxVal) * 100 : 0;
+                    const isToday = i === new Date().getDay() - 1;
+                    
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className={`text-xs font-medium w-10 ${isToday ? 'text-purple-600' : 'text-gray-400'}`}>
+                          {day}
+                        </span>
+                        <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
                           <div 
-                            className={`w-full rounded-t-md transition-all duration-500 ${
-                              isToday ? 'bg-purple-500' : 'bg-purple-200 hover:bg-purple-400'
-                            }`}
-                            style={{ height: `${Math.random() * 80 + 20}%` }}
+                            className={`h-full rounded-full transition-all duration-500 ${isToday ? 'bg-purple-500' : 'bg-purple-300'}`}
+                            style={{ width: `${width}%` }}
                           ></div>
-                          <span className={`text-[10px] ${isToday ? 'text-purple-600 font-semibold' : 'text-gray-400'}`}>
-                            {day}
-                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <span className="text-xs text-gray-500 w-8 text-right">{dayCount}</span>
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
               </div>
             </div>
             <div className="lg:col-span-1">
@@ -1206,53 +1252,97 @@ export default function SourceDashboard() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-              {jobRoles.map(r => (
-                <div key={r.id} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 flex flex-col">
-                  <div className="flex w-full items-start justify-between mb-2">
-                    <h3 className="text-lg font-semibold text-gray-800 pr-2">{r.title}</h3>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => openEditRole(r)} title="Edit role" className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0">
-                        <Edit size={14} />
-                      </button>
-                      <button onClick={() => deleteJobRole(r.id)} title="Delete role" className="p-1.5 rounded-lg bg-red-50 border border-red-200 text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors shrink-0">
-                        <Trash2 size={14} />
-                      </button>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 pb-4 mt-4">
+              {jobRoles.slice().sort((a, b) => new Date(a.created_at || a.updated_at || 0) - new Date(b.created_at || b.updated_at || 0)).map((r, index) => {
+                const colors = TAG_COLORS[index % TAG_COLORS.length];
+                const candidateCount = candidates.filter(c => c.role_id === r.id).length;
+                
+                return (
+                  <div 
+                    key={r.id} 
+                    className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-lg transition-all hover:scale-[1.01] hover:z-10 flex flex-col"
+                  >
+                    <div className="flex w-full items-start justify-between mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center ${colors.text} shrink-0`}>
+                          <Briefcase size={16} />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-800 truncate">{r.title}</h3>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button 
+                          onClick={() => openEditRole(r)} 
+                          title="Edit role" 
+                          className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button 
+                          onClick={() => deleteJobRole(r.id)} 
+                          title="Delete role" 
+                          className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-xs font-medium text-purple-600 mt-1 mb-2">Min Exp: {r.min_experience} yrs</p>
-                  {/* Required Skills chips */}
-                  {Array.isArray(r.required_skills) && r.required_skills.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {r.required_skills.slice(0, 6).map((s, i) => (
-                        <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
-                          {s.name || s.skill || (typeof s === 'string' ? s : '')}
-                        </span>
-                      ))}
-                      {r.required_skills.length > 6 && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">+{r.required_skills.length - 6} more</span>
-                      )}
+                    
+                    <div className="flex items-center gap-3 mt-1 mb-3 flex-wrap">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${colors.bg} ${colors.text} border ${colors.border}`}>
+                        Min Exp: {r.min_experience} yrs
+                      </span>
+                      <span className={`text-sm font-bold ${candidateCount > 0 ? 'text-gray-800' : 'text-gray-400'}`}>
+                        {candidateCount} {candidateCount === 1 ? 'candidate' : 'candidates'}
+                      </span>
                     </div>
-                  )}
-                  <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4">{r.description || 'No description provided.'}</p>
-                  <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
-                    <p className="text-sm text-gray-600">{candidates.filter(c => c.role_id === r.id).length} candidates</p>
-                    <button
-                      onClick={() => { handleAutoRank(r.id); fetchScoreStatus(r.id); }}
-                      disabled={autoRanking}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-xs font-medium hover:bg-purple-100 transition-colors disabled:opacity-50"
-                    >
-                      <Zap size={12} /> Re-rank
-                    </button>
-                  </div>
-                  {scoreStatus[r.id] && (
-                    <p className="text-[10px] text-gray-400 mt-2">
-                      {scoreStatus[r.id].scored_count} scored
-                      {scoreStatus[r.id].last_scored_at ? ` · ${new Date(scoreStatus[r.id].last_scored_at).toLocaleString()}` : ''}
+                    
+                    {/* Required Skills chips - all same color per role */}
+                    {Array.isArray(r.required_skills) && r.required_skills.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {r.required_skills.slice(0, 6).map((s, i) => (
+                          <span key={i} className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium ${colors.bg} ${colors.text} border ${colors.border}`}>
+                            {s.name || s.skill || (typeof s === 'string' ? s : '')}
+                          </span>
+                        ))}
+                        {r.required_skills.length > 6 && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                            +{r.required_skills.length - 6} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    
+                    <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4 flex-1">
+                      {r.description || 'No description provided.'}
                     </p>
-                  )}
-                </div>
-              ))}
+                    
+                    <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${candidateCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                        <span className="text-sm text-gray-600">
+                          {candidateCount > 0 ? `${candidateCount} assigned` : ''}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => { handleAutoRank(r.id); fetchScoreStatus(r.id); }}
+                        disabled={autoRanking}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-xs font-medium hover:bg-purple-100 transition-colors disabled:opacity-50"
+                      >
+                        <Zap size={12} /> 
+                        {autoRanking ? 'Ranking...' : 'Re-rank'}
+                      </button>
+                    </div>
+                    
+                    {scoreStatus[r.id] && (
+                      <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                        {scoreStatus[r.id].scored_count} scored
+                        {scoreStatus[r.id].last_scored_at ? ` · ${new Date(scoreStatus[r.id].last_scored_at).toLocaleString()}` : ''}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1333,97 +1423,97 @@ export default function SourceDashboard() {
           </div>
           
           {/* Bulk Upload Progress */}
-          {bulkJobId && (
+          {bulkUploadTriggered && bulkJobId && (
             <div className="bg-white w-full max-w-xl rounded-2xl p-6 border border-purple-200 shadow-sm relative overflow-hidden">
-           <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
-              {bulkJobProgress?.job?.status === 'extracting' ? (
-                <div className="h-full bg-purple-400 animate-pulse" style={{ width: '100%' }} />
-              ) : bulkJobProgress?.job?.total_files > 0 ? (
-                <div 
-                  className={`h-full transition-all duration-500 ${
-                    bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
-                  }`} 
-                  style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
-                ></div>
-              ) : null}
-           </div>
-           <div className="flex justify-between items-center mb-4 mt-1">
-             <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                {bulkJobProgress?.job?.status === 'paused' ? (
-                  <>
-                    <Pause size={14} className="text-amber-500" /> Queue Paused
-                  </>
-                ) : bulkJobProgress?.job?.status === 'extracting' ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin text-purple-600" /> Scanning &amp; Queueing Files...
-                  </>
-                ) : (
-                  <>
-                    <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
-                  </>
-                )}
-             </h3>
-             {bulkJobProgress?.job?.status === 'extracting' ? (
-               <span className="text-sm font-semibold text-purple-600">
-                 {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : 'Scanning...'}
-               </span>
-             ) : bulkJobProgress?.job?.total_files > 0 ? (
-               <span className={`text-sm font-semibold ${
-                 bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
-               }`}>
-                 {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
-               </span>
-             ) : null}
-               </div>
-               {(() => {
-                  const failedCount = bulkJobProgress?.items_stats?.find(s => s.status === 'failed')?.count || 0;
-                  if (failedCount > 0) {
-                    return (
-                      <div className="flex items-center gap-3 mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                        <span className="text-red-400 font-medium">
-                          {failedCount} file(s) failed
-                        </span>
-                        <button
-                          onClick={handleRetryFailed}
-                          className="px-3 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded-md text-sm font-medium transition-colors"
-                        >
-                          Retry Failed
-                        </button>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-               <div className="flex flex-wrap gap-3">
-                  {bulkJobProgress?.items_stats?.map(st => (
-                     <div key={st.status} className="bg-gray-50 px-4 py-2 rounded-lg text-sm border border-gray-100 flex items-center">
-                        <div className={`w-2 h-2 rounded-full mr-2 ${
-                          st.status === 'success' ? 'bg-emerald-500' : 
-                          st.status === 'failed' ? 'bg-rose-500' : 
-                          st.status === 'pending' ? 'bg-gray-300' : 'bg-amber-500'
-                        }`}></div>
-                        <span className="text-gray-500 font-medium mr-2">{st.status}:</span>
-                        <span className="text-gray-800 font-semibold">{st.count}</span>
-                     </div>
-                  ))}
-               </div>
-               <div className="flex justify-between items-center mt-6">
-                 <p className="text-xs text-gray-500">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
-                 <div className="flex gap-3 items-center">
-                   {bulkJobProgress?.job?.status === 'paused' ? (
-                     <button onClick={handleResumeQueue} className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
-                       <Play size={12} /> Resume
-                     </button>
-                   ) : (
-                     <button onClick={handlePauseQueue} className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
-                       <Pause size={12} /> Pause
-                     </button>
-                   )}
-                   <button onClick={handleCancelQueue} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
-                     Cancel Queue
-                   </button>
-                 </div>
-               </div>
+              <div className="absolute top-0 left-0 h-1 bg-purple-100 w-full">
+                {bulkJobProgress?.job?.status === 'extracting' ? (
+                  <div className="h-full bg-purple-400 animate-pulse" style={{ width: '100%' }} />
+                ) : bulkJobProgress?.job?.total_files > 0 ? (
+                  <div 
+                    className={`h-full transition-all duration-500 ${
+                      bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+                    }`} 
+                    style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+                  ></div>
+                ) : null}
+              </div>
+              <div className="flex justify-between items-center mb-4 mt-1">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  {bulkJobProgress?.job?.status === 'paused' ? (
+                    <>
+                      <Pause size={14} className="text-amber-500" /> Queue Paused
+                    </>
+                  ) : bulkJobProgress?.job?.status === 'extracting' ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin text-purple-600" /> Scanning &amp; Queueing Files...
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 size={14} className="animate-spin text-purple-600" /> Processing Candidates
+                    </>
+                  )}
+                </h3>
+                {bulkJobProgress?.job?.status === 'extracting' ? (
+                  <span className="text-sm font-semibold text-purple-600">
+                    {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : 'Scanning...'}
+                  </span>
+                ) : bulkJobProgress?.job?.total_files > 0 ? (
+                  <span className={`text-sm font-semibold ${
+                    bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+                  }`}>
+                    {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+                  </span>
+                ) : null}
+              </div>
+              {(() => {
+                const failedCount = bulkJobProgress?.items_stats?.find(s => s.status === 'failed')?.count || 0;
+                if (failedCount > 0) {
+                  return (
+                    <div className="flex items-center gap-3 mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                      <span className="text-red-400 font-medium">
+                        {failedCount} file(s) failed
+                      </span>
+                      <button
+                        onClick={handleRetryFailed}
+                        className="px-3 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded-md text-sm font-medium transition-colors"
+                      >
+                        Retry Failed
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              <div className="flex flex-wrap gap-3">
+                {bulkJobProgress?.items_stats?.map(st => (
+                  <div key={st.status} className="bg-gray-50 px-4 py-2 rounded-lg text-sm border border-gray-100 flex items-center">
+                    <div className={`w-2 h-2 rounded-full mr-2 ${
+                      st.status === 'success' ? 'bg-emerald-500' : 
+                      st.status === 'failed' ? 'bg-rose-500' : 
+                      st.status === 'pending' ? 'bg-gray-300' : 'bg-amber-500'
+                    }`}></div>
+                    <span className="text-gray-500 font-medium mr-2">{st.status}:</span>
+                    <span className="text-gray-800 font-semibold">{st.count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between items-center mt-6">
+                <p className="text-xs text-gray-500">Total Files Discovered: {bulkJobProgress?.job?.total_files || '...'}</p>
+                <div className="flex gap-3 items-center">
+                  {bulkJobProgress?.job?.status === 'paused' ? (
+                    <button onClick={handleResumeQueue} className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                      <Play size={12} /> Resume
+                    </button>
+                  ) : (
+                    <button onClick={handlePauseQueue} className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                      <Pause size={12} /> Pause
+                    </button>
+                  )}
+                  <button onClick={handleCancelQueue} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
+                    Cancel Queue
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1470,266 +1560,269 @@ export default function SourceDashboard() {
         <>
           {/* ── Filter Bar ── */}
           {showFilters && (
-        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex flex-wrap gap-4 items-end shrink-0">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">Job Role</label>
-            <div className="flex items-center gap-2">
-              <select
-                className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
-                value={filters.role_id}
-                onChange={e => setFilters(f => ({ ...f, role_id: e.target.value }))}
+            <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex flex-wrap gap-4 items-end shrink-0">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-500">Job Role</label>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                    value={filters.role_id}
+                    onChange={e => setFilters(f => ({ ...f, role_id: e.target.value }))}
+                  >
+                    <option value="">All Roles</option>
+                    {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-500">Status</label>
+                <select
+                  className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  value={filters.pool}
+                  onChange={e => setFilters(f => ({ ...f, pool: e.target.value }))}
+                >
+                  <option value="all">All</option>
+                  <option value="new">New</option>
+                  <option value="favourite">Favourite</option>
+                  <option value="invited">Invited</option>
+                  <option value="hired">Hired</option>
+                  <option value="archived">Archived</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-500">Min. Experience (yrs)</label>
+                <input
+                  type="number" min={0} max={30}
+                  className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors w-36"
+                  value={filters.min_exp}
+                  onChange={e => setFilters(f => ({ ...f, min_exp: parseInt(e.target.value) || 0 }))}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-500">Location</label>
+                <input
+                  type="text" placeholder="City or Remote"
+                  className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  value={filters.location}
+                  onChange={e => setFilters(f => ({ ...f, location: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-500">Sort By</label>
+                <select
+                  className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  value={filters.sort_by}
+                  onChange={e => setFilters(f => ({ ...f, sort_by: e.target.value }))}
+                >
+                  <option value="newest">Newest</option>
+                  <option value="experience">Experience</option>
+                  {filters.role_id && <option value="fit_score">Fit Score</option>}
+                </select>
+              </div>
+
+              {filters.role_id && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-500">Show</label>
+                  <select
+                    className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                    value={filters.limit}
+                    onChange={e => setFilters(f => ({ ...f, limit: parseInt(e.target.value) }))}
+                  >
+                    {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <button
+                onClick={fetchCandidates}
+                className="px-6 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors duration-150 shadow-sm"
               >
-                <option value="">All Roles</option>
-                {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">Status</label>
-            <select
-              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
-              value={filters.pool}
-              onChange={e => setFilters(f => ({ ...f, pool: e.target.value }))}
-            >
-              <option value="all">All</option>
-              <option value="new">New</option>
-              <option value="favourite">Favourite</option>
-              <option value="invited">Invited</option>
-              <option value="hired">Hired</option>
-              <option value="archived">Archived</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">Min. Experience (yrs)</label>
-            <input
-              type="number" min={0} max={30}
-              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors w-36"
-              value={filters.min_exp}
-              onChange={e => setFilters(f => ({ ...f, min_exp: parseInt(e.target.value) || 0 }))}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">Location</label>
-            <input
-              type="text" placeholder="City or Remote"
-              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
-              value={filters.location}
-              onChange={e => setFilters(f => ({ ...f, location: e.target.value }))}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">Sort By</label>
-            <select
-              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
-              value={filters.sort_by}
-              onChange={e => setFilters(f => ({ ...f, sort_by: e.target.value }))}
-            >
-              <option value="newest">Newest</option>
-              <option value="experience">Experience</option>
-              {filters.role_id && <option value="fit_score">Fit Score</option>}
-            </select>
-          </div>
-
-          {filters.role_id && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-gray-500">Show</label>
-              <select
-                className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
-                value={filters.limit}
-                onChange={e => setFilters(f => ({ ...f, limit: parseInt(e.target.value) }))}
+                Apply
+              </button>
+              <button
+                onClick={() => setFilters(initFilters)}
+                className="px-5 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:text-gray-700 transition-colors duration-150"
               >
-                {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+                Reset
+              </button>
+              {filters.role_id && (
+                <button
+                  onClick={() => handleAutoRank(filters.role_id)}
+                  disabled={autoRanking}
+                  className="px-6 py-2.5 ml-auto bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors duration-150 flex items-center gap-2 shadow-sm"
+                >
+                  {autoRanking ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                  Auto Score All
+                </button>
+              )}
             </div>
           )}
 
-          <button
-            onClick={fetchCandidates}
-            className="px-6 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors duration-150 shadow-sm"
-          >
-            Apply
-          </button>
-          <button
-            onClick={() => setFilters(initFilters)}
-            className="px-5 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:text-gray-700 transition-colors duration-150"
-          >
-            Reset
-          </button>
-          {filters.role_id && (
-            <button
-              onClick={() => handleAutoRank(filters.role_id)}
-              disabled={autoRanking}
-              className="px-6 py-2.5 ml-auto bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors duration-150 flex items-center gap-2 shadow-sm"
-            >
-              {autoRanking ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-              Auto Score All
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── Candidate Table ── */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col overflow-hidden min-h-0">
-        {/* Table header */}
-        <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 border-b border-gray-100 text-xs font-medium text-gray-500 shrink-0`}>
-          <div className="flex items-center justify-center">
-            <button
-              onClick={toggleAll}
-              className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${allSelected ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 hover:border-purple-400'}`}
-            >
-              {allSelected && <CheckSquare size={12} />}
-            </button>
+          {/* ── Candidate Table ── */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col overflow-hidden min-h-0">
+          {/* Table header */}
+          <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 border-b border-gray-100 text-xs font-medium text-gray-500 shrink-0`}>
+            {/* Header content */}
           </div>
-          <div>Candidate</div>
-          {filters.role_id && <div className="text-center">AI Fit Score</div>}
-          <div className="text-center">Experience</div>
-          <div className="text-center">Status</div>
-          <div>Location</div>
-          <div />
-        </div>
 
-        {/* Rows */}
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-100" style={{ overscrollBehavior: 'contain' }}>
-          {loading ? (
-            <div className="flex items-center justify-center gap-3 py-24 text-gray-500">
-              <Loader2 size={24} className="animate-spin text-purple-600" />
-              <span className="text-sm font-medium">Syncing directory...</span>
-            </div>
-          ) : candidates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-              <Database size={48} className="text-gray-300" />
-              <div>
-                <p className="text-lg font-semibold text-gray-800 mb-1">Directory is empty</p>
-                <p className="text-sm text-gray-500">Upload resumes to get started</p>
+          {/* Rows - Scrollable */}
+          <div 
+            className="flex-1 overflow-y-auto divide-y divide-gray-100" 
+            style={{ 
+              overscrollBehavior: 'contain',
+              maxHeight: '500px',  // ← This triggers scrolling when content exceeds 600px
+              minHeight: '400px'
+            }}
+          >
+            {loading ? (
+              <div className="flex items-center justify-center gap-3 py-24 text-gray-500">
+                <Loader2 size={24} className="animate-spin text-purple-600" />
+                <span className="text-sm font-medium">Syncing directory...</span>
               </div>
-            </div>
-          ) : filteredCandidates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-              <Search size={48} className="text-gray-300" />
-              <div>
-                <p className="text-lg font-semibold text-gray-800 mb-1">No matches found</p>
-                <p className="text-sm text-gray-500">Try adjusting your search query</p>
+            ) : candidates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+                <Database size={48} className="text-gray-300" />
+                <div>
+                  <p className="text-lg font-semibold text-gray-800 mb-1">Directory is empty</p>
+                  <p className="text-sm text-gray-500">Upload resumes to get started</p>
+                </div>
               </div>
-            </div>
-          ) : (
-            filteredCandidates.map(c => (
-              <div
-                key={c.id}
-                onClick={() => setDrawerCandidate(c)}
-                className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
-              >
-                {/* Checkbox */}
-                <div className="flex items-center justify-center" onClick={e => { e.stopPropagation(); toggle(c.id); }}>
-                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selectedIds.has(c.id) ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 hover:border-purple-400'}`}>
-                    {selectedIds.has(c.id) && <CheckSquare size={12} />}
-                  </div>
+            ) : filteredCandidates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+                <Search size={48} className="text-gray-300" />
+                <div>
+                  <p className="text-lg font-semibold text-gray-800 mb-1">No matches found</p>
+                  <p className="text-sm text-gray-500">Try adjusting your search query</p>
                 </div>
-
-                {/* Identity */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center font-semibold text-sm text-purple-700 group-hover:border-purple-300 transition-colors shrink-0">
-                    {(c.full_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
+              </div>
+            ) : (
+              filteredCandidates.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => setDrawerCandidate(c)}
+                  className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
+                >
+                  {/* Checkbox */}
+                  <div className="flex items-center justify-center" onClick={e => { e.stopPropagation(); toggle(c.id); }}>
+                    <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selectedIds.has(c.id) ? 'bg-purple-60 border-purple-600' : 'border-gray-300 hover:border-purple-400'}`}>
+                      {selectedIds.has(c.id) && <span className="text-white text-xs font-bold">✓</span>}
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm truncate">{c.full_name || '—'}</p>
-                    <p className="text-xs text-gray-500 truncate">{c.email}</p>
-                  </div>
-                </div>
 
-                {/* Score */}
-                {filters.role_id && (
+                  {/* Identity */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center font-semibold text-sm text-purple-700 group-hover:border-purple-300 transition-colors shrink-0">
+                      {(c.full_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-800 text-sm truncate">{c.full_name || '—'}</p>
+                      <p className="text-xs text-gray-500 truncate">{c.email}</p>
+                    </div>
+                  </div>
+
+                  {/* Score */}
+                  {filters.role_id && (
+                    <div className="flex justify-center">
+                      <span className={`px-3 py-1 rounded-lg border text-sm font-semibold ${SCORE_COLOR(c.fit_score)}`}>
+                        {c.fit_score != null ? `${Math.round(c.fit_score)}%` : '—'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Exp */}
+                  <div className="text-center">
+                    <span className="text-sm font-medium text-gray-700">{c.total_experience_years ?? '—'} yrs</span>
+                  </div>
+
+                  {/* Status */}
                   <div className="flex justify-center">
-                    <span className={`px-3 py-1 rounded-lg border text-sm font-semibold ${SCORE_COLOR(c.fit_score)}`}>
-                      {c.fit_score != null ? `${Math.round(c.fit_score)}%` : '—'}
+                    <span className={`px-3 py-1 rounded-lg border text-xs font-medium ${STATUS_STYLE[c.status?.toLowerCase()] || 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                      {c.status || 'New'}
                     </span>
                   </div>
-                )}
 
-                {/* Exp */}
-                <div className="text-center">
-                  <span className="text-sm font-medium text-gray-700">{c.total_experience_years ?? '—'} yrs</span>
-                </div>
+                  {/* Location */}
+                  <div className="flex items-center gap-1.5 text-gray-500 min-w-0">
+                    <MapPin size={12} className="shrink-0" />
+                    <span className="text-xs truncate">{c.location || 'N/A'}</span>
+                  </div>
 
-                {/* Status */}
-                <div className="flex justify-center">
-                  <span className={`px-3 py-1 rounded-lg border text-xs font-medium ${STATUS_STYLE[c.status?.toLowerCase()] || 'bg-gray-50 border-gray-200 text-gray-600'}`}>
-                    {c.status || 'New'}
-                  </span>
+                  {/* Delete */}
+                  <div className="flex justify-center" onClick={e => handleDelete(c.id, e)}>
+                    <button aria-label="Delete candidate permanently" className="p-2 rounded-lg text-gray-300 hover:text-rose-600 hover:bg-rose-50 transition-colors duration-150 opacity-0 group-hover:opacity-100">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
-
-                {/* Location */}
-                <div className="flex items-center gap-1.5 text-gray-500 min-w-0">
-                  <MapPin size={12} className="shrink-0" />
-                  <span className="text-xs truncate">{c.location || 'N/A'}</span>
-                </div>
-
-                {/* Delete */}
-                <div className="flex justify-center" onClick={e => handleDelete(c.id, e)}>
-                  <button className="p-2 rounded-lg text-gray-300 hover:text-rose-600 hover:bg-rose-50 transition-colors duration-150 opacity-0 group-hover:opacity-100">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
-      </div>
-      </>
+        </>
       )}
 
       {/* ── Bulk Action Bar ── */}
-      {anySelected && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-8 py-4 bg-white rounded-2xl border border-purple-200 shadow-2xl">
-          <span className="text-sm font-semibold text-purple-600">{selectedIds.size} selected</span>
-          <div className="w-px h-6 bg-gray-200" />
-          <button
-            onClick={() => setShowScore(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors duration-150"
-          >
-            <Star size={14} /> Score vs Role
-          </button>
-          <button
-            onClick={() => setShowInvite(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors duration-150"
-          >
-            <Send size={14} /> Send Invite
-          </button>
-          <button
-            onClick={async () => {
-              if(!confirm('Are you sure you want to delete these candidates?')) return;
-              try {
-                const r = await fetch('/api/source/candidates/bulk-delete', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ candidate_ids: Array.from(selectedIds) }),
-                  credentials: 'include'
-                });
-                if(r.ok) {
-                  toast.success('Candidates deleted successfully');
-                  setSelectedIds(new Set());
-                  fetchCandidates();
-                } else {
-                  toast.error('Failed to delete candidates');
-                }
-              } catch(e) {
-                toast.error('Error deleting candidates');
-              }
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-sm font-medium hover:bg-rose-100 hover:border-rose-300 transition-colors duration-150"
-          >
-            <Trash2 size={14} /> Delete
-          </button>
+{anySelected && (
+  <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-8 py-4 bg-white rounded-2xl border border-purple-200 shadow-2xl">
+    <span className="text-sm font-semibold text-purple-600">{selectedIds.size} selected</span>
+    <div className="w-px h-6 bg-gray-200" />
+    
+    {/* ── SELECT ALL BUTTON ── */}
+    <button
+      onClick={toggleAll}
+      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-50 border border-purple-300 text-purple-700 text-sm font-medium hover:bg-purple-100 transition-colors duration-150"
+    >
+      <CheckSquare size={14} /> {allSelected ? 'Deselect All' : 'Select All'}
+    </button>
+    
+    <button
+      onClick={() => setShowScore(true)}
+      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors duration-150"
+    >
+      <Star size={14} /> Score vs Role
+    </button>
+    <button
+      onClick={() => setShowInvite(true)}
+      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors duration-150"
+    >
+      <Send size={14} /> Send Invite
+    </button>
+    <button
+      onClick={async () => {
+        if(!confirm('Are you sure you want to delete these candidates?')) return;
+        try {
+          const r = await fetch('/api/source/candidates/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ candidate_ids: Array.from(selectedIds) }),
+            credentials: 'include'
+          });
+          if(r.ok) {
+            toast.success('Candidates deleted successfully');
+            setSelectedIds(new Set());
+            fetchCandidates();
+          } else {
+            toast.error('Failed to delete candidates');
+          }
+        } catch(e) {
+          toast.error('Error deleting candidates');
+        }
+      }}
+      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-sm font-medium hover:bg-rose-100 hover:border-rose-300 transition-colors duration-150"
+    >
+      <Trash2 size={14} /> Delete
+    </button>
 
-          <button onClick={clearSel} className="p-2.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors duration-150">
-            <X size={16} />
-          </button>
-        </div>
-      )}
+    <button onClick={clearSel} className="p-2.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors duration-150">
+      <X size={16} />
+    </button>
+  </div>
+)}
 
       {/* ── Candidate Profile Drawer ── */}
       <CandidateDrawer
@@ -1772,16 +1865,16 @@ export default function SourceDashboard() {
               <input type="number" min={0} className="form-input" value={newRole.min_experience} onChange={e => setNewRole(r => ({ ...r, min_experience: parseInt(e.target.value) || 0 }))} />
             </Field>
 
-            {/* Skills Builder */}
+            {/* Skills Builder - NEUTRAL TAGS INSIDE MODAL */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Required Skills</label>
-              {/* Existing skill chips */}
+              {/* Existing skill chips - NEUTRAL, NO COLOR */}
               {newRole.required_skills.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
                   {newRole.required_skills.map((s, i) => (
-                    <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                      {s.name || s.skill} <span className="text-purple-400">▸</span> {s.level}
-                      <button type="button" onClick={() => removeSkillFromRole(i)} className="ml-1 text-purple-400 hover:text-purple-700"><X size={10} /></button>
+                    <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                      {s.name || s.skill} <span className="text-gray-400">→</span> {s.level}
+                      <button type="button" onClick={() => removeSkillFromRole(i)} className="ml-1 text-gray-400 hover:text-gray-700"><X size={10} /></button>
                     </span>
                   ))}
                 </div>
@@ -1820,7 +1913,10 @@ export default function SourceDashboard() {
 
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setShowNewRole(false)} className="flex-1 py-3 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">Cancel</button>
-              <button type="submit" className="flex-1 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm">
+              <button
+                type="submit"
+                className="flex-1 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold shadow-sm transition-colors hover:bg-purple-700"
+              >
                 {newRole.id ? "Save Changes" : "Create Role"}
               </button>
             </div>
@@ -1917,58 +2013,58 @@ export default function SourceDashboard() {
     </div>
 
       {/* Global Floating Progress Widget (when not on upload tab) */}
-      {(bulkJobId || uploading) && currentTab !== 'upload' && (
+      {bulkUploadTriggered && (bulkJobId || uploading) && currentTab !== 'upload' && (
         <div 
           className="fixed bottom-6 right-6 z-50 w-80 bg-white rounded-xl shadow-xl border border-purple-200 p-4 cursor-pointer hover:shadow-2xl transition-all"
           onClick={() => setTab('upload')}
         >
-           <div className="flex justify-between items-center mb-2">
-             <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                {uploading ? (
-                  <><Upload size={12} className="text-purple-600 animate-bounce" /> Uploading ZIP...</>
-                ) : bulkJobProgress?.job?.status === 'paused' ? (
-                  <><Pause size={12} className="text-amber-500" /> Paused</>
-                ) : bulkJobProgress?.job?.status === 'extracting' ? (
-                  <><Loader2 size={12} className="animate-spin text-purple-600" /> Scanning ZIP</>
-                ) : (
-                  <><Loader2 size={12} className="animate-spin text-purple-600" /> Processing Resumes</>
-                )}
-             </h4>
-             {uploading ? (
-               <span className="text-xs font-bold text-purple-600">
-                 {Math.round(uploadProgress || 0)}%
-               </span>
-             ) : bulkJobProgress?.job?.status === 'extracting' ? (
-               <span className="text-xs font-semibold text-purple-600">
-                 {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : '...'}
-               </span>
-             ) : bulkJobProgress?.job?.total_files > 0 ? (
-               <span className={`text-xs font-bold ${
-                 bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
-               }`}>
-                 {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
-               </span>
-             ) : null}
-           </div>
-           
-           <div className="w-full bg-purple-100 h-1.5 rounded-full overflow-hidden">
+          <div className="flex justify-between items-center mb-2">
+            <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
               {uploading ? (
-                <div 
-                  className="h-full bg-purple-600 transition-all duration-300"
-                  style={{ width: `${uploadProgress || 0}%` }}
-                ></div>
+                <><Upload size={12} className="text-purple-600 animate-bounce" /> Uploading ZIP...</>
+              ) : bulkJobProgress?.job?.status === 'paused' ? (
+                <><Pause size={12} className="text-amber-500" /> Paused</>
               ) : bulkJobProgress?.job?.status === 'extracting' ? (
-                <div className="h-full bg-purple-400 animate-pulse w-full"></div>
-              ) : bulkJobProgress?.job?.total_files > 0 ? (
-                <div 
-                  className={`h-full transition-all duration-500 ${
-                    bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
-                  }`} 
-                  style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
-                ></div>
-              ) : null}
-           </div>
-           <p className="text-[10px] text-gray-400 mt-2 font-medium">Click to view details</p>
+                <><Loader2 size={12} className="animate-spin text-purple-600" /> Scanning ZIP</>
+              ) : (
+                <><Loader2 size={12} className="animate-spin text-purple-600" /> Processing Resumes</>
+              )}
+            </h4>
+            {uploading ? (
+              <span className="text-xs font-bold text-purple-600">
+                {Math.round(uploadProgress || 0)}%
+              </span>
+            ) : bulkJobProgress?.job?.status === 'extracting' ? (
+              <span className="text-xs font-semibold text-purple-600">
+                {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : '...'}
+              </span>
+            ) : bulkJobProgress?.job?.total_files > 0 ? (
+              <span className={`text-xs font-bold ${
+                bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+              }`}>
+                {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+              </span>
+            ) : null}
+          </div>
+          
+          <div className="w-full bg-purple-100 h-1.5 rounded-full overflow-hidden">
+            {uploading ? (
+              <div 
+                className="h-full bg-purple-600 transition-all duration-300"
+                style={{ width: `${uploadProgress || 0}%` }}
+              ></div>
+            ) : bulkJobProgress?.job?.status === 'extracting' ? (
+              <div className="h-full bg-purple-400 animate-pulse w-full"></div>
+            ) : bulkJobProgress?.job?.total_files > 0 ? (
+              <div 
+                className={`h-full transition-all duration-500 ${
+                  bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+                }`} 
+                style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+              ></div>
+            ) : null}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-2 font-medium">Click to view details</p>
         </div>
       )}
 
@@ -1981,8 +2077,8 @@ function Modal({ children, title, onClose }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-2xl p-8 shadow-2xl border border-gray-200">
-        <div className="flex items-center justify-between mb-6">
+      <div className="relative w-full max-w-lg bg-white rounded-2xl p-8 shadow-2xl border border-gray-200 overflow-hidden">
+        <div className="relative flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-800">{title}</h2>
           <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X size={18} /></button>
         </div>

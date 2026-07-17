@@ -15,6 +15,7 @@ import AssessmentDashboard from './AssessmentDashboard';
 
 import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
+import ewandzLogo from "../../../assets/EWANDZ.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
@@ -131,7 +132,7 @@ export default function VerifyDashboard() {
             src={logoutIcon}
             className="icon logout-icon"
             alt="logout"
-            onClick={() => { logout(); navigate('/login'); }}
+            onClick={() => { logout(); navigate('/'); }}
           />
           <div className="profile-wrap">
             <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>
@@ -193,12 +194,15 @@ export default function VerifyDashboard() {
               <button className={tab === 'candidate' ? 'active' : ''} onClick={() => setTab('candidate')}>My Assessments</button>
             </>
           )}
+          <div className="sidebar-brand">
+            <img src={ewandzLogo} alt="Ewandz" />
+          </div>
         </div>
         
         {/* CONTENT */}
         <div className="content" style={{ backgroundColor: '#FFFFFF', padding: '24px' }}>
           <div className="flex flex-col gap-6">
-            {/* Header */}
+            {/* Header - Only shows for Manage and Candidate tabs */}
             {showHeader && (
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">

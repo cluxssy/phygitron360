@@ -13,6 +13,7 @@ export default function ComboBox({
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const containerRef = useRef(null);
+    const searchInputRef = useRef(null);
 
     const isLightMode = window.location.pathname.startsWith('/deploy');
 
@@ -34,6 +35,14 @@ export default function ComboBox({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    useEffect(() => {
+        if (isOpen) {
+            requestAnimationFrame(() => {
+                searchInputRef.current?.focus();
+            });
+        }
+    }, [isOpen]);
+
     const handleSelect = (val) => {
         onChange(val);
         setIsOpen(false);
@@ -49,7 +58,8 @@ export default function ComboBox({
             )}
             
             <div 
-                onClick={() => setIsOpen(!isOpen)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setIsOpen((prev) => !prev)}
                 className={`w-full px-5 py-4 rounded-xl flex justify-between items-center cursor-pointer transition-all border group ${
                     isLightMode 
                         ? 'bg-white border-[#ebe4ff] hover:border-[#c084fc]' 
@@ -81,7 +91,7 @@ export default function ComboBox({
                             isLightMode ? 'text-black/30' : 'text-white/20'
                         }`} />
                         <input 
-                            autoFocus
+                            ref={searchInputRef}
                             placeholder="Search or type custom..."
                             className={`w-full rounded-lg pl-10 pr-4 py-2.5 text-xs outline-none border transition-all ${
                                 isLightMode 

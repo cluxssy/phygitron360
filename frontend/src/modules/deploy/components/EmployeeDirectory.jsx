@@ -13,10 +13,33 @@ import { toast } from 'react-hot-toast';
 import AddEmployeeModal from './AddEmployeeModal';
 import HasPermission from '../../../components/common/HasPermission';
 
+// ── UPDATED STATUS COLORS ──
 const STATUS_COLORS = {
   Active: '#10B981',
   'Notice Period': '#F59E0B',
-  Exited: '#F43F5E',
+  'On Notice': '#F59E0B',
+  'Notice': '#F59E0B',
+  'Inactive': '#000000',  // ← ADD THIS LINE
+  'Exited': '#fe002a',
+  'On Leave' : '#147bdb',
+};
+
+// ── HELPER: Normalize status for display ──
+const normalizeStatus = (status) => {
+  if (!status) return 'Active';
+  
+  const s = status.toLowerCase().trim();
+  
+  // All variations of "Notice" map to "Notice Period"
+  if (s === 'notice period' || s === 'on notice' || s === 'notice' || s === 'onnotice') {
+    return 'Notice Period';
+  }
+  
+  if (s === 'active') return 'Active';
+  if (s === 'exited' || s === 'terminated') return 'Exited';
+  if (s === 'inactive') return 'Inactive';
+  
+  return status; // Return as-is for unknown statuses
 };
 
 export default function EmployeeDirectory() {
@@ -85,6 +108,19 @@ setEmployees(employeeList);
     }
   };
 
+  // ── HELPER: Check if status matches filter ──
+  const statusMatchesFilter = (empStatus, filter) => {
+    if (filter === 'All') return true;
+    
+    const normalized = normalizeStatus(empStatus);
+    
+    if (filter === 'Active') return normalized === 'Active';
+    if (filter === 'Notice Period') return normalized === 'Notice Period';
+    if (filter === 'Exited') return normalized === 'Exited';
+    
+    return empStatus === filter;
+  };
+
   const filtered = employees.filter((e) => {
 
     const employeeName =
@@ -106,9 +142,7 @@ setEmployees(employeeList);
       employeeCode.toLowerCase().includes(s) ||
       employeeEmail.toLowerCase().includes(s);
 
-    const matchStatus =
-      filterStatus === 'All' ||
-      (e.employment_status || 'Active') === filterStatus;
+    const matchStatus = statusMatchesFilter(e.employment_status, filterStatus);
 
     const matchTeam =
       filterTeam === 'All' ||
@@ -138,11 +172,11 @@ setEmployees(employeeList);
 
       <div className="rounded-[2.5rem] border border-[#ebe7ff] bg-[#f7f3ff] px-10 py-10">
 
-        <p className="text-[11px] uppercase tracking-[0.35em] font-black text-[#7c3aed] mb-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">
           Personnel Management
         </p>
 
-        <h1 className="text-6xl font-black tracking-tight text-black">
+        <h1 className="text-5xl font-black text-black tracking-tight leading-none">
           Employee Directory
         </h1>
 
@@ -260,19 +294,14 @@ setEmployees(employeeList);
             className="
               px-7
               py-4
-              rounded-2xl
-              bg-gradient-to-r
-              from-[#8b5cf6]
-              to-[#c084fc]
-              text-white
+              bg-[#7c3aed] 
+              !text-white 
               text-sm
-              font-black
+              font-black 
               tracking-wide
-              flex
-              items-center
-              gap-3
-              shadow-lg
-              shadow-purple-200
+              flex items-center 
+              gap-3 shadow-lg 
+              shadow-[#7c3aed]/20
             "
           >
 
@@ -286,51 +315,51 @@ setEmployees(employeeList);
 
       </div>
 
-      {/* STATS */}
+      {/* ── UPDATED STATS ── */}
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-5">
 
         {[
-          {
-            label: 'Total',
-            count: employees.length,
-            
-            color: '#8B5CF6'
-          },
-          {
-            label: 'Active',
-            count: employees.filter(e =>
-              (e.employment_status || 'Active') === 'Active'
-            ).length,
-            color: '#10B981'
-          },
-          {
-            label: 'Notice',
-            count: employees.filter(e =>
-              e.employment_status === 'Notice Period'
-            ).length,
-            color: '#F59E0B'
-          },
-          {
-            label: 'Exited',
-            count: employees.filter(e =>
-              e.employment_status === 'Exited'
-            ).length,
-            color: '#EF4444'
-          },
-          {
-            label: 'Teams',
-            count: new Set(
-              employees.map(e => e.team).filter(Boolean)
-            ).size,
-            color: '#3B82F6'
-          },
-          {
-            label: 'Results',
-            count: filtered.length,
-            color: '#06B6D4'
-          },
-        ].map((s, i) => (
+        {
+          label: 'Total',
+          count: employees.length,
+          color: '#8B5CF6'
+        },
+        {
+          label: 'Active',
+          count: employees.filter(e =>
+            normalizeStatus(e.employment_status) === 'Active'
+          ).length,
+          color: '#10B981'
+        },
+        {
+          label: 'Notice',
+          count: employees.filter(e =>
+            normalizeStatus(e.employment_status) === 'Notice Period'
+          ).length,
+          color: '#F59E0B'
+        },
+        {
+          label: 'Exited',
+          count: employees.filter(e =>
+            normalizeStatus(e.employment_status) === 'Exited'
+          ).length,
+          color: '#EF4444'
+        },
+        {
+          label: 'Teams',
+          count: new Set(
+            employees.map(e => e.team).filter(Boolean)
+          ).size,
+          color: '#3B82F6'
+        },
+        {
+          label: 'Results',
+          count: filtered.length,
+          color: '#06B6D4'
+        },
+      ].map((s, i) => (
+
 
           <div
             key={i}
@@ -433,6 +462,10 @@ setEmployees(employeeList);
                   emp.username ||
                   'Unknown';
 
+                // ── Normalize status for display ──
+                const displayStatus = normalizeStatus(emp.employment_status);
+                const statusColor = STATUS_COLORS[displayStatus] || '#8B5CF6';
+
                 return (
 
                   <tr
@@ -529,7 +562,7 @@ setEmployees(employeeList);
 
                     </td>
 
-                    {/* STATUS */}
+                    {/* ── STATUS ── */}
 
                     <td className="px-8 py-6">
 
@@ -544,13 +577,13 @@ setEmployees(employeeList);
                           tracking-[0.15em]
                         "
                         style={{
-                          background: `${STATUS_COLORS[emp.employment_status || 'Active']}15`,
-                          color: STATUS_COLORS[emp.employment_status || 'Active'],
-                          border: `1px solid ${STATUS_COLORS[emp.employment_status || 'Active']}30`
+                          background: `${statusColor}15`,
+                          color: statusColor,
+                          border: `1px solid ${statusColor}30`
                         }}
                       >
 
-                        {emp.employment_status || 'Active'}
+                        {displayStatus}
 
                       </span>
 

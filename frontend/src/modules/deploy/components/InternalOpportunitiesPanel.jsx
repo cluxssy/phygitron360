@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Briefcase, Clock, CheckCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
 export default function InternalOpportunitiesPanel({ user }) {
   const [applications, setApplications] = useState([]);
@@ -24,13 +25,9 @@ export default function InternalOpportunitiesPanel({ user }) {
     fetchApplications();
   }, []);
 
+  // ── LOADING - REPLACED WITH HORIZONTAL LOADER ──
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4 animate-pulse">
-        <div className="w-10 h-10 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7C3AED]">Loading Opportunities</p>
-      </div>
-    );
+    return <HorizontalLoader label="Loading Opportunities..." />;
   }
 
   return (
@@ -99,7 +96,7 @@ export default function InternalOpportunitiesPanel({ user }) {
               {app.invite_status && (
                 <div className="mt-6 pt-6 border-t border-[#ebe4ff] relative z-10">
                   <button 
-                    onClick={() => window.open('/login', '_blank')}
+                    onClick={() => window.open('/', '_blank')}
                     className="w-full py-3 rounded-xl bg-black text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-black/80 transition-colors"
                   >
                     Go To Assessments <ExternalLink size={14} />
