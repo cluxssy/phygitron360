@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -30,7 +31,7 @@ import {
   Legend
 } from 'recharts';
 
-import { useNotifications } from '../../../core/context/NotificationContext'; // ← ADD THIS
+import { useNotifications } from '../../../core/context/NotificationContext';
 
 const PALETTE = [
   '#8B5CF6', // primary lilac
@@ -72,39 +73,65 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-const StatCard = ({ label, value, color, borderColor, icon: Icon, sub, onClick }) => (
-  <div 
-    onClick={onClick}
-    className={`bg-white border border-[#ebe4ff] rounded-[2rem] p-6 shadow-[0_10px_40px_rgba(180,140,255,0.08)] relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_rgba(124,58,237,0.08)] ${onClick ? 'cursor-pointer' : ''} border-t-4 ${borderColor}`}
-  >
-    <div
-      className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
-      style={{
-        background: `${color}15`,
-        border: `1px solid ${color}25`
-      }}
-    >
-      <Icon size={20} style={{ color }} />
-    </div>
+const PercentTooltip = ({ active, payload, data }) => {
+  if (!active || !payload?.length) return null;
 
-    <h3
-      className="text-4xl font-black leading-none mb-2"
-      style={{ color }}
-    >
-      {value}
-    </h3>
+  const entry = payload[0];
+  const total = (data || []).reduce((sum, d) => sum + (d.value || 0), 0);
+  const pct = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0.0';
+  const color = entry.color || entry.payload?.fill;
 
-    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-black/50">
-      {label}
-    </p>
-
-    {sub && (
-      <p className="text-[9px] text-black/30 mt-2 uppercase tracking-widest flex items-center gap-1">
-        {sub}
+  return (
+    <div className="bg-white border border-[#ebe4ff] rounded-2xl px-4 py-3 shadow-xl">
+      <p className="text-[10px] font-black uppercase tracking-widest text-black/40 mb-2">
+        {entry.name}
       </p>
-    )}
-  </div>
-);
+
+      <div
+        className="flex items-center gap-2 text-sm font-bold"
+        style={{ color }}
+      >
+        <div
+          className="w-2 h-2 rounded-full"
+          style={{ background: color }}
+        />
+        <span className="text-black">{pct}%</span>
+      </div>
+    </div>
+  );
+};
+
+const StatCard = ({ label, value, color, borderColor, icon: Icon, sub, onClick }) => (
+    <div 
+      onClick={onClick}
+      className={`bg-white border border-[#ebe4ff] p-6 shadow-[0_10px_40px_rgba(180,140,255,0.08)] relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_rgba(124,58,237,0.08)] ${onClick ? 'cursor-pointer' : ''} border-t-4 ${borderColor}`}
+    >
+      <div
+        className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
+        style={{
+          background: `${color}15`,
+          border: `1px solid ${color}25`
+        }}
+      >
+        <Icon size={20} style={{ color }} />
+      </div>
+
+      {/* ── NUMBER - NOW BLACK ── */}
+      <h3 className="text-4xl font-black leading-none mb-2 text-black">
+        {value}
+      </h3>
+
+      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-black/50">
+        {label}
+      </p>
+
+      {sub && (
+        <p className="text-[9px] text-black mt-2 uppercase tracking-widest flex items-center gap-1">
+          {sub}
+        </p>
+      )}
+    </div>
+  );
 
 const ChartCard = ({ title, children, className = '' }) => (
   <div
@@ -112,7 +139,7 @@ const ChartCard = ({ title, children, className = '' }) => (
       bg-white
       border
       border-[#ebe4ff]
-      rounded-[2rem]
+        
       p-8
       shadow-[0_10px_40px_rgba(180,140,255,0.08)]
       flex
@@ -137,6 +164,7 @@ export default function DeployAnalytics() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [totalAssets, setTotalAssets] = useState(0);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -151,8 +179,10 @@ export default function DeployAnalytics() {
       }
 
       const data = await res.json();
-
       setStats(data);
+
+      await fetchAssetsData();
+
       setLastRefresh(new Date());
     } catch (e) {
       toast.error('Failed to load analytics');
@@ -161,11 +191,60 @@ export default function DeployAnalytics() {
     }
   };
 
+  const fetchAssetsData = async () => {
+    try {
+      const res = await fetch('/api/employees', {
+        credentials: 'include'
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch employees');
+      }
+
+      const employees = await res.json();
+      const employeeList = Array.isArray(employees) ? employees : [];
+
+      let allocatedCount = 0;
+      const assetFields = ['ob_laptop', 'ob_laptop_bag', 'ob_headphones', 'ob_mouse', 
+                          'ob_extra_hardware', 'ob_client_assets', 'ob_id_card', 
+                          'ob_email_access', 'ob_groups', 'ob_mediclaim', 'ob_pf'];
+
+      const assetPromises = employeeList.map(async (emp) => {
+        try {
+          const assetRes = await fetch(`/api/assets/${emp.employee_code}`, {
+            credentials: 'include'
+          });
+          if (assetRes.ok) {
+            const assetData = await assetRes.json();
+            let employeeAllocated = 0;
+            assetFields.forEach(field => {
+              if (assetData[field] === 1 || assetData[field] === true) {
+                employeeAllocated++;
+              }
+            });
+            return employeeAllocated;
+          }
+          return 0;
+        } catch {
+          return 0;
+        }
+      });
+
+      const results = await Promise.all(assetPromises);
+      allocatedCount = results.reduce((sum, count) => sum + count, 0);
+
+      setTotalAssets(allocatedCount);
+
+    } catch (error) {
+      console.error('Error fetching assets data:', error);
+      setTotalAssets(0);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
   }, []);
 
-  // ── Card Click Handlers ──
   const handleEmployeesClick = () => {
     navigate('/deploy?tab=personnel');
   };
@@ -183,15 +262,7 @@ export default function DeployAnalytics() {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="w-12 h-12 border-4 border-[#7c3aed] border-t-transparent rounded-full animate-spin" />
-
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7c3aed]">
-          Loading Analytics
-        </p>
-      </div>
-    );
+    return <HorizontalLoader label="Loading analytics..." />;
   }
 
   if (!stats) {
@@ -208,13 +279,48 @@ export default function DeployAnalytics() {
 
   const { counts = {}, charts = {}, recent_hires = [] } = stats;
 
-  const departmentData = charts.department || [];
-  const statusData = charts.status || [];
+const departmentData = charts.department || [];
 
-  const hiringTrend = (charts.hiring_trend || []).map(h => ({
-    name: String(h.Year || h.name),
-    value: h.Hires || h.value || 0
-  }));
+// ── GROUP AND NORMALIZE STATUS DATA ──
+const rawStatusData = charts.status || [];
+
+// Function to normalize status names
+const normalizeStatusName = (name) => {
+  if (!name) return 'Unknown';
+  const lower = name.toLowerCase().trim();
+  if (lower === 'active') return 'Active';
+  if (lower === 'notice period' || lower === 'on notice' || lower === 'notice' || lower === 'onnotice') {
+    return 'Notice Period';
+  }
+  if (lower === 'exited' || lower === 'terminated') return 'Exited';
+  if (lower === 'inactive') return 'Inactive';
+  // Exclude "On Leave" or any status with "leave"
+  if (lower.includes('leave')) return null;
+  return name;
+};
+
+// Group statuses by normalized name
+const statusMap = {};
+rawStatusData.forEach(item => {
+  const normalized = normalizeStatusName(item.name);
+  if (normalized === null) return; // Skip "On Leave" and similar
+  if (statusMap[normalized]) {
+    statusMap[normalized] += item.value;
+  } else {
+    statusMap[normalized] = item.value;
+  }
+});
+
+// Convert back to array for chart
+const statusData = Object.keys(statusMap).map(name => ({
+  name: name,
+  value: statusMap[name]
+}));
+
+const hiringTrend = (charts.hiring_trend || []).map(h => ({
+  name: String(h.Year || h.name),
+  value: h.Hires || h.value || 0
+}));
 
   const skillsData = charts.skills || [];
 
@@ -243,12 +349,12 @@ export default function DeployAnalytics() {
             </p>
 
             <h1 className="text-5xl font-black text-black tracking-tight leading-none">
-              Workforce Analytics
+              Employee Central Analytics
             </h1>
 
-            <p className="text-black/40 mt-5 text-lg">
+            {/* <p className="text-black/70 mt-5 text-lg">
               Live operational metrics, employee overview, onboarding health and organisation activity.
-            </p>
+            </p> */}
           </div>
 
           <div className="flex items-center gap-4">
@@ -289,45 +395,45 @@ export default function DeployAnalytics() {
       {/* ── KPI CARDS ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
 
-        {/* 👥 Employees - Purple */}
+        {/*  Employees - Purple */}
         <StatCard
           label="Employees"
           value={counts.total ?? 0}
           color="#8B5CF6"
           borderColor="border-t-purple-500"
           icon={Users}
-          sub="Total Active Employees"
+          sub="Total Employee Profiles"
           onClick={handleEmployeesClick}
         />
 
-        {/* 🟢 Attendance - Green */}
+        {/*  Attendance - amber */}
         <StatCard
           label="Attendance"
           value={`${counts.active ?? 0}%`}
-          color="#10B981"
-          borderColor="border-t-emerald-500"
+          color="#F59E0B"
+          borderColor="border-t-amber-500"
           icon={Activity}
           sub="Present Today / Attendance Rate"
           onClick={handleAttendanceClick}
         />
 
-        {/* 📋 Assets - Blue */}
+        {/* 📋 Assets - green */}
         <StatCard
           label="Assets"
-          value={counts.designations ?? 0}
-          color="#3B82F6"
-          borderColor="border-t-blue-500"
+          value={totalAssets}
+          color="#10B981"
+          borderColor="border-t-emerald-500"
           icon={Package}
           sub="Total Assets Allocated"
           onClick={handleAssetsClick}
         />
 
-        {/* ⚠️ Alerts - red */}
+        {/* ⚠️ Alerts - pink */}
         <StatCard
           label="Alerts"
           value={counts.pending_approvals ?? 0}
-          color="#f50b0b"
-          borderColor="border-t-red-500"
+          color="#EC4899"
+          borderColor="border-t-pink-500"
           icon={Bell}
           sub="Pending Approvals / Pending Actions"
           onClick={handleAlertsClick}
@@ -341,7 +447,6 @@ export default function DeployAnalytics() {
         <ChartCard title="Employment Status">
           <ResponsiveContainer width="100%" height={320}>
             <PieChart>
-
               <Pie
                 data={statusData}
                 dataKey="value"
@@ -350,16 +455,17 @@ export default function DeployAnalytics() {
                 outerRadius={100}
                 paddingAngle={4}
               >
-                {statusData.map((_, i) => (
-                  <Cell
-                    key={i}
-                    fill={CHART_COLORS[i % CHART_COLORS.length]}
-                  />
-                ))}
+                {statusData.map((entry, index) => {
+                  // Map specific colors for status names
+                  let color = CHART_COLORS[index % CHART_COLORS.length];
+                  if (entry.name === 'Active') color = '#10B981';
+                  else if (entry.name === 'Notice Period') color = '#F59E0B';
+                  else if (entry.name === 'Exited') color = '#EF4444';
+                  else if (entry.name === 'Inactive') color = '#3B82F6';
+                  return <Cell key={index} fill={color} />;
+                })}
               </Pie>
-
               <Tooltip content={<CustomTooltip />} />
-
               <Legend
                 wrapperStyle={{
                   fontSize: '11px',
@@ -367,7 +473,6 @@ export default function DeployAnalytics() {
                   color: '#000'
                 }}
               />
-
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -500,7 +605,7 @@ export default function DeployAnalytics() {
                 ))}
               </Pie>
 
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<PercentTooltip data={locationData} />} />
 
               <Legend
                 wrapperStyle={{
@@ -644,7 +749,7 @@ export default function DeployAnalytics() {
       </div>
 
       {/* TABLE */}
-      <div className="bg-white border border-[#ebe4ff] rounded-[2rem] overflow-hidden shadow-[0_10px_40px_rgba(180,140,255,0.08)]">
+      <div className="bg-white border border-[#ebe4ff]    overflow-hidden shadow-[0_10px_40px_rgba(180,140,255,0.08)]">
 
         <div className="px-8 py-6 border-b border-[#ebe4ff] flex items-center justify-between">
           <div>
@@ -652,7 +757,7 @@ export default function DeployAnalytics() {
               Recent Hires
             </h3>
 
-            <p className="text-black/40 mt-2">
+            <p className="text-black/70 mt-2">
               Latest onboarding activity
             </p>
           </div>
@@ -706,15 +811,15 @@ export default function DeployAnalytics() {
                   </div>
                 </td>
 
-                <td className="px-8 py-5 text-black/60">
+                <td className="px-8 py-5 text-black/80">
                   {h.team || '—'}
                 </td>
 
-                <td className="px-8 py-5 text-black/60">
+                <td className="px-8 py-5 text-black/80">
                   {h.designation || '—'}
                 </td>
 
-                <td className="px-8 py-5 text-black/50">
+                <td className="px-8 py-5 text-black/80">
                   <div className="flex items-center gap-2">
                     <MapPin size={14} />
                     {h.location || '—'}
@@ -727,7 +832,7 @@ export default function DeployAnalytics() {
                   </span>
                 </td>
 
-                <td className="px-8 py-5 text-black/50 font-mono">
+                <td className="px-8 py-5 text-black/80 font-mono">
                   {h.doj_str || h.doj || '—'}
                 </td>
 

@@ -10,10 +10,10 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
   const detectSubdomain = () => {
     const hostname = window.location.hostname;
     
-    // Ignore IP addresses
     if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostname)) {
       return 'public';
     }
@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({
           email,
           workspace_id: workspaceId,
-          action: "Dispatch Reset" // ✅ backend requirement
+          action: "Dispatch Reset"
         }),
       });
 
@@ -72,17 +72,17 @@ export default function ForgotPasswordPage() {
   return (
     <div className="login-page">
 
-      {/* LEFT IMAGE (UNCHANGED) */}
+      {/* LEFT IMAGE */}
       <div className="login-left">
         <img src={loginImg} alt="login visual" />
       </div>
 
-      {/* RIGHT FORM (MODIFIED ONLY THIS) */}
+      {/* RIGHT FORM */}
       <div className="login-right">
         <div className="login-box">
 
           {/* BACK */}
-          <div className="back" onClick={() => navigate("/login")}>
+          <div className="back" onClick={() => navigate("/")}>
             ←
           </div>
 

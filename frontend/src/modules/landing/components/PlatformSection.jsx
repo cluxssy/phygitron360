@@ -1,66 +1,60 @@
-const cards = [
-  {
-    tag: "PHYGITRON SOURCE",
-    title: "Create a Stronger Talent Pipeline",
-    desc: "Reach better candidates, organize talent data, and uncover skill potential through a smarter sourcing system built for modern hiring teams.",
-  },
-  {
-    tag: "PHYGITRON FORGE",
-    title: "Turn Learning Into Business Impact",
-    desc: "Equip teams with focused development programs that improve readiness, sharpen expertise, and support long-term performance growth.",
-  },
-  {
-    tag: "PHYGITRON VERIFY",
-    title: "Make Decisions Backed by Evidence",
-    desc: "Measure capability through reliable assessments and trusted validation tools that bring clarity to hiring and workforce planning.",
-  },
-  {
-    tag: "PHYGITRON DEPLOY",
-    title: "Run Workforce Operations Smoothly",
-    desc: "Coordinate onboarding, payroll, compliance, and deployment workflows through one connected system built for scale.",
-  },
-];
+import demoImage from '../../../assets/demo.png';
+import triangleImage from '../../../assets/Polygon 2.png';
 
 const PlatformSection = () => {
   return (
-    <section className="platform">
-      <div className="platform-container">
+    <div className="relative w-full overflow-hidden">
+      {/* Spacer to create gap with guaranteed white background */}
+      <div className="w-full bg-white h-24 md:h-32 relative z-10" />
 
-        <h2 className="platform-heading">
-          One Platform.<br />
-          Four Powerful Workforce Engines.
-        </h2>
+      <section
+        className="w-full bg-[#E4E4E4] py-16 sm:py-20 md:py-32 lg:py-40 relative z-10 overflow-hidden"
+        style={{
+          backgroundImage:
+            'radial-gradient(rgba(0,0,0,0.06) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+        }}
+      >
+        {/* Decorative purple triangle, tucked behind the preview image — only shown once the image sits in its own column */}
+        <img
+          src={triangleImage}
+          alt=""
+          aria-hidden="true"
+          className="hidden lg:block absolute left-[1px] top-1/2 -translate-y-1/2 w-[420px] max-w-none pointer-events-none select-none z-0"
+        />
 
-        <p className="platform-sub">
-          From hiring the right talent to building skills, validating capabilities, and managing deployment, PHYGITRON brings the entire workforce lifecycle into one intelligent ecosystem.
-        </p>
+        <div className="mx-auto w-full max-w-[1400px] px-6 lg:px-10 relative z-10">
 
-        <div className="platform-grid">
-          {cards.map((card, i) => (
-            <div key={i} className="platform-card">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
 
-              {/* TOP GRADIENT */}
-              <div className="card-top">
-                <p>
-  PHYGITRON <span>{card.tag.split(" ")[1]}</span>
-</p>
-              </div>
-
-              {/* BOTTOM BLACK */}
-              <div className="card-bottom">
-                <h3>{card.title}</h3>
-                <p>{card.desc}</p>
-                <span className="platform-link">
-  Explore More <span className="arrow">↗</span>
-</span>
-              </div>
-
+            <div className="relative">
+              <img
+                src={demoImage}
+                alt="PHYGITRON 360 platform preview"
+                className="w-full shadow-2xl shadow-black/40"
+              />
             </div>
-          ))}
-        </div>
 
-      </div>
-    </section>
+            <div className="text-center lg:text-left">
+              <h2 className="text-3xl md:text-4xl font-medium text-[#151515] leading-tight mb-6">
+                Explore <span className="font-bold">PHYGITRON 360</span>
+                <br className="hidden lg:block" /> in Action
+              </h2>
+
+              <p className="text-gray-500 text-base leading-relaxed">
+                Take a guided tour of PHYGITRON 360 and discover how each intelligent
+                module works seamlessly together to simplify hiring, accelerate
+                employee development, automate assessments, and enhance workforce
+                operations—all through a modern, AI-driven experience designed for
+                growing organizations.
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+    </div>
   );
 };
 

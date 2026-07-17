@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 import "../styles/admin.css";
 
 import logo from "../../../assets/phy360.png";
+import ewandzLogo from "../../../assets/EWANDZ.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 
@@ -26,7 +28,21 @@ const hubNameMap = {
 };
 
 // Standardized palette for the Funnel Chart
-const PIE_PALETTE = ["#CC97FF", "#10B981", "#F59E0B", "#6366F1", "#8b5cf6"];
+const PIE_PALETTE = ["#8B5CF6", "#F59E0B", "#10B981","#EC4899"];
+
+const CustomTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white border border-[#ebe4ff] p-3 rounded-xl shadow-xl">
+        <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280] mb-1">{payload[0].name}</p>
+        <p className="text-sm font-black" style={{ color: payload[0].payload.fill }}>
+          {payload[0].value} candidates
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function OrgDashboard() {
   const navigate = useNavigate();
@@ -76,19 +92,20 @@ export default function OrgDashboard() {
         axios.get("/api/org/team-overview"),
       ]);
 
-      setStats(statsRes.data || {});
+      const statsData = statsRes.data || {};
+      setStats(statsData);
 
-      setFunnel(
-        funnelRes.data?.length
-          ? funnelRes.data
-          : [
-              { stage: "Sourced", count: 0 },
-              { stage: "Screening", count: 0 },
-              { stage: "Training", count: 0 },
-              { stage: "Verified", count: 0 },
-              { stage: "Deployed", count: 0 },
-            ]
-      );
+      // ── Always use stats data for funnel to ensure consistency ──
+      // This guarantees the pie chart matches the KPI cards
+      const funnelData = [
+        { stage: "Sourced", count: statsData.total_candidates || 0 },
+        { stage: "Training", count: statsData.currently_training || 0 },
+        { stage: "Verified", count: statsData.verified_ready || 0 },
+        { stage: "Deployed", count: statsData.active_employees || 0 },
+      ];
+
+      console.log('Funnel Data from Stats:', funnelData);
+      setFunnel(funnelData);
 
       setActivity(Array.isArray(activityRes.data) ? activityRes.data : []);
       setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : []);
@@ -126,27 +143,14 @@ export default function OrgDashboard() {
     navigate('/deploy?tab=personnel');
   };
 
-  const handleAlertsClick = () => {
-    console.log("Alerts card clicked - opening notifications");
-    setShowNotifications(true);
-  };
+  // ── Prepare data for Recharts PieChart ──
+  const pieChartData = funnel.map((f, i) => ({
+    name: f.stage,
+    value: f.count,
+    fill: PIE_PALETTE[i % PIE_PALETTE.length],
+  }));
 
-  // Funnel Pie Chart Logic
-  const totalFunnel = funnel.reduce((acc, f) => acc + f.count, 0);
-  let currentAngle = 0;
-  const conicStops = funnel
-    .map((f, i) => {
-      const percentage = totalFunnel > 0 ? (f.count / totalFunnel) * 100 : 0;
-      const start = currentAngle;
-      const end = currentAngle + percentage;
-      currentAngle = end;
-      return `${PIE_PALETTE[i % PIE_PALETTE.length]} ${start}% ${end}%`;
-    })
-    .join(", ");
-
-  const pieBg = totalFunnel > 0 ? `conic-gradient(${conicStops})` : "#e5e7eb";
-
-  // KPI Cards Configuration
+  // ── KPI CARDS - ONLY 4 ──
   const kpiItems = [
     {
       label: "Candidates",
@@ -169,7 +173,7 @@ export default function OrgDashboard() {
       value: stats.currently_training || 0,
       subtitle: "In Training",
       accent: "#F59E0B",
-      bgIcon: "#f5f3ff",
+      bgIcon: "#fef3c7",
       onClick: handleTrainingClick,
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -183,7 +187,7 @@ export default function OrgDashboard() {
       value: stats.verified_ready || 0,
       subtitle: "Verified & Ready",
       accent: "#10B981",
-      bgIcon: "#e6f4ea",
+      bgIcon: "#d1fae5",
       onClick: handleVerifiedClick,
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -197,26 +201,12 @@ export default function OrgDashboard() {
       value: stats.active_employees || 0,
       subtitle: "Active Employees",
       accent: "#e731ad",
-      bgIcon: "#e8f0fe",
+      bgIcon: "#fce7f3",
       onClick: handleEmployeesClick,
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e731ad" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
           <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-        </svg>
-      )
-    },
-    {
-      label: "Alerts",
-      value: stats.skill_decay_alerts || 0,
-      subtitle: "Needs Attention",
-      accent: "#e81f1f",
-      bgIcon: "#fdf2f8",
-      onClick: handleAlertsClick,
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e81f1f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
         </svg>
       )
     }
@@ -258,6 +248,7 @@ export default function OrgDashboard() {
             src={bellIcon} 
             className="icon cursor-pointer" 
             alt="bell" 
+            aria-label="Open notifications"
             onClick={() => {
               console.log("Bell clicked - opening notifications");
               setShowNotifications(true);
@@ -267,9 +258,10 @@ export default function OrgDashboard() {
             src={logoutIcon}
             className="icon logout-icon"
             alt="logout"
+            aria-label="Log out"
             onClick={() => {
               logout();
-              navigate("/login");
+              navigate("/");
             }}
           />
           <div className="profile-wrap">
@@ -287,7 +279,7 @@ export default function OrgDashboard() {
       {/* BODY */}
       <div className="dashboard-body">
         {/* SIDEBAR */}
-        <div className="sidebar">
+        <div className="sidebar" data-no-tooltip>
           <button
             className={activeSideTab === "overview" ? "active" : ""}
             onClick={() => setActiveSideTab("overview")}
@@ -302,14 +294,9 @@ export default function OrgDashboard() {
               Users
             </button>
           )}
-          {/* {hasPermission?.("admin.users.manage") && (
-            <button
-              className={activeSideTab === "analytics" ? "active" : ""}
-              onClick={() => setActiveSideTab("analytics")}
-            >
-              Analytics
-            </button>
-          )} */}
+          <div className="sidebar-brand">
+            <img src={ewandzLogo} alt="Ewandz" />
+          </div>
         </div>
 
         {/* CONTENT */}
@@ -319,11 +306,11 @@ export default function OrgDashboard() {
             <>
               <h2>Welcome, {displayName}</h2>
 
-              {/* KPI CARDS */}
+              {/* KPI CARDS - 4 columns */}
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(5, 1fr)",
+                  gridTemplateColumns: "repeat(4, 1fr)",
                   gap: "20px",
                   marginBottom: "28px",
                 }}
@@ -436,20 +423,32 @@ export default function OrgDashboard() {
                   marginBottom: "20px",
                 }}
               >
-                {/* TALENT INTELLIGENCE FUNNEL (PIE CHART) */}
+                {/* TALENT INTELLIGENCE FUNNEL (PIE CHART) - USING RECHARTS */}
                 <div className="section boxed" style={{ margin: 0, display: "flex", flexDirection: "column" }}>
                   <h3 style={{ marginBottom: "24px" }}>Talent Pipeline</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: "40px", flex: 1 }}>
-                    <div
-                      style={{
-                        width: "180px",
-                        height: "180px",
-                        borderRadius: "50%",
-                        background: pieBg,
-                        flexShrink: 0,
-                        boxShadow: "inset 0 0 20px rgba(0,0,0,0.05)"
-                      }}
-                    />
+                    <div style={{ width: "180px", height: "180px", flexShrink: 0 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={pieChartData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={4}
+                            stroke="none"
+                          >
+                            {pieChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<CustomTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
                       {funnel.map((f, i) => (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -582,13 +581,6 @@ export default function OrgDashboard() {
             <AdminPanel />
           )}
 
-          {/* ANALYTICS
-          {activeSideTab === "analytics" && (
-            <div className="section boxed">
-              <h2>Analytics</h2>
-              <p>Workforce analytics dashboard coming next.</p>
-            </div>
-          )} */}
         </div>
       </div>
     </div>

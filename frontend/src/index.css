@@ -37,31 +37,168 @@ html, body, #root {
   height: 100%;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   background-color: #040812;
   color: #DAE2FD;
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
+/* ── Shared black hover tooltip ── */
+.app-tooltip {
+  position: fixed;
+  z-index: 9999;
+  transform: translate(-50%, -100%);
+  width: max-content;
+  max-width: min(260px, 80vw);
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: #111111;
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  font: 500 11px/1.35 'Inter', sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.app-tooltip--below {
+  transform: translate(-50%, 0);
+}
+
+/* ──────────────────────────────────────────────────
+   SQUARE CORNERS FOR CONTAINERS & CONTROLS
+   Only applies to layout elements, NOT to badges/dots
+────────────────────────────────────────────────── */
+button:not(.rounded-full):not([class*="rounded-full"]),
+input:not(.rounded-full):not([class*="rounded-full"]),
+select:not(.rounded-full):not([class*="rounded-full"]),
+textarea:not(.rounded-full):not([class*="rounded-full"]),
+.glass-panel:not(.rounded-full):not([class*="rounded-full"]),
+[style*="border-radius"]:not(.rounded-full):not([class*="rounded-full"]) {
+  border-radius: 0 !important;
+}
+
+/* ──────────────────────────────────────────────────
+   ALLOW CIRCLES FOR BADGES, AVATARS, DOTS
+   These should always remain circular
+────────────────────────────────────────────────── */
+.rounded-full,
+[class*="rounded-full"],
+.w-4.h-4,
+.w-5.h-5,
+.w-2\.5.h-2\.5,
+.avatar,
+.profile-pic,
+.status-dot,
+.badge-dot,
+.online-indicator,
+[class*="rounded-full"] {
+  border-radius: 9999px !important;
+}
+
+/* ──────────────────────────────────────────────────
+   ALLOW SLIGHTLY ROUNDED FOR TAGS/CHIPS
+────────────────────────────────────────────────── */
+.rounded-lg,
+.rounded-xl,
+.rounded-2xl,
+[class*="rounded-lg"],
+[class*="rounded-xl"],
+[class*="rounded-2xl"] {
+  border-radius: 8px !important;
+}
+
+/* ──────────────────────────────────────────────────
+   SIDEBAR BRAND LOGO
+────────────────────────────────────────────────── */
+.sidebar-brand {
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+.sidebar-brand img {
+  display: block;
+  width: min(100%, 72px);
+  height: auto;
+}
+
+/* ──────────────────────────────────────────────────
+   HORIZONTAL LOADER
+────────────────────────────────────────────────── */
+.horizontal-loader {
+  display: flex;
+  min-width: 220px;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px;
+  color: #7c3aed;
+}
+
+.horizontal-loader--screen {
+  width: 100vw;
+  height: 100vh;
+  justify-content: center;
+}
+
+.horizontal-loader__track {
+  width: min(320px, 70vw);
+  height: 5px;
+  overflow: hidden;
+  background: #e9ddff;
+}
+
+.horizontal-loader__bar {
+  width: 42%;
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #c084fc);
+  animation: horizontal-loader 1s ease-in-out infinite;
+}
+
+.horizontal-loader p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+@keyframes horizontal-loader {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(260%); }
+}
+
+/* ──────────────────────────────────────────────────
+   GLASS PANEL
+────────────────────────────────────────────────── */
 .glass-panel {
   background: rgba(11, 19, 38, 0.4);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 24px;
   /* Only transition safe compositor properties, never 'all' */
   transition: border-color 0.2s ease, opacity 0.2s ease;
   will-change: auto;
 }
 
+/* ──────────────────────────────────────────────────
+   PRIMARY BUTTON
+────────────────────────────────────────────────── */
 .btn-primary {
   background: #CC97FF;
   color: #040812;
   font-weight: 800;
   padding: 14px 28px;
-  border-radius: 16px;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   font-size: 11px;
@@ -81,11 +218,13 @@ body {
   transform: scale(0.98);
 }
 
+/* ──────────────────────────────────────────────────
+   FORM INPUT
+────────────────────────────────────────────────── */
 .form-input {
   width: 100%;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px;
   padding: 10px 16px;
   color: #fff;
   font-size: 14px;
@@ -102,7 +241,9 @@ body {
   color: #fff;
 }
 
+/* ──────────────────────────────────────────────────
+   CUSTOM SCROLLBAR
+────────────────────────────────────────────────── */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
-

@@ -5,9 +5,10 @@ import ChangePasswordModal from '../../../core/auth/ChangePasswordModal';
 import { 
   User, MapPin, Phone, Mail, Calendar, Key, AlertCircle, Save, 
   CheckCircle, Edit3, Briefcase, TrendingUp, GraduationCap, 
-  Landmark, FileText, Upload, ExternalLink, Image, Package
+  Landmark, FileText, Upload, ExternalLink, Image, Package, Download
 } from 'lucide-react';
 import ComboBox from '../../../core/components/ComboBox';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import {
   isValidEmail,
   isValidPhone,
@@ -231,12 +232,9 @@ export default function MyProfile() {
         toast.error('Upload failed', { id: 'upload' });
     }
   };
+if (loading) return <HorizontalLoader label="Loading dashboard..." />;
 
-  if (loading && !details) return (
-    <div className="flex items-center justify-center h-48">
-      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  
 
   if (!details || !user?.employee_code) {
     return (
@@ -949,16 +947,40 @@ function SectionHeader({ icon: Icon, title }) {
 }
 
 function FileCard({ label, path, editMode, onUpload }) {
+    const getFileUrl = () => {
+        if (!path) return '';
+        if (path.startsWith('http')) return path;
+        return `/${path.replace(/^\//, '')}`;
+    };
+
     const handleView = () => {
         if (!path) {
             toast.error("Document not uploaded yet");
             return;
         }
-        if (path.startsWith('http')) {
-            window.open(path, '_blank');
-        } else {
-            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-            window.open(`${baseUrl}/${path.replace(/^\//, '')}`, '_blank');
+        window.open(getFileUrl(), '_blank');
+    };
+
+    const handleDownload = async (event) => {
+        event.stopPropagation();
+        if (!path) return;
+
+        try {
+            const url = getFileUrl();
+            const response = await fetch(url, { credentials: 'include' });
+            if (!response.ok) throw new Error();
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = path.split('/').pop() || `${label}.download`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(objectUrl);
+        } catch {
+            toast.error('Failed to download file');
         }
     };
 
@@ -994,7 +1016,17 @@ function FileCard({ label, path, editMode, onUpload }) {
             
             <div className="flex items-center gap-2">
                 {path && !editMode && (
-                    <ExternalLink size={14} className="text-[#c4b5fd] group-hover:text-[#7c3aed] transition-colors" />
+                    <>
+                        <ExternalLink size={14} className="text-[#c4b5fd] group-hover:text-[#7c3aed] transition-colors" />
+                        <button
+                            type="button"
+                            onClick={handleDownload}
+                            title="Download file"
+                            className="p-1.5 rounded-lg border border-[#e9ddff] bg-white text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white transition-all"
+                        >
+                            <Download size={12} />
+                        </button>
+                    </>
                 )}
                 {editMode && (
                     <button

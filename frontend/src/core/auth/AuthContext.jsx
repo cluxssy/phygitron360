@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
       console.error('Logout request failed', e);
     } finally {
       setUser(null);
-      window.location.href = '/login';
+      window.location.href = '/';
     }
   };
 
@@ -69,7 +69,9 @@ export function AuthProvider({ children }) {
                 setMustChange(true);
               }
             }
-          } catch (e) { }
+          } catch (e) {
+            // Silent fail for password change check
+          }
         } else {
           setUser(null);
         }
@@ -186,11 +188,15 @@ export function AuthProvider({ children }) {
     return false;
   };
 
+  // Check if user is authenticated
+  const isAuthenticated = !!user && !loading;
+
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
+        isAuthenticated,
         login,
         logout,
         hasRole,

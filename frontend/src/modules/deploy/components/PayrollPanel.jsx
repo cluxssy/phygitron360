@@ -243,7 +243,7 @@ export default function PayrollPanel() {
   };
 
   const panelBase = "bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_8px_32px_rgba(180,140,255,0.08)]";
-  const tabActive = "bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg";
+  const tabActive = "bg-[#7c3aed] text-white shadow-lg";
   const tabInactive = "bg-[#f5efff] border border-[#ebe4ff] text-[#6b7280] hover:text-black hover:bg-[#ede9fe] transition-all";
 
   const tabs = [
@@ -257,9 +257,9 @@ export default function PayrollPanel() {
       {/* Header */}
       <div className={`${panelBase} p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4`}>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8b5cf6] mb-1">Employee Central // Payroll</p>
-          <h2 className="text-2xl font-display font-black text-black uppercase tracking-tighter italic">
-            Payroll <span className="text-[#8b5cf6]">Management</span>
+          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">Payroll Management</p>
+          <h2 className="text-5xl font-black text-black tracking-tight leading-none">
+            Payroll Panel
           </h2>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -280,7 +280,7 @@ export default function PayrollPanel() {
         <div className="space-y-6">
           {/* Pay cycle selector */}
           <div className={`${panelBase} p-6`}>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8b5cf6] mb-5">Pay Cycle Configuration</p>
+            <p className="text-[15px] text-black text-sm font-black  mb-5">Pay Cycle Configuration</p>
             <div className="flex flex-wrap gap-4 items-end">
               <div>
                 <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Month</label>
@@ -304,7 +304,7 @@ export default function PayrollPanel() {
                 />
               </div>
               <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Pay Date <span className="text-[#c0a0f0]">(optional)</span></label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Pay Date <span className="text-[#00000]">(optional)</span></label>
                 <input
                   type="date"
                   value={payDate}
@@ -430,81 +430,100 @@ export default function PayrollPanel() {
 
       {/* ── TAB: EMPLOYEE DIRECTORY ── */}
       {tab === 'directory' && (
-        <div className={`${panelBase} p-8`}>
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8b5cf6] mb-6">Employee Payroll Directory</p>
-          <div className="max-w-md mb-8">
-            <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Select Employee</label>
-            <select
-              value={selectedEmp?.employee_code || ''}
-              onChange={e => {
-                const emp = employees.find(em => em.employee_code === e.target.value);
-                setSelectedEmp(emp);
-                if (emp) fetchEmpPayslips(emp.employee_code);
-              }}
-              className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm px-4 py-3 rounded-xl focus:outline-none focus:border-[#c084fc] transition-all"
-            >
-              <option value="">Select an employee...</option>
-              {employees.map(e => (
-                <option key={e.employee_code} value={e.employee_code}>
-                  {e.name} ({e.employee_code})
-                </option>
-              ))}
-            </select>
-          </div>
+  <div className={`${panelBase} p-8`}>
+    <p className="text-[15px] font-black uppercase tracking-[0.3em] text-[#00000] mb-6">Employee Payroll Directory</p>
+    <div className="max-w-md mb-8">
+      <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Select Employee</label>
+      <div style={{ position: 'relative' }}>
+        <select
+          value={selectedEmp?.employee_code || ''}
+          onChange={e => {
+            const emp = employees.find(em => em.employee_code === e.target.value);
+            setSelectedEmp(emp);
+            if (emp) fetchEmpPayslips(emp.employee_code);
+          }}
+          className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm px-4 py-3 rounded-xl focus:outline-none focus:border-[#c084fc] transition-all appearance-none"
+          style={{ 
+            position: 'relative',
+            zIndex: 10
+          }}
+        >
+          <option value="">Select an employee...</option>
+          {employees
+            .filter(e => 
+              e.employment_status === 'Active' || 
+              e.employment_status === 'active' ||
+              e.is_active === 1 ||
+              e.is_active === true
+            )
+            .map(e => (
+              <option key={e.employee_code} value={e.employee_code}>
+                {e.name} ({e.employee_code})
+              </option>
+            ))}
+        </select>
+        {/* Downward arrow indicator */}
+        <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-[#8b8ba3]">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
+    </div>
 
-          {selectedEmp && (
-            <div>
-              <div className="flex items-center gap-4 bg-[#f5efff] border border-[#ebe4ff] rounded-2xl p-4 mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#c084fc] to-[#8b5cf6] flex items-center justify-center text-white font-black text-xl">
-                  {selectedEmp.name?.charAt(0)}
+    {selectedEmp && (
+      <div>
+        <div className="flex items-center gap-4 bg-[#f5efff] border border-[#ebe4ff] rounded-2xl p-4 mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#c084fc] to-[#8b5cf6] flex items-center justify-center text-white font-black text-xl">
+            {selectedEmp.name?.charAt(0)}
+          </div>
+          <div>
+            <p className="font-black text-black uppercase italic text-sm">{selectedEmp.name}</p>
+            <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{selectedEmp.employee_code} · {selectedEmp.designation}</p>
+          </div>
+        </div>
+
+        {loadingEmpPayslips ? (
+          <div className="flex justify-center p-10"><div className="w-8 h-8 border-2 border-[#8b5cf6] border-t-transparent rounded-full animate-spin" /></div>
+        ) : empPayslips.length === 0 ? (
+          <p className="text-center text-[10px] font-black uppercase tracking-widest text-[#b6b6c7] py-10">No payslips found for this employee</p>
+        ) : (
+          <div className="space-y-3">
+            {empPayslips.map((ps, i) => (
+              <div key={i} className="flex items-center justify-between bg-white border border-[#ebe4ff] rounded-2xl px-6 py-4 hover:bg-[#faf7ff] transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-[#f5efff] flex items-center justify-center text-[#8b5cf6]">
+                    <Calendar size={18} />
+                  </div>
+                  <div>
+                    <p className="font-black text-black italic text-sm uppercase">{MONTH_NAMES[ps.pay_month]} {ps.pay_year}</p>
+                    <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">CTC: {fmt(ps.gross_ctc)} · Ded: {fmt(ps.total_deductions)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-black text-black uppercase italic text-sm">{selectedEmp.name}</p>
-                  <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{selectedEmp.employee_code} · {selectedEmp.designation}</p>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">{fmt(ps.net_in_hand)}</span>
+                  <button
+                    onClick={() => downloadPDF(ps.employee_code, ps.pay_year, ps.pay_month)}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#f5efff] text-[#8b5cf6] text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-[#8b5cf6] hover:text-white transition-all"
+                  >
+                    <Download size={13} /> PDF
+                  </button>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
 
-              {loadingEmpPayslips ? (
-                <div className="flex justify-center p-10"><div className="w-8 h-8 border-2 border-[#8b5cf6] border-t-transparent rounded-full animate-spin" /></div>
-              ) : empPayslips.length === 0 ? (
-                <p className="text-center text-[10px] font-black uppercase tracking-widest text-[#b6b6c7] py-10">No payslips found for this employee</p>
-              ) : (
-                <div className="space-y-3">
-                  {empPayslips.map((ps, i) => (
-                    <div key={i} className="flex items-center justify-between bg-white border border-[#ebe4ff] rounded-2xl px-6 py-4 hover:bg-[#faf7ff] transition-all">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-[#f5efff] flex items-center justify-center text-[#8b5cf6]">
-                          <Calendar size={18} />
-                        </div>
-                        <div>
-                          <p className="font-black text-black italic text-sm uppercase">{MONTH_NAMES[ps.pay_month]} {ps.pay_year}</p>
-                          <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">CTC: {fmt(ps.gross_ctc)} · Ded: {fmt(ps.total_deductions)}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">{fmt(ps.net_in_hand)}</span>
-                        <button
-                          onClick={() => downloadPDF(ps.employee_code, ps.pay_year, ps.pay_month)}
-                          className="flex items-center gap-2 px-4 py-2 bg-[#f5efff] text-[#8b5cf6] text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-[#8b5cf6] hover:text-white transition-all"
-                        >
-                          <Download size={13} /> PDF
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {!selectedEmp && (
-            <div className="text-center py-16 opacity-30">
-              <Users size={48} className="mx-auto mb-4 text-[#8b8ba3]" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Select an employee to view their payslip history</p>
-            </div>
-          )}
-        </div>
-      )}
+    {!selectedEmp && (
+      <div className="text-center py-16 opacity-30">
+        <Users size={48} className="mx-auto mb-4 text-[#8b8ba3]" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Select an employee to view their payslip history</p>
+      </div>
+    )}
+  </div>
+)}
 
       {/* ── TAB: MANAGE CYCLES ── */}
       {tab === 'manage' && (

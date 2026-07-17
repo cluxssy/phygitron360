@@ -5,7 +5,7 @@ import {
   AlertTriangle, ExternalLink, UserCheck, Send,
   Star, Loader2, ChevronRight,
   Globe, Calendar, DollarSign, Activity, FileText,
-  Award, Globe2, BookOpen, Plus, Trash2, Edit
+  Award, Globe2, BookOpen, Plus, Trash2, Edit, Download
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
@@ -57,10 +57,42 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
   // Offer state
   const [showOfferForm, setShowOfferForm] = useState(false);
-  const [offerDetails, setOfferDetails] = useState({ role_title: '', salary: '', department: '', location: '', start_date: '' });
+  const [offerDetails, setOfferDetails] = useState({ 
+    role_title: '', 
+    salary: '', 
+    department: '', 
+    location: '', 
+    start_date: '' 
+  });
   const [offerPreview, setOfferPreview] = useState(null);
   const [generatingOffer, setGeneratingOffer] = useState(false);
   const [creatingOffer, setCreatingOffer] = useState(false);
+  
+  // ── Dropdown options ──
+  const [departments, setDepartments] = useState([]);
+  const [locations, setLocations] = useState(['In-Office', 'Remote', 'Hybrid',]);
+
+  // ── Fetch departments on mount ──
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const res = await fetch('/api/options', { credentials: 'include' });
+        const data = await res.json();
+        if (data.departments && data.departments.length > 0) {
+          setDepartments(data.departments);
+        } else {
+          setDepartments(['Engineering', 'Product', 'Design', 'Marketing', 'Sales', 'Human Resources', 'Finance', 'Operations', 'Quality Assurance']);
+        }
+        if (data.locations && data.locations.length > 0) {
+          setLocations(data.locations);
+        }
+      } catch {
+        // Use fallback defaults
+        setDepartments(['Engineering', 'Product', 'Design', 'Marketing', 'Sales', 'Human Resources', 'Finance', 'Operations', 'Quality Assurance']);
+      }
+    };
+    fetchDepartments();
+  }, []);
 
   // Assessments state
   const [assessmentResults, setAssessmentResults] = useState([]);
@@ -75,7 +107,6 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   let confFlags = [];
   try { 
     const parsed = confidence ? JSON.parse(confidence.reasoning || '[]') : [];
-    // Ensure it's an array of strings or map objects down to strings if legacy
     confFlags = Array.isArray(parsed) ? parsed.map(f => typeof f === 'string' ? f : (f.reason || f.skill || '')).filter(Boolean) : [];
   } catch { /* ignore */ }
 
@@ -108,6 +139,27 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   }, [candidate?.id]);
 
   const data = profile || candidate;
+
+  const downloadResume = async () => {
+    try {
+      const response = await fetch(`/api/source/candidates/${data.id}/resume`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error();
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = data.resume_path?.split('/').pop() || `${data.full_name || 'candidate'}_resume`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      toast.error('Failed to download resume');
+    }
+  };
 
   // ── Send invite ──────────────────────────────────────────────────────────
   const handleInvite = async (e) => {
@@ -255,8 +307,10 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   // ── Offer Generation ──────────────────────────────────────────────────────
   const handleGenerateOffer = async (e) => {
     e.preventDefault();
-    if (!offerDetails.role_title.trim()) return toast.error('Role title is required');
+    if (!offerDetails.role_title.trim()) return toast.error('Please select a Role Title');
     if (!offerDetails.salary.trim()) return toast.error('Salary is required');
+    if (!offerDetails.department.trim()) return toast.error('Please select a Department');
+    if (!offerDetails.location.trim()) return toast.error('Please select a Location');
     if (offerDetails.start_date && Number.isNaN(new Date(offerDetails.start_date).getTime())) return toast.error('Start date is invalid');
     setGeneratingOffer(true);
     try {
@@ -277,18 +331,14 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
   const validateProfileEdit = () => {
     if (!editForm?.full_name?.trim()) return 'Full name is required.';
-    // Phone - only validate if filled
     if (editForm.phone && !isPhone(editForm.phone)) return 'Phone must be 7-15 digits, optionally starting with +.';
-    // Experience - only validate if filled
     if (editForm.total_experience_years !== undefined && editForm.total_experience_years !== '' && !isNonNegativeNumber(editForm.total_experience_years)) {
       return 'Total experience must be 0 or greater.';
     }
     if (editForm.expected_salary && !/^[0-9,.\sA-Za-z/-]+$/.test(editForm.expected_salary)) {
       return 'Expected salary contains unsupported characters.';
     }
-    // LinkedIn URL - only validate if filled
     if (editForm.linkedin_url && !isValidUrl(editForm.linkedin_url)) return 'LinkedIn URL must start with http:// or https://.';
-    // Portfolio URL - only validate if filled
     if (editForm.portfolio_url && !isValidUrl(editForm.portfolio_url)) return 'Portfolio URL must start with http:// or https://.';
     const badSkill = (editForm.skills || []).find(s => s.years_of_use !== null && s.years_of_use !== '' && !isNonNegativeNumber(s.years_of_use));
     if (badSkill) return 'Skill years must be 0 or greater.';
@@ -783,14 +833,23 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
                 {/* Resume link */}
                 {data?.resume_path && (
-                  <a
-                    href={`/api/source/candidates/${data.id}/resume`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs text-white/40 hover:text-primary transition-colors font-bold uppercase tracking-widest"
-                  >
-                    <ExternalLink size={13} /> View Resume
-                  </a>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={`/api/source/candidates/${data.id}/resume`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs text-white/40 hover:text-primary transition-colors font-bold uppercase tracking-widest"
+                    >
+                      <ExternalLink size={13} /> View Resume
+                    </a>
+                    <button
+                      type="button"
+                      onClick={downloadResume}
+                      className="flex items-center gap-2 text-xs text-white/40 hover:text-primary transition-colors font-bold uppercase tracking-widest"
+                    >
+                      <Download size={13} /> Download
+                    </button>
+                  </div>
                 )}
               </>
             )}
@@ -822,54 +881,152 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
         </div>
       </div>
 
-      {/* Offer Modal */}
+      {/* ── OFFER MODAL - WHITE/PURPLE THEME ── */}
       {showOfferForm && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowOfferForm(false)}>
-          <div className="glass-panel w-full max-w-2xl p-8 relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowOfferForm(false)} className="absolute top-5 right-5 p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-colors">
-              <X size={18} />
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowOfferForm(false)}>
+          <div className="bg-white w-full max-w-2xl rounded-3xl p-10 relative max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowOfferForm(false)} 
+              className="absolute top-6 right-6 p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <X size={20} />
             </button>
-            <h2 className="text-xl font-display font-black text-white uppercase tracking-tighter italic mb-6">
-              AI Offer <span className="text-emerald-400">Generation</span>
-            </h2>
+
+            {/* Header */}
+            <div className="mb-8">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
+                  <FileText size={20} />
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-600">Offer Management</p>
+              </div>
+              <h2 className="text-4xl font-black text-black tracking-tight leading-none">
+                <span className="text-purple-600">AI </span> Offer Generation
+              </h2>
+              <p className="text-sm text-gray-500 mt-2">Fill in the details below to generate a professional offer letter.</p>
+            </div>
 
             {!offerPreview ? (
-              <form onSubmit={handleGenerateOffer} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleGenerateOffer} className="space-y-6">
+                <div className="grid grid-cols-2 gap-5">
+                  
+                  {/* Role Title - Dropdown from jobRoles */}
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Role Title</label>
-                    <input required type="text" value={offerDetails.role_title} onChange={e => setOfferDetails({...offerDetails, role_title: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2">
+                      Role Title <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={offerDetails.role_title}
+                      onChange={e => setOfferDetails({...offerDetails, role_title: e.target.value})}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+                    >
+                      <option value="">Select a role...</option>
+                      {jobRoles.map((role) => (
+                        <option key={role.id} value={role.title}>{role.title}</option>
+                      ))}
+                    </select>
                   </div>
+
+                  {/* Salary - Text Input */}
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Salary</label>
-                    <input required type="text" value={offerDetails.salary} onChange={e => setOfferDetails({...offerDetails, salary: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2">
+                      Salary <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      value={offerDetails.salary}
+                      onChange={e => setOfferDetails({...offerDetails, salary: e.target.value})}
+                      placeholder="e.g. ₹ 12,00,000 per annum"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all placeholder:text-gray-400"
+                    />
                   </div>
+
+                  {/* Department - Dropdown */}
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Department</label>
-                    <input type="text" value={offerDetails.department} onChange={e => setOfferDetails({...offerDetails, department: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2">
+                      Department <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={offerDetails.department}
+                      onChange={e => setOfferDetails({...offerDetails, department: e.target.value})}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+                    >
+                      <option value="">Select a department...</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
                   </div>
+
+                  {/* Location - Dropdown */}
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Location</label>
-                    <input type="text" value={offerDetails.location} onChange={e => setOfferDetails({...offerDetails, location: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2">
+                      Location <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={offerDetails.location}
+                      onChange={e => setOfferDetails({...offerDetails, location: e.target.value})}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+                    >
+                      <option value="">Select a location...</option>
+                      <option value="On-Site">On-Site</option>
+                      <option value="Remote">Remote</option>
+                      <option value="Hybrid">Hybrid</option>
+                    </select>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Start Date</label>
-                    <input type="date" value={offerDetails.start_date} onChange={e => setOfferDetails({...offerDetails, start_date: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+
+                  {/* Start Date - Calendar */}
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={offerDetails.start_date}
+                      onChange={e => setOfferDetails({...offerDetails, start_date: e.target.value})}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+                    />
                   </div>
+
                 </div>
-                <div className="pt-4 mt-4 border-t border-white/10 flex justify-end">
-                  <button type="submit" disabled={generatingOffer} className="px-6 py-3 rounded-xl bg-emerald-400 text-black text-xs font-black uppercase tracking-widest hover:bg-emerald-300 transition-colors flex items-center gap-2">
-                    {generatingOffer ? <Loader2 size={16} className="animate-spin"/> : 'Create Preview'}
+
+                {/* Action Buttons */}
+                <div className="flex gap-4 pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowOfferForm(false)}
+                    className="flex-1 py-4 rounded-xl border border-gray-200 text-gray-600 text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={generatingOffer}
+                    className="flex-1 py-4 rounded-xl bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg shadow-purple-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {generatingOffer ? (
+                      <><Loader2 size={16} className="animate-spin" /> Generating...</>
+                    ) : (
+                      <><FileText size={16} /> Create Preview</>
+                    )}
                   </button>
                 </div>
               </form>
             ) : (
+              /* ── PREVIEW SECTION ── */
               <div className="space-y-6">
-                <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 overflow-y-auto max-h-[50vh] custom-scrollbar">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-4">Preview & Edit Offer Letter — Once submitted, this goes to Admin for approval</p>
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 overflow-y-auto max-h-[50vh] custom-scrollbar">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 mb-4 flex items-center gap-2">
+                    <CheckCircle size={14} /> Preview & Edit Offer Letter
+                  </p>
                   
                   {(() => {
-                    // Helper to unwrap content since it can be deeply nested
                     let c = offerPreview;
                     if (c && c.offer_content) c = c.offer_content;
                     if (c && c.content && c.content.offer_content) c = c.content.offer_content;
@@ -877,9 +1034,9 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     return c ? (
                       <div className="flex flex-col gap-4">
                         <div>
-                          <label className="block text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">Subject</label>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-gray-500 mb-2">Subject</label>
                           <input 
-                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-black outline-none focus:border-emerald-500"
+                            className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-all"
                             value={c.subject || ''}
                             onChange={e => {
                               const newC = { ...c, subject: e.target.value };
@@ -888,9 +1045,9 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                           />
                         </div>
                         <div>
-                          <label className="block text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">Body Paragraphs (Separated by double newlines)</label>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-gray-500 mb-2">Body Paragraphs (Separated by double newlines)</label>
                           <textarea 
-                            className="w-full bg-white border border-gray-200 rounded-lg px-4 py-3 text-sm text-black outline-none focus:border-emerald-500 resize-y min-h-[250px] font-mono leading-relaxed"
+                            className="w-full bg-white border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 transition-all resize-y min-h-[250px] font-mono leading-relaxed"
                             value={(c.body_paragraphs || []).join('\n\n')}
                             onChange={e => {
                               const newC = { ...c, body_paragraphs: e.target.value.split('\n\n') };
@@ -903,17 +1060,30 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                       <textarea 
                         value={typeof offerPreview === 'string' ? offerPreview : JSON.stringify(offerPreview, null, 2)} 
                         onChange={e => setOfferPreview(e.target.value)} 
-                        className="w-full h-[400px] bg-transparent text-sm text-black outline-none resize-none font-mono"
+                        className="w-full h-[400px] bg-white border border-gray-200 rounded-lg p-4 text-sm text-gray-700 outline-none focus:border-purple-400 transition-all resize-none font-mono"
                       />
                     );
                   })()}
                 </div>
-                <div className="flex justify-end gap-3">
-                  <button onClick={() => setOfferPreview(null)} className="px-4 py-3 rounded-xl bg-white/5 text-white/70 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors">
-                    ← Back to Details
+
+                {/* Preview Actions */}
+                <div className="flex gap-4 pt-4 border-t border-gray-200">
+                  <button 
+                    onClick={() => setOfferPreview(null)} 
+                    className="flex-1 py-4 rounded-xl border border-gray-200 text-gray-600 text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-all"
+                  >
+                    ← Back
                   </button>
-                  <button onClick={handleCreateOffer} disabled={creatingOffer} className="px-6 py-3 rounded-xl bg-emerald-400 text-black text-xs font-black uppercase tracking-widest hover:bg-emerald-300 transition-colors flex items-center gap-2">
-                    {creatingOffer ? <Loader2 size={16} className="animate-spin"/> : '✓ Submit for Admin Approval'}
+                  <button 
+                    onClick={handleCreateOffer} 
+                    disabled={creatingOffer} 
+                    className="flex-1 py-4 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {creatingOffer ? (
+                      <><Loader2 size={16} className="animate-spin" /> Submitting...</>
+                    ) : (
+                      <><CheckCircle size={16} /> Submit for Admin Approval</>
+                    )}
                   </button>
                 </div>
               </div>

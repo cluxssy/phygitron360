@@ -102,12 +102,20 @@ class DashboardService:
                     tenure_counts.loc[:, 'count'] = tenure_counts['count'].fillna(0)
                     tenure_distribution = tenure_counts.to_dict('records')
 
-            # 9. Location
+            # 9. Location -> Work Mode (Remote / Hybrid / On-site)
             location_distribution = []
             if not df_emp.empty and 'location' in df_emp.columns:
-                loc_counts = df_emp['location'].fillna('Unknown').value_counts().reset_index()
-                loc_counts.columns = ['name', 'value']
-                location_distribution = loc_counts.to_dict('records')
+                def classify_work_mode(loc):
+                    loc_str = str(loc).strip().lower()
+                    if 'remote' in loc_str:
+                        return 'Remote'
+                    elif 'hybrid' in loc_str:
+                        return 'Hybrid'
+                    else:
+                        return 'On-site'
+                work_mode_counts = df_emp['location'].fillna('').apply(classify_work_mode).value_counts().reset_index()
+                work_mode_counts.columns = ['name', 'value']
+                location_distribution = work_mode_counts.to_dict('records')
 
             # 10. Recent Hires
             recent_hires = []

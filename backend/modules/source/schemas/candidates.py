@@ -3,18 +3,18 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 class CandidateBase(BaseModel):
-    full_name: str
-    email: str
+    full_name: str  # Only this is mandatory
+    email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
-    total_experience_years: Optional[float] = 0.0
+    total_experience_years: Optional[float] = None  # Changed to None instead of 0.0
     current_designation: Optional[str] = None
     linkedin_url: Optional[str] = None
     portfolio_url: Optional[str] = None
-    primary_skills: List[str] = []
-    secondary_skills: List[str] = []
-    status: str = "New"
-    source: str = "Manual"
+    primary_skills: Optional[List[str]] = None  # Made Optional
+    secondary_skills: Optional[List[str]] = None  # Made Optional
+    status: Optional[str] = "New"  # Made Optional with default
+    source: Optional[str] = "Manual"  # Made Optional with default
     ai_summary: Optional[str] = None
 
 class ExperienceSchema(BaseModel):
@@ -33,8 +33,8 @@ class EducationSchema(BaseModel):
     end_date: Optional[str] = None
 
 class CandidateCreate(CandidateBase):
-    experience: List[ExperienceSchema] = []
-    education: List[EducationSchema] = []
+    experience: Optional[List[ExperienceSchema]] = []  # Made Optional
+    education: Optional[List[EducationSchema]] = []  # Made Optional
 
 class CandidateResponse(CandidateBase):
     id: int

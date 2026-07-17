@@ -7,6 +7,7 @@ import {
   ChevronRight, ChevronLeft, Send, Loader2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   isValidEmail,
@@ -627,7 +628,7 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     return null;
   };
 
-  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
+  if (loading) return <HorizontalLoader label="Loading assessment..." />;
   if (!assessment) return <div className="p-10 text-center text-gray-400">Assessment not found</div>;
 
   if (step === 'setup') {

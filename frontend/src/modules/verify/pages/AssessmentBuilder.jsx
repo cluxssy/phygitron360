@@ -6,6 +6,7 @@ import {
   Wand2, Settings, List, Eye, Shuffle, X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   isPositiveNumber,
@@ -278,7 +279,7 @@ export default function AssessmentBuilder() {
     return '';
   };
 
-  if (loading) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-purple-600" /></div>;
+  if (loading) return <HorizontalLoader label="Loading assessment..." />;
 
   return (
     <div className="flex flex-col gap-6">
@@ -338,7 +339,7 @@ export default function AssessmentBuilder() {
           </div>
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">Assessment Type</label>
+              <label data-tooltip="Controls the kinds of questions allowed in this assessment" className="block text-xs font-medium text-gray-600 mb-2">Assessment Type</label>
               <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all">
                 <option value="Mixed">Mixed</option>
                 <option value="MCQ">Multiple Choice Only</option>
@@ -347,23 +348,23 @@ export default function AssessmentBuilder() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">Time Limit (Minutes)</label>
+              <label data-tooltip="Maximum time a candidate has to complete the assessment" className="block text-xs font-medium text-gray-600 mb-2">Time Limit (Minutes)</label>
               <input type="number" value={timeLimit} onChange={e => setTimeLimit(parseInt(e.target.value) || 0)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">Pass Score (%)</label>
+              <label data-tooltip="Minimum percentage required to pass" className="block text-xs font-medium text-gray-600 mb-2">Pass Score (%)</label>
               <input type="number" value={passScore} onChange={e => setPassScore(parseInt(e.target.value) || 0)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" />
             </div>
           </div>
           <div className="flex gap-6 pt-4 border-t border-gray-200">
-            <label className="flex items-center gap-3 cursor-pointer group">
+            <label data-tooltip="Randomizes question order for each candidate" className="flex items-center gap-3 cursor-pointer group">
               <input type="checkbox" checked={shuffleQuestions} onChange={e => setShuffleQuestions(e.target.checked)} className="hidden" />
               <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${shuffleQuestions ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 bg-white group-hover:border-purple-400'}`}>
                 <CheckCircle size={12} />
               </div>
               <span className="text-xs font-medium text-gray-700">Shuffle Questions</span>
             </label>
-            <label className="flex items-center gap-3 cursor-pointer group">
+            <label data-tooltip="Shows the candidate's result as soon as they submit" className="flex items-center gap-3 cursor-pointer group">
               <input type="checkbox" checked={showResultImmediately} onChange={e => setShowResultImmediately(e.target.checked)} className="hidden" />
               <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${showResultImmediately ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 bg-white group-hover:border-purple-400'}`}>
                 <CheckCircle size={12} />
@@ -398,9 +399,9 @@ export default function AssessmentBuilder() {
               {questions.map((q, i) => (
                 <div key={q.id || i} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm border-l-4 border-l-purple-600 relative group">
                   <div className="absolute right-4 top-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => moveQuestion(i, 'up')} disabled={i === 0} className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-30"><ArrowUp size={14}/></button>
-                    <button onClick={() => moveQuestion(i, 'down')} disabled={i === questions.length - 1} className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-30"><ArrowDown size={14}/></button>
-                    <button onClick={() => removeQuestion(i)} className="p-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600"><Trash2 size={14}/></button>
+                    <button onClick={() => moveQuestion(i, 'up')} disabled={i === 0} aria-label="Move question up" className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-30"><ArrowUp size={14}/></button>
+                    <button onClick={() => moveQuestion(i, 'down')} disabled={i === questions.length - 1} aria-label="Move question down" className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-30"><ArrowDown size={14}/></button>
+                    <button onClick={() => removeQuestion(i)} aria-label="Delete question" className="p-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600"><Trash2 size={14}/></button>
                   </div>
 
                   <div className="flex gap-4 mb-4 pr-32">
@@ -409,12 +410,12 @@ export default function AssessmentBuilder() {
                     </div>
                     <div className="flex-1 space-y-4">
                       <div className="flex gap-4 flex-wrap">
-                        <select value={q.question_type} onChange={e => updateQuestion(i, 'question_type', e.target.value)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-purple-400">
+                        <select aria-label="Question type" value={q.question_type} onChange={e => updateQuestion(i, 'question_type', e.target.value)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-purple-400">
                           {QUESTION_TYPES.map(qt => <option key={qt.id} value={qt.id}>{qt.label}</option>)}
                         </select>
                         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                           <span className="text-xs font-medium text-gray-500">Marks:</span>
-                          <input type="number" value={q.marks || 1} onChange={e => updateQuestion(i, 'marks', parseFloat(e.target.value) || 0)} className="bg-transparent w-12 text-sm text-gray-700 outline-none text-right" />
+                          <input aria-label="Marks awarded for this question" type="number" value={q.marks || 1} onChange={e => updateQuestion(i, 'marks', parseFloat(e.target.value) || 0)} className="bg-transparent w-12 text-sm text-gray-700 outline-none text-right" />
                         </div>
                       </div>
 
@@ -498,13 +499,13 @@ export default function AssessmentBuilder() {
                             <div className="space-y-2">
                               {(q.test_cases || []).map((tc, tIdx) => (
                                 <div key={tIdx} className="flex gap-2 items-start bg-white p-2 rounded-lg border border-gray-200">
-                                  <textarea value={tc.input} onChange={e => {
+                                  <textarea aria-label="Test case input" value={tc.input} onChange={e => {
                                     const tcs = [...q.test_cases]; tcs[tIdx].input = e.target.value; updateQuestion(i, 'test_cases', tcs);
                                   }} placeholder="Input" className="flex-1 bg-gray-50 border border-gray-200 rounded p-2 text-sm font-mono text-gray-700 outline-none focus:border-purple-400 h-16 resize-none" />
-                                  <textarea value={tc.expected_output} onChange={e => {
+                                  <textarea aria-label="Expected output for this test case" value={tc.expected_output} onChange={e => {
                                     const tcs = [...q.test_cases]; tcs[tIdx].expected_output = e.target.value; updateQuestion(i, 'test_cases', tcs);
                                   }} placeholder="Expected Output" className="flex-1 bg-gray-50 border border-gray-200 rounded p-2 text-sm font-mono text-gray-700 outline-none focus:border-purple-400 h-16 resize-none" />
-                                  <button onClick={() => updateQuestion(i, 'test_cases', q.test_cases.filter((_, idx) => idx !== tIdx))} className="p-2 text-gray-400 hover:text-rose-600"><Trash2 size={14}/></button>
+                                  <button onClick={() => updateQuestion(i, 'test_cases', q.test_cases.filter((_, idx) => idx !== tIdx))} aria-label="Delete test case" className="p-2 text-gray-400 hover:text-rose-600"><Trash2 size={14}/></button>
                                 </div>
                               ))}
                             </div>

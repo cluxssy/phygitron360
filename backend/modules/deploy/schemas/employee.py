@@ -3,48 +3,48 @@ from typing import Optional, List, Any
 
 # Common Models
 class EmployeeBasicInfo(BaseModel):
-    employee_code: str
-    name: str
-    designation: Optional[str]
-    team: Optional[str]
-    reporting_manager: Optional[str]
-    email_id: Optional[str]
-    photo_path: Optional[str]
-    employment_status: Optional[str]
-    exit_date: Optional[str]
-    role: Optional[str]
+    name: str  # Only name is mandatory
+    employee_code: Optional[str] = None
+    designation: Optional[str] = None
+    team: Optional[str] = None
+    reporting_manager: Optional[str] = None
+    email_id: Optional[str] = None
+    photo_path: Optional[str] = None
+    employment_status: Optional[str] = None
+    exit_date: Optional[str] = None
+    role: Optional[str] = None
 
 class EmployeeFullProfile(BaseModel):
-    # Base fields
-    id: Optional[int]
-    employee_code: str
-    name: str
-    dob: Optional[str]
-    contact_number: Optional[str]
-    emergency_contact: Optional[str]
-    email_id: Optional[str]
-    doj: Optional[str] 
-    team: Optional[str]
-    designation: Optional[str]
-    employment_type: Optional[str]
-    reporting_manager: Optional[str]
-    location: Optional[str]
-    current_address: Optional[str]
-    permanent_address: Optional[str]
-    education_details: Optional[str]
-    employment_status: Optional[str]
-    photo_path: Optional[str]
-    cv_path: Optional[str]
-    id_proofs: Optional[str]
-    pf_included: Optional[str]
-    mediclaim_included: Optional[str]
-    notes: Optional[str]
-    bank_name: Optional[str]
-    bank_account_no: Optional[str]
-    pan_no: Optional[str]
-    exit_date: Optional[str]
-    exit_reason: Optional[str]
-    clearance_status: Optional[str]
+    # Only name is mandatory, all others optional
+    name: str  # Mandatory
+    employee_code: Optional[str] = None
+    id: Optional[int] = None
+    dob: Optional[str] = None
+    contact_number: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    email_id: Optional[str] = None
+    doj: Optional[str] = None 
+    team: Optional[str] = None
+    designation: Optional[str] = None
+    employment_type: Optional[str] = None
+    reporting_manager: Optional[str] = None
+    location: Optional[str] = None
+    current_address: Optional[str] = None
+    permanent_address: Optional[str] = None
+    education_details: Optional[str] = None
+    employment_status: Optional[str] = None
+    photo_path: Optional[str] = None
+    cv_path: Optional[str] = None
+    id_proofs: Optional[str] = None
+    pf_included: Optional[str] = None
+    mediclaim_included: Optional[str] = None
+    notes: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account_no: Optional[str] = None
+    pan_no: Optional[str] = None
+    exit_date: Optional[str] = None
+    exit_reason: Optional[str] = None
+    clearance_status: Optional[str] = None
     
     # Relations (Dictionaries/Lists)
     skill_matrix: Optional[dict] = {}
@@ -54,8 +54,7 @@ class EmployeeFullProfile(BaseModel):
     kra_assignments: Optional[List[dict]] = []
 
 class UpdateEmployeeRequest(BaseModel):
-    # Flexible dict request as handling all fields with nested objects can be complex directly from frontend
-    # But explicitly defining fields is better. For now adhering to existing logic:
+    # All fields optional for updates
     name: Optional[str] = None
     designation: Optional[str] = None
     team: Optional[str] = None
@@ -81,7 +80,7 @@ class UpdateEmployeeRequest(BaseModel):
     skill_matrix: Optional[dict] = None
 
 class OffboardRequest(BaseModel):
-    exit_date: Optional[str]
-    exit_reason: Optional[str]
+    exit_date: Optional[str] = None
+    exit_reason: Optional[str] = None
     exit_type: Optional[str] = "Immediate"
     remarks: Optional[str] = ""
