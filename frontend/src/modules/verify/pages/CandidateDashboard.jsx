@@ -11,6 +11,7 @@ import HorizontalLoader from '../../../core/components/HorizontalLoader';
 const STATUS_STYLE = {
   pending:   'bg-amber-50 text-amber-700 border-amber-200',
   started:   'bg-purple-50 text-purple-700 border-purple-200',
+  in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
   submitted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   graded:    'bg-indigo-50 text-indigo-700 border-indigo-200',
   expired:   'bg-rose-50 text-rose-700 border-rose-200',
@@ -135,7 +136,7 @@ export default function CandidateDashboard() {
           <div className="space-y-3">
             {assignments.map(a => {
               const s = a.status?.toLowerCase();
-              const isActionable = s === 'pending' || s === 'started';
+              const isActionable = s === 'pending' || s === 'started' || s === 'in_progress';
               const isCompleted = s === 'submitted' || s === 'graded';
               return (
                 <div key={a.assignment_id} className={`bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4 ${isActionable ? 'hover:border-purple-300' : ''} transition-colors`}>
