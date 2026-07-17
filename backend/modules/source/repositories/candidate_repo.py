@@ -104,7 +104,11 @@ class CandidateRepository:
             # regardless of what cursor type the caller is using on the shared conn.
             with conn.cursor(cursor_factory=RealDictCursor) as dict_cur:
                 self._set_search_path(dict_cur)
-                dict_cur.execute("SELECT * FROM candidates WHERE email = %s", (email,))
+                # Handle NULL or empty email
+                if not email:
+                    dict_cur.execute("SELECT * FROM candidates WHERE email IS NULL OR email = ''")
+                else:
+                    dict_cur.execute("SELECT * FROM candidates WHERE email = %s", (email,))
                 row = dict_cur.fetchone()
                 return dict(row) if row else None
         finally:
