@@ -14,6 +14,7 @@ import { useAuth } from '../core/auth/AuthContext';
 import OrgAdminSetupModal from '../modules/deploy/components/OrgAdminSetupModal';
 import { MODULE_CONFIG } from '../core/config/modules';
 import { NotificationProvider, useNotifications } from '../core/context/NotificationContext';
+import ewandzLogo from '../assets/EWANDZ.png';
 
 // ── Notification Dropdown Component ──
 function NotificationDropdown() {
@@ -252,7 +253,7 @@ function LayoutContent({ children }) {
       {!isAdminDashboard && !isForgePage && (
         <>
           {/* PRIMARY SIDEBAR */}
-          <aside className="w-[88px] flex flex-col items-center py-8 bg-[#060E20] border-r border-white/5">
+          <aside className="w-[88px] flex flex-col items-center py-8 bg-[#060E20] border-r border-white/5" data-no-tooltip>
             <div
               onClick={() => navigate('/')}
               className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center mb-10 cursor-pointer"
@@ -272,13 +273,14 @@ function LayoutContent({ children }) {
               ))}
             </nav>
 
-            <button onClick={logout} className="mt-auto mb-6">
+            <button onClick={logout} className="mt-auto mb-4" aria-label="Log out">
               <LogOut size={20} />
             </button>
+            <img src={ewandzLogo} alt="Ewandz" className="w-12 h-auto" />
           </aside>
 
           {/* SECOND SIDEBAR */}
-          <aside className="w-[260px] bg-[#060E20]/60 border-r border-white/5 p-6">
+          <aside className="w-[260px] bg-[#060E20]/60 border-r border-white/5 p-6" data-no-tooltip>
             <h2 className="text-lg font-bold mb-6">{activeModule?.name}</h2>
 
             {filteredOptions.map((opt, i) => (

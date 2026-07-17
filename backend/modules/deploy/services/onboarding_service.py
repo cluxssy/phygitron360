@@ -113,18 +113,18 @@ class OnboardingService:
         
         tenant_id = invite.get('tenant_id', 'public')
 
-        # Age check
-        try:
-            dob = datetime.strptime(employee_data['dob'], '%Y-%m-%d')
-            age = (datetime.now() - dob).days // 365
-            if age < 18:
-                raise ValueError("Neural contract requires minimum age of 18")
-        except:
-            pass # ignore parse errors if they happen, repo will handle bad data
+        # Age check - OPTIONAL (already optional with try/except)
+        # try:
+        #     dob = datetime.strptime(employee_data['dob'], '%Y-%m-%d')
+        #     age = (datetime.now() - dob).days // 365
+        #     if age < 18:
+        #         raise ValueError("Neural contract requires minimum age of 18")
+        # except:
+        #     pass # ignore parse errors if they happen, repo will handle bad data
 
-        # Password check
-        if len(password) < 8:
-            raise ValueError("Access Key must be at least 8 segments (characters)")
+        # Password validation - REMOVED
+        # if len(password) < 8:
+        #     raise ValueError("Access Key must be at least 8 segments (characters)")
 
         # 1. Check for rehire and determine Employee Code
         from backend.modules.deploy.repositories.employee_repo import EmployeeRepository

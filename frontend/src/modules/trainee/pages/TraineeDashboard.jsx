@@ -54,7 +54,7 @@ export default function TraineeDashboard() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/');
   };
 
   return (

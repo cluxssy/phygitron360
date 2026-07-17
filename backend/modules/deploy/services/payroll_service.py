@@ -73,7 +73,7 @@ class PayrollService:
                 mapped = label_map.get(label)
                 if mapped:
                     for v in row:
-                        if isinstance(v, (int, float)) and v > 0:
+                        if isinstance(v, (int, float)):
                             data[mapped] = float(v)
                             break
             

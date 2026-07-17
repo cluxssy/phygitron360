@@ -353,7 +353,7 @@ export default function OnboardPage() {
                      <p className="text-sm text-white/50 pb-10 leading-relaxed max-w-md mx-auto">
                         Your details have been submitted. The HR team will verify your credentials shortly and notify you when your account is ready.
                      </p>
-                     <button onClick={() => navigate('/login')} className="w-full bg-primary text-black font-black text-[12px] uppercase tracking-[0.2em] py-6 rounded-2xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20">
+                     <button onClick={() => navigate('/')} className="w-full bg-primary text-black font-black text-[12px] uppercase tracking-[0.2em] py-6 rounded-2xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20">
                         Go to login
                      </button>
                  </div>

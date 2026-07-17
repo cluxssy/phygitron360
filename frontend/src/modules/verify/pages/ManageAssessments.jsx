@@ -5,6 +5,7 @@ import {
   XCircle, AlertTriangle, Lock, Unlock, Shuffle, Search, Activity
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 
@@ -186,7 +187,7 @@ function AssignModal({ assessment, onClose }) {
               <p className="text-sm font-semibold text-gray-800">Generate AI Variants</p>
               <p className="text-xs text-gray-400 mt-0.5">AI shuffles options and regenerates questions</p>
             </div>
-            <button type="button" onClick={() => setGenerateVariants(v => !v)} className={`relative w-12 h-6 rounded-full border transition-colors duration-200 ${generateVariants ? 'bg-purple-600 border-purple-600' : 'bg-gray-200 border-gray-300'}`}>
+            <button type="button" aria-label="Generate AI variants: create a different version for each candidate" onClick={() => setGenerateVariants(v => !v)} className={`relative w-12 h-6 rounded-full border transition-colors duration-200 ${generateVariants ? 'bg-purple-600 border-purple-600' : 'bg-gray-200 border-gray-300'}`}>
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${generateVariants ? 'translate-x-6' : ''}`} />
             </button>
           </div>
@@ -196,7 +197,7 @@ function AssignModal({ assessment, onClose }) {
               <p className="text-sm font-semibold text-gray-800">Shuffle Questions Locally</p>
               <p className="text-xs text-gray-400 mt-0.5">Randomize the order per candidate</p>
             </div>
-            <button type="button" onClick={() => setShuffleQuestions(v => !v)} className={`relative w-12 h-6 rounded-full border transition-colors duration-200 ${shuffleQuestions ? 'bg-purple-600 border-purple-600' : 'bg-gray-200 border-gray-300'}`}>
+            <button type="button" aria-label="Shuffle questions: randomize their order for each candidate" onClick={() => setShuffleQuestions(v => !v)} className={`relative w-12 h-6 rounded-full border transition-colors duration-200 ${shuffleQuestions ? 'bg-purple-600 border-purple-600' : 'bg-gray-200 border-gray-300'}`}>
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${shuffleQuestions ? 'translate-x-6' : ''}`} />
             </button>
           </div>
@@ -337,6 +338,7 @@ export default function ManageAssessments() {
         
         <button
           onClick={fetchAssessments}
+          aria-label="Refresh"
           className="p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
         >
           <RefreshCw size={16} />
@@ -350,10 +352,7 @@ export default function ManageAssessments() {
       {/* Content */}
       <div className="flex-1">
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-24 text-gray-400">
-            <Loader2 size={24} className="animate-spin text-purple-600" />
-            <span className="text-sm font-medium">Loading assessments...</span>
-          </div>
+          <HorizontalLoader label="Loading assessments..." />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-5 py-24 bg-white rounded-2xl border border-gray-200 shadow-sm">
             <FileText size={48} className="text-gray-300" />
@@ -383,10 +382,10 @@ export default function ManageAssessments() {
                     <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{asm.description || 'No description'}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${TYPE_STYLE[asm.type] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                    <span data-tooltip="Assessment type" className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${TYPE_STYLE[asm.type] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                       {asm.type || 'MCQ'}
                     </span>
-                    <span className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${STATUS_STYLE[asm.status?.toLowerCase()] || STATUS_STYLE.draft}`}>
+                    <span data-tooltip="Assessment status" className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${STATUS_STYLE[asm.status?.toLowerCase()] || STATUS_STYLE.draft}`}>
                       {asm.status || 'Draft'}
                     </span>
                   </div>
@@ -484,6 +483,7 @@ export default function ManageAssessments() {
                   <button
                     onClick={() => handleDelete(asm)}
                     disabled={deleting === asm.id}
+                    aria-label="Delete assessment permanently"
                     className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
                   >
                     {deleting === asm.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}

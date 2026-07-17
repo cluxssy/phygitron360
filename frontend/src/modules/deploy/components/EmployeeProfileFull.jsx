@@ -20,6 +20,19 @@ import {
   isPositiveNumber
 } from '../../../core/utils/validators';
 
+// ── STATUS CONFIG ──
+const STATUS_OPTIONS = ['Active', 'Notice Period', 'On Leave', 'Inactive'];
+const EXITED_STATUSES = ['Exited', 'Terminated'];
+
+const STATUS_COLORS = {
+  Active: '#10B981',
+  'Notice Period': '#F59E0B',
+  'On Leave': '#F59E0B',
+  'Inactive': '#000000',
+  'Exited': '#EF4444',
+  'Terminated': '#EF4444',
+};
+
 export default function EmployeeProfileFull({ employeeCode: initialCode, onBack }) {
     const [employeeCode, setEmployeeCode] = useState(initialCode);
     const [details, setDetails] = useState(null);
@@ -33,6 +46,12 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const fileInputPfp = useRef();
     const fileInputCv = useRef();
     const fileInputId = useRef();
+
+    // ── Check if status is editable ──
+    const isStatusEditable = () => {
+      const currentStatus = formData.employment_status || details?.employment_status || 'Active';
+      return !EXITED_STATUSES.includes(currentStatus);
+    };
 
     const fetchDetails = async (code) => {
         try {
@@ -72,7 +91,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         }
     }, [employeeCode]);
 
-    // ── Validation Functions ──
+    // ── Validation Functions (ONLY ONCE) ──
     const validateForm = () => {
         const newErrors = {};
 
@@ -96,12 +115,17 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             newErrors.dob = 'Please enter a valid date of birth';
         }
 
-        // DOJ validation - only if both DOJ and DOB are filled
+        // DOJ validation - only if BOTH DOJ and DOB are filled
         if (formData.doj && formData.dob) {
             if (!isValidDate(formData.doj)) {
                 newErrors.doj = 'Please enter a valid date of joining';
             } else if (!isDateAfter(formData.doj, formData.dob)) {
                 newErrors.doj = 'Date of joining cannot be before date of birth';
+            }
+        } else if (formData.doj && !formData.dob) {
+            // DOJ provided but DOB not - just validate DOJ format
+            if (!isValidDate(formData.doj)) {
+                newErrors.doj = 'Please enter a valid date of joining';
             }
         }
 
@@ -128,6 +152,11 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             newErrors.portfolio_url = 'Please enter a valid portfolio URL';
         }
 
+        // Name validation - only if filled (no longer required)
+        // if (formData.name && formData.name.length < 2) {
+        //     newErrors.name = 'Name must be at least 2 characters';
+        // }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -144,90 +173,104 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     if (!details) return null;
 
     const handleSave = async () => {
-        // Run validation before saving
-        if (!validateForm()) {
-            // Focus the first field with error
-            const firstError = Object.keys(errors)[0];
-            if (firstError) {
-                const el = document.getElementById(`field-${firstError}`);
-                if (el) el.focus();
-            }
-            toast.error('Please fix the errors before saving');
-            return;
-        }
+    // ── REMOVED: This was blocking save ──
+    // if (!validateForm()) {
+    //     const firstError = Object.keys(errors)[0];
+    //     if (firstError) {
+    //         const el = document.getElementById(`field-${firstError}`);
+    //         if (el) el.focus();
+    //     }
+    //     toast.error('Please fix the errors before saving');
+    //     return;
+    // }
 
-        setIsSaving(true);
-        try {
-            const payload = {
-                name: formData.name,
-                designation: formData.designation,
-                team: formData.team,
-                employment_type: formData.employment_type,
-                reporting_manager: formData.reporting_manager,
-                location: formData.location,
-                contact_number: formData.contact_number,
-                emergency_contact: formData.emergency_contact,
-                current_address: formData.current_address,
-                permanent_address: formData.permanent_address,
-                dob: formData.dob,
-                email_id: formData.email_id,
-                doj: formData.doj,
-                notes: formData.notes,
-                education_details: formData.education_details,
-                pf_included: formData.pf_included,
-                mediclaim_included: formData.mediclaim_included,
-                primary_skillset: formData.primary_skillset,
-                secondary_skillset: formData.secondary_skillset,
-                experience_years: formData.experience_years,
-                bank_name: formData.bank_name,
-                bank_account_no: formData.bank_account_no,
-                pan_no: formData.pan_no,
-            };
+    // ── NEW: Just validate silently, but don't block ──
+    validateForm(); // This just sets errors state, doesn't block
 
-            const res = await fetch(`/api/employee/${details.employee_code}`, {
-                method: 'PUT',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const result = await res.json();
-            if (!res.ok) throw new Error(result.detail || 'Update failed');
-            
-            toast.success('Profile updated successfully');
-            setEditMode(false);
-            setErrors({});
-            fetchDetails(details.employee_code);
-        } catch (e) {
-            toast.error(e.message);
-        } finally {
-            setIsSaving(false);
-        }
-    };
+    setIsSaving(true);
+    try {
+        const payload = {
+            name: formData.name,
+            designation: formData.designation,
+            team: formData.team,
+            employment_type: formData.employment_type,
+            reporting_manager: formData.reporting_manager,
+            location: formData.location,
+            contact_number: formData.contact_number,
+            emergency_contact: formData.emergency_contact,
+            current_address: formData.current_address,
+            permanent_address: formData.permanent_address,
+            dob: formData.dob,
+            email_id: formData.email_id,
+            doj: formData.doj,
+            notes: formData.notes,
+            education_details: formData.education_details,
+            pf_included: formData.pf_included,
+            mediclaim_included: formData.mediclaim_included,
+            primary_skillset: formData.primary_skillset,
+            secondary_skillset: formData.secondary_skillset,
+            experience_years: formData.experience_years,
+            bank_name: formData.bank_name,
+            bank_account_no: formData.bank_account_no,
+            pan_no: formData.pan_no,
+            employment_status: formData.employment_status,
+        };
+
+        const res = await fetch(`/api/employee/${details.employee_code}`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.detail || 'Update failed');
+        
+        toast.success('Profile updated successfully');
+        setEditMode(false);
+        setErrors({});
+        fetchDetails(details.employee_code);
+    } catch (e) {
+        toast.error(e.message);
+    } finally {
+        setIsSaving(false);
+    }
+};
 
     const handleFileUpload = async (type, file) => {
         if (!file) return;
         
-        // ── File Validation ──
-        const allowedTypes = {
-            pfp: ['image/jpeg', 'image/png', 'image/webp'],
-            cv: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-            id: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+        // ── File Validation with correct specs ──
+        const fileRules = {
+            pfp: {
+                types: ['image/jpeg', 'image/png'],
+                maxSize: 2 * 1024 * 1024, // 2MB
+                label: 'Profile Photo',
+                formats: 'JPG, JPEG, PNG (max 2MB)'
+            },
+            cv: {
+                types: ['application/pdf'],
+                maxSize: 5 * 1024 * 1024, // 5MB
+                label: 'Resume/CV',
+                formats: 'PDF only (max 5MB)'
+            },
+            id: {
+                types: ['image/jpeg', 'image/png', 'application/pdf'],
+                maxSize: 5 * 1024 * 1024, // 5MB
+                label: 'Government ID Proof',
+                formats: 'PDF, JPG, JPEG, PNG (max 5MB)'
+            }
         };
         
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        const rule = fileRules[type];
         
-        if (!allowedTypes[type].includes(file.type)) {
-            const typeNames = {
-                pfp: 'JPEG, PNG, WebP',
-                cv: 'PDF, DOC, DOCX',
-                id: 'JPEG, PNG, WebP, PDF'
-            };
-            toast.error(`Please upload a valid file type: ${typeNames[type]}`);
+        if (!rule.types.includes(file.type)) {
+            toast.error(`Please upload a valid ${rule.label} file: ${rule.formats}`);
             return;
         }
         
-        if (file.size > maxSize) {
-            toast.error('File size must be less than 5MB');
+        if (file.size > rule.maxSize) {
+            const maxMB = rule.maxSize / (1024 * 1024);
+            toast.error(`${rule.label} size must be less than ${maxMB}MB`);
             return;
         }
 
@@ -244,7 +287,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 body: fd
             });
             if (!res.ok) throw new Error('Upload failed');
-            toast.success('Artifact synchronized', { id: 'upload' });
+            toast.success('Document uploaded successfully', { id: 'upload' });
             fetchDetails(details.employee_code);
         } catch {
             toast.error('Upload failed', { id: 'upload' });
@@ -302,12 +345,16 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         return null;
     };
 
+    const currentStatus = formData.employment_status || details?.employment_status || 'Active';
+    const statusColor = STATUS_COLORS[currentStatus] || '#8B5CF6';
+    const isExited = EXITED_STATUSES.includes(currentStatus);
+
     return (
         <div className="space-y-8 animate-fade-in pb-20">
             {/* Action Bar */}
             <div className="flex justify-between items-center bg-gradient-to-r from-[#f7f3ff] to-[#faf7ff] p-4 rounded-2xl border border-[#e9ddff] shadow-lg shadow-primary/5">
                 <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-black/90 hover:text-black transition-all">
-                    <ArrowLeft size={14} /> Back to Nexus
+                    <ArrowLeft size={14} /> Back 
                 </button>
                 <div className="flex gap-3">
                     {editMode ? (
@@ -361,32 +408,67 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 <Image size={18} /> Update PFP
                             </button>
                         )}
-                        <input type="file" ref={fileInputPfp} hidden accept="image/jpeg,image/png,image/webp" onChange={e => handleFileUpload('pfp', e.target.files[0])} />
+                        <input type="file" ref={fileInputPfp} hidden accept="image/jpeg,image/png" onChange={e => handleFileUpload('pfp', e.target.files[0])} />
                     </div>
                     
                     <div className="flex-1 space-y-4">
                         <div className="flex flex-col gap-2">
-                            {editMode ? (
-                                <div>
-                                    <input 
-                                        type="text" 
-                                        value={formData.name}
-                                        onChange={e => setFormData({...formData, name: e.target.value})}
-                                        className="text-4xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
-                                        placeholder="Full Name"
-                                    />
-                                    {renderError('name')}
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4 flex-wrap">
+                                {editMode ? (
+                                    <div>
+                                        <input 
+                                            type="text" 
+                                            value={formData.name}
+                                            onChange={e => setFormData({...formData, name: e.target.value})}
+                                            className="text-4xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                            placeholder="Full Name"
+                                        />
+                                        {renderError('name')}
+                                    </div>
+                                ) : (
                                     <h2 className="text-4xl font-display font-black text-black uppercase tracking-tighter italic">{details.name}</h2>
-                                    <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                                        details.employment_status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                    }`}>
-                                        {details.employment_status || 'Active'}
+                                )}
+                                
+                                {/* ── EDITABLE STATUS TAG ── */}
+                                {editMode && isStatusEditable() ? (
+                                    <select
+                                        value={currentStatus}
+                                        onChange={e => setFormData({...formData, employment_status: e.target.value})}
+                                        className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border-2 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                                        style={{
+                                            background: `${statusColor}15`,
+                                            color: statusColor,
+                                            borderColor: `${statusColor}40`
+                                        }}
+                                    >
+                                        {STATUS_OPTIONS.map(status => (
+                                            <option key={status} value={status}>{status}</option>
+                                        ))}
+                                    </select>
+                                ) : editMode && !isStatusEditable() ? (
+                                    <span
+                                        className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest opacity-50 cursor-not-allowed"
+                                        style={{
+                                            background: `${statusColor}10`,
+                                            color: statusColor,
+                                            border: `1px solid ${statusColor}20`
+                                        }}
+                                    >
+                                        {currentStatus} (🔒 Locked)
                                     </span>
-                                </div>
-                            )}
+                                ) : (
+                                    <span
+                                        className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest"
+                                        style={{
+                                            background: `${statusColor}15`,
+                                            color: statusColor,
+                                            border: `1px solid ${statusColor}30`
+                                        }}
+                                    >
+                                        {currentStatus}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-3">
@@ -631,8 +713,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 onUpload={() => fileInputId.current.click()}
                             />
                         </div>
-                        <input type="file" ref={fileInputCv} hidden accept=".pdf,.doc,.docx" onChange={e => handleFileUpload('cv', e.target.files[0])} />
-                        <input type="file" ref={fileInputId} hidden accept="image/jpeg,image/png,image/webp,.pdf" onChange={e => handleFileUpload('id', e.target.files[0])} />
+                        <input type="file" ref={fileInputCv} hidden accept=".pdf" onChange={e => handleFileUpload('cv', e.target.files[0])} />
+                        <input type="file" ref={fileInputId} hidden accept=".pdf,image/jpeg,image/png" onChange={e => handleFileUpload('id', e.target.files[0])} />
                     </div>
 
                     {/* Allocation & Lifecycle Matrix */}
@@ -915,7 +997,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
 
                     {/* Security & Access */}
-                    {details.employment_status === 'Active' && (
+                    {!isExited && (
                         <HasPermission permission="deploy.employees.edit">
                             <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                                 <SectionHeader icon={Key} title="Security & Access" />
@@ -941,7 +1023,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     )}
 
                     {/* Offboard Danger Zone */}
-                    {details.employment_status === 'Active' && (
+                    {!isExited && (
                         <HasPermission permission="deploy.employees.offboard">
                             <div className="bg-white border border-red-200 shadow-lg shadow-red-500/5 p-8 rounded-2xl">
                                 <SectionHeader icon={X} title="Danger Zone" />
@@ -1057,6 +1139,29 @@ function SectionHeader({ icon: Icon, title }) {
 }
 
 function FileCard({ label, path, editMode, onUpload }) {
+    const fileUrl = path ? (path.startsWith('http') ? path : `/${path.replace(/^\//, '')}`) : '';
+
+    const handleDownload = async () => {
+        if (!path) return;
+
+        try {
+            const response = await fetch(fileUrl, { credentials: 'include' });
+            if (!response.ok) throw new Error();
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = path.split('/').pop() || `${label}.download`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(objectUrl);
+        } catch {
+            toast.error('Failed to download file');
+        }
+    };
+
     return (
         <div className="flex items-center justify-between p-4 bg-[#f8f5ff] rounded-xl border border-[#e9ddff] group hover:border-[#c4b5fd] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
             <div className="flex items-center gap-3">
@@ -1067,14 +1172,25 @@ function FileCard({ label, path, editMode, onUpload }) {
             </div>
             <div className="flex gap-2">
                 {path && (
-                    <a
-                        href={path.startsWith('http') ? path : `/${path.replace(/^\//, '')}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2 bg-white rounded-lg border border-[#e9ddff] text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white hover:shadow-md hover:shadow-[#7c3aed]/20 transition-all"
-                    >
-                        <ExternalLink size={12} />
-                    </a>
+                    <>
+                        <a
+                            href={fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="View file"
+                            className="p-2 bg-white rounded-lg border border-[#e9ddff] text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white hover:shadow-md hover:shadow-[#7c3aed]/20 transition-all"
+                        >
+                            <ExternalLink size={12} />
+                        </a>
+                        <button
+                            type="button"
+                            onClick={handleDownload}
+                            title="Download file"
+                            className="p-2 bg-white rounded-lg border border-[#e9ddff] text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white hover:shadow-md hover:shadow-[#7c3aed]/20 transition-all"
+                        >
+                            <Download size={12} />
+                        </button>
+                    </>
                 )}
                 {editMode && (
                     <button

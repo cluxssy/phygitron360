@@ -6,6 +6,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
 const STATUS_STYLE = {
   pending:   'bg-amber-50 text-amber-700 border-amber-200',

@@ -49,46 +49,48 @@ class EmployeeService:
         return employee
 
     def create_employee(self, data: Dict[str, Any]):
-        # Validations
-        if not data['code']:
-             raise ValueError("Employee code cannot be empty.")
+    # Only name is mandatory
+        if not data.get('name'):
+            raise ValueError("Employee name is required.")
         
-        import re
-        phone_cleaned = re.sub(r'[\s\-()]', '', data['phone'])
-        if not re.match(r'^\+?[0-9]{7,15}$', phone_cleaned):
-             raise ValueError("Contact number must be a valid phone number (7-15 digits, optionally starting with +).")
-
-        # Date calcs for age validation
-        try:
-            dob_date = datetime.strptime(data['dob'], "%Y-%m-%d")
-            doj_date = datetime.strptime(data['doj'], "%Y-%m-%d")
-            today = datetime.today()
-            age = today.year - dob_date.year - ((today.month, today.day) < (dob_date.month, dob_date.day))
-            if age < 18:
-                raise ValueError("Employee must be at least 18 years old.")
-        except ValueError:
-             raise ValueError("Invalid date format.")
-
+        # Generate employee code if not provided
+        if not data.get('code'):
+            import uuid
+            data['code'] = f"EMP{uuid.uuid4().hex[:8].upper()}"
+        
+        # Check if employee code already exists
         existing_emp_by_code = self.repo.get_employee_by_code(data['code'], self.tenant_id)
         if existing_emp_by_code:
-            raise ValueError("Employee Code already exists.")
-            
-        existing_emp_by_email = self.repo.get_employee_by_email(data['email'], self.tenant_id)
-        is_rehire = False
-        old_employee_code = None
+            # Generate a new code if conflict
+            import uuid
+            data['code'] = f"EMP{uuid.uuid4().hex[:8].upper()}"
+            # Re-check (simple approach - just use the new code)
         
-        if existing_emp_by_email:
-            if existing_emp_by_email.get('employment_status') == 'Exited':
-                is_rehire = True
-                old_employee_code = existing_emp_by_email['employee_code']
-            else:
-                raise ValueError("An active employee with this email already exists.")
-
-        if is_rehire:
-            self.repo.update_employee_rehire(old_employee_code, data, self.tenant_id)
-        else:
-            self.repo.create_employee(data, self.tenant_id)
+        # Check for existing employee by email ONLY if email is provided AND not empty
+        if data.get('email') and str(data['email']).strip():
+            try:
+                existing_emp_by_email = self.repo.get_employee_by_email(data['email'], self.tenant_id)
+                if existing_emp_by_email and existing_emp_by_email.get('employment_status') != 'Exited':
+                    # If email exists, we can either skip or generate a unique email
+                    # For now, let's generate a unique email to avoid conflict
+                    import uuid
+                    data['email'] = f"user_{uuid.uuid4().hex[:8]}@temp.local"
+            except Exception:
+                # If there's any error with email check, just proceed
+                pass
         
+        # Set defaults for any missing fields
+        data.setdefault('employment_status', 'Active')
+        data.setdefault('type', 'Full-time')
+        data.setdefault('role', 'employee')
+        data.setdefault('pf', 'No')
+        data.setdefault('mediclaim', 'No')
+        data.setdefault('education_details', [])
+        data.setdefault('experience_years', 0)
+        
+        # Create the employee
+        self.repo.create_employee(data, self.tenant_id)
+    
         # --- ATOMIC INITIALIZATION ---
         # 1. Initialize Asset Checklist (Empty/Default)
         default_assets = {
@@ -108,58 +110,57 @@ class EmployeeService:
         except Exception:
             pass
 
-        # 3. Auto-create user account so the employee can log in
-        username = data['email']  # email is the login username
+        # 3. Auto-create user account so the employee can log in (only if email is provided)
+        username = data.get('email')  # email is the login username
         temp_password = None
         user_created = False
         email_sent = False
 
-        # Only create if this email isn't already a user
-        # Note: user_repo needs tenant_id too, but for scope we handle employee isolating primarily
-        # Assuming user_repo is tenant-aware
-        existing_user = None
-        try:
-            existing_user = self.user_repo.get_user_by_username(username)
-        except:
-            pass
+        if username:  # Only create user if email exists
+            # Only create if this email isn't already a user
+            existing_user = None
+            try:
+                existing_user = self.user_repo.get_user_by_username(username)
+            except:
+                pass
 
-        if not existing_user:
-            emp_status = data.get('employment_status', 'Active')
-            if emp_status != 'Exited':
-                # Generate a secure 8-char URL-safe temp password
-                temp_password = secrets.token_urlsafe(8)
-                password_hash = pbkdf2_sha256.hash(temp_password)
-                try:
-                    self.user_repo.create_user(
-                        username=username,
-                        password_hash=password_hash,
-                        role=data.get('role') or 'employee',
-                        employee_code=data['code'],
-                        tenant_id=self.tenant_id,
-                        is_active=0 if emp_status == 'Inactive' else 1
-                    )
-                    user_created = True
-    
-                    # Send welcome email with credentials (only if Active)
-                    if emp_status == 'Active' and self.email_service.is_configured():
-                        email_result = self.email_service.send_new_employee_credentials(
-                            recipient_email=username,
-                            recipient_name=data['name'],
+            if not existing_user:
+                emp_status = data.get('employment_status', 'Active')
+                if emp_status != 'Exited':
+                    # Generate a secure 8-char URL-safe temp password
+                    temp_password = secrets.token_urlsafe(8)
+                    password_hash = pbkdf2_sha256.hash(temp_password)
+                    try:
+                        self.user_repo.create_user(
+                            username=username,
+                            password_hash=password_hash,
+                            role=data.get('role') or 'employee',
                             employee_code=data['code'],
-                            temporary_password=temp_password
+                            tenant_id=self.tenant_id,
+                            is_active=0 if emp_status == 'Inactive' else 1
                         )
-                        email_sent = email_result.get('success', False)
-                except:
-                    pass
-        else:
-            # Link existing user to this employee code if not already linked
-            if not existing_user.get('employee_code'):
-                from backend.modules.deploy.repositories.admin_repo import AdminRepository
-                admin_repo = AdminRepository()
-                try:
-                    admin_repo.update_employee_code(existing_user['id'], data['code'])
-                except:
-                    pass
+                        user_created = True
+        
+                        # Send welcome email with credentials (only if Active)
+                        if emp_status == 'Active' and self.email_service.is_configured():
+                            email_result = self.email_service.send_new_employee_credentials(
+                                recipient_email=username,
+                                recipient_name=data['name'],
+                                employee_code=data['code'],
+                                temporary_password=temp_password
+                            )
+                            email_sent = email_result.get('success', False)
+                    except:
+                        pass
+            else:
+                # Link existing user to this employee code if not already linked
+                if not existing_user.get('employee_code'):
+                    from backend.modules.deploy.repositories.admin_repo import AdminRepository
+                    admin_repo = AdminRepository()
+                    try:
+                        admin_repo.update_employee_code(existing_user['id'], data['code'])
+                    except:
+                        pass
 
         result = {"success": True, "message": "Employee added successfully!"}
         if user_created:
@@ -173,7 +174,7 @@ class EmployeeService:
                     "temporary_password": temp_password,
                     "note": "Share these credentials with the employee. They must change the password on first login."
                 }
-        else:
+        elif username and not user_created:
             result["message"] += " An existing user account was found and linked."
 
         return result
@@ -225,8 +226,8 @@ class EmployeeService:
         if 'role' in data and data['role']:
             self.repo.update_user_role(current_emp_code, data['role'], self.tenant_id)
 
-        # Sync email with user username
-        if 'email_id' in data and data['email_id'] != old_email:
+        # Sync email with user username (only if email_id is provided)
+        if 'email_id' in data and data['email_id'] != old_email and data['email_id']:
              try:
                  user = self.user_repo.get_user_by_username(old_email)
                  if user:

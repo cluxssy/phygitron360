@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Users, Award, ShieldAlert, Clock, Loader2, ChevronDown, ChevronUp, AlertTriangle, Play, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
 export default function AssessmentAnalytics({ assessmentId: initialAssessmentId }) {
   const [assessmentsList, setAssessmentsList] = useState([]);
