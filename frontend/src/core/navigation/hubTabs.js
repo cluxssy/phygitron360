@@ -5,7 +5,11 @@ export const canViewDashboardTab = (hasRole) =>
 
 export const getHubTabs = ({ hasPermission, hasRole }) => {
   const moduleTabs = Object.entries(MODULE_CONFIG)
-    .filter(([_, config]) => hasPermission?.(config.permission))
+    .filter(([key, config]) => {
+      // Assessment Central (Verify) is always visible so employees can access Candidate Portal
+      if (key === 'verify') return true;
+      return hasPermission?.(config.permission);
+    })
     .map(([key, config]) => ({
       id: key,
       name: config.label,
