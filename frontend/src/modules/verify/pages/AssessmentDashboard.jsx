@@ -256,21 +256,8 @@ export default function AssessmentDashboard() {
 
     return (
       <div className="flex flex-col gap-6">
-        {/* ── HEADER ── */}
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-2">
-            Assessment Analytics
-          </p>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-            Assessment Central Dashboard
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Overview of all assessment activities and performance metrics
-          </p>
-        </div>
-
         {/* KPI Cards - 4 columns with icons - Purple, Amber, Green, Pink */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {adminCards.map((card, index) => (
             <div
               key={index}
@@ -292,9 +279,9 @@ export default function AssessmentDashboard() {
         </div>
 
         {/* Recent Activity + Quick Actions - Horizontal Layout */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Recent Activity - Takes 2/3 */}
-          <div className="col-span-2 bg-white    p-6 border border-gray-200 shadow-sm">
+          <div className="lg:col-span-2 bg-white    p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <Activity size={16} className="text-purple-600" />
@@ -441,21 +428,8 @@ export default function AssessmentDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* ── HEADER ── */}
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-2">
-          Assessment Analytics
-        </p>
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-          Assessment Central Dashboard
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Your assessment progress and performance
-        </p>
-      </div>
-
       {/* KPI Cards - 4 columns with icons - Purple, Amber, Green, Pink */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {candidateCards.map((card, index) => (
           <div
             key={index}
@@ -477,9 +451,9 @@ export default function AssessmentDashboard() {
       </div>
 
       {/* In Progress + Quick Actions - Horizontal Layout */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* In Progress - Takes 2/3 */}
-        <div className="col-span-2 bg-white    p-6 border border-gray-200 shadow-sm">
+        <div className="lg:col-span-2 bg-white    p-6 border border-gray-200 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
             <Clock size={16} className="text-amber-500" />
             In Progress

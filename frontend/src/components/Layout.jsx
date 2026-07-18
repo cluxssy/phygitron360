@@ -31,11 +31,11 @@ function NotificationDropdown() {
       />
       
       {/* Dropdown positioned under bell icon */}
-      <div 
-        className="fixed z-[9999] bg-white rounded-2xl shadow-2xl w-96 max-h-[500px] overflow-hidden border border-[#ece4ff]"
+      <div
+        className="fixed z-[9999] bg-white rounded-2xl shadow-2xl w-[calc(100vw-2rem)] sm:w-96 max-h-[500px] overflow-hidden border border-[#ece4ff]"
         style={{
           top: '72px',
-          right: '100px',
+          right: '1rem',
           transformOrigin: 'top right',
         }}
       >
@@ -253,7 +253,7 @@ function LayoutContent({ children }) {
       {!isAdminDashboard && !isForgePage && (
         <>
           {/* PRIMARY SIDEBAR */}
-          <aside className="w-[88px] flex flex-col items-center py-8 bg-[#060E20] border-r border-white/5" data-no-tooltip>
+          <aside className="hidden lg:flex w-[88px] flex-col items-center py-8 bg-[#060E20] border-r border-white/5" data-no-tooltip>
             <div
               onClick={() => navigate('/')}
               className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center mb-10 cursor-pointer"
@@ -280,7 +280,7 @@ function LayoutContent({ children }) {
           </aside>
 
           {/* SECOND SIDEBAR */}
-          <aside className="w-[260px] bg-[#060E20]/60 border-r border-white/5 p-6" data-no-tooltip>
+          <aside className="hidden lg:block w-[260px] bg-[#060E20]/60 border-r border-white/5 p-6" data-no-tooltip>
             <h2 className="text-lg font-bold mb-6">{activeModule?.name}</h2>
 
             {filteredOptions.map((opt, i) => (

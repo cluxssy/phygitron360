@@ -352,8 +352,8 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
         </div>
 
         {/* History Table */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-sm">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-x-auto">
+          <table className="w-full text-left text-sm min-w-[680px]">
             <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3">Assessment</th>

@@ -487,12 +487,12 @@ export default function OnboardingPanel() {
               </button>
            </div>
 
-           <div className={`overflow-hidden rounded-[2rem] border ${
-             isLightMode 
-               ? 'bg-white border-[#ebe4ff] shadow-[0_10px_40px_rgba(180,140,255,0.06)]' 
+           <div className={`overflow-x-auto rounded-[2rem] border ${
+             isLightMode
+               ? 'bg-white border-[#ebe4ff] shadow-[0_10px_40px_rgba(180,140,255,0.06)]'
                : 'glass-panel border-white/5'
            }`}>
-             <table className="w-full text-left">
+             <table className="w-full text-left min-w-[760px]">
   <thead className={`border-b ${isLightMode ? 'bg-[#faf7ff] border-[#f1ebff]' : 'bg-white/5 border-white/10'}`}>
     <tr>
       {['Identity', 'Designation', 'Access Role', 'Current Status', 'Initiated', 'Action'].map(h => (
@@ -592,12 +592,12 @@ export default function OnboardingPanel() {
       ) : (
         /* Approvals Tab */
         <div className="space-y-6 animate-fade-in-up">
-           <div className={`overflow-hidden rounded-[2rem] border ${
-             isLightMode 
-               ? 'bg-white border-[#ebe4ff] shadow-[0_10px_40px_rgba(180,140,255,0.06)]' 
+           <div className={`overflow-x-auto rounded-[2rem] border ${
+             isLightMode
+               ? 'bg-white border-[#ebe4ff] shadow-[0_10px_40px_rgba(180,140,255,0.06)]'
                : 'glass-panel border-white/5'
            }`}>
-             <table className="w-full text-left">
+             <table className="w-full text-left min-w-[640px]">
                <thead className={`border-b ${isLightMode ? 'bg-[#faf7ff] border-[#f1ebff]' : 'bg-white/5 border-white/10'}`}>
                  <tr>
                    {['Candidate', 'Role', 'Invite Code', 'Status', 'Action'].map(h => (
@@ -668,8 +668,8 @@ export default function OnboardingPanel() {
 
       {/* Invite Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-          <div className={`p-10 w-full max-w-md space-y-6 scale-in-center rounded-[2.5rem] border ${
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 py-8 overflow-y-auto">
+          <div className={`p-6 sm:p-10 w-full max-w-md space-y-6 scale-in-center rounded-[2.5rem] border max-h-[85vh] overflow-y-auto ${
             isLightMode 
               ? 'bg-white border-[#ebe4ff] shadow-[0_20px_50px_rgba(180,140,255,0.15)] animate-fade-in' 
               : 'glass-panel border-white/10 shadow-[0_50px_100px_rgba(0,0,0,0.9)]'
@@ -817,15 +817,15 @@ export default function OnboardingPanel() {
                        >
                          <Save size={14} /> Save Changes
                        </button>
-                       <button 
-                         onClick={() => setSelectedApproval(null)} 
-                         className={`p-3 rounded-2xl transition-all ${
-                           isLightMode 
-                             ? 'bg-[#faf7ff] border border-[#ebe4ff] text-[#6b7280] hover:bg-red-50 hover:text-red-500' 
+                       <button
+                         onClick={() => setSelectedApproval(null)}
+                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                           isLightMode
+                             ? 'bg-[#faf7ff] border border-[#ebe4ff] text-[#6b7280] hover:bg-red-50 hover:text-red-500'
                              : 'bg-white/5 text-white/30 hover:text-error hover:bg-error/10'
                          }`}
                        >
-                         Abort Review
+                         <Ban size={14} /> Abort Review
                        </button>
                     </div>
                  </div>

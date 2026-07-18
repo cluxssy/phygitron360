@@ -767,7 +767,8 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
           </div>
         </div>
 
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px]">
 
           <thead className="bg-[#faf7ff]">
             <tr>
@@ -842,6 +843,7 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
           </tbody>
 
         </table>
+        </div>
 
       </div>
 

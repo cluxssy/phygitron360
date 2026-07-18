@@ -58,7 +58,7 @@ const FeatureGrid = () => {
       <div className="mx-auto w-full max-w-[1100px] px-6 lg:px-10">
 
         {/* ── HEADER ── */}
-        <div className="text-center mb-14 md:mb-16">
+        <div className="text-left sm:text-center mb-14 md:mb-16">
           <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 leading-tight">
             One Platform.
             <br className="hidden sm:block" />
@@ -76,7 +76,7 @@ const FeatureGrid = () => {
           {hubs.map((hub) => (
             <div
               key={hub.title}
-              className="relative bg-[#D9D9D9] rounded-xl p-8 md:p-10 transition-transform duration-300 ease-out hover:scale-[1.02]"
+              className="group relative bg-[#10b981ab] border border-black p-8 md:p-10 transition-[background-color] duration-200 ease-linear hover:bg-white"
             >
               <img
                 src={hub.icon}
@@ -85,11 +85,11 @@ const FeatureGrid = () => {
                 style={hub.iconStyle}
               />
 
-              <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
+              <h3 className="text-xl md:text-2xl font-bold text-black mb-2">
                 {hub.title}
               </h3>
 
-              <p className="text-gray-600 text-sm leading-relaxed mb-4 max-w-[380px]">
+              <p className="text-black text-sm leading-relaxed mb-4 max-w-[380px]">
                 {hub.desc}
               </p>
 
@@ -97,7 +97,7 @@ const FeatureGrid = () => {
                 {hub.capabilities.map((cap) => (
                   <li
                     key={cap}
-                    className="text-gray-700 text-sm leading-relaxed"
+                    className="text-black text-sm leading-relaxed"
                   >
                     • {cap}
                   </li>

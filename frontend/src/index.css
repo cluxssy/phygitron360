@@ -12,8 +12,8 @@
   --color-indigo: #6366F1;
   --color-error: #FFB4AB;
 
-  --font-family-display: 'Manrope', sans-serif;
-  --font-family-body: 'Inter', sans-serif;
+  --font-family-display: Arial, Helvetica, sans-serif;
+  --font-family-body: Arial, Helvetica, sans-serif;
 
   --animate-fade-in-up: fade-in-up 0.6s ease-out forwards;
   --animate-pulse-glow: pulse-glow 4s ease-in-out infinite;
@@ -44,11 +44,34 @@ html {
 body {
   background-color: #040812;
   color: #DAE2FD;
-  font-family: 'Inter', sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   max-width: 100vw;
+}
+
+/* ──────────────────────────────────────────────────
+   LANDING PAGE FONT SCOPE
+   The public marketing landing page keeps its original
+   Inter/Manrope typography; every other screen in the
+   tool uses the Arial default set above.
+────────────────────────────────────────────────── */
+.landing-scope {
+  font-family: 'Inter', sans-serif;
+}
+
+/* ──────────────────────────────────────────────────
+   NO ITALICS INSIDE THE TOOL
+   Bold weights and font sizes are untouched — only
+   italic styling is disabled outside the landing page.
+────────────────────────────────────────────────── */
+.italic {
+  font-style: normal !important;
+}
+
+.landing-scope .italic {
+  font-style: italic;
 }
 
 /* ── Shared black hover tooltip ── */
@@ -63,7 +86,7 @@ body {
   background: #111111;
   color: #ffffff;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
-  font: 500 11px/1.35 'Inter', sans-serif;
+  font: 500 11px/1.35 Arial, Helvetica, sans-serif;
   letter-spacing: 0;
   text-transform: none;
   text-align: center;

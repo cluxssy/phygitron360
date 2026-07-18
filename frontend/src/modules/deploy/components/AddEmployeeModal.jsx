@@ -307,9 +307,9 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-5" onClick={onClose}>
-      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-[2.8rem] border border-[#ece3ff] bg-[#fcfbff] shadow-[0_30px_100px_rgba(180,140,255,0.18)] p-12 custom-scrollbar animate-fade-in-up" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-7 right-7 w-11 h-11 rounded-2xl bg-[#f5f1ff] border border-[#e7ddff] flex items-center justify-center hover:bg-[#ede6ff] transition-all">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-2.5 sm:p-5" onClick={onClose}>
+      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl sm:rounded-[2.8rem] border border-[#ece3ff] bg-[#fcfbff] shadow-[0_30px_100px_rgba(180,140,255,0.18)] p-5 sm:p-8 lg:p-12 custom-scrollbar animate-fade-in-up" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 sm:top-7 sm:right-7 w-11 h-11 rounded-2xl bg-[#f5f1ff] border border-[#e7ddff] flex items-center justify-center hover:bg-[#ede6ff] transition-all">
           <X size={18} className="text-black" />
         </button>
 
@@ -524,8 +524,8 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                 <div className="bg-[#f5f1ff] px-4 py-3 border-b border-[#e8defc] flex justify-between items-center">
                   <h3 className="font-bold text-xs text-black">Data Preview ({bulkData.length} Records)</h3>
                 </div>
-                <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                  <table className="w-full text-left text-xs">
+                <div className="max-h-60 overflow-y-auto overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left text-xs min-w-[520px]">
                     <thead className="bg-white sticky top-0 border-b border-[#e8defc]">
                       <tr>
                         <th className="px-4 py-3 font-semibold text-gray-500">Emp Code</th>

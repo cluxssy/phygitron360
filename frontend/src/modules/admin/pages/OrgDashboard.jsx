@@ -308,9 +308,8 @@ export default function OrgDashboard() {
 
               {/* KPI CARDS - 4 columns */}
               <div
+                className="grid grid-cols-2 sm:grid-cols-4"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, 1fr)",
                   gap: "20px",
                   marginBottom: "28px",
                 }}
@@ -416,9 +415,8 @@ export default function OrgDashboard() {
 
               {/* ROW 1: FUNNEL & ACTIVITY */}
               <div
+                className="grid grid-cols-1 lg:[grid-template-columns:1.5fr_1fr]"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.5fr 1fr",
                   gap: "20px",
                   marginBottom: "20px",
                 }}
@@ -518,7 +516,8 @@ export default function OrgDashboard() {
               {/* ROW 2: CORE TEAM OVERVIEW */}
               <div className="section boxed" style={{ margin: 0, width: "100%" }}>
                 <h3 style={{ marginBottom: "20px" }}>Core Team Overview</h3>
-                <table style={{ width: "100%", textAlign: "left", borderCollapse: "collapse" }}>
+                <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", minWidth: "480px", textAlign: "left", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #eaeaea" }}>
                       <th style={{ paddingBottom: "12px" }}>User</th>
@@ -572,6 +571,7 @@ export default function OrgDashboard() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             </>
           )}

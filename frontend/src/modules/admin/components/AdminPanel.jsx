@@ -358,9 +358,9 @@ export default function AdminPanel() {
 
               {/* TABLE */}
 
-              <div className="light-table bg-white/70 backdrop-blur-2xl border border-primary/10 shadow-[0_10px_60px_rgba(180,140,255,0.08)] overflow-hidden rounded-[2.5rem]">
+              <div className="light-table bg-white/70 backdrop-blur-2xl border border-primary/10 shadow-[0_10px_60px_rgba(180,140,255,0.08)] overflow-x-auto rounded-[2.5rem]">
 
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[720px]">
 
                   <thead>
 
@@ -554,7 +554,7 @@ export default function AdminPanel() {
 
   <div
     className="
-      overflow-hidden
+      overflow-x-auto
       rounded-[2.8rem]
       border
       border-[#ebe5fa]
@@ -563,7 +563,7 @@ export default function AdminPanel() {
     "
   >
 
-    <table className="w-full text-left border-collapse">
+    <table className="w-full text-left border-collapse min-w-[720px]">
 
       <thead>
 

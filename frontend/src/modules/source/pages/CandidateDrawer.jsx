@@ -371,19 +371,17 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     <>
       {/* Backdrop - only covers the content area, not the sidebars */}
       <div
-        className="fixed inset-0 z-[100]"
-        style={{ left: 88 + 280 }}
+        className="fixed inset-0 z-[100] left-0 lg:left-[368px]"
         onClick={onClose}
       />
 
       {/* Drawer panel */}
       <div
-        className={`fixed top-0 right-0 h-full z-[110] bg-[#040812] border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-300 ${candidate ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{ width: 520 }}
+        className={`fixed top-0 right-0 h-full z-[110] bg-[#040812] border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-300 w-full sm:w-[520px] max-w-full ${candidate ? 'translate-x-0' : 'translate-x-full'}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-8 border-b border-white/5 shrink-0">
+        <div className="flex items-start justify-between p-5 sm:p-8 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-2xl font-display font-black text-primary shrink-0">
               {(data?.full_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -433,7 +431,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
             </div>
           )}
 
-          <div className="p-8 space-y-8">
+          <div className="p-5 sm:p-8 space-y-8">
             {isEditing ? (
               <form onSubmit={saveProfile} className="space-y-6">
                 <div className="space-y-4">
@@ -884,7 +882,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       {/* ── OFFER MODAL - WHITE/PURPLE THEME ── */}
       {showOfferForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowOfferForm(false)}>
-          <div className="bg-white w-full max-w-2xl rounded-3xl p-10 relative max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-2xl rounded-3xl p-5 sm:p-10 relative max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             
             {/* Close Button */}
             <button 

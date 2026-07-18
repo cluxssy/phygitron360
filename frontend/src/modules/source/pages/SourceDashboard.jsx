@@ -1004,8 +1004,8 @@ export default function SourceDashboard() {
 
       {/* ── KPI CARDS ── (Purple, Yellow, Green, Pink) */}
       {currentTab === 'home' && (
-        <div className="grid grid-cols-4 gap-4">
-        <div 
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div
           className="bg-white border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-purple-600"
           onClick={() => setTab('directory')}
         >
@@ -2075,9 +2075,9 @@ export default function SourceDashboard() {
 // ── Reusable sub-components ───────────────────────────────────────────────────
 function Modal({ children, title, onClose }) {
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/50 backdrop-blur-sm overflow-y-auto">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-2xl p-8 shadow-2xl border border-gray-200 overflow-hidden">
+      <div className="relative w-full max-w-lg bg-white rounded-2xl p-5 sm:p-8 shadow-2xl border border-gray-200 my-8 max-h-[85vh] overflow-y-auto">
         <div className="relative flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-800">{title}</h2>
           <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X size={18} /></button>

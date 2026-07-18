@@ -69,13 +69,13 @@ export default function InviteStatus({ roleId, roleName, onClose }) {
   const loginRate = total > 0 ? Math.round((loggedIn / total) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm">
       <div className="absolute inset-0" onClick={onClose} />
 
       <div className="relative w-full max-w-4xl max-h-[90vh] glass-panel flex flex-col shadow-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center justify-between p-8 border-b border-white/5 shrink-0">
+        <div className="flex items-center justify-between p-5 sm:p-8 border-b border-white/5 shrink-0">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Invite Tracking</p>
             <h2 className="text-2xl font-display font-black text-white uppercase tracking-tighter italic">
@@ -97,7 +97,7 @@ export default function InviteStatus({ roleId, roleName, onClose }) {
         </div>
 
         {/* Stats */}
-        <div className="flex gap-4 p-8 pb-0 shrink-0 flex-wrap">
+        <div className="flex gap-4 p-5 sm:p-8 pb-0 shrink-0 flex-wrap">
           <StatCard icon={<Send size={12} />} label="Total Sent" value={total} />
           <StatCard icon={<Mail size={12} />} label={`Opened (${openRate}%)`} value={opened} color="text-amber-400" />
           <StatCard icon={<LogIn size={12} />} label={`Logged In (${loginRate}%)`} value={loggedIn} color="text-indigo" />
@@ -105,7 +105,7 @@ export default function InviteStatus({ roleId, roleName, onClose }) {
         </div>
 
         {/* Table */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 pt-6">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-8 pt-6">
           {loading ? (
             <div className="flex items-center justify-center gap-3 py-24 text-white/40">
               <Loader2 size={24} className="animate-spin text-primary" />
@@ -120,34 +120,36 @@ export default function InviteStatus({ roleId, roleName, onClose }) {
               </div>
             </div>
           ) : (
-            <div className="glass-panel overflow-hidden border-white/5">
-              {/* Table header */}
-              <div className="grid grid-cols-[1fr_1fr_120px_1fr_1fr] gap-4 px-6 py-4 border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/30">
-                <div>Candidate</div>
-                <div>Email</div>
-                <div className="text-center">Status</div>
-                <div>Sent At</div>
-                <div>Opened At</div>
-              </div>
+            <div className="glass-panel overflow-x-auto border-white/5">
+              <div className="min-w-[640px]">
+                {/* Table header */}
+                <div className="grid grid-cols-[1fr_1fr_120px_1fr_1fr] gap-4 px-6 py-4 border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/30">
+                  <div>Candidate</div>
+                  <div>Email</div>
+                  <div className="text-center">Status</div>
+                  <div>Sent At</div>
+                  <div>Opened At</div>
+                </div>
 
-              {/* Rows */}
-              <div className="divide-y divide-white/5">
-                {invites.map((inv, idx) => (
-                  <div key={inv.id || idx} className="grid grid-cols-[1fr_1fr_120px_1fr_1fr] gap-4 px-6 py-4 items-center hover:bg-white/[0.02] transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-display font-black text-xs text-white shrink-0">
-                        {(inv.candidate_name || inv.full_name || '?')[0]}
+                {/* Rows */}
+                <div className="divide-y divide-white/5">
+                  {invites.map((inv, idx) => (
+                    <div key={inv.id || idx} className="grid grid-cols-[1fr_1fr_120px_1fr_1fr] gap-4 px-6 py-4 items-center hover:bg-white/[0.02] transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-display font-black text-xs text-white shrink-0">
+                          {(inv.candidate_name || inv.full_name || '?')[0]}
+                        </div>
+                        <span className="text-sm font-bold text-white truncate">{inv.candidate_name || inv.full_name || '—'}</span>
                       </div>
-                      <span className="text-sm font-bold text-white truncate">{inv.candidate_name || inv.full_name || '—'}</span>
+                      <span className="text-xs text-white/50 truncate">{inv.email || '—'}</span>
+                      <div className="flex justify-center">
+                        <StatusBadge status={inv.status} />
+                      </div>
+                      <span className="text-xs text-white/40">{formatDate(inv.sent_at || inv.created_at)}</span>
+                      <span className="text-xs text-white/40">{formatDate(inv.opened_at)}</span>
                     </div>
-                    <span className="text-xs text-white/50 truncate">{inv.email || '—'}</span>
-                    <div className="flex justify-center">
-                      <StatusBadge status={inv.status} />
-                    </div>
-                    <span className="text-xs text-white/40">{formatDate(inv.sent_at || inv.created_at)}</span>
-                    <span className="text-xs text-white/40">{formatDate(inv.opened_at)}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}

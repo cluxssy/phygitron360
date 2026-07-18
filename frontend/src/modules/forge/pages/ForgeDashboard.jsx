@@ -138,9 +138,9 @@ export default function ForgeDashboard() {
             {/* Header */}
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">LEARNING CENTRAL</p>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
                     Learning Forge
                   </h1>
                   <p className="text-sm text-gray-500 mt-1">
@@ -199,7 +199,7 @@ export default function ForgeDashboard() {
               <>
                 {/* Admin View - Active Assignments Table */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                       <Briefcase size={16} className="text-purple-600" />
                       Active Assignments
