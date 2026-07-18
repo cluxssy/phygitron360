@@ -56,7 +56,11 @@ Respond ONLY with a JSON array of question objects matching this structure:
 }
 """
         result = await self.ai.ai.generate_json(text, system_prompt)
-        questions = result.get("questions", [])
+        
+        if isinstance(result, list):
+            questions = result
+        else:
+            questions = result.get("questions", [])
         
         count = 0
         for q in questions:
