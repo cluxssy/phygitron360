@@ -1,5 +1,4 @@
 import demoImage from '../../../assets/demo.png';
-import triangleImage from '../../../assets/Polygon 2.png';
 
 const PlatformSection = () => {
   return (
@@ -15,12 +14,14 @@ const PlatformSection = () => {
           backgroundSize: '22px 22px',
         }}
       >
-        {/* Decorative purple triangle, tucked behind the preview image — only shown once the image sits in its own column */}
-        <img
-          src={triangleImage}
-          alt=""
+        {/* Decorative purple triangle, stretched full-bleed across the section and tucked behind the preview image — only shown once the image sits in its own column */}
+        <div
           aria-hidden="true"
-          className="hidden lg:block absolute left-[1px] top-1/2 -translate-y-1/2 w-[420px] max-w-none pointer-events-none select-none z-0"
+          className="hidden lg:block absolute inset-y-0 left-0 w-[150%] max-w-none pointer-events-none select-none z-0"
+          style={{
+            background: 'rgba(122, 29, 255, 0.28)',
+            clipPath: 'polygon(0 0, 0 100%,   100% 50%)',
+          }}
         />
 
         <div className="mx-auto w-full max-w-[1400px] px-6 lg:px-10 relative z-10">
@@ -31,17 +32,24 @@ const PlatformSection = () => {
               <img
                 src={demoImage}
                 alt="PHYGITRON 360 platform preview"
-                className="w-full shadow-2xl shadow-black/40"
+                className="w-full"
+                style={{ maxWidth: '600px' }}
               />
             </div>
 
-            <div className="text-center lg:text-left">
+            <div className="text-left sm:text-center lg:text-left">
               <h2 className="text-3xl md:text-4xl font-medium text-[#151515] leading-tight mb-6">
-                Explore <span className="font-bold">PHYGITRON 360</span>
+                Explore{" "}
+                <span
+                  className="font-bold px-1.5"
+                  style={{ backgroundColor: "rgba(16, 185, 129, 0.67)" }}
+                >
+                  PHYGITRON 360
+                </span>
                 <br className="hidden lg:block" /> in Action
               </h2>
 
-              <p className="text-gray-500 text-base leading-relaxed">
+              <p className="text-gray-900 text-base leading-relaxed">
                 Take a guided tour of PHYGITRON 360 and discover how each intelligent
                 module works seamlessly together to simplify hiring, accelerate
                 employee development, automate assessments, and enhance workforce

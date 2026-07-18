@@ -7,6 +7,9 @@ const cards = [
   { src: ceo, alt: "CEO" },
   { src: phy, alt: "Phygitron" },
   { src: cybersec, alt: "Cybersecurity" },
+  { placeholder: true },
+  { placeholder: true },
+  { placeholder: true },
 ];
 
 const InsightsSection = () => {
@@ -30,7 +33,7 @@ const InsightsSection = () => {
       <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 lg:px-10">
 
         {/* ── HEADER ── */}
-        <div className="text-center mb-10 md:mb-12">
+        <div className="text-left sm:text-center mb-10 md:mb-12">
           <h2 className="text-3xl md:text-4xl font-semibold text-white leading-tight">
             Insights from Industry Leaders
           </h2>
@@ -41,18 +44,22 @@ const InsightsSection = () => {
           </p>
         </div>
 
-        {/* ── STATIC STRIP — all three cards side by side ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {/* ── 3x2 GRID — 3 real clips, 3 placeholder slots ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 max-w-[820px] mx-auto">
           {cards.map((card, i) => (
             <div
               key={i}
-              className="overflow-hidden border border-white/10"
+              className="aspect-[345/169] overflow-hidden border border-white/10"
             >
-              <img
-                src={card.src}
-                alt={card.alt}
-                className="w-full h-full object-cover"
-              />
+              {card.placeholder ? (
+                <div className="w-full h-full bg-[#D9D9D9]" />
+              ) : (
+                <img
+                  src={card.src}
+                  alt={card.alt}
+                  className="w-full h-full object-cover object-top"
+                />
+              )}
             </div>
           ))}
         </div>

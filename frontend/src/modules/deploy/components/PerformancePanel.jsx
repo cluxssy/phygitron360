@@ -545,7 +545,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
 </div>
 
       {/* Period Overview Stats */}
-      <div className={`grid gap-4 ${periodType === 'Quarterly' ? 'grid-cols-4' : 'grid-cols-6 md:grid-cols-12'}`}>
+      <div className={`grid gap-4 ${periodType === 'Quarterly' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3 sm:grid-cols-6 md:grid-cols-12'}`}>
         {PERIODS.map(p => {
           const ast = periodStatus(p);
           return (

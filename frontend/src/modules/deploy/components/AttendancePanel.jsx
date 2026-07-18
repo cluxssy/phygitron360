@@ -485,8 +485,8 @@ export default function AttendancePanel({ mode }) {
           </div>
 
           {adminTab === 'today' && (
-            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-hidden animate-fade-in-up">
-              <table className="w-full text-left">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-x-auto animate-fade-in-up">
+              <table className="w-full text-left min-w-[720px]">
                 <thead className="bg-white/5 border-b border-white/10">
                   <tr>
                     {['Personnel', 'Clock In', 'Clock Out', 'Status', 'Mission Log', 'Control'].map(h => (
@@ -536,8 +536,8 @@ export default function AttendancePanel({ mode }) {
           )}
 
           {adminTab === 'leaves' && (
-            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-hidden animate-fade-in-up">
-              <table className="w-full text-left">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-x-auto animate-fade-in-up">
+              <table className="w-full text-left min-w-[640px]">
                 <thead className="bg-[#f5efff] border-b border-[#ebe4ff]">
                   <tr>
                     {['Applicant', 'Protocol', 'Window', 'Rationale', 'Control'].map(h => (
@@ -582,8 +582,8 @@ export default function AttendancePanel({ mode }) {
           )}
 
           {adminTab === 'corrections' && (
-            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden animate-fade-in-up">
-              <table className="w-full text-left">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-x-auto animate-fade-in-up">
+              <table className="w-full text-left min-w-[640px]">
                 <thead className="bg-[#f5efff] border-b border-[#ece2ff]">
                   <tr>
                     {['Personnel', 'Time Vector (Date)', 'Correction Type', 'Requested Signals', 'Rationale', 'Control'].map(h => (
@@ -963,8 +963,8 @@ export default function AttendancePanel({ mode }) {
 
       {/* Correction Request Modal */}
       {showCorrectionForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
-          <form onSubmit={applyCorrection} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
+          <form onSubmit={applyCorrection} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-6 sm:p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff] my-8 max-h-[85vh] overflow-y-auto">
             <div className="absolute top-0 right-0 p-8 opacity-5"><Edit size={100} /></div>
             
             <div className="relative z-10">
@@ -1056,8 +1056,8 @@ export default function AttendancePanel({ mode }) {
 
       {/* Absence Request Modal */}
       {showLeaveForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
-          <form onSubmit={applyLeave} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
+          <form onSubmit={applyLeave} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-6 sm:p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff] my-8 max-h-[85vh] overflow-y-auto">
             <div className="absolute top-0 right-0 p-8 opacity-5"><Calendar size={100} /></div>
             
             <div className="relative z-10">
@@ -1241,8 +1241,8 @@ export default function AttendancePanel({ mode }) {
       
       {/* Clock Out Modal */}
       {showClockOutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl animate-fade-in p-4">
-          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 p-10 w-full max-w-md space-y-8 relative overflow-hidden bg-[#0B1326]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl animate-fade-in p-4 overflow-y-auto">
+          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 p-6 sm:p-10 w-full max-w-md space-y-8 relative overflow-hidden bg-[#0B1326] my-8 max-h-[85vh] overflow-y-auto">
              <div className="absolute top-0 right-0 p-8 opacity-5 text-red-500"><LogOut size={120} /></div>
              
              <div className="relative z-10 text-center">

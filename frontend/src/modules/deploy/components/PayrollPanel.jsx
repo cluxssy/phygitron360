@@ -612,8 +612,8 @@ export default function PayrollPanel() {
 
       {/* ── PREVIEW MODAL ── */}
       {previewRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setPreviewRecord(null)}>
-          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setPreviewRecord(null)}>
+          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] p-5 sm:p-8 w-full max-w-md shadow-2xl my-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8b5cf6]">Payslip Preview</p>

@@ -217,14 +217,14 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md px-6 py-12 overflow-y-auto">
-      <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-[24px] p-8 md:p-12 shadow-2xl my-auto animate-fade-in-up font-inter text-slate-800">
-        
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md px-3 sm:px-6 py-8 sm:py-12 overflow-y-auto">
+      <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-[24px] p-5 sm:p-8 md:p-12 shadow-2xl my-auto animate-fade-in-up font-inter text-slate-800">
+
         {/* HEADER */}
-        <div className="mb-8 flex justify-between items-center border-b border-slate-100 pb-6">
+        <div className="mb-8 flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-6">
           <div>
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Phygitron 360 // Security Node</span>
-            <h2 className="text-3xl font-display font-black text-slate-900 uppercase tracking-tighter mt-1">Identity <span className="text-primary text-glow">Initialization</span></h2>
+            <h2 className="text-2xl sm:text-3xl font-display font-black text-slate-900 uppercase tracking-tighter mt-1">Identity <span className="text-primary text-glow">Initialization</span></h2>
           </div>
 
           <div className="flex flex-col items-end gap-2">
@@ -388,7 +388,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 <input placeholder="Street address, building, apartment" value={form.current_location} onChange={e => setForm({...form, current_location: e.target.value})} className="w-full glass-panel-input"/>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">City</label>
                   <input placeholder="e.g. Bangalore" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="w-full glass-panel-input"/>

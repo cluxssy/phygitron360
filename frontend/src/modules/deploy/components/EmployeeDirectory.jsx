@@ -391,7 +391,7 @@ setEmployees(employeeList);
 
       {/* TABLE */}
 
-      <div className="overflow-hidden rounded-[2rem] border border-[#ebe7ff] bg-white">
+      <div className="overflow-x-auto rounded-[2rem] border border-[#ebe7ff] bg-white">
 
         {loading ? (
 
@@ -415,7 +415,7 @@ setEmployees(employeeList);
 
         ) : (
 
-          <table className="w-full">
+          <table className="w-full min-w-[900px]">
 
             <thead className="bg-[#f7f3ff] border-b border-[#ebe7ff]">
 

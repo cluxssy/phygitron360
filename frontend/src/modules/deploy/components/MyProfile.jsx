@@ -506,7 +506,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                 className="text-[#7c3aed]"
             />
 
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">
                 Email
             </p>
 
@@ -545,7 +545,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
 
         ) : (
 
-            <p className="text-xs font-black text-black truncate">
+            <p className="text-xs font-normal text-black truncate">
                 {formData.email_id || '—'}
             </p>
 
@@ -563,7 +563,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                 className="text-[#7c3aed]"
             />
 
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">
                 Contact
             </p>
 
@@ -602,7 +602,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
 
         ) : (
 
-            <p className="text-xs font-black text-black truncate">
+            <p className="text-xs font-normal text-black truncate">
                 {formData.contact_number || '—'}
             </p>
 
@@ -620,7 +620,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                 className="text-[#7c3aed]"
             />
 
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">
                 Location
             </p>
 
@@ -647,7 +647,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
 
         ) : (
 
-            <p className="text-xs font-black text-black truncate">
+            <p className="text-xs font-normal text-black truncate">
                 {formData.location || '—'}
             </p>
 
@@ -665,7 +665,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                 className="text-[#7c3aed]"
             />
 
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">
                 DOJ
             </p>
 
@@ -700,7 +700,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
 
         ) : (
 
-            <p className="text-xs font-black text-black truncate">
+            <p className="text-xs font-normal text-black truncate">
                 {formData.doj || '—'}
             </p>
 
@@ -720,7 +720,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                 <SectionHeader icon={TrendingUp} title="Skills & Expertise" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-[#000000] mb-3">Primary Skills</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-3">Primary Skills</p>
                         {editMode ? (
                             <textarea value={formData.primary_skillset} onChange={e => setFormData({...formData, primary_skillset: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none" rows={3}/>
                         ) : (
@@ -734,7 +734,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                         )}
                     </div>
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-3">Secondary Skills</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-3">Secondary Skills</p>
                         {editMode ? (
                             <textarea value={formData.secondary_skillset} onChange={e => setFormData({...formData, secondary_skillset: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-4 text-xs text-black focus:outline-none" rows={3}/>
                         ) : (
@@ -837,7 +837,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                 <SectionHeader icon={Landmark} title="Geography" />
                 <div className="mt-6 space-y-4">
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Current Base</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Current Base</p>
                         {editMode ? (
                             <textarea value={formData.current_address} onChange={e => setFormData({...formData, current_address: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" rows={2}/>
                         ) : (
@@ -845,7 +845,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                         )}
                     </div>
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Permanent Anchor</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Permanent Anchor</p>
                         {editMode ? (
                             <textarea value={formData.permanent_address} onChange={e => setFormData({...formData, permanent_address: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" rows={2}/>
                         ) : (
@@ -860,7 +860,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                 <SectionHeader icon={Landmark} title="Financial Details" />
                 <div className="mt-6 space-y-4">
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Bank Name</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Bank Name</p>
                         {editMode ? (
                             <input type="text" value={formData.bank_name || ''} onChange={e => setFormData({...formData, bank_name: e.target.value})} className="w-full bg-[#f4ecff] border border-[#e9defd] rounded-xl p-3 text-xs text-black" placeholder="e.g. HDFC Bank" />
                         ) : (
@@ -868,7 +868,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                         )}
                     </div>
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Bank Account No.</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Bank Account No.</p>
                         {editMode ? (
                             <div>
                                 <input 
@@ -885,7 +885,7 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                         )}
                     </div>
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1">PAN No.</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">PAN No.</p>
                         {editMode ? (
                             <div>
                                 <input 
@@ -938,7 +938,7 @@ function SectionHeader({ icon: Icon, title }) {
                 <Icon size={14} />
             </div>
 
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-black">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#7B1FFF]">
                 {title}
             </h3>
 

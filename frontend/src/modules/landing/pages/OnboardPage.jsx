@@ -48,6 +48,8 @@ export default function OnboardPage() {
 
   // Password visibility
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Form states
   const [form, setForm] = useState({
@@ -111,8 +113,11 @@ export default function OnboardPage() {
           if (form.password) {
               const passwordError = validatePassword(form.password);
               if (passwordError) errors.password = passwordError;
+              else if (form.password !== confirmPassword) {
+                  errors.confirmPassword = "Passwords do not match";
+              }
           }
-          
+
           // DOB / Age check - only if filled
           if (form.dob) {
               if (!isValidDate(form.dob)) errors.dob = "Invalid date format";
@@ -406,67 +411,89 @@ export default function OnboardPage() {
                                {renderError('password')}
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Date of birth</label>
-                               <input type="date" name="dob" value={form.dob} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.dob ? 'border-error/50' : 'border-white/5'}`} />
-                               {renderError('dob')}
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Confirm password</label>
+                               <div className="relative">
+                                 <input
+                                   type={showConfirmPassword ? 'text' : 'password'}
+                                   name="confirmPassword"
+                                   value={confirmPassword}
+                                   onChange={e => setConfirmPassword(e.target.value)}
+                                   className={`w-full glass-panel-input pr-10 ${validationErrors.confirmPassword ? 'border-error/50' : 'border-white/5'}`}
+                                   placeholder="Re-enter password"
+                                 />
+                                 <button
+                                   type="button"
+                                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors"
+                                 >
+                                   {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                 </button>
+                               </div>
+                               {renderError('confirmPassword')}
                             </div>
                          </div>
 
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Date of birth</label>
+                               <input type="date" name="dob" value={form.dob} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.dob ? 'border-error/50' : 'border-white/5'}`} />
+                               {renderError('dob')}
+                            </div>
+
                             {/* Primary Contact with Country Code */}
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Contact number</label>
                                <div className="flex gap-2">
-                                 <select 
-                                   value={phoneCountryCode} 
-                                   onChange={e => setPhoneCountryCode(e.target.value)} 
+                                 <select
+                                   value={phoneCountryCode}
+                                   onChange={e => setPhoneCountryCode(e.target.value)}
                                    className="bg-white border border-gray-300 rounded-xl px-3 text-xs text-gray-900 outline-none focus:border-[#7b1eff]/40 transition-colors w-28"
                                  >
                                    {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-gray-900" style={{ color: '#000000' }}>{c.country}</option>)}
                                  </select>
-                                 <input 
+                                 <input
                                    type="tel"
-                                   name="contact_number" 
-                                   value={form.contact_number} 
-                                   onChange={handleChange} 
-                                   className={`flex-1 glass-panel-input ${validationErrors.contact_number ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
-                                   placeholder="9876543210" 
+                                   name="contact_number"
+                                   value={form.contact_number}
+                                   onChange={handleChange}
+                                   className={`flex-1 glass-panel-input ${validationErrors.contact_number ? 'border-error/50' : 'border-[#e5e5e5]'}`}
+                                   placeholder="9876543210"
                                  />
                                </div>
                                {renderError('contact_number')}
                             </div>
+                         </div>
 
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Emergency Contact Name */}
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Contact Name</label>
-                               <input 
-                                 value={emergencyName} 
-                                 onChange={e => setEmergencyName(e.target.value)} 
-                                 className={`w-full glass-panel-input ${validationErrors.emergencyName ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
-                                 placeholder="e.g. Jane Doe (Relation)" 
+                               <input
+                                 value={emergencyName}
+                                 onChange={e => setEmergencyName(e.target.value)}
+                                 className={`w-full glass-panel-input ${validationErrors.emergencyName ? 'border-error/50' : 'border-[#e5e5e5]'}`}
+                                 placeholder="e.g. Jane Doe (Relation)"
                                />
                                {renderError('emergencyName')}
                             </div>
-                         </div>
 
-                         {/* Emergency Contact Phone with Country Code */}
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                            {/* Emergency Contact Phone with Country Code */}
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Emergency Contact Phone</label>
                                <div className="flex gap-2">
-                                 <select 
-                                   value={emergencyCountryCode} 
-                                   onChange={e => setEmergencyCountryCode(e.target.value)} 
+                                 <select
+                                   value={emergencyCountryCode}
+                                   onChange={e => setEmergencyCountryCode(e.target.value)}
                                    className="bg-white border border-gray-300 rounded-xl px-3 text-xs text-gray-900 outline-none focus:border-[#7b1eff]/40 transition-colors w-28"
                                  >
                                    {COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white text-gray-900" style={{ color: '#000000' }}>{c.country}</option>)}
                                  </select>
-                                 <input 
+                                 <input
                                    type="tel"
-                                   value={emergencyPhone} 
-                                   onChange={e => setEmergencyPhone(e.target.value)} 
-                                   className={`flex-1 glass-panel-input ${validationErrors.emergencyPhone ? 'border-error/50' : 'border-[#e5e5e5]'}`} 
-                                   placeholder="9876543210" 
+                                   value={emergencyPhone}
+                                   onChange={e => setEmergencyPhone(e.target.value)}
+                                   className={`flex-1 glass-panel-input ${validationErrors.emergencyPhone ? 'border-error/50' : 'border-[#e5e5e5]'}`}
+                                   placeholder="9876543210"
                                  />
                                </div>
                                {renderError('emergencyPhone')}

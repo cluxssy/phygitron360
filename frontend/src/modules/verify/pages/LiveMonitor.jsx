@@ -121,8 +121,8 @@ export default function LiveMonitor() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
           <div className="lg:col-span-2 space-y-4">
             <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Users size={16}/> Candidate Status</h3>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <table className="w-full text-left text-sm">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+              <table className="w-full text-left text-sm min-w-[560px]">
                 <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                   <tr>
                     <th className="px-4 py-3">Candidate</th>

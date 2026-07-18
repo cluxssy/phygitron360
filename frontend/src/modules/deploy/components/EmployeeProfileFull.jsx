@@ -502,7 +502,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <Mail size={12} className="text-[#7c3aed]" />
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">Email</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Email</p>
     </div>
     {editMode ? (
         <div>
@@ -517,14 +517,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             {renderError('email_id')}
         </div>
     ) : (
-        <p className="text-xs font-black text-black truncate">{formData.email_id || '—'}</p>
+        <p className="text-xs font-normal text-black truncate">{formData.email_id || '—'}</p>
     )}
 </div>
 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <Phone size={12} className="text-[#7c3aed]" />
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">Contact</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Contact</p>
     </div>
     {editMode ? (
         <div>
@@ -539,14 +539,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             {renderError('contact_number')}
         </div>
     ) : (
-        <p className="text-xs font-black text-black truncate">{formData.contact_number || '—'}</p>
+        <p className="text-xs font-normal text-black truncate">{formData.contact_number || '—'}</p>
     )}
 </div>
 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <MapPin size={12} className="text-[#7c3aed]" />
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">Location</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Location</p>
     </div>
     {editMode ? (
         <input
@@ -557,16 +557,16 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             placeholder="City, Country"
         />
     ) : (
-        <p className="text-xs font-black text-black truncate">{formData.location || '—'}</p>
+        <p className="text-xs font-normal text-black truncate">{formData.location || '—'}</p>
     )}
 </div>
 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <Briefcase size={12} className="text-[#7c3aed]" />
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">Employee ID</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Employee ID</p>
     </div>
-    <p className="text-xs font-black text-black truncate">{formData.employee_code || '—'}</p>
+    <p className="text-xs font-normal text-black truncate">{formData.employee_code || '—'}</p>
 </div>
 
 </div>
@@ -593,7 +593,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={TrendingUp} title="Skills & Expertise" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-black/75 mb-4 italic">Primary SKILL</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#7B1FFF] mb-4 italic">Primary SKILL</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.primary_skillset}
@@ -613,7 +613,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-black/75 mb-4 italic">secondary SKILL</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#7B1FFF] mb-4 italic">secondary SKILL</p>
                                 {editMode ? (
                                     <textarea 
                                         value={formData.secondary_skillset}
@@ -838,7 +838,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={Landmark} title="Location details" />
                         <div className="mt-6 space-y-6">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     Primary Operation Base
                                 </p>
                                 {editMode ? (
@@ -858,7 +858,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     Permanent Identity Anchor
                                 </p>
                                 {editMode ? (
@@ -885,7 +885,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={Landmark} title="Financial Info" />
                         <div className="mt-6 space-y-6">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     Bank Name
                                 </p>
                                 {editMode ? (
@@ -897,13 +897,13 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                         placeholder="e.g. HDFC Bank"
                                     />
                                 ) : (
-                                    <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                    <p className="text-xs text-black font-normal bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
                                         {details.bank_name || 'Not recorded'}
                                     </p>
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     Bank Account No.
                                 </p>
                                 {editMode ? (
@@ -919,13 +919,13 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                         {renderError('bank_account_no')}
                                     </div>
                                 ) : (
-                                    <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                    <p className="text-xs text-black font-normal bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
                                         {details.bank_account_no || 'Not recorded'}
                                     </p>
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     PAN No.
                                 </p>
                                 {editMode ? (
@@ -941,7 +941,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                         {renderError('pan_no')}
                                     </div>
                                 ) : (
-                                    <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff] uppercase">
+                                    <p className="text-xs text-black font-normal bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff] uppercase">
                                         {details.pan_no || 'Not recorded'}
                                     </p>
                                 )}
@@ -966,7 +966,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     {renderError('emergency_contact')}
                                 </div>
                             ) : (
-                                <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                <p className="text-xs text-black font-normal bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
                                     {details.emergency_contact || 'Not registered'}
                                 </p>
                             )}
@@ -989,7 +989,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     {renderError('dob')}
                                 </div>
                             ) : (
-                                <p className="text-xs text-black font-bold bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                <p className="text-xs text-black font-normal bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
                                     {details.dob ? details.dob.split('T')[0] : 'Not recorded'}
                                 </p>
                             )}
@@ -1080,7 +1080,7 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
 function EditStatCard({ label, value, sub, editMode, onChange, type = "text", options = [], displayValue, error }) {
     return (
         <div className={`bg-white border border-[#e9ddff] rounded-2xl shadow-sm hover:shadow-md hover:shadow-[#7c3aed]/10 p-6 transition-all ${editMode ? 'ring-2 ring-[#c4b5fd]' : ''}`}>
-            <p className="text-[9px] font-black uppercase tracking-widest text-black mb-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                 {label}
             </p>
             {editMode ? (
@@ -1114,7 +1114,7 @@ function EditStatCard({ label, value, sub, editMode, onChange, type = "text", op
                     {error && <p className="text-red-500 text-[9px] font-bold mt-1">{error}</p>}
                 </>
             ) : (
-                <p className="text-lg font-display font-black text-black uppercase truncate">
+                <p className="text-lg font-display font-normal text-black uppercase truncate">
                     {displayValue || value || '—'}
                 </p>
             )}
@@ -1131,7 +1131,7 @@ function SectionHeader({ icon: Icon, title }) {
             <div className="w-8 h-8 rounded-lg bg-[#f4ecff] flex items-center justify-center text-[#7c3aed] border border-[#ddd6fe]">
                 <Icon size={14} />
             </div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-black">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#7B1FFF]">
                 {title}
             </h3>
         </div>

@@ -266,7 +266,7 @@ function ManualEntryModal({ onClose, onSaved, uniqueTopics, initialData = null }
   return (
     <Modal onClose={onClose} title={initialData ? "Edit Question" : "Add to Question Bank"} maxWidth="max-w-3xl">
       <div className="flex flex-col gap-5">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Question Type</label>
             <select className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" value={form.question_type} onChange={e=>set('question_type',e.target.value)}>

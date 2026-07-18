@@ -12,7 +12,7 @@ export default function UserClearanceOverrides({
   if (!user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-3 sm:p-6 overflow-y-auto">
       <div
         className="
           w-full
@@ -32,17 +32,21 @@ export default function UserClearanceOverrides({
         {/* HEADER */}
         <div
           className="
-            px-10
-            py-8
+            px-5
+            sm:px-10
+            py-6
+            sm:py-8
             border-b
             border-[#ece7fa]
             bg-gradient-to-r
             from-[#ffffff]
             to-[#f6f1ff]
             flex
+            flex-wrap
             justify-between
             items-start
-            gap-6
+            gap-4
+            sm:gap-6
           "
         >
           <div>
@@ -79,7 +83,8 @@ export default function UserClearanceOverrides({
 
             <h3
               className="
-                text-4xl
+                text-2xl
+                sm:text-4xl
                 font-bold
                 tracking-tight
                 text-black
@@ -127,7 +132,7 @@ export default function UserClearanceOverrides({
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 overflow-y-auto px-10 py-10 space-y-12">
+        <div className="flex-1 overflow-y-auto px-5 sm:px-10 py-6 sm:py-10 space-y-10 sm:space-y-12">
           {PERMISSIONS_CATEGORIES.map(cat => (
             <div key={cat.group} className="space-y-6">
               {/* SECTION HEADER */}
