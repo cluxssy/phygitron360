@@ -81,6 +81,12 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
         }
       })
       .finally(() => setLoading(false));
+      
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+      }
+    };
   }, [asmId]);
 
   // Timer

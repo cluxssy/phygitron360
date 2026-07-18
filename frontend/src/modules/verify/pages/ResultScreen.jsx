@@ -223,10 +223,11 @@ export default function ResultScreen() {
       <h3 className="text-lg font-bold text-gray-800 mt-8 mb-4">Question Breakdown</h3>
       <div className="space-y-3">
         {(result.details || []).map((detail, i) => {
-          const q = result.assessment.questions.find(x => x.id === detail.question_id) || {};
+          const questions = result.assessment.questions || [];
+          const q = questions.find(x => x.id === detail.question_id) || {};
           const isExpanded = expandedQ[i];
-          const fullMarks = detail.score_awarded >= q.marks;
-          const partial = detail.score_awarded > 0 && detail.score_awarded < q.marks;
+          const fullMarks = detail.score_awarded >= (q.marks || 1);
+          const partial = detail.score_awarded > 0 && detail.score_awarded < (q.marks || 1);
           
           return (
             <div key={i} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
