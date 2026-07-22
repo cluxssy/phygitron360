@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 const TYPE_STYLE = {
   MCQ:     'bg-purple-50 text-purple-700 border-purple-200',
@@ -25,6 +26,7 @@ const STATUS_STYLE = {
 const STATUSES = ['draft', 'active', 'closed'];
 
 function Modal({ onClose, title, children }) {
+  useEscapeClose(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8" onClick={e => e.stopPropagation()}>

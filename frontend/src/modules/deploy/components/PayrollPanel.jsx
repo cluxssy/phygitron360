@@ -13,6 +13,7 @@ import {
   isPan,
   validateFile,
 } from '../../../core/utils/validators';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 const MONTH_NAMES = {
   1: 'January', 2: 'February', 3: 'March', 4: 'April',
@@ -54,6 +55,7 @@ export default function PayrollPanel() {
 
   // Preview modal
   const [previewRecord, setPreviewRecord] = useState(null);
+  useEscapeClose(() => setPreviewRecord(null), !!previewRecord);
 
   useEffect(() => {
     if (tab === 'manage') fetchCycles();
@@ -649,7 +651,7 @@ export default function PayrollPanel() {
                   ['Special Allowance', previewRecord.special_allowance],
                   ['Medical Insurance', previewRecord.medical_insurance],
                   ["PF Employer's Contribution", previewRecord.pf_employer_contribution],
-                  ['Travelling Reimbursement', previewRecord.travelling_reimbursement],
+                  ['Traveling Reimbursement', previewRecord.travelling_reimbursement],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between items-center py-1.5 border-b border-[#ebe4ff] last:border-0">
                     <span className="text-[10px] font-bold text-[#6b7280]">{k}</span>

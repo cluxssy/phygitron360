@@ -45,7 +45,7 @@ export default function VerifyDashboard() {
   const getRoleDisplay = () => {
     if (verifyView === 'personal') return 'Candidate Portal';
     if (hasRole?.('super_admin')) return 'Super Admin';
-    if (hasRole?.('org_admin')) return 'Organisation Admin';
+    if (hasRole?.('org_admin')) return 'Organization Admin';
     if (hasRole?.('manager')) return 'Manager';
     if (hasRole?.('assessor')) return 'Assessor';
     return 'Employee';

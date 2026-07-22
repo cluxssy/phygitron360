@@ -3,7 +3,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 class CandidateBase(BaseModel):
-    full_name: str  # Only this is mandatory
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: str
     email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None

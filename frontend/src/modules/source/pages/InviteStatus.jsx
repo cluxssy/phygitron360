@@ -4,6 +4,7 @@ import {
   CheckCircle, LogIn, BarChart2, Send
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 const INVITE_STATUS_STYLE = {
   sent:       'bg-white/5 text-white/40 border-white/10',
@@ -42,6 +43,7 @@ function formatDate(d) {
 export default function InviteStatus({ roleId, roleName, onClose }) {
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
+  useEscapeClose(onClose);
 
   const fetchInvites = useCallback(async () => {
     if (!roleId) return;

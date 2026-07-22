@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock, Zap, ArrowRight, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { validatePassword } from '../utils/validators';
+import useEscapeClose from '../hooks/useEscapeClose';
 
 export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -9,6 +10,8 @@ export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // No escape hatch when the password change is forced (no onClose provided anyway)
+  useEscapeClose(onClose, !forceUpdate && !!onClose);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -13,9 +13,11 @@ import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 export default function ForgeDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const handleTabKeyNav = useTabListKeyNav();
   const { hasRole, hasPermission, user, logout } = useAuth();
   const isAdmin = hasRole(['org_admin', 'manager', 'trainer']);
   
@@ -26,7 +28,7 @@ export default function ForgeDashboard() {
   // Get role display
   const getRoleDisplay = () => {
     if (hasRole?.('super_admin')) return 'Super Admin';
-    if (hasRole?.('org_admin')) return 'Organisation Admin';
+    if (hasRole?.('org_admin')) return 'Organization Admin';
     if (hasRole?.('manager')) return 'Manager';
     if (hasRole?.('recruiter')) return 'Recruiter';
     if (hasRole?.('trainer')) return 'Trainer';
@@ -117,7 +119,7 @@ export default function ForgeDashboard() {
         `}</style>
 
         {/* New Sidebar - Without Icons and Tooltips */}
-        <div className="sidebar forge-sidebar" data-no-tooltip>
+        <div className="sidebar forge-sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>
             Dashboard
           </button>

@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { 
-  UserPlus, Mail, CheckCircle, Clock, Trash2, Plus, 
-  FileText, Briefcase, GraduationCap, MapPin, Phone, 
+import {
+  UserPlus, Mail, CheckCircle, Clock, Trash2, Plus,
+  FileText, Briefcase, GraduationCap, MapPin, Phone,
   ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink,
-  Copy, Link, Ban, Save
+  Copy, Link, Ban, Save, User, CreditCard, Lock, X, Download
 } from 'lucide-react';
 import ComboBox from '../../../core/components/ComboBox';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 import {
   isEmail,
   isEmployeeCode,
@@ -65,11 +67,15 @@ export default function OnboardingPanel() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', role: 'employee', department: '', designation: '' });
+  const [form, setForm] = useState({ employee_code: '', first_name: '', middle_name: '', last_name: '', guardian_name: '', email: '', role: 'employee', department: '', designation: '', doj: '' });
   const [submitting, setSubmitting] = useState(false);
   const [editApprovalForm, setEditApprovalForm] = useState(null);
 
   const isLightMode = window.location.pathname.startsWith('/deploy');
+
+  useEscapeClose(() => setShowForm(false), showForm);
+  useEscapeClose(() => setSelectedApproval(null), !!selectedApproval);
+  const handleTabKeyNav = useTabListKeyNav();
 
   // Approval Form Stats
   const [approveForm, setApproveForm] = useState({
@@ -200,7 +206,7 @@ export default function OnboardingPanel() {
   };
 
   const sendInvite = async () => {
-    if (!form.name || !form.email) {
+    if (!form.first_name || !form.last_name || !form.email) {
       toast.error('Please input complete vectors');
       return;
     }
@@ -223,7 +229,7 @@ export default function OnboardingPanel() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Transmission failed');
       toast.success('Sequence Initiated successfully');
-      setForm({ name: '', email: '', role: 'employee', department: '', designation: '' });
+      setForm({ employee_code: '', first_name: '', middle_name: '', last_name: '', guardian_name: '', email: '', role: 'employee', department: '', designation: '', doj: '' });
       setShowForm(false);
       loadInvites();
     } catch (e) {
@@ -271,14 +277,54 @@ export default function OnboardingPanel() {
 
   const openApprovalReview = (approval) => {
     setSelectedApproval(approval);
-    // Initialize edit form with approval data
+
+    // education_details comes back from the API as a JSONB array (or a JSON string in edge cases)
+    let eduList = [];
+    try {
+      eduList = Array.isArray(approval.education_details)
+        ? approval.education_details
+        : (approval.education_details ? JSON.parse(approval.education_details) : []);
+    } catch {
+      eduList = [];
+    }
+    if (!eduList.length) eduList = [{ degree: '', university: '', year: '', percentage: '' }];
+
+    // emergency_contact is stored as a single "Name - CountryCode Number" string
+    // (built that way on the onboarding forms); split it back into two fields for editing here.
+    const emergencyRaw = approval.emergency_contact || '';
+    const emergencySplitIdx = emergencyRaw.indexOf(' - ');
+    const emergencyContactName = emergencySplitIdx >= 0 ? emergencyRaw.slice(0, emergencySplitIdx).trim() : emergencyRaw.trim();
+    const emergencyContactNumber = emergencySplitIdx >= 0 ? emergencyRaw.slice(emergencySplitIdx + 3).trim() : '';
+
+    // Initialize edit form with everything the individual submitted on the onboarding form
     setEditApprovalForm({
-      name: approval.name || '',
-      email: approval.email_id || '',
       employee_code: approval.employee_code || '',
+      first_name: approval.first_name || '',
+      middle_name: approval.middle_name || '',
+      last_name: approval.last_name || '',
+      guardian_name: approval.guardian_name || '',
+      dob: (approval.dob || '').split('T')[0],
+      email_id: approval.email_id || '',
+      contact_number: approval.contact_number || '',
+      emergency_contact_name: emergencyContactName,
+      emergency_contact_number: emergencyContactNumber,
+      current_address: approval.current_address || '',
+      permanent_address: approval.permanent_address || '',
       designation: approval.designation || '',
       team: approval.team || '',
-      invite_code: approval.invite_code || '',
+      role: approval.role || 'employee',
+      primary_skillset: approval.primary_skillset || '',
+      secondary_skillset: approval.secondary_skillset || '',
+      education_details: eduList,
+      bank_name: approval.bank_name || '',
+      bank_account_no: approval.bank_account_no || '',
+      pan_no: approval.pan_no || '',
+      pf_included: approval.pf_included || 'No',
+      mediclaim_included: approval.mediclaim_included || 'No',
+      notes: approval.notes || '',
+      photo_path: approval.photo_path || '',
+      cv_path: approval.cv_path || '',
+      id_proofs: approval.id_proofs || '',
     });
     setApproveForm(prev => ({
       ...prev,
@@ -288,40 +334,71 @@ export default function OnboardingPanel() {
     }));
   };
 
-  const manageCompletedInvite = async (invite) => {
+  const updateApprovalEducation = (idx, field, value) => {
+    setEditApprovalForm(prev => {
+      const list = [...(prev.education_details || [])];
+      list[idx] = { ...list[idx], [field]: value };
+      return { ...prev, education_details: list };
+    });
+  };
+
+  const addApprovalEducation = () => {
+    setEditApprovalForm(prev => ({
+      ...prev,
+      education_details: [...(prev.education_details || []), { degree: '', university: '', year: '', percentage: '' }]
+    }));
+  };
+
+  const removeApprovalEducation = (idx) => {
+    setEditApprovalForm(prev => ({
+      ...prev,
+      education_details: (prev.education_details || []).filter((_, i) => i !== idx)
+    }));
+  };
+
+  // Uploaded documents are served through a backend endpoint (which reads the
+  // file server-side / redirects to a presigned S3 URL) rather than a raw
+  // static path, since locally-stored files aren't reachable via any static route.
+  // The endpoint serves the file inline by default; ?download=true forces a save.
+  const getDocumentUrl = (docType, download = false) =>
+    `/api/employee/${editApprovalForm.employee_code}/document/${docType}${download ? '?download=true' : ''}`;
+
+  const viewApprovalDocument = (docType, path) => {
+    if (!path) {
+      toast.error('Document not uploaded yet');
+      return;
+    }
+    window.open(getDocumentUrl(docType), '_blank');
+  };
+
+  const downloadApprovalDocument = async (docType, path, label) => {
+    if (!path) return;
     try {
-      const [approvalsRes] = await Promise.all([
-        fetch('/api/onboarding/approvals', { credentials: 'include' }),
-        loadOptions()
-      ]);
+      const url = getDocumentUrl(docType, true);
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) throw new Error();
 
-      if (!approvalsRes.ok) throw new Error();
-
-      const pendingApprovals = await approvalsRes.json();
-      setApprovals(pendingApprovals);
-
-      const approval = pendingApprovals.find(app =>
-        app.email_id?.toLowerCase?.() === invite.email?.toLowerCase?.()
-      );
-
-      if (!approval) {
-        toast.error('No pending approval found for this invite');
-        return;
-      }
-
-      openApprovalReview(approval);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = path.split('/').pop() || `${label}.download`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
     } catch {
-      toast.error('Failed to load onboarding approval');
+      toast.error('Failed to download file');
     }
   };
 
   const handleSaveApprovalEdit = async () => {
     // Validate fields
-    if (!editApprovalForm.name?.trim()) {
-      toast.error("Name is required");
+    if (!editApprovalForm.first_name?.trim() || !editApprovalForm.last_name?.trim()) {
+      toast.error("First name and last name are required");
       return;
     }
-    if (editApprovalForm.email && !isEmail(editApprovalForm.email)) {
+    if (editApprovalForm.email_id && !isEmail(editApprovalForm.email_id)) {
       toast.error("Enter a valid email address");
       return;
     }
@@ -329,21 +406,66 @@ export default function OnboardingPanel() {
       toast.error("Employee code must be 3-20 letters, numbers, hyphens, or underscores");
       return;
     }
+    if (editApprovalForm.contact_number && !isValidPhone(editApprovalForm.contact_number)) {
+      toast.error("Enter a valid contact number");
+      return;
+    }
+    if (editApprovalForm.emergency_contact_number && !isValidPhone(editApprovalForm.emergency_contact_number)) {
+      toast.error("Enter a valid emergency contact number");
+      return;
+    }
+    if (editApprovalForm.dob && !isValidDate(editApprovalForm.dob)) {
+      toast.error("Enter a valid date of birth");
+      return;
+    }
 
     try {
+      // Bank name/account number are locked to HR in this review panel; the
+      // server also refuses to touch them, but we don't even send them.
+      // emergency_contact_name/number are edit-only conveniences here — recombine
+      // them into the single emergency_contact string the backend actually stores.
+      const {
+        bank_name: _bank_name,
+        bank_account_no: _bank_account_no,
+        emergency_contact_name,
+        emergency_contact_number,
+        ...payload
+      } = editApprovalForm;
+      payload.emergency_contact = [emergency_contact_name, emergency_contact_number].filter(Boolean).join(' - ');
+
       const res = await fetch(`/api/onboarding/approval/${selectedApproval.employee_code}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editApprovalForm)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Update failed');
-      toast.success('Approval details updated successfully');
+      toast.success('Profile details saved successfully');
       // Refresh approvals
       loadApprovals();
       // Update selected approval with new data
-      setSelectedApproval(prev => ({ ...prev, ...editApprovalForm }));
+      const combinedName = [editApprovalForm.first_name, editApprovalForm.middle_name, editApprovalForm.last_name].filter(Boolean).join(' ');
+      setSelectedApproval(prev => ({ ...prev, ...payload, name: combinedName }));
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const handleRejectProfile = async () => {
+    if (!window.confirm('Reject this profile? This permanently deletes the submitted record and revokes the invite — the person will need a brand new onboarding link.')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/onboarding/reject/${selectedApproval.employee_code}`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to reject profile');
+      toast.success('Profile rejected and invite revoked');
+      setSelectedApproval(null);
+      loadApprovals();
     } catch (e) {
       toast.error(e.message);
     }
@@ -400,7 +522,7 @@ export default function OnboardingPanel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Activation failed');
-      toast.success("Personnel Active in Matrix");
+      toast.success("Employee onboarded successfully");
       setSelectedApproval(null);
       loadApprovals();
     } catch (e) {
@@ -425,8 +547,8 @@ export default function OnboardingPanel() {
           <h2 className="text-5xl font-black text-black tracking-tight leading-none">Onboarding Panel</h2>
         </div>
         
-        <div className={`flex gap-2 p-1.5 rounded-2xl border ${isLightMode ? 'bg-[#f5efff] border-[#ece2ff]' : 'bg-white/5 border-white/5'}`}>
-            <button 
+        <div onKeyDown={handleTabKeyNav} className={`flex gap-2 p-1.5 rounded-2xl border ${isLightMode ? 'bg-[#f5efff] border-[#ece2ff]' : 'bg-white/5 border-white/5'}`}>
+            <button
               onClick={() => setActiveTab('invites')}
               className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 activeTab === 'invites' 
@@ -483,7 +605,7 @@ export default function OnboardingPanel() {
                     : 'bg-primary text-black hover:bg-white'
                 }`}
               >
-                <Plus size={16} /> Deploy New Invite
+                <Plus size={16} /> Onboard Employee
               </button>
            </div>
 
@@ -530,41 +652,40 @@ export default function OnboardingPanel() {
         </td>
         <td className="px-6 py-5">
           <div className="flex gap-2">
-            {inv.status === 'Completed' && (
-              <button
-                onClick={() => manageCompletedInvite(inv)}
-                className={`px-4 py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
-                  isLightMode
-                    ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]'
-                    : 'text-white/40 bg-white/5 border-white/5 hover:text-primary hover:bg-white/10'
-                }`}
-              >
-                Manage
-              </button>
-            )}
             {inv.status === 'Pending' && (
               <>
-                <button 
-                  onClick={() => copyInviteLink(inv.token)} 
+                <button
+                  onClick={() => copyInviteLink(inv.token)}
                   title="Copy Invite Link"
                   className={`p-2 rounded-lg border transition-all ${
-                    isLightMode 
-                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]' 
+                    isLightMode
+                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-[#f3e8ff] hover:text-[#8b5cf6]'
                       : 'text-white/40 bg-white/5 border-white/5 hover:text-primary hover:bg-white/10'
                   }`}
                 >
                   <Link size={14} />
                 </button>
-                <button 
-                  onClick={() => revokeInvite(inv.id)} 
+                <button
+                  onClick={() => revokeInvite(inv.id)}
                   title="Revoke Invite"
                   className={`p-2 rounded-lg border transition-all ${
-                    isLightMode 
-                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
+                    isLightMode
+                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100'
                       : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
                   }`}
                 >
                   <Ban size={14} />
+                </button>
+                <button
+                  onClick={() => hardDeleteInvite(inv.id)}
+                  title="Delete Invite"
+                  className={`p-2 rounded-lg border transition-all ${
+                    isLightMode
+                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100'
+                      : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
+                  }`}
+                >
+                  <Trash2 size={14} />
                 </button>
               </>
             )}
@@ -643,7 +764,7 @@ export default function OnboardingPanel() {
                      <td className="px-6 py-6">
                         <div className="flex flex-col gap-1.5">
                             <span className="flex items-center gap-2 text-[9px] font-black uppercase text-emerald-500"><BadgeCheck size={10} /> Identity Verified</span>
-                            <span className="flex items-center gap-2 text-[9px] font-black uppercase text-amber-500"><Clock size={10} /> Awaiting Sync</span>
+                            <span className="flex items-center gap-2 text-[9px] font-black uppercase text-amber-500"><Clock size={10} /> Awaiting Save</span>
                         </div>
                      </td>
                      <td className="px-6 py-6 text-right">
@@ -655,7 +776,7 @@ export default function OnboardingPanel() {
                               : 'bg-white/5 text-white hover:bg-primary hover:text-black'
                           }`}
                         >
-                          Review Matrix <ChevronRight size={14} className="inline ml-1 group-hover:translate-x-1 transition-transform" />
+                          Review Profile <ChevronRight size={14} className="inline ml-1 group-hover:translate-x-1 transition-transform" />
                         </button>
                      </td>
                    </tr>
@@ -669,7 +790,7 @@ export default function OnboardingPanel() {
       {/* Invite Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 py-8 overflow-y-auto">
-          <div className={`p-6 sm:p-10 w-full max-w-md space-y-6 scale-in-center rounded-[2.5rem] border max-h-[85vh] overflow-y-auto ${
+          <div className={`p-6 sm:p-10 w-full max-w-3xl space-y-6 scale-in-center rounded-[2.5rem] border max-h-[85vh] overflow-y-auto ${
             isLightMode 
               ? 'bg-white border-[#ebe4ff] shadow-[0_20px_50px_rgba(180,140,255,0.15)] animate-fade-in' 
               : 'glass-panel border-white/10 shadow-[0_50px_100px_rgba(0,0,0,0.9)]'
@@ -682,36 +803,92 @@ export default function OnboardingPanel() {
             </div>
             
             <div className="space-y-4">
-               <div className="space-y-1.5">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Name</label>
-                  <input 
-                    value={form.name} 
-                    onChange={e => setForm({...form, name: e.target.value})} 
-                    className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
-                      isLightMode 
-                        ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
-                        : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
-                    }`} 
-                    placeholder="Full name..." 
-                  />
+               <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1.5">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>First Name</label>
+                    <input
+                      value={form.first_name}
+                      onChange={e => setForm({...form, first_name: e.target.value})}
+                      className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
+                        isLightMode
+                          ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                          : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                      }`}
+                      placeholder="First name..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Middle Name</label>
+                    <input
+                      value={form.middle_name}
+                      onChange={e => setForm({...form, middle_name: e.target.value})}
+                      className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
+                        isLightMode
+                          ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                          : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                      }`}
+                      placeholder="Middle name..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Last Name</label>
+                    <input
+                      value={form.last_name}
+                      onChange={e => setForm({...form, last_name: e.target.value})}
+                      className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
+                        isLightMode
+                          ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                          : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                      }`}
+                      placeholder="Last name..."
+                    />
+                  </div>
                </div>
-               <div className="space-y-1.5">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Email</label>
-                  <input 
-                    type="email"
-                    value={form.email} 
-                    onChange={e => setForm({...form, email: e.target.value})} 
-                    className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
-                      isLightMode 
-                        ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
-                        : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
-                    }`} 
-                    placeholder="Email address..." 
-                  />
+               <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1.5">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Employee Code</label>
+                    <input
+                      value={form.employee_code}
+                      onChange={e => setForm({...form, employee_code: e.target.value})}
+                      className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
+                        isLightMode
+                          ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                          : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                      }`}
+                      placeholder="Auto-generated"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-2 whitespace-nowrap ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Father / Husband / Guardian</label>
+                    <input
+                      value={form.guardian_name}
+                      onChange={e => setForm({...form, guardian_name: e.target.value})}
+                      className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
+                        isLightMode
+                          ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                          : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                      }`}
+                      placeholder="Guardian's name..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Email</label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={e => setForm({...form, email: e.target.value})}
+                      className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
+                        isLightMode
+                          ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                          : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                      }`}
+                      placeholder="Email address..."
+                    />
+                  </div>
                </div>
-               <div className="grid grid-cols-2 gap-4">
+               <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1.5 flex-1">
-                    <ComboBox 
+                    <ComboBox
                       label="Designation"
                       options={dynDesignations.length > 0 ? dynDesignations : DESIGNATIONS}
                       value={form.designation}
@@ -720,7 +897,7 @@ export default function OnboardingPanel() {
                     />
                   </div>
                   <div className="space-y-1.5 flex-1">
-                    <ComboBox 
+                    <ComboBox
                       label="Department"
                       options={dynDepartments.length > 0 ? dynDepartments : DEPARTMENTS}
                       value={form.department}
@@ -728,15 +905,28 @@ export default function OnboardingPanel() {
                       placeholder="Select Department..."
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Date of Joining</label>
+                    <input
+                      type="date"
+                      value={form.doj}
+                      onChange={e => setForm({...form, doj: e.target.value})}
+                      className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
+                        isLightMode
+                          ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                          : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                      }`}
+                    />
+                  </div>
                </div>
               <div className="space-y-1.5">
                  <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>Access Role</label>
-                  <select 
+                  <select
                     value={form.role}
                     onChange={e => setForm({...form, role: e.target.value})}
                     className={`w-full text-xs px-5 py-4 rounded-xl outline-none transition-all ${
-                      isLightMode 
-                        ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                      isLightMode
+                        ? 'bg-[#faf7ff] border border-[#ebe4ff] text-black focus:border-[#c084fc]'
                         : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
                     }`}
                   >
@@ -760,17 +950,17 @@ export default function OnboardingPanel() {
                     : 'border border-white/10 text-white/40 hover:text-white'
                 }`}
               >
-                Abort
+                Cancel
               </button>
-              <button 
+              <button
                 onClick={sendInvite} disabled={submitting}
                 className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all ${
-                  isLightMode 
-                    ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg' 
+                  isLightMode
+                    ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg'
                     : 'bg-primary text-black shadow-xl shadow-primary/20'
                 }`}
               >
-                {submitting ? 'Transmitting...' : 'Initiate'}
+                {submitting ? 'Sending...' : 'Send'}
               </button>
             </div>
           </div>
@@ -780,7 +970,7 @@ export default function OnboardingPanel() {
       {/* Approval & Review Drawer */}
       {selectedApproval && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/40 backdrop-blur-sm">
-           <div className={`w-full max-w-3xl h-full border-l animate-slide-in-right overflow-y-auto pr-2 custom-scrollbar ${
+           <div className={`w-full max-w-4xl h-full border-l animate-slide-in-right overflow-y-auto pr-2 custom-scrollbar ${
              isLightMode ? 'bg-white border-[#ebe4ff]' : 'glass-panel border-white/10'
            }`}>
               <div className="p-10 space-y-10">
@@ -799,112 +989,505 @@ export default function OnboardingPanel() {
                            )}
                         </div>
                         <div>
-                           <div className="flex items-center gap-3">
-                              <h2 className={`text-3xl font-display font-black uppercase tracking-tighter italic ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.name}</h2>
-                              <span className="px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">Pending Invite</span>
-                           </div>
+                           <h2 className={`text-3xl font-display font-black uppercase tracking-tighter italic leading-tight ${isLightMode ? 'text-black' : 'text-white'}`}>{selectedApproval.name}</h2>
+                           <span className="inline-block mt-2 px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase tracking-widest border border-emerald-500/20 whitespace-nowrap">Pending Invite</span>
                            <p className={`font-black text-xs uppercase tracking-[0.3em] mt-2 italic ${isLightMode ? 'text-[#8b5cf6]' : 'text-primary'}`}>{selectedApproval.designation} // {selectedApproval.team}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                       <button 
+                    <div className="flex items-center gap-3 shrink-0">
+                       <button
                          onClick={handleSaveApprovalEdit}
-                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                           isLightMode 
-                             ? 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed] shadow-lg shadow-[#8b5cf6]/20' 
+                         className={`flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-lg text-[9px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                           isLightMode
+                             ? 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed] shadow-lg shadow-[#8b5cf6]/20'
                              : 'bg-primary text-black hover:bg-white shadow-lg shadow-primary/20'
                          }`}
                        >
-                         <Save size={14} /> Save Changes
+                         <Save size={11} /> Save Changes
                        </button>
                        <button
-                         onClick={() => setSelectedApproval(null)}
-                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                         onClick={handleRejectProfile}
+                         className={`flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-lg border text-[9px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
                            isLightMode
-                             ? 'bg-[#faf7ff] border border-[#ebe4ff] text-[#6b7280] hover:bg-red-50 hover:text-red-500'
-                             : 'bg-white/5 text-white/30 hover:text-error hover:bg-error/10'
+                             ? 'bg-[#faf7ff] border-[#ebe4ff] text-[#6b7280] hover:bg-red-50 hover:text-red-500'
+                             : 'bg-white/5 border-white/10 text-white/30 hover:text-error hover:bg-error/10'
                          }`}
                        >
-                         <Ban size={14} /> Abort Review
+                         <Trash2 size={11} /> Reject Profile
                        </button>
                     </div>
                  </div>
 
-                 {/* Information Grid */}
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                        <SectionHeader icon={FileText} label="Personal Vectors" isLightMode={isLightMode} />
-                        <div className={`space-y-4 p-6 rounded-3xl border ${
-                          isLightMode 
-                            ? 'bg-[#faf7ff] border-[#f1ebff]' 
-                            : 'bg-white/5 border-white/5'
-                        }`}>
-                          <Field label="Name" isLightMode={isLightMode}>
-                            <input 
-                              type="text"
-                              value={editApprovalForm?.name || ''}
-                              onChange={e => setEditApprovalForm(prev => ({ ...prev, name: e.target.value }))}
-                              className={`w-full text-sm font-bold px-4 py-2 rounded-xl outline-none transition-all ${
-                                isLightMode 
-                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
-                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
-                              }`}
-                              placeholder="Enter full name"
-                            />
-                          </Field>
-                          <Field label="Email" isLightMode={isLightMode}>
-                            <input 
-                              type="email"
-                              value={editApprovalForm?.email || ''}
-                              onChange={e => setEditApprovalForm(prev => ({ ...prev, email: e.target.value }))}
-                              className={`w-full text-xs font-mono px-4 py-2 rounded-xl outline-none transition-all ${
-                                isLightMode 
-                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
-                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
-                              }`}
-                              placeholder="Enter email address"
-                            />
-                          </Field>
-                        </div>
+                 {/* Full Onboarding Profile */}
+                 <div className="space-y-6">
+                    <SectionHeader icon={User} label="Identity" isLightMode={isLightMode} />
+                    <div className={`space-y-4 p-6 rounded-3xl border ${
+                      isLightMode
+                        ? 'bg-[#faf7ff] border-[#f1ebff]'
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Field label="First Name" isLightMode={isLightMode}>
+                          <input
+                            type="text"
+                            value={editApprovalForm?.first_name || ''}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, first_name: e.target.value }))}
+                            className={`w-full text-sm font-bold px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode
+                                ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                                : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                            placeholder="First name"
+                          />
+                        </Field>
+                        <Field label="Middle Name" isLightMode={isLightMode}>
+                          <input
+                            type="text"
+                            value={editApprovalForm?.middle_name || ''}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, middle_name: e.target.value }))}
+                            className={`w-full text-sm font-bold px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode
+                                ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                                : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                            placeholder="Middle name"
+                          />
+                        </Field>
+                        <Field label="Last Name" isLightMode={isLightMode}>
+                          <input
+                            type="text"
+                            value={editApprovalForm?.last_name || ''}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, last_name: e.target.value }))}
+                            className={`w-full text-sm font-bold px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode
+                                ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                                : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                            placeholder="Last name"
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Field label="Father / Husband / Guardian" isLightMode={isLightMode}>
+                          <input
+                            type="text"
+                            value={editApprovalForm?.guardian_name || ''}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, guardian_name: e.target.value }))}
+                            className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode
+                                ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                                : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                            placeholder="Guardian's name"
+                          />
+                        </Field>
+                        <Field label="Date of Birth" isLightMode={isLightMode}>
+                          <input
+                            type="date"
+                            value={editApprovalForm?.dob || ''}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, dob: e.target.value }))}
+                            className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode
+                                ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                                : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                          />
+                        </Field>
+                        <Field label="Employee Code" isLightMode={isLightMode}>
+                          <input
+                            type="text"
+                            value={editApprovalForm?.employee_code || ''}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, employee_code: e.target.value }))}
+                            className={`w-full text-xs font-mono px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode
+                                ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                                : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                          />
+                        </Field>
+                      </div>
                     </div>
+                 </div>
 
-                    <div className="space-y-6">
-                        <SectionHeader icon={Briefcase} label="Role Parameters" isLightMode={isLightMode} />
-                        <div className={`space-y-4 p-6 rounded-3xl border ${
-                          isLightMode 
-                            ? 'bg-[#faf7ff] border-[#f1ebff]' 
-                            : 'bg-white/5 border-white/5'
-                        }`}>
-                          <Field label="Designation" isLightMode={isLightMode}>
-                            <ComboBox 
-                              options={dynDesignations.length > 0 ? dynDesignations : DESIGNATIONS}
-                              value={editApprovalForm?.designation || ''}
-                              onChange={val => setEditApprovalForm(prev => ({ ...prev, designation: val }))}
-                              placeholder="Select Designation..."
-                            />
-                          </Field>
-                          <Field label="Team / Department" isLightMode={isLightMode}>
-                            <ComboBox 
-                              options={dynDepartments.length > 0 ? dynDepartments : DEPARTMENTS}
-                              value={editApprovalForm?.team || ''}
-                              onChange={val => setEditApprovalForm(prev => ({ ...prev, team: val }))}
-                              placeholder="Select Department..."
-                            />
-                          </Field>
-                          <Field label="Invite Code" isLightMode={isLightMode}>
-                            <input 
+                 <div className="space-y-6">
+                    <SectionHeader icon={Phone} label="Contact" isLightMode={isLightMode} />
+                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border ${
+                      isLightMode
+                        ? 'bg-[#faf7ff] border-[#f1ebff]'
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                      <Field label="Email" isLightMode={isLightMode}>
+                        <input
+                          type="email"
+                          value={editApprovalForm?.email_id || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, email_id: e.target.value }))}
+                          className={`w-full text-xs font-mono px-4 py-2 rounded-xl outline-none transition-all ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="Enter email address"
+                        />
+                      </Field>
+                      <Field label="Contact Number" isLightMode={isLightMode}>
+                        <input
+                          type="text"
+                          value={editApprovalForm?.contact_number || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, contact_number: e.target.value }))}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="Contact number"
+                        />
+                      </Field>
+                      <Field label="Emergency Contact Name" isLightMode={isLightMode}>
+                        <input
+                          type="text"
+                          value={editApprovalForm?.emergency_contact_name || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, emergency_contact_name: e.target.value }))}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="Emergency contact name"
+                        />
+                      </Field>
+                      <Field label="Emergency Contact Number" isLightMode={isLightMode}>
+                        <input
+                          type="text"
+                          value={editApprovalForm?.emergency_contact_number || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, emergency_contact_number: e.target.value }))}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="e.g. +91 9876543210"
+                        />
+                      </Field>
+                    </div>
+                 </div>
+
+                 <div className="space-y-6">
+                    <SectionHeader icon={MapPin} label="Address" isLightMode={isLightMode} />
+                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border ${
+                      isLightMode
+                        ? 'bg-[#faf7ff] border-[#f1ebff]'
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                      <Field label="Current Address" isLightMode={isLightMode}>
+                        <textarea
+                          value={editApprovalForm?.current_address || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, current_address: e.target.value }))}
+                          rows={2}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all resize-none ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="Current address"
+                        />
+                      </Field>
+                      <Field label="Permanent Address" isLightMode={isLightMode}>
+                        <textarea
+                          value={editApprovalForm?.permanent_address || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, permanent_address: e.target.value }))}
+                          rows={2}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all resize-none ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="Permanent address"
+                        />
+                      </Field>
+                    </div>
+                 </div>
+
+                 <div className="space-y-6">
+                    <SectionHeader icon={Briefcase} label="Role Parameters" isLightMode={isLightMode} />
+                    <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 p-6 rounded-3xl border ${
+                      isLightMode
+                        ? 'bg-[#faf7ff] border-[#f1ebff]'
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                      <Field label="Designation" isLightMode={isLightMode}>
+                        <ComboBox
+                          options={dynDesignations.length > 0 ? dynDesignations : DESIGNATIONS}
+                          value={editApprovalForm?.designation || ''}
+                          onChange={val => setEditApprovalForm(prev => ({ ...prev, designation: val }))}
+                          placeholder="Select Designation..."
+                        />
+                      </Field>
+                      <Field label="Team / Department" isLightMode={isLightMode}>
+                        <ComboBox
+                          options={dynDepartments.length > 0 ? dynDepartments : DEPARTMENTS}
+                          value={editApprovalForm?.team || ''}
+                          onChange={val => setEditApprovalForm(prev => ({ ...prev, team: val }))}
+                          placeholder="Select Department..."
+                        />
+                      </Field>
+                      <Field label="Access Role" isLightMode={isLightMode}>
+                        <select
+                          value={editApprovalForm?.role || 'employee'}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, role: e.target.value }))}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                        >
+                          {[
+                            { id: 'org_admin', label: 'Org Admin (L2)' },
+                            { id: 'manager', label: 'Manager (L3)' },
+                            { id: 'employee', label: 'Employee (L4)' }
+                          ].map(r => (
+                            <option key={r.id} value={r.id} className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>{r.label}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                 </div>
+
+                 <div className="space-y-6">
+                    <SectionHeader icon={BadgeCheck} label="Skills" isLightMode={isLightMode} />
+                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border ${
+                      isLightMode
+                        ? 'bg-[#faf7ff] border-[#f1ebff]'
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                      <Field label="Primary Skillset" isLightMode={isLightMode}>
+                        <input
+                          type="text"
+                          value={editApprovalForm?.primary_skillset || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, primary_skillset: e.target.value }))}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="e.g. React, Node.js"
+                        />
+                      </Field>
+                      <Field label="Secondary Skillset" isLightMode={isLightMode}>
+                        <input
+                          type="text"
+                          value={editApprovalForm?.secondary_skillset || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, secondary_skillset: e.target.value }))}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                            isLightMode
+                              ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
+                              : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="e.g. Docker, AWS"
+                        />
+                      </Field>
+                    </div>
+                 </div>
+
+                 <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <SectionHeader icon={GraduationCap} label="Education" isLightMode={isLightMode} />
+                      <button
+                        type="button"
+                        onClick={addApprovalEducation}
+                        className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all ${
+                          isLightMode ? 'bg-[#f3e8ff] text-[#8b5cf6] hover:bg-[#ebe0ff]' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                        }`}
+                      >
+                        <Plus size={12} /> Add
+                      </button>
+                    </div>
+                    <div className={`space-y-4 p-6 rounded-3xl border ${
+                      isLightMode
+                        ? 'bg-[#faf7ff] border-[#f1ebff]'
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                      {(editApprovalForm?.education_details || []).map((edu, idx) => (
+                        <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_90px_90px_32px] gap-2 items-end">
+                          <Field label="Degree" isLightMode={isLightMode}>
+                            <input
                               type="text"
-                              value={editApprovalForm?.invite_code || ''}
-                              onChange={e => setEditApprovalForm(prev => ({ ...prev, invite_code: e.target.value }))}
-                              className={`w-full text-xs font-mono font-bold px-4 py-2 rounded-xl outline-none transition-all ${
-                                isLightMode 
-                                  ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
-                                  : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              value={edu.degree || ''}
+                              onChange={e => updateApprovalEducation(idx, 'degree', e.target.value)}
+                              className={`w-full text-xs px-3 py-2 rounded-xl outline-none transition-all ${
+                                isLightMode ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
                               }`}
-                              placeholder="Invite code"
                             />
                           </Field>
+                          <Field label="University" isLightMode={isLightMode}>
+                            <input
+                              type="text"
+                              value={edu.university || ''}
+                              onChange={e => updateApprovalEducation(idx, 'university', e.target.value)}
+                              className={`w-full text-xs px-3 py-2 rounded-xl outline-none transition-all ${
+                                isLightMode ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                            />
+                          </Field>
+                          <Field label="Year" isLightMode={isLightMode}>
+                            <input
+                              type="text"
+                              value={edu.year || ''}
+                              onChange={e => updateApprovalEducation(idx, 'year', e.target.value)}
+                              className={`w-full text-xs px-3 py-2 rounded-xl outline-none transition-all ${
+                                isLightMode ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                            />
+                          </Field>
+                          <Field label="%" isLightMode={isLightMode}>
+                            <input
+                              type="text"
+                              value={edu.percentage || ''}
+                              onChange={e => updateApprovalEducation(idx, 'percentage', e.target.value)}
+                              className={`w-full text-xs px-3 py-2 rounded-xl outline-none transition-all ${
+                                isLightMode ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                              }`}
+                            />
+                          </Field>
+                          <button
+                            type="button"
+                            onClick={() => removeApprovalEducation(idx)}
+                            className={`h-9 w-9 flex items-center justify-center rounded-xl transition-all ${
+                              isLightMode ? 'text-[#b0a8c5] hover:bg-red-50 hover:text-red-500' : 'text-white/30 hover:bg-error/10 hover:text-error'
+                            }`}
+                          >
+                            <X size={14} />
+                          </button>
                         </div>
+                      ))}
+                    </div>
+                 </div>
+
+                 <div className="space-y-6">
+                    <SectionHeader icon={FileText} label="Documents" isLightMode={isLightMode} />
+                    <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 p-6 rounded-3xl border ${
+                      isLightMode
+                        ? 'bg-[#faf7ff] border-[#f1ebff]'
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                      {[
+                        { label: 'Photo', docType: 'photo', path: editApprovalForm?.photo_path },
+                        { label: 'CV / Resume', docType: 'cv', path: editApprovalForm?.cv_path },
+                        { label: 'ID Proof', docType: 'id_proof', path: editApprovalForm?.id_proofs },
+                      ].map(doc => (
+                        <Field key={doc.label} label={doc.label} isLightMode={isLightMode}>
+                          {doc.path ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => viewApprovalDocument(doc.docType, doc.path)}
+                                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all ${
+                                  isLightMode ? 'bg-white border border-[#ebe4ff] text-[#8b5cf6] hover:border-[#c084fc]' : 'glass-panel border border-white/5 text-primary hover:border-primary/40'
+                                }`}
+                              >
+                                <ExternalLink size={12} /> View
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadApprovalDocument(doc.docType, doc.path, doc.label)}
+                                title="Download file"
+                                className={`flex items-center justify-center h-9 w-9 rounded-xl transition-all ${
+                                  isLightMode ? 'bg-white border border-[#ebe4ff] text-[#8b5cf6] hover:border-[#c084fc]' : 'glass-panel border border-white/5 text-primary hover:border-primary/40'
+                                }`}
+                              >
+                                <Download size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <p className={`text-xs px-4 py-2 ${isLightMode ? 'text-[#b0a8c5]' : 'text-white/20'}`}>Not uploaded</p>
+                          )}
+                        </Field>
+                      ))}
+                    </div>
+                 </div>
+
+                 <div className="space-y-6">
+                    <div className="flex items-center gap-2">
+                      <SectionHeader icon={CreditCard} label="Financial & Benefits" isLightMode={isLightMode} />
+                      <span className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${isLightMode ? 'bg-amber-50 text-amber-600' : 'bg-amber-500/10 text-amber-400'}`}>
+                        <Lock size={9} /> Bank details locked
+                      </span>
+                    </div>
+                    <div className={`space-y-4 p-6 rounded-3xl border ${
+                      isLightMode
+                        ? 'bg-[#faf7ff] border-[#f1ebff]'
+                        : 'bg-white/5 border-white/5'
+                    }`}>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Field label="Bank Name" isLightMode={isLightMode}>
+                          <input
+                            type="text"
+                            value={editApprovalForm?.bank_name || ''}
+                            disabled
+                            readOnly
+                            title="Bank details cannot be edited from this panel"
+                            className={`w-full text-xs px-4 py-2 rounded-xl outline-none cursor-not-allowed ${
+                              isLightMode ? 'bg-[#f1eef7] border border-[#ebe4ff] text-[#8b8ba3]' : 'bg-white/[0.03] border border-white/5 text-white/30'
+                            }`}
+                          />
+                        </Field>
+                        <Field label="Bank Account No." isLightMode={isLightMode}>
+                          <input
+                            type="text"
+                            value={editApprovalForm?.bank_account_no || ''}
+                            disabled
+                            readOnly
+                            title="Bank details cannot be edited from this panel"
+                            className={`w-full text-xs px-4 py-2 rounded-xl outline-none cursor-not-allowed ${
+                              isLightMode ? 'bg-[#f1eef7] border border-[#ebe4ff] text-[#8b8ba3]' : 'bg-white/[0.03] border border-white/5 text-white/30'
+                            }`}
+                          />
+                        </Field>
+                        <Field label="PAN No." isLightMode={isLightMode}>
+                          <input
+                            type="text"
+                            value={editApprovalForm?.pan_no || ''}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, pan_no: e.target.value }))}
+                            className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Field label="PF Included" isLightMode={isLightMode}>
+                          <select
+                            value={editApprovalForm?.pf_included || 'No'}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, pf_included: e.target.value }))}
+                            className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                          >
+                            {['Yes', 'No'].map(t => <option key={t} value={t} className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>{t}</option>)}
+                          </select>
+                        </Field>
+                        <Field label="Mediclaim Included" isLightMode={isLightMode}>
+                          <select
+                            value={editApprovalForm?.mediclaim_included || 'No'}
+                            onChange={e => setEditApprovalForm(prev => ({ ...prev, mediclaim_included: e.target.value }))}
+                            className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all ${
+                              isLightMode ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                            }`}
+                          >
+                            {['Yes', 'No'].map(t => <option key={t} value={t} className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>{t}</option>)}
+                          </select>
+                        </Field>
+                      </div>
+                      <Field label="Notes" isLightMode={isLightMode}>
+                        <textarea
+                          value={editApprovalForm?.notes || ''}
+                          onChange={e => setEditApprovalForm(prev => ({ ...prev, notes: e.target.value }))}
+                          rows={2}
+                          className={`w-full text-xs px-4 py-2 rounded-xl outline-none transition-all resize-none ${
+                            isLightMode ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
+                          }`}
+                          placeholder="Any additional notes or remarks..."
+                        />
+                      </Field>
                     </div>
                  </div>
 
@@ -1033,18 +1616,18 @@ export default function OnboardingPanel() {
                                 : 'border border-white/10 text-white/40 hover:text-white'
                             }`}
                           >
-                            Abort Workflow
+                            Cancel
                           </button>
-                          <button 
-                            type="submit" 
+                          <button
+                            type="submit"
                             disabled={submitting}
                             className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all ${
-                              isLightMode 
-                                ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg' 
+                              isLightMode
+                                ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg'
                                 : 'bg-primary text-black shadow-xl shadow-primary/20'
                             }`}
                           >
-                            {submitting ? 'Activating...' : 'Approve & Deploy'}
+                            {submitting ? 'Activating...' : 'Approve & Onboard'}
                           </button>
                        </div>
                     </form>

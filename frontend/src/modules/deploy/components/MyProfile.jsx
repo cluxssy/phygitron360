@@ -90,6 +90,11 @@ export default function MyProfile() {
 
   // ── Validation Functions ──
   const validateProfile = () => {
+    if (!formData.first_name?.trim() || !formData.last_name?.trim()) {
+      toast.error('First name and last name are required');
+      return false;
+    }
+
     // Email validation - only if filled
     if (formData.email_id && !isValidEmail(formData.email_id)) {
       toast.error('Please enter a valid email address');
@@ -142,7 +147,9 @@ export default function MyProfile() {
     setIsSaving(true);
     try {
         const payload = {
-            name: formData.name,
+            first_name: formData.first_name,
+            middle_name: formData.middle_name,
+            last_name: formData.last_name,
             designation: formData.designation,
             team: formData.team,
             employment_type: formData.employment_type,
@@ -458,12 +465,29 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
                 )}
             </div>
             {editMode ? (
-                <input 
-                    type="text" 
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="text-3xl font-display font-black text-black uppercase tracking-tighter bg-[#f4ecff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full max-w-md"
-                />
+                <div className="grid grid-cols-3 gap-2 max-w-2xl">
+                    <input
+                        type="text"
+                        placeholder="First Name"
+                        value={formData.first_name || ''}
+                        onChange={e => setFormData({...formData, first_name: e.target.value})}
+                        className="text-lg font-display font-black text-black uppercase tracking-tighter bg-[#f4ecff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                    />
+                    <input
+                        type="text"
+                        placeholder="Middle Name"
+                        value={formData.middle_name || ''}
+                        onChange={e => setFormData({...formData, middle_name: e.target.value})}
+                        className="text-lg font-display font-black text-black uppercase tracking-tighter bg-[#f4ecff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                    />
+                    <input
+                        type="text"
+                        placeholder="Last Name"
+                        value={formData.last_name || ''}
+                        onChange={e => setFormData({...formData, last_name: e.target.value})}
+                        className="text-lg font-display font-black text-black uppercase tracking-tighter bg-[#f4ecff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                    />
+                </div>
             ) : (
                 <h1 className="text-3xl font-display font-black text-black uppercase tracking-tighter italic">
                     {details.name}
@@ -754,8 +778,8 @@ if (loading) return <HorizontalLoader label="Loading dashboard..." />;
               <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8">
                 <SectionHeader icon={FileText} title="Document Registry" />
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <FileCard editMode={editMode} label="CV / Resume" path={details.cv_path} onUpload={() => fileInputCv.current.click()} />
-                    <FileCard editMode={editMode} label="ID Compliance" path={details.id_proofs} onUpload={() => fileInputId.current.click()} />
+                    <FileCard editMode={editMode} label="CV / Resume" path={details.cv_path} employeeCode={details.employee_code} docType="cv" onUpload={() => fileInputCv.current.click()} />
+                    <FileCard editMode={editMode} label="ID Compliance" path={details.id_proofs} employeeCode={details.employee_code} docType="id_proof" onUpload={() => fileInputId.current.click()} />
                 </div>
                 <input type="file" ref={fileInputCv} hidden accept=".pdf,.doc,.docx" onChange={e => handleFileUpload('cv', e.target.files[0])} />
                 <input type="file" ref={fileInputId} hidden accept="image/jpeg,image/png,image/webp,.pdf" onChange={e => handleFileUpload('id', e.target.files[0])} />
@@ -946,12 +970,13 @@ function SectionHeader({ icon: Icon, title }) {
     );
 }
 
-function FileCard({ label, path, editMode, onUpload }) {
-    const getFileUrl = () => {
-        if (!path) return '';
-        if (path.startsWith('http')) return path;
-        return `/${path.replace(/^\//, '')}`;
-    };
+function FileCard({ label, path, editMode, onUpload, employeeCode, docType }) {
+    // Served through a backend endpoint (reads the file server-side, or redirects
+    // to a presigned S3 URL) rather than a raw static path — locally-stored files
+    // aren't reachable via any static file route. Inline by default (for viewing);
+    // ?download=true forces a "Save As" download instead.
+    const getFileUrl = (download = false) =>
+        `/api/employee/${employeeCode}/document/${docType}${download ? '?download=true' : ''}`;
 
     const handleView = () => {
         if (!path) {
@@ -966,7 +991,7 @@ function FileCard({ label, path, editMode, onUpload }) {
         if (!path) return;
 
         try {
-            const url = getFileUrl();
+            const url = getFileUrl(true);
             const response = await fetch(url, { credentials: 'include' });
             if (!response.ok) throw new Error();
 

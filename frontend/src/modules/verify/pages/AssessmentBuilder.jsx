@@ -12,6 +12,7 @@ import {
   isPositiveNumber,
   isValidUrl,
 } from '../../../core/utils/validators';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 const QUESTION_TYPES = [
   { id: 'mcq', label: 'Multiple Choice (Single)' },
@@ -76,6 +77,8 @@ export default function AssessmentBuilder() {
   // Bank Import
   const [showBankImport, setShowBankImport] = useState(false);
   const [bankQuestions, setBankQuestions] = useState([]);
+  useEscapeClose(() => setShowImportUrl(false), showImportUrl);
+  useEscapeClose(() => setShowBankImport(false), showBankImport);
   const [loadingBank, setLoadingBank] = useState(false);
 
   const fetchBankQuestions = async () => {

@@ -62,7 +62,9 @@ export default function OnboardPage() {
 
   // Country Code and Emergency States
   const [phoneCountryCode, setPhoneCountryCode] = useState('+91');
-  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyFirstName, setEmergencyFirstName] = useState('');
+  const [emergencyMiddleName, setEmergencyMiddleName] = useState('');
+  const [emergencyLastName, setEmergencyLastName] = useState('');
   const [emergencyCountryCode, setEmergencyCountryCode] = useState('+91');
   const [emergencyPhone, setEmergencyPhone] = useState('');
 
@@ -130,8 +132,11 @@ export default function OnboardPage() {
           }
 
           // Emergency contact name - only if filled
-          if (emergencyName && !isNonEmpty(emergencyName)) {
-              errors.emergencyName = "Name cannot be empty";
+          if (emergencyFirstName && !isNonEmpty(emergencyFirstName)) {
+              errors.emergencyFirstName = "First name cannot be empty";
+          }
+          if (emergencyLastName && !isNonEmpty(emergencyLastName)) {
+              errors.emergencyLastName = "Last name cannot be empty";
           }
           
           // Emergency phone - only if filled
@@ -279,7 +284,8 @@ export default function OnboardPage() {
     fd.append('token', token);
 
     const finalContactNumber = form.contact_number ? `${phoneCountryCode} ${form.contact_number.trim()}` : '';
-    const finalEmergencyContact = emergencyName && emergencyPhone ? `${emergencyName} - ${emergencyCountryCode} ${emergencyPhone.trim()}` : '';
+    const emergencyFullName = [emergencyFirstName, emergencyMiddleName, emergencyLastName].filter(Boolean).join(' ');
+    const finalEmergencyContact = emergencyFullName && emergencyPhone ? `${emergencyFullName} - ${emergencyCountryCode} ${emergencyPhone.trim()}` : '';
 
     Object.keys(form).forEach(k => {
         if (k === 'contact_number') {
@@ -464,19 +470,42 @@ export default function OnboardPage() {
                             </div>
                          </div>
 
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {/* Emergency Contact Name */}
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Contact Name</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency First Name</label>
                                <input
-                                 value={emergencyName}
-                                 onChange={e => setEmergencyName(e.target.value)}
-                                 className={`w-full glass-panel-input ${validationErrors.emergencyName ? 'border-error/50' : 'border-[#e5e5e5]'}`}
-                                 placeholder="e.g. Jane Doe (Relation)"
+                                 value={emergencyFirstName}
+                                 onChange={e => setEmergencyFirstName(e.target.value)}
+                                 className={`w-full glass-panel-input ${validationErrors.emergencyFirstName ? 'border-error/50' : 'border-[#e5e5e5]'}`}
+                                 placeholder="e.g. Jane"
                                />
-                               {renderError('emergencyName')}
+                               {renderError('emergencyFirstName')}
                             </div>
 
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Middle Name</label>
+                               <input
+                                 value={emergencyMiddleName}
+                                 onChange={e => setEmergencyMiddleName(e.target.value)}
+                                 className="w-full glass-panel-input border-[#e5e5e5]"
+                                 placeholder="Optional"
+                               />
+                            </div>
+
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Last Name</label>
+                               <input
+                                 value={emergencyLastName}
+                                 onChange={e => setEmergencyLastName(e.target.value)}
+                                 className={`w-full glass-panel-input ${validationErrors.emergencyLastName ? 'border-error/50' : 'border-[#e5e5e5]'}`}
+                                 placeholder="e.g. Doe (Relation)"
+                               />
+                               {renderError('emergencyLastName')}
+                            </div>
+                         </div>
+
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Emergency Contact Phone with Country Code */}
                             <div className="space-y-2">
                                <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1 flex items-center gap-1"><Phone size={10} /> Emergency Contact Phone</label>

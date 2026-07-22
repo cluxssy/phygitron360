@@ -6,6 +6,7 @@ import json
 from backend.modules.deploy.repositories.onboarding_repo import OnboardingRepository
 from backend.common.services.email_service import EmailService
 from backend.modules.deploy.services.notification_service import add_notification
+from backend.common.utils.name_utils import join_name_parts
 from passlib.hash import pbkdf2_sha256
 
 class OnboardingService:
@@ -21,16 +22,26 @@ class OnboardingService:
         if self.repo.get_pending_invite_by_email(data['email']):
             raise ValueError("Pending invite already exists for this email.")
 
+        if data.get('employee_code') and self.repo.check_employee_code_exists(data['employee_code'], tenant_id=tenant_id):
+            raise ValueError("Employee code already in use.")
+
         token = str(uuid.uuid4())
         expires_at = datetime.now() + timedelta(days=7)
-        
+
+        name = join_name_parts(data.get('first_name'), data.get('middle_name'), data.get('last_name'))
         invite_data = {
             "token": token,
             "email": data['email'],
-            "name": data['name'],
+            "name": name,
+            "first_name": data.get('first_name'),
+            "middle_name": data.get('middle_name'),
+            "last_name": data.get('last_name'),
+            "employee_code": data.get('employee_code'),
+            "guardian_name": data.get('guardian_name'),
             "role": data.get('role', 'Employee'),
             "department": data.get('department'),
             "designation": data.get('designation'),
+            "doj": data.get('doj'),
             "expires_at": expires_at
         }
         
@@ -50,7 +61,7 @@ class OnboardingService:
             
             email_result = self.email_service.send_onboarding_invitation(
                 recipient_email=data['email'],
-                recipient_name=data['name'],
+                recipient_name=data.get('first_name') or name,
                 onboarding_link=full_link,
                 expires_days=7
             )
@@ -101,6 +112,9 @@ class OnboardingService:
             "valid": True,
             "email": invite['email'],
             "name": invite['name'],
+            "first_name": invite.get('first_name'),
+            "middle_name": invite.get('middle_name'),
+            "last_name": invite.get('last_name'),
             "role": invite['role'],
             "department": invite['department'],
             "designation": invite['designation']
@@ -138,6 +152,9 @@ class OnboardingService:
             # we must UPDATE their profile rather than INSERT to avoid unique_email_id constraint violation.
             is_rehire = True
             emp_code = existing_emp['employee_code']
+        elif invite.get('employee_code') and not self.repo.check_employee_code_exists(invite['employee_code'], tenant_id=tenant_id):
+            # Use the employee code HR specified at invite time, if it's still available
+            emp_code = invite['employee_code']
         else:
             count = self.repo.generate_employee_code(tenant_id=tenant_id)
             for i in range(100):
@@ -145,7 +162,7 @@ class OnboardingService:
                 if not self.repo.check_employee_code_exists(candidate, tenant_id=tenant_id):
                     emp_code = candidate
                     break
-            
+
             if not emp_code:
                 import random
                 emp_code = f"EMP{str(random.randint(1000, 9999))}"
@@ -163,6 +180,10 @@ class OnboardingService:
         emp_record = {
             "code": emp_code,
             "name": invite['name'],
+            "first_name": invite.get('first_name'),
+            "middle_name": invite.get('middle_name'),
+            "last_name": invite.get('last_name'),
+            "guardian_name": invite.get('guardian_name'),
             "email": invite['email'],
             "phone": employee_data['contact_number'],
             "emergency": employee_data.get('emergency_contact'),
@@ -172,7 +193,7 @@ class OnboardingService:
             "education": employee_data.get('education_details'),
             "team": invite['department'],
             "designation": invite['designation'],
-            "doj": employee_data.get('doj') or datetime.now().strftime('%Y-%m-%d'),
+            "doj": invite.get('doj') or employee_data.get('doj') or datetime.now().strftime('%Y-%m-%d'),
             "location": employee_data.get('location', ''),
             "photo_path": file_metadata.get('photo', ''),
             "cv_path": file_metadata.get('cv', ''),
@@ -211,6 +232,12 @@ class OnboardingService:
     def get_pending_approvals(self, tenant_id: str = 'public'):
         return self.repo.get_pending_approvals(tenant_id=tenant_id)
 
+    def reject_pending_approval(self, employee_code: str, tenant_id: str = 'public'):
+        email = self.repo.reject_pending_approval(employee_code, tenant_id=tenant_id)
+        if not email:
+            raise ValueError("Pending approval not found")
+        return {"success": True, "message": "Profile rejected and invite revoked."}
+
     def approve_onboarding(self, employee_code: str, approval_data: dict, tenant_id: str = 'public'):
         final_code = self.repo.approve_employee(employee_code, approval_data, tenant_id=tenant_id)
         final_code = final_code or employee_code
@@ -247,21 +274,26 @@ class OnboardingService:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}", public')
                 
+                first_name = emp_data.get('first_name') or username.split('@')[0]
+                middle_name = emp_data.get('middle_name')
+                last_name = emp_data.get('last_name')
+                full_name = join_name_parts(first_name, middle_name, last_name)
+
                 # Insert Employee
                 cur.execute("""
                     INSERT INTO employees (
-                        employee_code, name, email_id, contact_number, emergency_contact, 
-                        dob, current_address, permanent_address, team, designation, 
+                        employee_code, name, first_name, middle_name, last_name, email_id, contact_number, emergency_contact,
+                        dob, current_address, permanent_address, team, designation,
                         employment_status, location, photo_path, cv_path, id_proofs, doj,
                         employment_type, education_details, bank_name, bank_account_no,
                         pan_no, pf_included, mediclaim_included
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
-                    emp_code, emp_data.get('name') or username.split('@')[0], username, 
-                    emp_data['contact_number'], emp_data['emergency_contact'], emp_data['dob'], 
-                    emp_data['current_address'], emp_data['permanent_address'], 
+                    emp_code, full_name, first_name, middle_name, last_name, username,
+                    emp_data['contact_number'], emp_data['emergency_contact'], emp_data['dob'],
+                    emp_data['current_address'], emp_data['permanent_address'],
                     "Executive", "Organization Admin", "Active", emp_data.get('location', ''),
-                    file_metadata.get('photo', ''), file_metadata.get('cv', ''), 
+                    file_metadata.get('photo', ''), file_metadata.get('cv', ''),
                     file_metadata.get('id_proof', ''), datetime.now().strftime('%Y-%m-%d'),
                     'Full Time', emp_data.get('education_details', '[]'),
                     emp_data.get('bank_name'), emp_data.get('bank_account_no'),
@@ -272,11 +304,11 @@ class OnboardingService:
                 # Insert Skill Matrix (Notice the correct column names found in schema check)
                 cur.execute("""
                     INSERT INTO skill_matrix (
-                        employee_code, candidate_name, primary_skillset, 
+                        employee_code, candidate_name, primary_skillset,
                         secondary_skillset, cv_upload, experience_years
                     ) VALUES (%s, %s, %s, %s, %s, %s)
                 """, (
-                    emp_code, emp_data.get('name') or username.split('@')[0],
+                    emp_code, full_name,
                     emp_data.get('primary_skills', ''), emp_data.get('secondary_skills', ''),
                     file_metadata.get('cv', ''), '0'
                 ))

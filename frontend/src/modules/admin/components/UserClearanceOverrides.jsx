@@ -1,6 +1,7 @@
 import React from 'react';
 import { Shield, X, Check, Activity } from 'lucide-react';
 import { PERMISSIONS_CATEGORIES } from './ClearanceMatrix';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 export default function UserClearanceOverrides({
   user,
@@ -8,6 +9,7 @@ export default function UserClearanceOverrides({
   onUpdate,
   onClose
 }) {
+  useEscapeClose(onClose, !!user);
 
   if (!user) return null;
 

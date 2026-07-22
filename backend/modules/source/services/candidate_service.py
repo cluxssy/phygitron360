@@ -10,6 +10,7 @@ from backend.modules.source.repositories.skill_repo import SkillRepository
 from backend.modules.source.repositories.ai_score_repo import AIScoreRepository
 from backend.modules.source.services.ats_engine import calculate_role_fit, compute_resume_ats_score, normalise_required_skills
 from backend.common.services.ai.agents import AIAgents
+from backend.common.utils.name_utils import split_full_name, join_name_parts
 
 logger = logging.getLogger(__name__)
 
@@ -142,8 +143,12 @@ class CandidateService:
             else:
                 certifications.append(cert)
 
+        first_name, middle_name, last_name = split_full_name(name or "Unknown Candidate")
         candidate_data = {
             "full_name": name or "Unknown Candidate",
+            "first_name": first_name,
+            "middle_name": middle_name or None,
+            "last_name": last_name,
             "email": email,
             "phone": ai_result.get("p") or ai_result.get("phone"),
             "location": ai_result.get("l") or ai_result.get("location"),
@@ -411,6 +416,7 @@ class CandidateService:
         return self.repo.add_candidate_note(candidate_id, author_name, content)
 
     def create_manual_candidate(self, data: Dict[str, Any], actor_name: str) -> int:
+        data['full_name'] = join_name_parts(data.get('first_name'), data.get('middle_name'), data.get('last_name'))
         candidate_id = self.repo.create_candidate(data)
         self.repo.log_activity(candidate_id, actor_name, "profile_created", "Manual candidate entry")
         return candidate_id
@@ -579,6 +585,14 @@ class CandidateService:
         return cand
 
     def update_candidate(self, candidate_id: int, data: Dict[str, Any], actor_name: str = "System") -> bool:
+        # If any name part changed, recompute full_name using existing values for the rest
+        if any(k in data for k in ('first_name', 'middle_name', 'last_name')):
+            existing = self.repo.get_candidate_by_id(candidate_id) or {}
+            first_name = data.get('first_name', existing.get('first_name'))
+            middle_name = data.get('middle_name', existing.get('middle_name'))
+            last_name = data.get('last_name', existing.get('last_name'))
+            data['full_name'] = join_name_parts(first_name, middle_name, last_name)
+
         # 1. Update candidate record in DB
         success = self.repo.update_candidate(candidate_id, data)
         if not success:
@@ -1114,8 +1128,12 @@ class CandidateService:
                 raise Exception("Failed to write resume file to persistent storage (Local or S3)")
             final_path = saved_path
 
+        first_name, middle_name, last_name = split_full_name(name or "Unknown Candidate")
         candidate_data = {
             "full_name": name or "Unknown Candidate",
+            "first_name": first_name,
+            "middle_name": middle_name or None,
+            "last_name": last_name,
             "email": email,
             "phone": ai_result.get("p") or ai_result.get("phone"),
             "location": ai_result.get("l") or ai_result.get("location"),

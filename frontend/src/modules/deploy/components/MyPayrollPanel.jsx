@@ -100,7 +100,7 @@ export default function MyPayrollPanel() {
     { name: 'Special Allowance', value: (parseFloat(latestPayslip.special_allowance) || 0) * 12, color: '#10b981' },
     { name: 'Medical Insurance', value: (parseFloat(latestPayslip.medical_insurance) || 0) * 12, color: '#f59e0b' },
     { name: "PF Employer's Contribution", value: (parseFloat(latestPayslip.pf_employer_contribution) || 0) * 12, color: '#f43f5e' },
-    { name: 'Travelling Reimbursement', value: (parseFloat(latestPayslip.travelling_reimbursement) || 0) * 12, color: '#0ea5e9' }
+    { name: 'Traveling Reimbursement', value: (parseFloat(latestPayslip.travelling_reimbursement) || 0) * 12, color: '#0ea5e9' }
   ].filter(item => item.value > 0).sort((a, b) => b.value - a.value) : [];
 
   const CustomTooltip = ({ active, payload }) => {
@@ -356,7 +356,7 @@ export default function MyPayrollPanel() {
                           ['Special Allowance', ps.special_allowance],
                           ['Medical Insurance', ps.medical_insurance],
                           ["PF Employer's Contribution", ps.pf_employer_contribution],
-                          ['Travelling Reimbursement', ps.travelling_reimbursement],
+                          ['Traveling Reimbursement', ps.travelling_reimbursement],
                         ].map(([k, v]) => (
                           <div key={k} className="flex justify-between items-center py-2 border-b border-[#ebe4ff] last:border-0">
                             <span className="text-[10px] font-bold text-[#6b7280]">{k}</span>

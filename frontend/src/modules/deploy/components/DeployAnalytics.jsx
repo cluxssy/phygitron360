@@ -345,7 +345,7 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
 
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">
-              Organisation Analytics
+              Organization Analytics
             </p>
 
             <h1 className="text-5xl font-black text-black tracking-tight leading-none">
@@ -353,7 +353,7 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
             </h1>
 
             {/* <p className="text-black/70 mt-5 text-lg">
-              Live operational metrics, employee overview, onboarding health and organisation activity.
+              Live operational metrics, employee overview, onboarding health and organization activity.
             </p> */}
           </div>
 

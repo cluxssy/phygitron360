@@ -3,7 +3,9 @@ from typing import Optional, List, Any
 
 # Common Models
 class EmployeeBasicInfo(BaseModel):
-    name: str  # Only name is mandatory
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: str
     employee_code: Optional[str] = None
     designation: Optional[str] = None
     team: Optional[str] = None
@@ -15,8 +17,10 @@ class EmployeeBasicInfo(BaseModel):
     role: Optional[str] = None
 
 class EmployeeFullProfile(BaseModel):
-    # Only name is mandatory, all others optional
-    name: str  # Mandatory
+    # First and last name are mandatory, middle name is optional
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: str
     employee_code: Optional[str] = None
     id: Optional[int] = None
     dob: Optional[str] = None
@@ -55,7 +59,9 @@ class EmployeeFullProfile(BaseModel):
 
 class UpdateEmployeeRequest(BaseModel):
     # All fields optional for updates
-    name: Optional[str] = None
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
     designation: Optional[str] = None
     team: Optional[str] = None
     contact_number: Optional[str] = None

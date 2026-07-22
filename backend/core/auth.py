@@ -154,9 +154,11 @@ def get_current_user(request: Request) -> dict:
             cur.execute(
                 """
                 SELECT u.id, u.username, u.role, u.roles, u.employee_code, u.is_active,
-                       e.name AS employee_name
+                       e.name AS employee_name, e.first_name AS employee_first_name,
+                       c.full_name AS candidate_name, c.first_name AS candidate_first_name
                 FROM users u
                 LEFT JOIN employees e ON u.employee_code = e.employee_code
+                LEFT JOIN candidates c ON c.user_id = u.id
                 WHERE u.id = %s
                 """,
                 (user_id,)
@@ -205,7 +207,8 @@ def get_current_user(request: Request) -> dict:
     return {
         "id":             user_row["id"],
         "username":       user_row["username"],
-        "name":           user_row.get("employee_name") or user_row["username"],
+        "name":           user_row.get("employee_name") or user_row.get("candidate_name") or user_row["username"],
+        "first_name":     user_row.get("employee_first_name") or user_row.get("candidate_first_name") or user_row["username"],
         "role":           _normalize_role(user_row.get("role", "")),
         "roles":          norm_roles,
         "tenant_id":      tenant_id,

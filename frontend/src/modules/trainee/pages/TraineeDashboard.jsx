@@ -75,10 +75,10 @@ export default function TraineeDashboard() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-black text-xs">
-              {user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'T'}
+              {user?.name?.charAt(0) || user?.username?.charAt(0) || 'T'}
             </div>
             <div className="hidden md:block text-right">
-              <p className="text-xs font-bold text-white">{user?.full_name || user?.username || 'Trainee'}</p>
+              <p className="text-xs font-bold text-white">{user?.name || user?.username || 'Trainee'}</p>
               <p className="text-[10px] uppercase tracking-widest text-primary/80">{user?.company_name || 'Phygitron 360'}</p>
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function TraineeDashboard() {
         {/* Welcome Banner */}
         <div className="mb-12">
           <h1 className="text-4xl md:text-5xl font-display font-black tracking-tighter mb-4">
-            Welcome, <span className="text-primary italic pr-2">{user?.full_name?.split(' ')[0] || user?.username || 'Trainee'}</span>
+            Welcome, <span className="text-primary italic pr-2">{user?.first_name || user?.username || 'Trainee'}</span>
           </h1>
           <p className="text-white/60 text-sm max-w-xl leading-relaxed">
             Your candidate journey is now active. Check below for any assignments, interview links, or updates from the Talent Acquisition team.

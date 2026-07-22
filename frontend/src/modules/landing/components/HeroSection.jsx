@@ -346,6 +346,15 @@ export default function HeroSection() {
                       {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
                     </button>
                   </div>
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate('/forgot-password')}
+                      className="text-sm font-medium text-[#7C3AED] hover:text-[#6b21d8] transition-colors"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                 </div>
 
                 <button

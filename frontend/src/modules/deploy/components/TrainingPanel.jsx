@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { BookOpen, Plus, CheckCircle, Clock, Users } from 'lucide-react';
 import { isDateString } from '../../../core/utils/validators';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 export default function TrainingPanel() {
   const [programs, setPrograms] = useState([]);
@@ -10,6 +11,7 @@ export default function TrainingPanel() {
   const [employees, setEmployees] = useState([]);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [form, setForm] = useState({ employee_codes: [], program_id: '', date: '', duration: '' });
+  useEscapeClose(() => setShowAssignForm(false), showAssignForm);
 
   useEffect(() => { loadData(); }, []);
 

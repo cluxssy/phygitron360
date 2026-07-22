@@ -5,9 +5,11 @@ import ClearanceMatrix from './ClearanceMatrix';
 import UserClearanceOverrides from './UserClearanceOverrides';
 import ModuleControl from './ModuleControl';
 import "../styles/adminPanel.css";
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('users');
+  const handleTabKeyNav = useTabListKeyNav();
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [rolesPerms, setRolesPerms] = useState({});
@@ -283,7 +285,7 @@ export default function AdminPanel() {
           </p>
         </div>
 
-        <div className="admin-tabs">
+        <div className="admin-tabs" onKeyDown={handleTabKeyNav}>
 
           {TABS.map(t => (
 
