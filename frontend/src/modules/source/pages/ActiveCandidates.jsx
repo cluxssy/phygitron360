@@ -83,7 +83,7 @@ function CandidateRow({ c, onSelect }) {
 
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: 'All Statuses' },
-  { value: 'favourite', label: 'Favourite' },
+  { value: 'favourite', label: 'Favorite' },
   { value: 'invited', label: 'Invited' },
   { value: 'hired', label: 'Hired' },
   { value: 'rejected', label: 'Rejected' },

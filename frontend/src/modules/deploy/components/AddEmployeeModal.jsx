@@ -13,6 +13,8 @@ import {
   isPan,
   validateFile,
 } from '../../../core/utils/validators';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 const ROLES = ['org_admin', 'manager', 'employee', 'candidate'];
 
@@ -34,7 +36,9 @@ const Field = ({ label, k, type = 'text', options, form, set, required = false }
 export default function AddEmployeeModal({ onClose, onSuccess }) {
   const [activeTab, setActiveTab] = useState('single'); // 'single' or 'bulk'
   const [managers, setManagers] = useState([]);
-  
+  useEscapeClose(onClose);
+  const handleTabKeyNav = useTabListKeyNav();
+
   useEffect(() => {
     fetch('/api/options', { credentials: 'include' })
       .then(r => r.json())
@@ -46,7 +50,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
-    code: '', name: '', email: '', dob: '', phone: '', emergency: '',
+    code: '', first_name: '', middle_name: '', last_name: '', email: '', dob: '', phone: '', emergency: '',
     doj: '', team: '', role: 'employee', type: 'Full-time', manager: '',
     location: '', designation: '', current_address: '', permanent_address: '',
     pf: 'No', mediclaim: 'No', notes: '', primary_skillset: '',
@@ -88,9 +92,12 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
   };
 
   const validateSingle = () => {
-    // ── ONLY NAME IS MANDATORY ──
-    if (!form.name || !form.name.trim()) {
-      return 'Full Name is required.';
+    // ── FIRST NAME AND LAST NAME ARE MANDATORY, MIDDLE NAME IS OPTIONAL ──
+    if (!form.first_name || !form.first_name.trim()) {
+      return 'First Name is required.';
+    }
+    if (!form.last_name || !form.last_name.trim()) {
+      return 'Last Name is required.';
     }
 
     // ── All other fields are optional, only validate if filled ──
@@ -259,7 +266,8 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       const row = rows[i];
       const rowNo = i + 2;
       const code = String(row["Employee Code"] || '').trim();
-      const name = String(row["Name"] || '').trim();
+      const firstName = String(row["First Name"] || '').trim();
+      const lastName = String(row["Last Name"] || '').trim();
       const email = String(row["Email ID"] || '').trim();
       const phone = String(row["Contact Number"] || '').trim();
       const dob = String(row["Date of Birth"] || '').trim();
@@ -268,8 +276,8 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       const bankAccount = String(row["Bank Account No"] || '').trim();
       const pan = String(row["PAN No"] || '').trim();
 
-      // ── ONLY NAME IS MANDATORY ──
-      if (!name) return `Row ${rowNo}: Name is mandatory.`;
+      // ── FIRST NAME AND LAST NAME ARE MANDATORY ──
+      if (!firstName || !lastName) return `Row ${rowNo}: First Name and Last Name are mandatory.`;
 
       // ── All other fields optional, only validate if filled ──
       
@@ -321,7 +329,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
             Add Team Member
           </h2>
 
-          <div className="flex bg-[#f5f1ff] p-1.5 rounded-2xl mb-8 w-max">
+          <div onKeyDown={handleTabKeyNav} className="flex bg-[#f5f1ff] p-1.5 rounded-2xl mb-8 w-max">
             <button
               className={`px-6 py-2.5 rounded-xl text-[13px] font-bold transition-all ${activeTab === 'single' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}
               onClick={() => setActiveTab('single')}
@@ -356,7 +364,11 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
               {step === 1 && (
                 <div className="grid grid-cols-2 gap-6">
                   <Field label="Employee ID" k="code" form={form} set={set} />
-                  <Field label="Full Name" k="name" form={form} set={set} required />
+                  <div className="grid grid-cols-3 gap-3 col-span-2">
+                    <Field label="First Name" k="first_name" form={form} set={set} required />
+                    <Field label="Middle Name" k="middle_name" form={form} set={set} />
+                    <Field label="Last Name" k="last_name" form={form} set={set} required />
+                  </div>
                   <Field label="Email Address" k="email" type="email" form={form} set={set} />
                   <Field label="Phone Number" k="phone" form={form} set={set} />
                   <Field label="Date of Birth" k="dob" type="date" form={form} set={set} />
@@ -529,7 +541,8 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                     <thead className="bg-white sticky top-0 border-b border-[#e8defc]">
                       <tr>
                         <th className="px-4 py-3 font-semibold text-gray-500">Emp Code</th>
-                        <th className="px-4 py-3 font-semibold text-gray-500">Name</th>
+                        <th className="px-4 py-3 font-semibold text-gray-500">First Name</th>
+                        <th className="px-4 py-3 font-semibold text-gray-500">Last Name</th>
                         <th className="px-4 py-3 font-semibold text-gray-500">Email</th>
                         <th className="px-4 py-3 font-semibold text-gray-500">Role</th>
                       </tr>
@@ -538,14 +551,15 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                       {bulkData.slice(0, 10).map((row, i) => (
                         <tr key={i} className="hover:bg-[#faf8ff] transition-all">
                           <td className="px-4 py-3 font-medium">{row["Employee Code"] || '-'}</td>
-                          <td className="px-4 py-3">{row["Name"] || '-'}</td>
+                          <td className="px-4 py-3">{row["First Name"] || '-'}</td>
+                          <td className="px-4 py-3">{row["Last Name"] || '-'}</td>
                           <td className="px-4 py-3">{row["Email ID"] || '-'}</td>
                           <td className="px-4 py-3">{row["Role"] || 'employee'}</td>
                         </tr>
                       ))}
                       {bulkData.length > 10 && (
                         <tr>
-                          <td colSpan={4} className="px-4 py-3 text-center text-gray-400 italic">
+                          <td colSpan={5} className="px-4 py-3 text-center text-gray-400 italic">
                             ... and {bulkData.length - 10} more rows
                           </td>
                         </tr>

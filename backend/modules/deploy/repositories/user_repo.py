@@ -10,9 +10,11 @@ class UserRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("""
-                    SELECT u.*, e.name as employee_name
+                    SELECT u.*, e.name as employee_name, e.first_name as employee_first_name,
+                           c.full_name as candidate_name, c.first_name as candidate_first_name
                     FROM users u
                     LEFT JOIN employees e ON u.employee_code = e.employee_code
+                    LEFT JOIN candidates c ON c.user_id = u.id
                     WHERE u.username = %s
                 """, (username,))
                 row = cur.fetchone()
@@ -31,9 +33,11 @@ class UserRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("""
-                    SELECT u.*, e.name as employee_name
+                    SELECT u.*, e.name as employee_name, e.first_name as employee_first_name,
+                           c.full_name as candidate_name, c.first_name as candidate_first_name
                     FROM users u
                     LEFT JOIN employees e ON u.employee_code = e.employee_code
+                    LEFT JOIN candidates c ON c.user_id = u.id
                     WHERE u.id = %s
                 """, (user_id,))
                 row = cur.fetchone()
@@ -160,9 +164,12 @@ class UserRepository:
                  # 2. Extract user info from specific tenant schema
                  cur.execute(f'SET search_path TO "{tenant_id}"')
                  cur.execute("""
-                    SELECT u.id as user_id, u.username, u.role, u.roles, u.employee_code, u.is_active, e.name as employee_name
+                    SELECT u.id as user_id, u.username, u.role, u.roles, u.employee_code, u.is_active,
+                           e.name as employee_name, e.first_name as employee_first_name,
+                           c.full_name as candidate_name, c.first_name as candidate_first_name
                     FROM users u
                     LEFT JOIN employees e ON u.employee_code = e.employee_code
+                    LEFT JOIN candidates c ON c.user_id = u.id
                     WHERE u.id = %s
                  """, (session_row['user_id'],))
                  user_row = cur.fetchone()

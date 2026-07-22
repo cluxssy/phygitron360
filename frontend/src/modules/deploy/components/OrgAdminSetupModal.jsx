@@ -30,7 +30,9 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
-    full_name: '',
+    first_name: '',
+    middle_name: '',
+    last_name: '',
     dob: '',
     contact_number: '', // Local number digits only
     current_location: '',
@@ -48,7 +50,9 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
 
   // Country Code and Emergency States
   const [phoneCountryCode, setPhoneCountryCode] = useState('+91');
-  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyFirstName, setEmergencyFirstName] = useState('');
+  const [emergencyMiddleName, setEmergencyMiddleName] = useState('');
+  const [emergencyLastName, setEmergencyLastName] = useState('');
   const [emergencyCountryCode, setEmergencyCountryCode] = useState('+91');
   const [emergencyPhone, setEmergencyPhone] = useState('');
 
@@ -108,7 +112,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
   const validateStep = () => {
     if (step === 1) {
       // Required fields - must be filled
-      if (!form.full_name || !form.dob || !form.contact_number || !emergencyName || !emergencyPhone || !form.bank_name || !form.bank_account_no || !form.pan_no) {
+      if (!form.first_name || !form.last_name || !form.dob || !form.contact_number || !emergencyFirstName || !emergencyLastName || !emergencyPhone || !form.bank_name || !form.bank_account_no || !form.pan_no) {
         toast.error("All personal, contact, and financial details are mandatory");
         return false;
       }
@@ -176,12 +180,15 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
     const fd = new FormData();
     const finalAddress = `${form.current_location}, ${form.city}, ${form.state} - ${form.pincode}`;
     const finalContactNumber = `${phoneCountryCode} ${form.contact_number.trim()}`;
-    const finalEmergencyContact = `${emergencyName} - ${emergencyCountryCode} ${emergencyPhone.trim()}`;
+    const emergencyFullName = [emergencyFirstName, emergencyMiddleName, emergencyLastName].filter(Boolean).join(' ');
+    const finalEmergencyContact = `${emergencyFullName} - ${emergencyCountryCode} ${emergencyPhone.trim()}`;
 
     fd.append("current_address", finalAddress);
     fd.append("permanent_address", finalAddress);
     fd.append("location", form.city);
-    fd.append("full_name", form.full_name);
+    fd.append("first_name", form.first_name);
+    fd.append("middle_name", form.middle_name);
+    fd.append("last_name", form.last_name);
     fd.append("dob", form.dob);
     fd.append("contact_number", finalContactNumber);
     fd.append("emergency_contact", finalEmergencyContact);
@@ -252,12 +259,24 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Personal & Contact Info (Optional)</h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Full Name</label>
-                  <input name="full_name" value={form.full_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="Enter your full name" />
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">First Name</label>
+                  <input name="first_name" value={form.first_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="First name" />
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Middle Name</label>
+                  <input name="middle_name" value={form.middle_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="Middle name" />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Last Name</label>
+                  <input name="last_name" value={form.last_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="Last name" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Date of Birth</label>
                   <input type="date" name="dob" value={form.dob} onChange={handleChange} className="w-full glass-panel-input" />
@@ -296,16 +315,34 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
               <div className="pt-4 border-t border-slate-100 space-y-4">
                 <h4 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Emergency Contact Details</h4>
                 
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">
-                    Contact Name
-                  </label>
-                  <input 
-                    value={emergencyName} 
-                    onChange={e => setEmergencyName(e.target.value)} 
-                    className="w-full glass-panel-input" 
-                    placeholder="e.g. Jane Doe" 
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">First Name</label>
+                    <input
+                      value={emergencyFirstName}
+                      onChange={e => setEmergencyFirstName(e.target.value)}
+                      className="w-full glass-panel-input"
+                      placeholder="e.g. Jane"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Middle Name</label>
+                    <input
+                      value={emergencyMiddleName}
+                      onChange={e => setEmergencyMiddleName(e.target.value)}
+                      className="w-full glass-panel-input"
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Last Name</label>
+                    <input
+                      value={emergencyLastName}
+                      onChange={e => setEmergencyLastName(e.target.value)}
+                      className="w-full glass-panel-input"
+                      placeholder="e.g. Doe"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">

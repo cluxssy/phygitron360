@@ -3,6 +3,8 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle } from 'lucide-react';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 export default function AttendancePanel({ mode }) {
   const { user } = useAuth();
@@ -38,6 +40,14 @@ export default function AttendancePanel({ mode }) {
   const [selectedLog, setSelectedLog] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchedEmployeeHistory, setSearchedEmployeeHistory] = useState([]);
+
+  useEscapeClose(() => setShowCorrectionForm(false), showCorrectionForm);
+  useEscapeClose(() => setShowLeaveForm(false), showLeaveForm);
+  useEscapeClose(() => setShowClockOutModal(false), showClockOutModal);
+  useEscapeClose(() => setSelectedCorrectionId(null), !!selectedCorrectionId);
+  useEscapeClose(() => setEditingRecord(null), !!editingRecord);
+  useEscapeClose(() => setSelectedLog(null), !!selectedLog);
+  const handleTabKeyNav = useTabListKeyNav();
   const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -442,7 +452,7 @@ export default function AttendancePanel({ mode }) {
       {isAdmin && (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex gap-2">
+            <div onKeyDown={handleTabKeyNav} className="flex gap-2">
                 {[
                 { id: 'today', label: "Daily Log", icon: Users },
                 { id: 'leaves', label: 'Absence Queue', icon: Clock },

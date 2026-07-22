@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Loader2, RefreshCw, Filter, Trash2, Edit3, Search, UploadCloud, Library, Folder, Link as LinkIcon, FolderOpen, Tag, X, FileJson, Copy, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 const QTYPES = [
   { value: 'mcq', label: 'Multiple Choice' },
@@ -12,6 +13,7 @@ const QTYPES = [
 ];
 
 function Modal({ onClose, title, children, maxWidth = "max-w-lg" }) {
+  useEscapeClose(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
       <div className={`bg-white rounded-2xl w-full ${maxWidth} p-8 relative shadow-2xl border border-gray-200 my-8`} onClick={e => e.stopPropagation()}>

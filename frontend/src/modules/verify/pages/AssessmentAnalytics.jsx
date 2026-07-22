@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Users, Award, ShieldAlert, Clock, Loader2, ChevronDown, ChevronUp, AlertTriangle, Play, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 export default function AssessmentAnalytics({ assessmentId: initialAssessmentId }) {
   const [assessmentsList, setAssessmentsList] = useState([]);
@@ -18,6 +19,7 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
   const [resultDetailsCache, setResultDetailsCache] = useState({});
   const [loadingDetailsId, setLoadingDetailsId] = useState(null);
   const [lightboxImage, setLightboxImage] = useState(null);
+  useEscapeClose(() => setLightboxImage(null), !!lightboxImage);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');

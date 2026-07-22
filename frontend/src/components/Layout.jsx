@@ -15,10 +15,12 @@ import OrgAdminSetupModal from '../modules/deploy/components/OrgAdminSetupModal'
 import { MODULE_CONFIG } from '../core/config/modules';
 import { NotificationProvider, useNotifications } from '../core/context/NotificationContext';
 import ewandzLogo from '../assets/EWANDZ.png';
+import useEscapeClose from '../core/hooks/useEscapeClose';
 
 // ── Notification Dropdown Component ──
 function NotificationDropdown() {
   const { notifications, showNotifications, setShowNotifications, markRead, markAllRead } = useNotifications();
+  useEscapeClose(() => setShowNotifications(false), showNotifications);
 
   if (!showNotifications) return null;
 

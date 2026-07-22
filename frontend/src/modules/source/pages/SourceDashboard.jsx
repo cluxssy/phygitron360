@@ -33,6 +33,8 @@ import {
 
 // ── Import Notification Context ──
 import { useNotifications } from '../../../core/context/NotificationContext';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
@@ -83,7 +85,7 @@ export default function SourceDashboard() {
   // Dynamic role display based on actual user roles
   const getRoleDisplay = () => {
     if (hasRole?.('super_admin')) return 'Super Admin';
-    if (hasRole?.('org_admin')) return 'Organisation Admin';
+    if (hasRole?.('org_admin')) return 'Organization Admin';
     if (hasRole?.('manager')) return 'Manager';
     if (hasRole?.('recruiter')) return 'Recruiter';
     return 'Employee';
@@ -208,6 +210,8 @@ export default function SourceDashboard() {
   // Invite-status tab: role selector
   const [inviteStatusRoleId, setInviteStatusRoleId] = useState('');
   const [showInviteStatus, setShowInviteStatus] = useState(false);
+
+  const handleTabKeyNav = useTabListKeyNav();
 
   // Form states
   const [uploading, setUploading] = useState(false);
@@ -495,7 +499,7 @@ export default function SourceDashboard() {
         credentials: 'include' 
       });
       if (r.ok) {
-        toast.success('Queue cancelled successfully');
+        toast.success('Queue canceled successfully');
         setBulkJobId(null);
         setBulkJobProgress(null);
         setBulkUploadTriggered(false);
@@ -503,7 +507,7 @@ export default function SourceDashboard() {
         toast.error('Failed to cancel queue');
       }
     } catch {
-      toast.error('Error cancelling queue');
+      toast.error('Error canceling queue');
     }
   };
 
@@ -708,7 +712,7 @@ export default function SourceDashboard() {
     
     if (!window.confirm(`Are you sure you want to cancel the invite for ${ids.length} candidate(s)? This will unlink their user account if they are a trainee and convert them back to an active candidate.`)) return;
 
-    const tid = toast.loading('Cancelling invites...');
+    const tid = toast.loading('Canceling invites...');
     try {
       const r = await fetch('/api/source/cancel-invite', {
         method: 'POST',
@@ -717,7 +721,7 @@ export default function SourceDashboard() {
       });
       const d = await r.json();
       if (r.ok) {
-        toast.success(d.message || `Cancelled invites for ${ids.length} candidate(s)!`, { id: tid });
+        toast.success(d.message || `Canceled invites for ${ids.length} candidate(s)!`, { id: tid });
         clearSel();
         fetchCandidates();
         fetchActivities();
@@ -820,7 +824,7 @@ export default function SourceDashboard() {
       </div>
 
       <div className="dashboard-body">
-        <div className="sidebar" data-no-tooltip>
+        <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>Home</button>
           <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>
           <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>
@@ -1584,7 +1588,7 @@ export default function SourceDashboard() {
                 >
                   <option value="all">All</option>
                   <option value="new">New</option>
-                  <option value="favourite">Favourite</option>
+                  <option value="favourite">Favorite</option>
                   <option value="invited">Invited</option>
                   <option value="hired">Hired</option>
                   <option value="archived">Archived</option>
@@ -1991,7 +1995,7 @@ export default function SourceDashboard() {
                     <ul className="list-disc list-inside mt-1 space-y-0.5">
                       <li><code className="text-purple-600">{`{candidate_name}`}</code> - Full name</li>
                       <li><code className="text-purple-600">{`{role}`}</code> - Job role title</li>
-                      <li><code className="text-purple-600">{`{org_name}`}</code> - Organisation name</li>
+                      <li><code className="text-purple-600">{`{org_name}`}</code> - Organization name</li>
                       <li><code className="text-purple-600">{`{assessment_link}`}</code> - URL to access the portal</li>
                       <li><code className="text-purple-600">{`{temp_password}`}</code> - Temporary password</li>
                     </ul>
@@ -2074,6 +2078,7 @@ export default function SourceDashboard() {
 
 // ── Reusable sub-components ───────────────────────────────────────────────────
 function Modal({ children, title, onClose }) {
+  useEscapeClose(onClose);
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/50 backdrop-blur-sm overflow-y-auto">
       <div className="absolute inset-0" onClick={onClose} />

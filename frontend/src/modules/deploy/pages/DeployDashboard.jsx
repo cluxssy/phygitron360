@@ -15,6 +15,7 @@ import PayrollPanel from '../components/PayrollPanel';
 import MyPayrollPanel from '../components/MyPayrollPanel';
 import InternalOpportunitiesPanel from '../components/InternalOpportunitiesPanel';
 import "../styles/deploy.css";
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 import logo from "../../../assets/phy360.png";
 import ewandzLogo from "../../../assets/EWANDZ.png";
@@ -87,6 +88,8 @@ export default function DeployDashboard() {
   const setTab = (tab) =>
     navigate(`/deploy?tab=${tab}`);
 
+  const handleTabKeyNav = useTabListKeyNav();
+
   const displayName =
     user?.name ||
     user?.email?.split('@')[0] ||
@@ -102,7 +105,7 @@ export default function DeployDashboard() {
     // In management view, show actual management role
     if (deployView === 'management') {
       if (hasRole?.('super_admin')) return 'Super Admin';
-      if (hasRole?.('org_admin')) return 'Organisation Admin';
+      if (hasRole?.('org_admin')) return 'Organization Admin';
       if (hasRole?.('manager')) return 'Manager';
       return 'Employee Workspace';
     }
@@ -111,7 +114,7 @@ export default function DeployDashboard() {
     return hasRole?.('super_admin')
       ? 'Super Admin'
       : hasRole?.('org_admin')
-      ? 'Organisation Admin'
+      ? 'Organization Admin'
       : hasRole?.('manager')
       ? 'Manager Workspace'
       : 'Employee Workspace';
@@ -221,7 +224,7 @@ export default function DeployDashboard() {
             SIDEBAR
         ========================================= */}
 
-        <div className="sidebar" data-no-tooltip>
+        <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
 
           {/* VIEW TOGGLE */}
 
@@ -255,9 +258,10 @@ export default function DeployDashboard() {
                       : 'text-black/60 hover:bg-white'
                   }
                 `}
-                onClick={() =>
-                  setDeployView('management')
-                }
+                onClick={() => {
+                  setDeployView('management');
+                  setTab('dashboard');
+                }}
               >
                 Management
               </button>
@@ -276,9 +280,10 @@ export default function DeployDashboard() {
                       : 'text-black/60 hover:bg-white'
                   }
                 `}
-                onClick={() =>
-                  setDeployView('employee')
-                }
+                onClick={() => {
+                  setDeployView('employee');
+                  setTab('dashboard');
+                }}
               >
                 Personal
               </button>
@@ -304,7 +309,7 @@ export default function DeployDashboard() {
                 className={currentTab === 'personnel' ? 'active' : ''}
                 onClick={() => setTab('personnel')}
               >
-                Personnel
+                Directory
               </button>
 
               <button

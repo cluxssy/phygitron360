@@ -23,8 +23,8 @@ const ICON_LABELS = {
 const STATUS_TOOLTIPS = {
   'Pending Invite': 'An invitation has been created and is waiting for the recipient to act.',
   Submitted: 'Submitted and waiting for review.',
-  Reviewed: 'Reviewed by an authorised user.',
-  Finalized: 'Finalised and no longer editable.',
+  Reviewed: 'Reviewed by an authorized user.',
+  Finalized: 'Finalized and no longer editable.',
   'Malpractice Flagged': 'Potential assessment malpractice was detected and needs review.',
   Locked: 'This account cannot sign in until it is restored.',
   Inactive: 'This account is not currently active.',

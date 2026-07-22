@@ -223,7 +223,7 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       if (!seenFaceOnceRef.current) seenFaceOnceRef.current = true;
     }, 10000);
 
-    // Initialise native FaceDetector (Chrome, behind flag)
+    // Initialize native FaceDetector (Chrome, behind flag)
     if ('FaceDetector' in window && !faceDetectorRef.current) {
       try { faceDetectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 4 }); }
       catch (_) { faceDetectorRef.current = null; }

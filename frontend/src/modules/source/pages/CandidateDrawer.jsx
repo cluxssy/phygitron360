@@ -13,6 +13,7 @@ import {
   isPhone,
   isValidUrl,
 } from '../../../core/utils/validators';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 const LEVEL_COLOR = {
   beginner:     'bg-white/5 border-white/10 text-white/50',
@@ -33,6 +34,7 @@ const STATUS_STYLE = {
 export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, onRefresh, onConvert }) {
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  useEscapeClose(onClose, !!candidate);
 
   // Edit Mode states
   const [isEditing, setIsEditing] = useState(false);
@@ -245,7 +247,9 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   // ── Edit Profile Helpers ─────────────────────────────────────────────────
   const startEditing = () => {
     setEditForm({
-      full_name: data.full_name || '',
+      first_name: data.first_name || '',
+      middle_name: data.middle_name || '',
+      last_name: data.last_name || '',
       email: data.email || '',
       phone: data.phone || '',
       location: data.location || '',
@@ -330,7 +334,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   };
 
   const validateProfileEdit = () => {
-    if (!editForm?.full_name?.trim()) return 'Full name is required.';
+    if (!editForm?.first_name?.trim() || !editForm?.last_name?.trim()) return 'First name and last name are required.';
     if (editForm.phone && !isPhone(editForm.phone)) return 'Phone must be 7-15 digits, optionally starting with +.';
     if (editForm.total_experience_years !== undefined && editForm.total_experience_years !== '' && !isNonNegativeNumber(editForm.total_experience_years)) {
       return 'Total experience must be 0 or greater.';
@@ -439,18 +443,40 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     <Shield size={14} /> Basic Information
                   </h3>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Full Name</label>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">First Name</label>
                       <input
                         type="text"
                         required
-                        value={editForm.full_name}
-                        onChange={e => setEditForm({ ...editForm, full_name: e.target.value })}
+                        value={editForm.first_name}
+                        onChange={e => setEditForm({ ...editForm, first_name: e.target.value })}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
-                    
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Middle Name</label>
+                      <input
+                        type="text"
+                        value={editForm.middle_name}
+                        onChange={e => setEditForm({ ...editForm, middle_name: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Last Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={editForm.last_name}
+                        onChange={e => setEditForm({ ...editForm, last_name: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+
                     <div>
                       <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Email</label>
                       <input
@@ -583,7 +609,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         onClick={() => handleStatusUpdate('Favourite')}
                         className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black text-primary text-[10px] font-black uppercase tracking-widest transition-all"
                       >
-                        Favourite
+                        Favorite
                       </button>
                     )}
                     {data?.status?.toLowerCase() !== 'archived' && (

@@ -8,6 +8,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { isEmail, validatePassword } from '../../../core/utils/validators';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 import logo from '../../../assets/phy360.png';
 import bellIcon from '../../../assets/bell.png';
@@ -21,6 +22,7 @@ export default function SuperadminDashboard() {
   const location = useLocation();
 
   const [activeSideTab, setActiveSideTab] = useState('tenants');
+  const handleTabKeyNav = useTabListKeyNav();
 
   const [tenants, setTenants] = useState([]);
   const [demoRequests, setDemoRequests] = useState([]);
@@ -321,7 +323,7 @@ export default function SuperadminDashboard() {
       <div className="dashboard-body">
 
         {/* ── SIDEBAR ── */}
-        <div className="sidebar">
+        <div className="sidebar" onKeyDown={handleTabKeyNav}>
           {[
             { id: 'tenants',  label: 'Tenants'      },
             { id: 'demo',     label: 'Demo Archive'  },
@@ -764,7 +766,7 @@ export default function SuperadminDashboard() {
                 <button type="submit" disabled={savingOps}
                   style={{ ...S.primaryBtn, flex: 1, justifyContent: 'center', opacity: savingOps ? .7 : 1 }}>
                   {savingOps ? <Activity size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={14} />}
-                  Sync
+                  Save
                 </button>
               </div>
             </form>

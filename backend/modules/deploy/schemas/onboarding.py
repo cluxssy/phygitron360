@@ -2,16 +2,24 @@ from pydantic import BaseModel
 from typing import Optional
 
 class InviteRequest(BaseModel):
-    name: str
+    employee_code: Optional[str] = None
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: str
+    guardian_name: Optional[str] = None
     email: str
     role: str = "Employee"
     department: Optional[str] = None
     designation: Optional[str] = None
+    doj: Optional[str] = None
 
 class InviteResponse(BaseModel):
     id: int
     token: str
     name: str
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
     email: str
     role: str
     department: Optional[str]

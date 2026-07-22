@@ -152,11 +152,6 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             newErrors.portfolio_url = 'Please enter a valid portfolio URL';
         }
 
-        // Name validation - only if filled (no longer required)
-        // if (formData.name && formData.name.length < 2) {
-        //     newErrors.name = 'Name must be at least 2 characters';
-        // }
-
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -190,7 +185,9 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     setIsSaving(true);
     try {
         const payload = {
-            name: formData.name,
+            first_name: formData.first_name,
+            middle_name: formData.middle_name,
+            last_name: formData.last_name,
             designation: formData.designation,
             team: formData.team,
             employment_type: formData.employment_type,
@@ -415,13 +412,27 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-4 flex-wrap">
                                 {editMode ? (
-                                    <div>
-                                        <input 
-                                            type="text" 
-                                            value={formData.name}
-                                            onChange={e => setFormData({...formData, name: e.target.value})}
-                                            className="text-4xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
-                                            placeholder="Full Name"
+                                    <div className="grid grid-cols-3 gap-2 w-full">
+                                        <input
+                                            type="text"
+                                            value={formData.first_name || ''}
+                                            onChange={e => setFormData({...formData, first_name: e.target.value})}
+                                            className="text-2xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                            placeholder="First Name"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={formData.middle_name || ''}
+                                            onChange={e => setFormData({...formData, middle_name: e.target.value})}
+                                            className="text-2xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                            placeholder="Middle Name"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={formData.last_name || ''}
+                                            onChange={e => setFormData({...formData, last_name: e.target.value})}
+                                            className="text-2xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                            placeholder="Last Name"
                                         />
                                         {renderError('name')}
                                     </div>
@@ -703,12 +714,16 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             <FileCard
                                 label="Curriculum Vitae"
                                 path={details.cv_path}
+                                employeeCode={details.employee_code}
+                                docType="cv"
                                 editMode={editMode}
                                 onUpload={() => fileInputCv.current.click()}
                             />
                             <FileCard
                                 label="Identity Proof"
                                 path={details.id_proofs}
+                                employeeCode={details.employee_code}
+                                docType="id_proof"
                                 editMode={editMode}
                                 onUpload={() => fileInputId.current.click()}
                             />
@@ -1138,14 +1153,18 @@ function SectionHeader({ icon: Icon, title }) {
     );
 }
 
-function FileCard({ label, path, editMode, onUpload }) {
-    const fileUrl = path ? (path.startsWith('http') ? path : `/${path.replace(/^\//, '')}`) : '';
+function FileCard({ label, path, editMode, onUpload, employeeCode, docType }) {
+    // Served through a backend endpoint (reads the file server-side, or redirects
+    // to a presigned S3 URL) rather than a raw static path — locally-stored files
+    // aren't reachable via any static file route. Inline by default (for viewing);
+    // ?download=true forces a "Save As" download instead.
+    const fileUrl = path ? `/api/employee/${employeeCode}/document/${docType}` : '';
 
     const handleDownload = async () => {
         if (!path) return;
 
         try {
-            const response = await fetch(fileUrl, { credentials: 'include' });
+            const response = await fetch(`${fileUrl}?download=true`, { credentials: 'include' });
             if (!response.ok) throw new Error();
 
             const blob = await response.blob();

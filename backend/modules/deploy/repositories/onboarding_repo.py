@@ -34,12 +34,15 @@ class OnboardingRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur, 'public')
                 cur.execute('''
-                    INSERT INTO onboarding_invites (token, tenant_id, email, name, role, department, designation, expires_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO onboarding_invites (token, tenant_id, email, name, first_name, middle_name, last_name, employee_code, guardian_name, role, department, designation, doj, expires_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 ''', (
-                    invite_data['token'], tenant_id, invite_data['email'], invite_data['name'], 
-                    invite_data['role'], invite_data['department'], invite_data['designation'], 
+                    invite_data['token'], tenant_id, invite_data['email'], invite_data['name'],
+                    invite_data.get('first_name'), invite_data.get('middle_name'), invite_data.get('last_name'),
+                    invite_data.get('employee_code'), invite_data.get('guardian_name'),
+                    invite_data['role'], invite_data['department'], invite_data['designation'],
+                    invite_data.get('doj'),
                     invite_data['expires_at']
                 ))
                 conn.commit()
@@ -106,13 +109,50 @@ class OnboardingRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur, tenant_id)
                 cur.execute("""
-                    SELECT e.*, s.primary_skillset, s.secondary_skillset 
+                    SELECT e.*, s.primary_skillset, s.secondary_skillset,
+                           (SELECT u.role FROM users u WHERE u.employee_code = e.employee_code LIMIT 1) AS role
                     FROM employees e
                     LEFT JOIN skill_matrix s ON e.employee_code = s.employee_code
                     WHERE e.employment_status = 'Pending Approval'
                 """)
                 rows = cur.fetchall()
                 return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def reject_pending_approval(self, employee_code: str, tenant_id: str = 'public') -> Optional[str]:
+        """Deletes a pending-approval employee's submitted record and revokes
+        their invite (by email) so a fresh onboarding link can be sent.
+        Returns the email that was rejected, or None if nothing was found."""
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_path(cur, tenant_id)
+                cur.execute("SELECT email_id FROM employees WHERE employee_code = %s AND employment_status = 'Pending Approval'", (employee_code,))
+                row = cur.fetchone()
+                if not row:
+                    return None
+                email = row[0]
+
+                # Delete child records first to satisfy the users->employees FK
+                cur.execute("DELETE FROM skill_matrix WHERE employee_code = %s", (employee_code,))
+                cur.execute("DELETE FROM assets WHERE employee_code = %s", (employee_code,))
+                cur.execute("DELETE FROM performance WHERE employee_code = %s", (employee_code,))
+                cur.execute("DELETE FROM hr_activity WHERE employee_code = %s", (employee_code,))
+                cur.execute("DELETE FROM users WHERE employee_code = %s", (employee_code,))
+                cur.execute("DELETE FROM employees WHERE employee_code = %s", (employee_code,))
+
+                # Invites always live in the public schema, keyed by email + tenant_id
+                cur.execute('SET search_path TO public')
+                cur.execute(
+                    "UPDATE onboarding_invites SET status = 'Revoked' WHERE email = %s AND tenant_id = %s",
+                    (email, tenant_id)
+                )
+                conn.commit()
+                return email
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
@@ -135,12 +175,12 @@ class OnboardingRepository:
                     # 1. Clone the employee record with the new code
                     cur.execute('''
                         INSERT INTO employees (
-                            employee_code, name, dob, contact_number, emergency_contact, email_id, 
+                            employee_code, name, first_name, middle_name, last_name, guardian_name, dob, contact_number, emergency_contact, email_id,
                             team, designation, employment_status, current_address, permanent_address,
                             education_details, photo_path, cv_path, id_proofs, doj, employment_type, reporting_manager,
                             location, pf_included, mediclaim_included, notes, exit_date, exit_reason, clearance_status,
                             bank_name, bank_account_no, pan_no
-                        ) SELECT %s, name, dob, contact_number, emergency_contact, %s, 
+                        ) SELECT %s, name, first_name, middle_name, last_name, guardian_name, dob, contact_number, emergency_contact, %s,
                             team, designation, employment_status, current_address, permanent_address,
                             education_details, photo_path, cv_path, id_proofs, doj, employment_type, reporting_manager,
                             location, pf_included, mediclaim_included, notes, exit_date, exit_reason, clearance_status,
@@ -222,14 +262,15 @@ class OnboardingRepository:
                 if is_rehire:
                     # 1. Employee UPDATE
                     cur.execute('''
-                        UPDATE employees SET 
-                            name = %s, contact_number = %s, emergency_contact = %s, dob = %s, 
+                        UPDATE employees SET
+                            name = %s, first_name = %s, middle_name = %s, last_name = %s, guardian_name = %s, contact_number = %s, emergency_contact = %s, dob = %s,
                             current_address = %s, permanent_address = %s, education_details = %s,
                             team = %s, designation = %s, employment_status = 'Pending Approval', doj = %s, location = %s,
                             photo_path = %s, cv_path = %s, id_proofs = %s, bank_name = %s, bank_account_no = %s, pan_no = %s
                         WHERE employee_code = %s
                     ''', (
-                        employee_data['name'], employee_data['phone'], employee_data['emergency'], employee_data['dob'],
+                        employee_data['name'], employee_data.get('first_name'), employee_data.get('middle_name'), employee_data.get('last_name'), employee_data.get('guardian_name'),
+                        employee_data['phone'], employee_data['emergency'], employee_data['dob'],
                         employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
                         employee_data['team'], employee_data['designation'], employee_data['doj'], employee_data.get('location', ''),
                         employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'],
@@ -261,16 +302,16 @@ class OnboardingRepository:
                     # 1. Employee INSERT
                     cur.execute('''
                         INSERT INTO employees (
-                            employee_code, name, email_id, contact_number, emergency_contact, dob, 
+                            employee_code, name, first_name, middle_name, last_name, guardian_name, email_id, contact_number, emergency_contact, dob,
                             current_address, permanent_address, education_details,
                             team, designation, employment_status, doj, location,
                             photo_path, cv_path, id_proofs, bank_name, bank_account_no, pan_no
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ''', (
-                        employee_data['code'], employee_data['name'], employee_data['email'], 
+                        employee_data['code'], employee_data['name'], employee_data.get('first_name'), employee_data.get('middle_name'), employee_data.get('last_name'), employee_data.get('guardian_name'), employee_data['email'],
                         employee_data['phone'], employee_data['emergency'], employee_data['dob'],
                         employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
-                        employee_data['team'], employee_data['designation'], 'Pending Approval', 
+                        employee_data['team'], employee_data['designation'], 'Pending Approval',
                         employee_data['doj'], employee_data.get('location', ''),
                         employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'],
                         employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no')

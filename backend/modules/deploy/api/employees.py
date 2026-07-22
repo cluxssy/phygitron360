@@ -28,10 +28,42 @@ def get_employee(employee_code: str, current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=404, detail="Employee not found")
     return employee
 
+@router.get("/employee/{employee_code}/document/{doc_type}")
+def get_employee_document(employee_code: str, doc_type: str, download: bool = False, current_user: dict = Depends(get_current_user)):
+    """Serves an employee's uploaded photo/cv/id_proof. Reads the file server-side
+    (or redirects to a presigned S3 URL) rather than exposing a raw static path,
+    since locally-stored files aren't reachable via any static file route.
+
+    By default the file is served inline (viewable in a new tab); pass
+    ?download=true to force a "Save As" download instead."""
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
+    file_path = service.get_document_path(employee_code, doc_type)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if file_path.startswith("http://") or file_path.startswith("https://"):
+        from fastapi.responses import RedirectResponse
+        from backend.common.services.storage_service import generate_presigned_url
+        presigned = generate_presigned_url(file_path, expiry_seconds=900)
+        return RedirectResponse(url=presigned)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File missing from storage")
+
+    from fastapi.responses import FileResponse
+    return FileResponse(
+        file_path,
+        filename=os.path.basename(file_path),
+        content_disposition_type="attachment" if download else "inline"
+    )
+
 @router.post("/employee", dependencies=[Depends(require_permission("deploy.employees.create"))])
 async def create_employee(
-    # Only name is mandatory, all others optional
-    name: str = Form(...),
+    # First and last name are mandatory, middle name is optional, all others optional
+    first_name: str = Form(...),
+    middle_name: Optional[str] = Form(None),
+    last_name: str = Form(...),
     code: Optional[str] = Form(None),
     dob: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
@@ -75,7 +107,9 @@ async def create_employee(
         id_proofs_path = save_uploaded_file(id_proof_file, tenant_id, 'deploy', 'identification_docs', code or 'unknown', 'id_proof')
 
     data = {
-        "name": name,  # name is mandatory
+        "first_name": first_name,
+        "middle_name": middle_name,
+        "last_name": last_name,
         "code": code,
         "dob": dob,
         "phone": phone,
@@ -179,7 +213,7 @@ from fastapi.responses import StreamingResponse
 @router.get("/employees/bulk-upload/template", dependencies=[Depends(require_permission("deploy.employees.create"))])
 def get_bulk_upload_template():
     columns = [
-        "Employee Code", "Name", "Email ID", "Role", "Date of Joining", 
+        "Employee Code", "First Name", "Middle Name", "Last Name", "Email ID", "Role", "Date of Joining",
         "Designation", "Team / Department", "Employment Type", "Reporting Manager", 
         "Base Location", "Employment Status", "Date of Birth", "Contact Number", 
         "Emergency Contact Name", "Emergency Contact", "Current Address", "Permanent Address", 
@@ -224,15 +258,19 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
     
     for idx, row in enumerate(employees):
         try:
-            # Only name is mandatory - everything else can be blank/None
-            name = str(row.get("Name", "")).strip()
-            if not name:
-                raise ValueError("Name is mandatory")
-            
+            # First Name and Last Name are mandatory - everything else can be blank/None
+            first_name = str(row.get("First Name", "")).strip()
+            middle_name = str(row.get("Middle Name", "")).strip() or None
+            last_name = str(row.get("Last Name", "")).strip()
+            if not first_name or not last_name:
+                raise ValueError("First Name and Last Name are mandatory")
+
             # Build data dict with safe defaults for ALL fields
             data = {
                 "code": str(row.get("Employee Code", "")).strip() or None,
-                "name": name,
+                "first_name": first_name,
+                "middle_name": middle_name,
+                "last_name": last_name,
                 "dob": str(row.get("Date of Birth", "")).strip() or None,
                 "phone": str(row.get("Contact Number", "")).strip() or None,
                 "emergency": str(row.get("Emergency Contact", "")).strip() or None,
@@ -285,12 +323,12 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
                 data["education_details"] = []
             
             # Remove None values so service uses defaults
-            # But keep name and any other fields that might have values
+            # But keep name parts and any other fields that might have values
             clean_data = {}
             for k, v in data.items():
                 if v is not None:
                     clean_data[k] = v
-                elif k == "name":  # Always keep name
+                elif k in ("first_name", "last_name"):  # Always keep mandatory name parts
                     clean_data[k] = v
                 elif k == "employment_status":  # Keep defaults
                     clean_data[k] = v
@@ -306,9 +344,9 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
                     clean_data[k] = v
             
             # Make sure we have at least the mandatory fields
-            if "name" not in clean_data:
-                clean_data["name"] = name
-            
+            clean_data.setdefault("first_name", first_name)
+            clean_data.setdefault("last_name", last_name)
+
             service.create_employee(clean_data)
             results["success"] += 1
             
@@ -321,7 +359,7 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
             results["errors"].append({
                 "row": idx + 1,
                 "code": str(row.get("Employee Code", "Unknown")),
-                "name": str(row.get("Name", "Unknown")),
+                "name": f"{row.get('First Name', '')} {row.get('Last Name', '')}".strip() or "Unknown",
                 "error": error_detail
             })
             

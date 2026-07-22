@@ -173,6 +173,10 @@ def create_tables(schema_name='public'):
                 clearance_status TEXT
             )
         ''')
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS middle_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS last_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS guardian_name TEXT")
         # 1.1) Skill Matrix Table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS skill_matrix (
@@ -260,6 +264,12 @@ def create_tables(schema_name='public'):
                 expires_at TIMESTAMP
             )
         ''')
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS first_name TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS middle_name TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS last_name TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS employee_code TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS guardian_name TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS doj TEXT")
 
         # 3) Talent Vault: Candidates Table
         cur.execute('''
@@ -290,6 +300,9 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS primary_skills TEXT[] DEFAULT '{}'::text[]")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS secondary_skills TEXT[] DEFAULT '{}'::text[]")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS current_designation TEXT")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS first_name TEXT")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS middle_name TEXT")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS last_name TEXT")
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS current_company")
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS expected_salary")
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS notice_period")

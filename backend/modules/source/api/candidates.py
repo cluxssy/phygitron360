@@ -30,7 +30,9 @@ router = APIRouter(prefix="/api/source/candidates", tags=["Source - Candidates"]
 # ---------------------------------------------------------------------------
 
 class ManualCandidateCreate(BaseModel):
-    full_name: str
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: str
     email: str
     phone: Optional[str] = None
     location: Optional[str] = None
@@ -43,7 +45,9 @@ class ManualCandidateCreate(BaseModel):
 
 
 class CandidateUpdate(BaseModel):
-    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
