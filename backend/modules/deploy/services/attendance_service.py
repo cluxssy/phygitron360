@@ -173,6 +173,14 @@ class AttendanceService:
                 n_type="AdminAlert",
                 tenant_id=self.tenant_id
             )
+            # Confirm submission back to the employee
+            add_notification(
+                title="Leave Request Submitted",
+                message=f"Your {req.leave_type} leave request from {req.start_date} to {req.end_date} ({days} day(s)) has been submitted and is pending approval.",
+                employee_code=employee_code,
+                n_type="Info",
+                tenant_id=self.tenant_id
+            )
 
         return {"success": True, "message": msg}
 
@@ -455,6 +463,14 @@ class AttendanceService:
             req.work_log, 
             status, 
             self.tenant_id
+        )
+        # Notify the affected employee that their record was modified
+        add_notification(
+            title="Attendance Record Updated",
+            message=f"Your attendance record for {req.date} has been updated by admin (status: {status}).",
+            employee_code=req.employee_code,
+            n_type="Info",
+            tenant_id=self.tenant_id
         )
         return {"success": True, "message": "Attendance record synchronized", "status": status}
 

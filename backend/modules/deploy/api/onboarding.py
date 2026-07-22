@@ -14,7 +14,7 @@ def get_service():
     return OnboardingService()
 
 @router.post("/invite", dependencies=[Depends(require_module("deploy"))])
-def send_invite(invite: InviteRequest, current_user: dict = Depends(require_permission("deploy.onboarding.manage")), service: OnboardingService = Depends(get_service)):
+def send_invite(invite: InviteRequest, current_user: dict = Depends(require_permission("deploy.onboarding.send_invite")), service: OnboardingService = Depends(get_service)):
     try:
         tenant_id = current_user.get("tenant_id", "public")
         return service.create_invite(invite.dict(), tenant_id=tenant_id)
@@ -28,11 +28,11 @@ def get_invites(current_user: dict = Depends(require_permission("deploy.onboardi
     tenant_id = current_user.get("tenant_id", "public")
     return service.get_all_invites(tenant_id=tenant_id)
 
-@router.delete("/invite/{invite_id}", dependencies=[Depends(require_permission("deploy.onboarding.manage")), Depends(require_module("deploy"))])
+@router.delete("/invite/{invite_id}", dependencies=[Depends(require_permission("deploy.onboarding.cancel_invite")), Depends(require_module("deploy"))])
 def revoke_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
     return service.revoke_invite(invite_id)
 
-@router.delete("/invite/{invite_id}/delete", dependencies=[Depends(require_permission("deploy.onboarding.manage")), Depends(require_module("deploy"))])
+@router.delete("/invite/{invite_id}/delete", dependencies=[Depends(require_permission("deploy.onboarding.cancel_invite")), Depends(require_module("deploy"))])
 def delete_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
     return service.delete_invite(invite_id)
 
@@ -129,7 +129,7 @@ def onboard_admin(
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
-    current_user: dict = Depends(require_permission("deploy.onboarding.manage")),
+    current_user: dict = Depends(require_permission("deploy.onboarding.review_submissions")),
     service: OnboardingService = Depends(get_service)
 ):
     user_id = current_user['id']
@@ -223,7 +223,7 @@ def approve_onboarding(
     mediclaim_included: str = Form("No"),
     location: str = Form(None),
     notes: str = Form(None),
-    current_user: dict = Depends(require_permission("deploy.onboarding.manage")),
+    current_user: dict = Depends(require_permission("deploy.onboarding.review_submissions")),
     service: OnboardingService = Depends(get_service)
 ):
     approval_data = {

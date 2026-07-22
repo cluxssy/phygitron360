@@ -191,6 +191,15 @@ def create_tables(schema_name='public'):
             )
         ''')
 
+        # 1.4) Permission Templates (previously custom_roles)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS permission_templates (
+                name TEXT PRIMARY KEY,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # 1.5) Role Permissions Table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS role_permissions (
@@ -222,7 +231,7 @@ def create_tables(schema_name='public'):
                 role TEXT CHECK(role IN (
                     'super_admin', 'org_admin', 'manager', 'employee', 'candidate', 'trainee'
                 )) NOT NULL,
-                roles TEXT[],
+                templates TEXT[],
                 employee_code TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 is_active INTEGER DEFAULT 1,
                 last_login TIMESTAMP,

@@ -106,6 +106,39 @@ class AdminRepository:
         finally:
             conn.close()
 
+    def get_templates(self) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT name, description, created_at FROM permission_templates ORDER BY created_at DESC")
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def create_template(self, name: str, description: str):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO permission_templates (name, description) VALUES (%s, %s)",
+                (name, description)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def delete_template(self, name: str):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM permission_templates WHERE name = %s", (name,))
+            # Also clean up role_permissions
+            cur.execute("DELETE FROM role_permissions WHERE role = %s", (name,))
+            conn.commit()
+        finally:
+            conn.close()
+
     def update_role_permissions(self, role: str, permissions: List[str]):
         conn = get_db_connection()
         try:
@@ -179,11 +212,11 @@ class AdminRepository:
         finally:
             conn.close()
 
-    def update_role(self, user_id: int, role: str):
+    def update_role(self, user_id: int, role: str, templates: List[str] = None):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
+            cur.execute("UPDATE users SET role = %s, templates = %s WHERE id = %s", (role, templates or [], user_id))
             conn.commit()
         finally:
             conn.close()

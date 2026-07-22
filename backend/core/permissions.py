@@ -39,41 +39,76 @@ class P:
     ADMIN_ROLES_MANAGE    = "admin.roles.manage"  # Manage role-level permission overrides
 
     # ── Deploy: Employees ────────────────────────────────────────────────────
-    DEPLOY_EMP_VIEW       = "deploy.employees.view"
-    DEPLOY_EMP_CREATE     = "deploy.employees.create"
-    DEPLOY_EMP_EDIT       = "deploy.employees.edit"
-    DEPLOY_EMP_DELETE     = "deploy.employees.delete"
-    DEPLOY_EMP_OFFBOARD   = "deploy.employees.offboard"
+    DEPLOY_EMP_VIEW_LIST            = "deploy.employees.view_list"
+    DEPLOY_EMP_VIEW_PROFILE         = "deploy.employees.view_profile"
+    DEPLOY_EMP_VIEW_PROFILE_SENSITIVE = "deploy.employees.view_profile_sensitive"
+    DEPLOY_EMP_VIEW_PROFILE_FINANCIAL = "deploy.employees.view_profile_financial"
+    DEPLOY_EMP_CREATE               = "deploy.employees.create"
+    DEPLOY_EMP_OFFBOARD             = "deploy.employees.offboard"
+    DEPLOY_EMP_DELETE               = "deploy.employees.delete"
+    DEPLOY_EMP_EDIT_BASIC           = "deploy.employees.edit_basic"
+    DEPLOY_EMP_EDIT_JOB             = "deploy.employees.edit_job"
+    DEPLOY_EMP_EDIT_FINANCIAL       = "deploy.employees.edit_financial"
+    DEPLOY_EMP_EXPORT               = "deploy.employees.export"
+    DEPLOY_EMP_MANAGE_DOCS          = "deploy.employees.manage_documents"
 
     # ── Deploy: Assets ───────────────────────────────────────────────────────
-    DEPLOY_ASSETS_VIEW    = "deploy.assets.view"
-    DEPLOY_ASSETS_MANAGE  = "deploy.assets.manage"
+    DEPLOY_ASSETS_VIEW_PERSONAL     = "deploy.assets.view_personal"
+    DEPLOY_ASSETS_VIEW_ALL          = "deploy.assets.view_all"
+    DEPLOY_ASSETS_MANAGE_ONBOARDING = "deploy.assets.manage_onboarding"
+    DEPLOY_ASSETS_MANAGE_CLEARANCE  = "deploy.assets.manage_clearance"
+    DEPLOY_ASSETS_EXPORT_REPORTS    = "deploy.assets.export_reports"
 
-    # ── Deploy: Attendance ───────────────────────────────────────────────────
-    DEPLOY_ATT_PERSONAL   = "deploy.attendance.view_personal"
-    DEPLOY_ATT_TEAM       = "deploy.attendance.view_team"
-    DEPLOY_ATT_MANAGE     = "deploy.attendance.manage"
+    # ── Deploy: Attendance & Leaves ──────────────────────────────────────────
+    DEPLOY_ATT_VIEW_PERSONAL        = "deploy.attendance.view_personal"
+    DEPLOY_ATT_VIEW_TEAM            = "deploy.attendance.view_team"
+    DEPLOY_ATT_VIEW_ALL             = "deploy.attendance.view_all"
+    DEPLOY_ATT_CLOCK_IN_OUT         = "deploy.attendance.clock_in_out"
+    DEPLOY_ATT_REQ_CORRECTION       = "deploy.attendance.request_correction"
+    DEPLOY_ATT_APP_CORRECTION       = "deploy.attendance.approve_correction"
+    DEPLOY_LEAVES_VIEW_PERSONAL     = "deploy.leaves.view_personal"
+    DEPLOY_LEAVES_VIEW_TEAM         = "deploy.leaves.view_team"
+    DEPLOY_LEAVES_VIEW_ALL          = "deploy.leaves.view_all"
+    DEPLOY_LEAVES_REQUEST           = "deploy.leaves.request"
+    DEPLOY_LEAVES_APPROVE           = "deploy.leaves.approve"
+    DEPLOY_LEAVES_MANAGE_BALANCES   = "deploy.leaves.manage_balances"
+    DEPLOY_ATT_MANAGE_POLICIES      = "deploy.attendance.manage_policies"
 
     # ── Deploy: Onboarding ───────────────────────────────────────────────────
-    DEPLOY_ONBOARD_VIEW   = "deploy.onboarding.view"
-    DEPLOY_ONBOARD_MANAGE = "deploy.onboarding.manage"
-
-    # ── Deploy: Learning / Performance ───────────────────────────────────────
-    DEPLOY_ASSESS_VIEW    = "deploy.assessments.view"
-    DEPLOY_ASSESS_MANAGE  = "deploy.assessments.manage"
-    DEPLOY_TRAIN_VIEW     = "deploy.training.view"
-    DEPLOY_TRAIN_MANAGE   = "deploy.training.manage"
-    DEPLOY_PERF_VIEW      = "deploy.performance.view"
-    DEPLOY_PERF_MANAGE    = "deploy.performance.manage"
-
-    # ── Deploy: Dashboard / Notifications ────────────────────────────────────
-    DEPLOY_DASH_ADMIN     = "deploy.dashboard.view_admin"
-    DEPLOY_NOTIF_ADMIN    = "deploy.notifications.view_admin"
-    DEPLOY_NOTIF_MANAGE   = "deploy.notifications.manage"
+    DEPLOY_ONBOARD_VIEW             = "deploy.onboarding.view"
+    DEPLOY_ONBOARD_SEND_INVITE      = "deploy.onboarding.send_invite"
+    DEPLOY_ONBOARD_CANCEL_INVITE    = "deploy.onboarding.cancel_invite"
+    DEPLOY_ONBOARD_REVIEW_SUBMISSIONS = "deploy.onboarding.review_submissions"
 
     # ── Deploy: Payroll ──────────────────────────────────────────────────────
-    DEPLOY_PAYROLL_VIEW   = "deploy.payroll.view"
-    DEPLOY_PAYROLL_MANAGE = "deploy.payroll.manage"
+    DEPLOY_PAYROLL_VIEW_PERSONAL    = "deploy.payroll.view_personal"
+    DEPLOY_PAYROLL_VIEW_ALL         = "deploy.payroll.view_all"
+    DEPLOY_PAYROLL_RUN_PAYROLL      = "deploy.payroll.run_payroll"
+    DEPLOY_PAYROLL_EDIT_RECORDS     = "deploy.payroll.edit_records"
+    DEPLOY_PAYROLL_UPLOAD_BULK      = "deploy.payroll.upload_bulk"
+    DEPLOY_PAYROLL_APPROVE          = "deploy.payroll.approve"
+    DEPLOY_PAYROLL_EXPORT_REPORTS   = "deploy.payroll.export_reports"
+
+    # ── Deploy: Performance ──────────────────────────────────────────────────
+    DEPLOY_PERF_VIEW_PERSONAL       = "deploy.performance.view_personal"
+    DEPLOY_PERF_VIEW_TEAM           = "deploy.performance.view_team"
+    DEPLOY_PERF_VIEW_ALL            = "deploy.performance.view_all"
+    DEPLOY_PERF_ASSIGN_KRAS         = "deploy.performance.assign_kras"
+    DEPLOY_PERF_SUBMIT_SELF         = "deploy.performance.submit_self_rating"
+    DEPLOY_PERF_SUBMIT_MANAGER      = "deploy.performance.submit_manager_rating"
+    DEPLOY_PERF_MANAGE_ASSESSMENTS  = "deploy.performance.manage_assessments"
+    DEPLOY_PERF_EXPORT_REPORTS      = "deploy.performance.export_reports"
+
+    # ── Deploy: Learning & Development (unmapped) ────────────────────────────
+    DEPLOY_ASSESS_VIEW              = "deploy.assessments.view"
+    DEPLOY_ASSESS_MANAGE            = "deploy.assessments.manage"
+    DEPLOY_TRAIN_VIEW               = "deploy.training.view"
+    DEPLOY_TRAIN_MANAGE             = "deploy.training.manage"
+
+    # ── Deploy: Dashboard / Notifications ────────────────────────────────────
+    DEPLOY_DASH_ADMIN               = "deploy.dashboard.view_admin"
+    DEPLOY_NOTIF_ADMIN              = "deploy.notifications.view_admin"
+    DEPLOY_NOTIF_MANAGE             = "deploy.notifications.manage"
 
     # ── Source: Jobs ─────────────────────────────────────────────────────────
     SOURCE_JOBS_VIEW      = "source.jobs.view"
@@ -113,22 +148,26 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Admin
         P.VIEW_REPORTS, P.MANAGE_OPS, P.ADMIN_USERS_MANAGE, P.ADMIN_ROLES_MANAGE,
         # Deploy: Employees
-        P.DEPLOY_EMP_VIEW, P.DEPLOY_EMP_CREATE, P.DEPLOY_EMP_EDIT,
-        P.DEPLOY_EMP_DELETE, P.DEPLOY_EMP_OFFBOARD,
+        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE, P.DEPLOY_EMP_VIEW_PROFILE_SENSITIVE, P.DEPLOY_EMP_VIEW_PROFILE_FINANCIAL,
+        P.DEPLOY_EMP_CREATE, P.DEPLOY_EMP_EDIT_BASIC, P.DEPLOY_EMP_EDIT_JOB, P.DEPLOY_EMP_EDIT_FINANCIAL,
+        P.DEPLOY_EMP_DELETE, P.DEPLOY_EMP_OFFBOARD, P.DEPLOY_EMP_EXPORT, P.DEPLOY_EMP_MANAGE_DOCS,
         # Deploy: Assets
-        P.DEPLOY_ASSETS_VIEW, P.DEPLOY_ASSETS_MANAGE,
-        # Deploy: Attendance
-        P.DEPLOY_ATT_PERSONAL, P.DEPLOY_ATT_TEAM, P.DEPLOY_ATT_MANAGE,
+        P.DEPLOY_ASSETS_VIEW_PERSONAL, P.DEPLOY_ASSETS_VIEW_ALL, P.DEPLOY_ASSETS_MANAGE_ONBOARDING, P.DEPLOY_ASSETS_MANAGE_CLEARANCE, P.DEPLOY_ASSETS_EXPORT_REPORTS,
+        # Deploy: Attendance & Leaves
+        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_VIEW_TEAM, P.DEPLOY_ATT_VIEW_ALL, P.DEPLOY_ATT_CLOCK_IN_OUT, P.DEPLOY_ATT_REQ_CORRECTION, P.DEPLOY_ATT_APP_CORRECTION,
+        P.DEPLOY_LEAVES_VIEW_PERSONAL, P.DEPLOY_LEAVES_VIEW_TEAM, P.DEPLOY_LEAVES_VIEW_ALL, P.DEPLOY_LEAVES_REQUEST, P.DEPLOY_LEAVES_APPROVE, P.DEPLOY_LEAVES_MANAGE_BALANCES,
+        P.DEPLOY_ATT_MANAGE_POLICIES,
         # Deploy: Onboarding
-        P.DEPLOY_ONBOARD_VIEW, P.DEPLOY_ONBOARD_MANAGE,
-        # Deploy: Learning / Performance
+        P.DEPLOY_ONBOARD_VIEW, P.DEPLOY_ONBOARD_SEND_INVITE, P.DEPLOY_ONBOARD_CANCEL_INVITE, P.DEPLOY_ONBOARD_REVIEW_SUBMISSIONS,
+        # Deploy: Payroll
+        P.DEPLOY_PAYROLL_VIEW_PERSONAL, P.DEPLOY_PAYROLL_VIEW_ALL, P.DEPLOY_PAYROLL_RUN_PAYROLL, P.DEPLOY_PAYROLL_EDIT_RECORDS, P.DEPLOY_PAYROLL_UPLOAD_BULK, P.DEPLOY_PAYROLL_APPROVE, P.DEPLOY_PAYROLL_EXPORT_REPORTS,
+        # Deploy: Performance
+        P.DEPLOY_PERF_VIEW_PERSONAL, P.DEPLOY_PERF_VIEW_TEAM, P.DEPLOY_PERF_VIEW_ALL, P.DEPLOY_PERF_ASSIGN_KRAS, P.DEPLOY_PERF_SUBMIT_SELF, P.DEPLOY_PERF_SUBMIT_MANAGER, P.DEPLOY_PERF_MANAGE_ASSESSMENTS, P.DEPLOY_PERF_EXPORT_REPORTS,
+        # Deploy: Learning (unmapped)
         P.DEPLOY_ASSESS_VIEW, P.DEPLOY_ASSESS_MANAGE,
         P.DEPLOY_TRAIN_VIEW, P.DEPLOY_TRAIN_MANAGE,
-        P.DEPLOY_PERF_VIEW, P.DEPLOY_PERF_MANAGE,
         # Deploy: Dashboard / Notifications
         P.DEPLOY_DASH_ADMIN, P.DEPLOY_NOTIF_ADMIN, P.DEPLOY_NOTIF_MANAGE,
-        # Deploy: Payroll
-        P.DEPLOY_PAYROLL_VIEW, P.DEPLOY_PAYROLL_MANAGE,
         # Source
         P.SOURCE_JOBS_VIEW, P.SOURCE_JOBS_MANAGE,
         P.SOURCE_CANDIDATES_VIEW, P.SOURCE_CANDIDATES_MANAGE,
@@ -143,22 +182,24 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.MODULE_SOURCE_ACCESS, P.MODULE_FORGE_ACCESS,
         P.MODULE_VERIFY_ACCESS, P.MODULE_DEPLOY_ACCESS,
         P.VIEW_REPORTS,
-        # Deploy: Employees (no delete/offboard)
-        P.DEPLOY_EMP_VIEW, P.DEPLOY_EMP_CREATE, P.DEPLOY_EMP_EDIT,
+        # Deploy: Employees
+        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE,
         # Deploy: Assets
-        P.DEPLOY_ASSETS_VIEW,
+        P.DEPLOY_ASSETS_VIEW_PERSONAL,
         # Deploy: Attendance
-        P.DEPLOY_ATT_PERSONAL, P.DEPLOY_ATT_TEAM,
+        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_VIEW_TEAM, P.DEPLOY_ATT_CLOCK_IN_OUT, P.DEPLOY_ATT_REQ_CORRECTION, P.DEPLOY_ATT_APP_CORRECTION,
+        P.DEPLOY_LEAVES_VIEW_PERSONAL, P.DEPLOY_LEAVES_VIEW_TEAM, P.DEPLOY_LEAVES_REQUEST, P.DEPLOY_LEAVES_APPROVE,
         # Deploy: Onboarding
         P.DEPLOY_ONBOARD_VIEW,
-        # Deploy: Learning / Performance
+        # Deploy: Payroll
+        P.DEPLOY_PAYROLL_VIEW_PERSONAL,
+        # Deploy: Performance
+        P.DEPLOY_PERF_VIEW_PERSONAL, P.DEPLOY_PERF_VIEW_TEAM, P.DEPLOY_PERF_SUBMIT_SELF, P.DEPLOY_PERF_SUBMIT_MANAGER,
+        # Deploy: Learning (unmapped)
         P.DEPLOY_ASSESS_VIEW, P.DEPLOY_ASSESS_MANAGE,
         P.DEPLOY_TRAIN_VIEW,
-        P.DEPLOY_PERF_VIEW, P.DEPLOY_PERF_MANAGE,
         # Deploy: Dashboard / Notifications
         P.DEPLOY_DASH_ADMIN, P.DEPLOY_NOTIF_ADMIN,
-        # Deploy: Payroll
-        P.DEPLOY_PAYROLL_VIEW, P.DEPLOY_PAYROLL_MANAGE,
         # Source
         P.SOURCE_JOBS_VIEW, P.SOURCE_JOBS_MANAGE,
         P.SOURCE_CANDIDATES_VIEW,
@@ -170,13 +211,20 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
     ],
     "employee": [
         P.MODULE_FORGE_ACCESS, P.MODULE_DEPLOY_ACCESS,
-        # Deploy: personal access only
-        P.DEPLOY_EMP_VIEW,           # view own profile in directory lookup
-        P.DEPLOY_ATT_PERSONAL,       # clock in/out, view own history
-        P.DEPLOY_PERF_VIEW,          # view own KRA scorecard
-        P.DEPLOY_ASSESS_VIEW,        # view / submit assigned assessments
-        P.DEPLOY_TRAIN_VIEW,         # view own training assignments
-        P.DEPLOY_PAYROLL_VIEW,       # view own payslips
+        # Deploy: Employees
+        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE,
+        # Deploy: Assets
+        P.DEPLOY_ASSETS_VIEW_PERSONAL,
+        # Deploy: Attendance
+        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_CLOCK_IN_OUT, P.DEPLOY_ATT_REQ_CORRECTION,
+        P.DEPLOY_LEAVES_VIEW_PERSONAL, P.DEPLOY_LEAVES_REQUEST,
+        # Deploy: Payroll
+        P.DEPLOY_PAYROLL_VIEW_PERSONAL,
+        # Deploy: Performance
+        P.DEPLOY_PERF_VIEW_PERSONAL, P.DEPLOY_PERF_SUBMIT_SELF,
+        # Deploy: Learning (unmapped)
+        P.DEPLOY_ASSESS_VIEW,
+        P.DEPLOY_TRAIN_VIEW,
         # Verify: take tests assigned to them
         P.VERIFY_ASSESS_VIEW,
         # Forge: learn

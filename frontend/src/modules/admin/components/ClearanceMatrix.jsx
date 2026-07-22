@@ -15,32 +15,95 @@ export const PERMISSIONS_CATEGORIES = [
   {
     group: 'Deployment: Personnel',
     perms: [
-      { key: 'deploy.employees.view', label: 'View Directory' },
+      { key: 'deploy.employees.view_list', label: 'View Employee List' },
+      { key: 'deploy.employees.view_profile', label: 'View Basic Profile' },
+      { key: 'deploy.employees.view_profile_sensitive', label: 'View Sensitive Details' },
+      { key: 'deploy.employees.view_profile_financial', label: 'View Financial Details' },
       { key: 'deploy.employees.create', label: 'Add Employee' },
-      { key: 'deploy.employees.edit', label: 'Edit Employee' },
-      { key: 'deploy.employees.delete', label: 'Delete Employee' },
+      { key: 'deploy.employees.edit_basic', label: 'Edit Basic Details' },
+      { key: 'deploy.employees.edit_job', label: 'Edit Job Details' },
+      { key: 'deploy.employees.edit_financial', label: 'Edit Financials' },
+      { key: 'deploy.employees.manage_documents', label: 'Manage Documents' },
       { key: 'deploy.employees.offboard', label: 'Offboard Access' },
+      { key: 'deploy.employees.delete', label: 'Delete Employee' },
+      { key: 'deploy.employees.export', label: 'Export Personnel Data' },
     ]
   },
   {
-    group: 'Deployment: Core Ops',
+    group: 'Deployment: Assets',
     perms: [
-      { key: 'deploy.assets.view', label: 'View Assets' },
-      { key: 'deploy.assets.manage', label: 'Manage Assets' },
+      { key: 'deploy.assets.view_personal', label: 'View Personal Assets' },
+      { key: 'deploy.assets.view_all', label: 'View All Assets' },
+      { key: 'deploy.assets.manage_onboarding', label: 'Manage Onboarding Assets' },
+      { key: 'deploy.assets.manage_clearance', label: 'Manage Clearance Assets' },
+      { key: 'deploy.assets.export_reports', label: 'Export Asset Reports' },
+    ]
+  },
+  {
+    group: 'Deployment: Attendance & Leaves',
+    perms: [
       { key: 'deploy.attendance.view_personal', label: 'Personal Attendance' },
       { key: 'deploy.attendance.view_team', label: 'Team Attendance' },
-      { key: 'deploy.attendance.manage', label: 'Manage Attendance' },
+      { key: 'deploy.attendance.view_all', label: 'All Attendance' },
+      { key: 'deploy.attendance.clock_in_out', label: 'Clock In/Out' },
+      { key: 'deploy.attendance.request_correction', label: 'Request Correction' },
+      { key: 'deploy.attendance.approve_correction', label: 'Approve Correction' },
+      { key: 'deploy.attendance.manage_policies', label: 'Manage Policies' },
+      { key: 'deploy.leaves.view_personal', label: 'Personal Leaves' },
+      { key: 'deploy.leaves.view_team', label: 'Team Leaves' },
+      { key: 'deploy.leaves.view_all', label: 'All Leaves' },
+      { key: 'deploy.leaves.request', label: 'Request Leave' },
+      { key: 'deploy.leaves.approve', label: 'Approve Leave' },
+      { key: 'deploy.leaves.manage_balances', label: 'Manage Balances' },
+    ]
+  },
+  {
+    group: 'Deployment: Onboarding',
+    perms: [
       { key: 'deploy.onboarding.view', label: 'View Onboarding' },
-      { key: 'deploy.onboarding.manage', label: 'Manage Onboarding' },
+      { key: 'deploy.onboarding.send_invite', label: 'Send Invite' },
+      { key: 'deploy.onboarding.cancel_invite', label: 'Cancel Invite' },
+      { key: 'deploy.onboarding.review_submissions', label: 'Review Submissions' },
+    ]
+  },
+  {
+    group: 'Deployment: Payroll',
+    perms: [
+      { key: 'deploy.payroll.view_personal', label: 'View Personal Payroll' },
+      { key: 'deploy.payroll.view_all', label: 'View All Payroll' },
+      { key: 'deploy.payroll.run_payroll', label: 'Run Payroll' },
+      { key: 'deploy.payroll.edit_records', label: 'Edit Records' },
+      { key: 'deploy.payroll.upload_bulk', label: 'Upload Bulk' },
+      { key: 'deploy.payroll.approve', label: 'Approve Payroll' },
+      { key: 'deploy.payroll.export_reports', label: 'Export Payroll Reports' },
+    ]
+  },
+  {
+    group: 'Deployment: Performance',
+    perms: [
+      { key: 'deploy.performance.view_personal', label: 'View Personal KRA' },
+      { key: 'deploy.performance.view_team', label: 'View Team KRA' },
+      { key: 'deploy.performance.view_all', label: 'View All KRA' },
+      { key: 'deploy.performance.assign_kras', label: 'Assign KRAs' },
+      { key: 'deploy.performance.submit_self_rating', label: 'Submit Self Rating' },
+      { key: 'deploy.performance.submit_manager_rating', label: 'Submit Manager Rating' },
+      { key: 'deploy.performance.manage_assessments', label: 'Manage Assessments' },
+      { key: 'deploy.performance.export_reports', label: 'Export Perf Reports' },
+    ]
+  },
+  {
+    group: 'Deployment: Ops & Dashboards',
+    perms: [
       { key: 'deploy.notifications.view_admin', label: 'Admin Notifications' },
+      { key: 'deploy.notifications.manage', label: 'Manage Notifications' },
       { key: 'deploy.dashboard.view_admin', label: 'Admin Analytics' },
     ]
   },
   {
-    group: 'Deployment: Learning',
+    group: 'Deployment: Learning (Forge)',
     perms: [
-      { key: 'deploy.assessments.view', label: 'View Assessments' },
-      { key: 'deploy.assessments.manage', label: 'Manage Assessments' },
+      { key: 'deploy.assessments.view', label: 'View Learning Assessments' },
+      { key: 'deploy.assessments.manage', label: 'Manage Learning Assessments' },
       { key: 'deploy.training.view', label: 'View Training' },
       { key: 'deploy.training.manage', label: 'Manage Training' },
     ]
@@ -67,7 +130,10 @@ export const PERMISSIONS_CATEGORIES = [
   }
 ];
 
-export default function ClearanceMatrix({ rolesPerms, onUpdate }) {
+export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefreshRoles, onUpdate }) {
+  const [showCreateModal, setShowCreateModal] = React.useState(false);
+  const [newRoleName, setNewRoleName] = React.useState('');
+  const [newRoleDesc, setNewRoleDesc] = React.useState('');
 
   const roles = Object.keys(rolesPerms);
 
@@ -98,6 +164,49 @@ export default function ClearanceMatrix({ rolesPerms, onUpdate }) {
     }
   };
 
+  const createCustomRole = async () => {
+    if (!newRoleName.trim()) return;
+    try {
+      const res = await fetch('/api/admin/permissions/templates', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: newRoleName.trim(),
+          description: newRoleDesc.trim() || undefined
+        })
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || 'Creation failed');
+      }
+      toast.success('Template Created');
+      setShowCreateModal(false);
+      setNewRoleName('');
+      setNewRoleDesc('');
+      if (onRefreshRoles) onRefreshRoles();
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const deleteCustomRole = async (name) => {
+    if (!confirm(`Delete template ${name}?`)) return;
+    try {
+      const res = await fetch(`/api/admin/permissions/templates/${name}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (!res.ok) throw new Error('Deletion failed');
+      toast.success('Template Deleted');
+      if (onRefreshRoles) onRefreshRoles();
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
   return (
     <div className="bg-white/70 backdrop-blur-2xl border border-primary/10 shadow-[0_10px_60px_rgba(180,140,255,0.08)] overflow-hidden animate-fade-in-up rounded-[2.5rem]">
       {/* HEADER */}
@@ -114,15 +223,34 @@ export default function ClearanceMatrix({ rolesPerms, onUpdate }) {
     </p>
   </div>
 
-  <div className="flex gap-3 flex-wrap">
-    {roles.map(r => (
-      <div
-        key={r}
-        className="px-4 py-2 bg-white border border-black rounded-2xl text-[10px] font-semibold uppercase tracking-[0.12em] text-black shadow-[0_0_20px_rgba(0,0,0,0.08)]"
-      >
-        {r}
-      </div>
-    ))}
+  <div className="flex gap-3 flex-wrap items-center">
+    {roles.map(r => {
+      const isCustom = customRolesList && customRolesList.find(cr => cr.name === r);
+      return (
+        <div
+          key={r}
+          className="group relative px-4 py-2 bg-white border border-black rounded-2xl text-[10px] font-semibold uppercase tracking-[0.12em] text-black shadow-[0_0_20px_rgba(0,0,0,0.08)] flex items-center gap-2"
+        >
+          {r}
+          {isCustom && (
+            <button 
+              onClick={() => deleteCustomRole(r)}
+              className="hidden group-hover:flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 p-1 rounded-md transition-all absolute -top-2 -right-2 border border-red-200"
+              title="Delete Template"
+            >
+              <X size={12} strokeWidth={3} />
+            </button>
+          )}
+        </div>
+      );
+    })}
+    <button
+      onClick={() => setShowCreateModal(true)}
+      className="px-4 py-2 bg-black text-white rounded-2xl text-[10px] font-semibold uppercase tracking-[0.12em] shadow-[0_0_20px_rgba(0,0,0,0.08)] hover:bg-violet-700 transition-all flex items-center gap-1 active:scale-95"
+    >
+      <Check size={12} />
+      New Template
+    </button>
   </div>
 </div>
 
@@ -205,6 +333,60 @@ export default function ClearanceMatrix({ rolesPerms, onUpdate }) {
           </tbody>
         </table>
       </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-[2rem] p-8 w-[400px] shadow-[0_20px_80px_rgba(0,0,0,0.2)] border border-primary/10">
+            <h3 className="text-xl font-bold text-black uppercase tracking-tight mb-6 flex items-center gap-3">
+              <Shield size={20} className="text-primary" />
+              New Template
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Role Name</label>
+                <input
+                  type="text"
+                  value={newRoleName}
+                  onChange={e => setNewRoleName(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                  placeholder="e.g. hr_reviewer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Description (Optional)</label>
+                <textarea
+                  value={newRoleDesc}
+                  onChange={e => setNewRoleDesc(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                  placeholder="What does this role do?"
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setNewRoleName('');
+                  setNewRoleDesc('');
+                }}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createCustomRole}
+                className="flex-1 py-3 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-violet-700 transition-all"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FOOTER */}
       <div className="p-8 bg-gradient-to-r from-primary/[0.04] to-transparent border-t border-primary/10">

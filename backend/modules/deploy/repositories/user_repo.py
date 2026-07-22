@@ -45,25 +45,25 @@ class UserRepository:
         finally:
             conn.close()
 
-    def create_user(self, username: str, password_hash: str, role: str, employee_code: Optional[str] = None, tenant_id: str = 'public', is_active: int = 1):
+    def create_user(self, username: str, password_hash: str, role: str, employee_code: Optional[str] = None, tenant_id: str = 'public', is_active: int = 1, templates: List[str] = None):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute(
                     """
-                    INSERT INTO users (username, password_hash, role, roles, employee_code, password_must_change, is_active) 
+                    INSERT INTO users (username, password_hash, role, templates, employee_code, password_must_change, is_active) 
                     VALUES (%s, %s, %s, %s, %s, 1, %s)
                     ON CONFLICT (username) 
                     DO UPDATE SET 
                         password_hash = EXCLUDED.password_hash,
                         role = EXCLUDED.role,
-                        roles = EXCLUDED.roles,
+                        templates = EXCLUDED.templates,
                         employee_code = EXCLUDED.employee_code,
                         password_must_change = EXCLUDED.password_must_change,
                         is_active = EXCLUDED.is_active
                     """,
-                    (username, password_hash, role[0] if isinstance(role, list) else role, role if isinstance(role, list) else [role], employee_code, is_active)
+                    (username, password_hash, role, templates or [], employee_code, is_active)
                 )
                 conn.commit()
         finally:
@@ -164,7 +164,7 @@ class UserRepository:
                  # 2. Extract user info from specific tenant schema
                  cur.execute(f'SET search_path TO "{tenant_id}"')
                  cur.execute("""
-                    SELECT u.id as user_id, u.username, u.role, u.roles, u.employee_code, u.is_active,
+                    SELECT u.id as user_id, u.username, u.role, u.templates, u.employee_code, u.is_active,
                            e.name as employee_name, e.first_name as employee_first_name,
                            c.full_name as candidate_name, c.first_name as candidate_first_name
                     FROM users u

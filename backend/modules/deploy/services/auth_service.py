@@ -134,7 +134,8 @@ class AuthService:
         modules_enabled = self._get_tenant_modules(tenant_id)
         
         resolved_role = _resolve_role(session['role'])
-        resolved_roles = _resolve_roles(session.get('roles') or [session['role']])
+        resolved_roles = _resolve_roles(session.get('templates') or [])
+        resolved_roles.append(resolved_role)
         
         return {
             "id": session['user_id'],

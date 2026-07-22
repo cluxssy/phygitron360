@@ -13,9 +13,14 @@ export default function AdminPanel() {
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [rolesPerms, setRolesPerms] = useState({});
+  const [templatesList, setCustomRolesList] = useState([]);
   const [tenantOps, setTenantOps] = useState({ modules_enabled: [] });
   const [userOverrides, setUserOverrides] = useState({});
   const [selectedUserForOverride, setSelectedUserForOverride] = useState(null);
+  
+  const [selectedUserForCustomRoles, setSelectedUserForCustomRoles] = useState(null);
+  const [showCustomRolesModal, setShowCustomRolesModal] = useState(false);
+
   const [loading, setLoading] = useState(true);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -24,6 +29,7 @@ export default function AdminPanel() {
     username: '',
     password: '',
     role: 'employee',
+    templates: [],
     employee_code: ''
   });
 
@@ -36,23 +42,40 @@ export default function AdminPanel() {
 
     try {
       if (activeTab === 'users') {
-        const res = await fetch(`/api/admin/users?t=${Date.now()}`, {
-          credentials: 'include',
-          headers: {
-            'Cache-Control': 'no-cache'
-          }
-        });
+        const [resUsers, resCustomRoles] = await Promise.all([
+          fetch(`/api/admin/users?t=${Date.now()}`, {
+            credentials: 'include',
+            headers: { 'Cache-Control': 'no-cache' }
+          }),
+          fetch('/api/admin/permissions/templates', { credentials: 'include' })
+        ]);
 
-        const data = await res.json();
-        setUsers(Array.isArray(data) ? data : []);
+        const dataUsers = await resUsers.json();
+        setUsers(Array.isArray(dataUsers) ? dataUsers : []);
+
+        if (resCustomRoles.ok) {
+          const customData = await resCustomRoles.json();
+          setCustomRolesList(customData || []);
+        }
 
       } else if (activeTab === 'permissions') {
-        const res = await fetch('/api/admin/permissions/roles', {
-          credentials: 'include'
-        });
+        const [resBase, resCustom] = await Promise.all([
+          fetch('/api/admin/permissions/roles', { credentials: 'include' }),
+          fetch('/api/admin/permissions/templates', { credentials: 'include' })
+        ]);
 
-        const data = await res.json();
-        setRolesPerms(data || {});
+        const baseData = await resBase.json();
+        const customData = await resCustom.json();
+        setCustomRolesList(customData || []);
+
+        // Merge custom roles into rolesPerms so they display in the matrix
+        const merged = { ...(baseData || {}) };
+        if (Array.isArray(customData)) {
+          customData.forEach(cr => {
+            merged[cr.name] = cr.permissions || [];
+          });
+        }
+        setRolesPerms(merged);
 
       } else if (activeTab === 'modules') {
         const res = await fetch('/api/org/billing-status', {
@@ -170,7 +193,7 @@ export default function AdminPanel() {
     }
   };
 
-  const updateRole = async (id, newRole) => {
+  const updateRole = async (id, newRole, customRoles = []) => {
     try {
       const res = await fetch(`/api/admin/users/${id}/role`, {
         method: 'PATCH',
@@ -179,7 +202,8 @@ export default function AdminPanel() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          role: newRole
+          role: newRole,
+          templates: customRoles
         })
       });
 
@@ -356,6 +380,14 @@ export default function AdminPanel() {
 
                 </div>
 
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="bg-black hover:bg-violet-700 text-white text-[11px] font-semibold uppercase tracking-[0.2em] px-6 py-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_10px_40px_rgba(139,92,246,0.3)] transition-all duration-300 flex items-center gap-3 active:scale-95"
+                >
+                  <Plus size={16} strokeWidth={2.5} />
+                  Provision Identity
+                </button>
+
               </div>
 
               {/* TABLE */}
@@ -431,27 +463,33 @@ export default function AdminPanel() {
                         {/* ROLE */}
 
                         <td className="px-10 py-8">
+                          <div className="flex flex-col gap-2">
+                            <select
+                              value={u.role}
+                              onChange={e => updateRole(u.id, e.target.value, u.templates || [])}
+                              className="bg-[#ece8f8] border border-primary/15 text-black text-[10px] font-normal uppercase tracking-[0.15em] px-5 py-3 rounded-2xl focus:outline-none hover:border-primary/40 hover:shadow-[0_0_20px_rgba(180,140,255,0.12)] transition-all cursor-pointer"
+                            >
+                              {['org_admin', 'manager', 'employee', 'trainee'].map(r => (
+                                <option
+                                  key={r}
+                                  value={r}
+                                  className="bg-white text-black font-normal"
+                                >
+                                  {r.replace('_', ' ')}
+                                </option>
+                              ))}
+                            </select>
 
-                          <select
-                            value={u.role}
-                            onChange={e => updateRole(u.id, e.target.value)}
-                            className="bg-[#ece8f8] border border-primary/15 text-black text-[10px] font-normal uppercase tracking-[0.15em] px-5 py-3 rounded-2xl focus:outline-none hover:border-primary/40 hover:shadow-[0_0_20px_rgba(180,140,255,0.12)] transition-all cursor-pointer"
-                          >
-
-                            {['org_admin', 'manager', 'employee', 'trainee'].map(r => (
-
-                              <option
-                                key={r}
-                                value={r}
-                                className="bg-white text-black font-normal"
-                              >
-                                {r.replace('_', ' ')}
-                              </option>
-
-                            ))}
-
-                          </select>
-
+                            <button
+                              onClick={() => {
+                                setSelectedUserForCustomRoles(u);
+                                setShowCustomRolesModal(true);
+                              }}
+                              className="bg-transparent border border-primary/20 text-primary text-[9px] font-semibold uppercase tracking-[0.15em] px-3 py-2 rounded-xl hover:bg-primary/5 transition-all text-left truncate"
+                            >
+                              {(u.templates && u.templates.length > 0) ? u.templates.join(', ') : '+ Add Templates'}
+                            </button>
+                          </div>
                         </td>
 
                         {/* PERSONNEL LINK */}
@@ -533,6 +571,8 @@ export default function AdminPanel() {
 
             <ClearanceMatrix
               rolesPerms={rolesPerms}
+              templatesList={templatesList}
+              onRefreshRoles={loadData}
               onUpdate={(role, newList) =>
                 setRolesPerms(prev => ({
                   ...prev,
@@ -714,6 +754,159 @@ export default function AdminPanel() {
           onUpdate={(userId, perm, value) => updateOverride(userId, perm, value)}
           onClose={() => setSelectedUserForOverride(null)}
         />
+      )}
+
+      {showCustomRolesModal && selectedUserForCustomRoles && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-[2rem] p-8 w-[400px] shadow-[0_20px_80px_rgba(0,0,0,0.2)] border border-primary/10">
+            <h3 className="text-xl font-bold text-black uppercase tracking-tight mb-6 flex items-center gap-3">
+              <Shield size={20} className="text-primary" />
+              Edit Templates
+            </h3>
+
+            <div className="space-y-4">
+              <p className="text-xs text-gray-500 mb-4">
+                Assign extra custom roles to <strong className="text-black">{selectedUserForCustomRoles.username}</strong>
+              </p>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Select Roles</label>
+                <select
+                  multiple
+                  defaultValue={selectedUserForCustomRoles.templates || []}
+                  onChange={e => {
+                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                    selectedUserForCustomRoles._temp_templates = selected;
+                  }}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all min-h-[150px]"
+                >
+                  {templatesList.map(cr => (
+                    <option key={cr.name} value={cr.name}>{cr.name}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Hold CMD/CTRL to select multiple</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button
+                onClick={() => {
+                  setSelectedUserForCustomRoles(null);
+                  setShowCustomRolesModal(false);
+                }}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  updateRole(
+                    selectedUserForCustomRoles.id, 
+                    selectedUserForCustomRoles.role, 
+                    selectedUserForCustomRoles._temp_templates || selectedUserForCustomRoles.templates || []
+                  );
+                  setSelectedUserForCustomRoles(null);
+                  setShowCustomRolesModal(false);
+                }}
+                className="flex-1 py-3 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-violet-700 transition-all"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-[2rem] p-8 w-[400px] shadow-[0_20px_80px_rgba(0,0,0,0.2)] border border-primary/10">
+            <h3 className="text-xl font-bold text-black uppercase tracking-tight mb-6 flex items-center gap-3">
+              <Plus size={20} className="text-primary" />
+              Provision Identity
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Username</label>
+                <input
+                  type="text"
+                  value={form.username}
+                  onChange={e => setForm({...form, username: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                  placeholder="Enter username"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Password</label>
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={e => setForm({...form, password: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                  placeholder="Enter password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Base Role</label>
+                <select
+                  value={form.role}
+                  onChange={e => setForm({...form, role: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                >
+                  <option value="employee">Employee</option>
+                  <option value="manager">Manager</option>
+                  <option value="org_admin">Org Admin</option>
+                  <option value="trainee">Trainee</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Templates</label>
+                <select
+                  multiple
+                  value={form.templates}
+                  onChange={e => {
+                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                    setForm({...form, templates: selected});
+                  }}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all min-h-[100px]"
+                >
+                  {templatesList.map(cr => (
+                    <option key={cr.name} value={cr.name}>{cr.name}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Hold CMD/CTRL to select multiple</p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Employee Code (Optional)</label>
+                <input
+                  type="text"
+                  value={form.employee_code}
+                  onChange={e => setForm({...form, employee_code: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                  placeholder="e.g. EMP123"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button
+                onClick={() => setShowAddForm(false)}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createUser}
+                className="flex-1 py-3 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-violet-700 transition-all"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

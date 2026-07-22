@@ -7,12 +7,14 @@ class UserCreate(BaseModel):
     password: str
     role: str
     employee_code: Optional[str] = None
+    templates: Optional[List[str]] = []
 
 class UserResponse(BaseModel):
     id: int
     username: str
     role: str
     employee_code: Optional[str] = None
+    templates: Optional[List[str]] = []
 
 class LogResponse(BaseModel):
     id: int
@@ -31,3 +33,8 @@ class UserOverrideUpdate(BaseModel):
 
 class RoleUpdate(BaseModel):
     role: str
+    templates: Optional[List[str]] = []
+
+class PermissionTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None

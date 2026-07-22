@@ -123,14 +123,14 @@ def approve_reject_leave(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/admin/summary")
-def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
+def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_permission("deploy.attendance.view_all")), service: AttendanceService = Depends(get_service)):
     try:
         return service.get_monthly_summary(year, month)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/admin/edit")
-def edit_attendance(req: EditAttendanceRequest, user=Depends(require_permission("deploy.attendance.manage")), service: AttendanceService = Depends(get_service)):
+def edit_attendance(req: EditAttendanceRequest, user=Depends(require_permission("deploy.attendance.approve_correction")), service: AttendanceService = Depends(get_service)):
     try:
         return service.edit_attendance(req)
     except Exception as e:
@@ -144,7 +144,7 @@ def get_active_employees(user=Depends(get_current_user), service: AttendanceServ
 def get_employee_history_admin(
     employee_code: str,
     limit: int = 90,
-    user=Depends(require_permission("deploy.attendance.view_team")),
+    user=Depends(require_permission("deploy.attendance.view_all")),
     service: AttendanceService = Depends(get_service)
 ):
     """Admin/Manager: get full attendance history for any employee."""
@@ -153,7 +153,7 @@ def get_employee_history_admin(
 @router.get("/admin/employee/{employee_code}/leaves")
 def get_employee_leaves_admin(
     employee_code: str,
-    user=Depends(require_permission("deploy.attendance.view_team")),
+    user=Depends(require_permission("deploy.leaves.view_all")),
     service: AttendanceService = Depends(get_service)
 ):
     """Admin/Manager: get all leave records for any employee."""
@@ -162,7 +162,7 @@ def get_employee_leaves_admin(
 
 @router.post("/admin/trigger-reminders")
 def trigger_missed_clockout_reminders(
-    user=Depends(require_permission("deploy.attendance.manage")), 
+    user=Depends(require_permission("deploy.attendance.manage_policies")), 
     service: AttendanceService = Depends(get_service)
 ):
     """

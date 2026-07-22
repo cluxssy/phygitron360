@@ -1,5 +1,6 @@
 from typing import List, Dict, Any
 from backend.modules.deploy.repositories.training_repo import TrainingRepository
+from backend.modules.deploy.services.notification_service import add_notification
 
 class TrainingService:
     def __init__(self, tenant_id: str = 'public'):
@@ -19,6 +20,13 @@ class TrainingService:
         
         for code in employee_codes:
             self.repo.create_assignment(code, program_id, prog_name, date, duration, self.tenant_id)
+            add_notification(
+                title="New Training Assigned",
+                message=f"You have been assigned a new training program: {prog_name}. Scheduled start: {date}.",
+                employee_code=code,
+                n_type="Info",
+                tenant_id=self.tenant_id
+            )
             
         return {"success": True, "message": f"Assigned training to {len(employee_codes)} employees."}
 

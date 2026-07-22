@@ -151,9 +151,27 @@ def release_result(
     service: SubmissionService = Depends(get_submission_service),
 ):
     """Release a result to the candidate (sets _is_released flag in feedback JSON)."""
+    # Fetch result before releasing so we can notify the owner
+    result = service.get_result_by_id(result_id)
+
     success = service.release_result(result_id)
     if not success:
         raise HTTPException(status_code=404, detail="Result not found or release failed")
+
+    # Notify the candidate in-app that their result is now visible
+    try:
+        if result and result.get('user_id'):
+            from backend.modules.deploy.services.notification_service import add_notification
+            add_notification(
+                title="Assessment Result Available",
+                message="Your assessment result has been released. You can now view your score and feedback.",
+                user_id=result['user_id'],
+                n_type="Success",
+                tenant_id=current_user.get('tenant_id', 'public')
+            )
+    except Exception:
+        pass  # Non-blocking
+
     return {"success": True, "message": "Result released"}
 
 # ---------------------------------------------------------------------------

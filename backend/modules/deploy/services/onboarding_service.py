@@ -253,6 +253,15 @@ class OnboardingService:
         except Exception as e:
             print("Failed to initialize assets on approve:", e)
 
+        # Notify the employee that their account is now active
+        add_notification(
+            title="Account Activated",
+            message="Your profile has been reviewed and approved. You now have full access to the platform.",
+            employee_code=final_code,
+            n_type="Success",
+            tenant_id=tenant_id
+        )
+
         return {"success": True, "message": f"Personnel {final_code} identity activated."}
 
     def unify_admin_identity(self, user_id: int, username: str, emp_data: dict, file_metadata: dict, tenant_id: str = 'public'):

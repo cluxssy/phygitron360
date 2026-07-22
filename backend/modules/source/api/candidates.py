@@ -21,6 +21,7 @@ from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.source.services.candidate_service import CandidateService
 from backend.core.email_service_extended import send_generic_notification_email
 from backend.modules.deploy.repositories.notification_repo import NotificationRepository
+from backend.modules.deploy.services.notification_service import add_notification
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/source/candidates", tags=["Source - Candidates"])
@@ -437,6 +438,31 @@ def update_status(
 
     author = current_user.get("name") or current_user.get("username")
     service.repo.log_activity(candidate_id, author, "status_changed", f"Status changed to {body.status}")
+
+    # Notify the candidate in-app if they have a user account
+    try:
+        candidate = service.get_candidate(candidate_id)
+        if candidate and candidate.get('user_id'):
+            status_messages = {
+                'Shortlisted': 'Good news! Your profile has been shortlisted.',
+                'Interview Scheduled': 'Your interview has been scheduled. Please check with the recruiter for details.',
+                'Rejected': 'Thank you for your application. We have reviewed your profile and will keep it on file.',
+                'Hired': 'Congratulations! You have been selected.',
+                'Offered': 'An offer letter is being prepared for you.',
+                'Assessment': 'You have been invited to complete an assessment. Please check your assignments.',
+            }
+            n_type = 'Success' if body.status in ('Hired', 'Offered', 'Shortlisted') else \
+                     'Alert' if body.status == 'Rejected' else 'Info'
+            add_notification(
+                title=f"Application Update: {body.status}",
+                message=status_messages.get(body.status, f'Your application status has been updated to: {body.status}.'),
+                user_id=candidate['user_id'],
+                n_type=n_type,
+                tenant_id=current_user.get('tenant_id', 'public')
+            )
+    except Exception:
+        pass  # Non-blocking
+
     return {"success": True, "message": "Status updated successfully"}
 
 
@@ -508,6 +534,21 @@ async def convert_to_offer(
     
     try:
         await service.convert_to_offer(candidate_id, hiring_details, body.offer_content)
+
+        # Notify the candidate in-app if they have a linked user account
+        try:
+            candidate = service.get_candidate(candidate_id)
+            if candidate and candidate.get('user_id'):
+                add_notification(
+                    title="Offer Letter Prepared",
+                    message=f"Congratulations! An offer letter for the role of {body.role_title} is being prepared for you.",
+                    user_id=candidate['user_id'],
+                    n_type="Success",
+                    tenant_id=tenant_id
+                )
+        except Exception:
+            pass  # Non-blocking
+
         return {"success": True, "message": "Offer letter created"}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

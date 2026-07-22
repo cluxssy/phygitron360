@@ -71,7 +71,7 @@ class AdminService:
         self.repo.log_action(actor, "DELETE_TENANT", f"Decommissioned enterprise workspace: {tenant_id}")
         return {"success": True}
 
-    def create_user(self, username: str, password: str, role: str, actor: str, actor_role: str, employee_code: str = None):
+    def create_user(self, username: str, password: str, role: str, actor: str, actor_role: str, employee_code: str = None, templates: List[str] = None):
         valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee']
         if role not in valid_roles:
              raise ValueError(f"Invalid role. Must be one of {valid_roles}")
@@ -90,7 +90,7 @@ class AdminService:
                  raise ValueError(f"User {username} already exists in this workspace")
                  
              password_hash = self.auth_service.get_password_hash(password)
-             user_repo.create_user(username, password_hash, role, employee_code, tenant_id=self.tenant_id)
+             user_repo.create_user(username, password_hash, role, employee_code, tenant_id=self.tenant_id, templates=templates)
              
              self.repo.log_action(actor, "CREATE_USER", f"Created user {username} with role {role}")
              return {"message": "User created successfully"}
@@ -139,6 +139,19 @@ class AdminService:
     def get_role_permissions(self):
         return self.repo.get_role_permissions()
 
+    def get_templates(self):
+        return self.repo.get_templates()
+
+    def create_template(self, name: str, description: str, actor: str):
+        self.repo.create_template(name, description)
+        self.repo.log_action(actor, "CREATE_CUSTOM_ROLE", f"Created custom role: {name}")
+        return {"success": True, "message": f"Custom role {name} created"}
+
+    def delete_template(self, name: str, actor: str):
+        self.repo.delete_template(name)
+        self.repo.log_action(actor, "DELETE_CUSTOM_ROLE", f"Deleted custom role: {name}")
+        return {"success": True, "message": f"Custom role {name} deleted"}
+
     def update_role_permissions(self, role: str, permissions: List[str], actor: str):
         self.repo.update_role_permissions(role, permissions)
         self.repo.log_action(actor, "UPDATE_ROLE_PERMISSIONS", f"Updated permissions for role {role}")
@@ -172,7 +185,7 @@ class AdminService:
         self.repo.log_action(actor, "UPDATE_EMPLOYEE_CODE", f"Linked user ID {user_id} to employee code: {employee_code or 'None'} in {self.tenant_id}")
         return {"success": True}
 
-    def update_role(self, user_id: int, role: str, actor: str, actor_role: str):
+    def update_role(self, user_id: int, role: str, actor: str, actor_role: str, templates: List[str] = None):
         valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'candidate']
         if role not in valid_roles:
             raise ValueError(f"Invalid role. Must be one of {valid_roles}")
@@ -193,7 +206,9 @@ class AdminService:
         try:
             cur = conn.cursor()
             cur.execute(f'SET search_path TO "{self.tenant_id}"')
-            cur.execute("UPDATE users SET role = %s, roles = %s WHERE id = %s", (role, [role], user_id))
+            if not templates:
+                templates = []
+            cur.execute("UPDATE users SET role = %s, templates = %s WHERE id = %s", (role, templates, user_id))
             conn.commit()
         finally:
             conn.close()
