@@ -243,3 +243,26 @@ def approve_onboarding(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/approve-section/{employee_code}", dependencies=[Depends(require_module("deploy"))])
+def approve_onboarding_section(
+    employee_code: str,
+    section: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user),
+    service: OnboardingService = Depends(get_service)
+):
+    perms = current_user.get("permissions", {})
+    roles = [r.lower() for r in (current_user.get("roles") or [current_user.get("role")]) if r]
+    is_admin = "super_admin" in roles or "superadmin" in roles or "org_admin" in roles
+
+    if section == "hr":
+        if not is_admin and not perms.get("deploy.employees.approve_basic") and not perms.get("deploy.employees.approve_sensitive") and not perms.get("deploy.onboarding.review_submissions"):
+            raise HTTPException(status_code=403, detail="Missing HR approval clearance")
+    elif section == "finance":
+        if not is_admin and not perms.get("deploy.employees.approve_financial"):
+            raise HTTPException(status_code=403, detail="Missing Finance approval clearance")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid section. Must be 'hr' or 'finance'.")
+
+    tenant_id = current_user.get("tenant_id", "public")
+    return service.approve_section(employee_code, section, tenant_id=tenant_id)

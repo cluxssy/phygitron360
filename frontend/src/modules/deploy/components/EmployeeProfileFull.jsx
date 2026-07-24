@@ -60,11 +60,15 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const canEditFinancial = hasPermission(P.DEPLOY_EMP_EDIT_FINANCIAL);
     const canManageDocs    = hasPermission(P.DEPLOY_EMP_MANAGE_DOCS) || isSelf;
 
+    const canApproveBasic     = hasPermission(P.DEPLOY_EMP_APPROVE_BASIC);
+    const canApproveSensitive = hasPermission(P.DEPLOY_EMP_APPROVE_SENSITIVE);
+    const canApproveFinancial = hasPermission(P.DEPLOY_EMP_APPROVE_FINANCIAL);
+
     // Derived edit modes — only the relevant section becomes interactive
-    const editBasic     = editMode && canEditBasic;
-    const editJob       = editMode && canEditJob;
-    const editFinancial = editMode && canEditFinancial;
-    const editDocs      = editMode && (canManageDocs || canEditBasic);
+    const editBasic     = editMode && (canEditBasic || canApproveBasic);
+    const editJob       = editMode && (canEditJob || canApproveBasic);
+    const editFinancial = editMode && (canEditFinancial || canApproveFinancial);
+    const editDocs      = editMode && (canManageDocs || canEditBasic || canApproveSensitive);
 
     // ── Check if status is editable ──
     const isStatusEditable = () => {

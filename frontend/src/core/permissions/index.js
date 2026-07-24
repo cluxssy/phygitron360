@@ -36,6 +36,9 @@ export const P = {
   DEPLOY_EMP_EDIT_BASIC:           'deploy.employees.edit_basic',
   DEPLOY_EMP_EDIT_JOB:             'deploy.employees.edit_job',
   DEPLOY_EMP_EDIT_FINANCIAL:       'deploy.employees.edit_financial',
+  DEPLOY_EMP_APPROVE_BASIC:        'deploy.employees.approve_basic',
+  DEPLOY_EMP_APPROVE_SENSITIVE:    'deploy.employees.approve_sensitive',
+  DEPLOY_EMP_APPROVE_FINANCIAL:    'deploy.employees.approve_financial',
   DEPLOY_EMP_EXPORT:               'deploy.employees.export',
   DEPLOY_EMP_MANAGE_DOCS:          'deploy.employees.manage_documents',
 

@@ -49,6 +49,9 @@ class P:
     DEPLOY_EMP_EDIT_BASIC           = "deploy.employees.edit_basic"
     DEPLOY_EMP_EDIT_JOB             = "deploy.employees.edit_job"
     DEPLOY_EMP_EDIT_FINANCIAL       = "deploy.employees.edit_financial"
+    DEPLOY_EMP_APPROVE_BASIC        = "deploy.employees.approve_basic"
+    DEPLOY_EMP_APPROVE_SENSITIVE    = "deploy.employees.approve_sensitive"
+    DEPLOY_EMP_APPROVE_FINANCIAL    = "deploy.employees.approve_financial"
     DEPLOY_EMP_EXPORT               = "deploy.employees.export"
     DEPLOY_EMP_MANAGE_DOCS          = "deploy.employees.manage_documents"
 
@@ -161,6 +164,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Deploy: Employees
         P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE, P.DEPLOY_EMP_VIEW_PROFILE_SENSITIVE, P.DEPLOY_EMP_VIEW_PROFILE_FINANCIAL,
         P.DEPLOY_EMP_CREATE, P.DEPLOY_EMP_EDIT_BASIC, P.DEPLOY_EMP_EDIT_JOB, P.DEPLOY_EMP_EDIT_FINANCIAL,
+        P.DEPLOY_EMP_APPROVE_BASIC, P.DEPLOY_EMP_APPROVE_SENSITIVE, P.DEPLOY_EMP_APPROVE_FINANCIAL,
         P.DEPLOY_EMP_DELETE, P.DEPLOY_EMP_OFFBOARD, P.DEPLOY_EMP_EXPORT, P.DEPLOY_EMP_MANAGE_DOCS,
         # Deploy: Assets
         P.DEPLOY_ASSETS_VIEW_PERSONAL, P.DEPLOY_ASSETS_VIEW_ALL, P.DEPLOY_ASSETS_MANAGE_ONBOARDING, P.DEPLOY_ASSETS_MANAGE_CLEARANCE, P.DEPLOY_ASSETS_EXPORT_REPORTS,
@@ -197,7 +201,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.MODULE_VERIFY_ACCESS, P.MODULE_DEPLOY_ACCESS,
         P.VIEW_REPORTS,
         # Deploy: Employees
-        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE,
+        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE, P.DEPLOY_EMP_APPROVE_BASIC, P.DEPLOY_EMP_APPROVE_SENSITIVE,
         # Deploy: Assets
         P.DEPLOY_ASSETS_VIEW_PERSONAL,
         # Deploy: Attendance

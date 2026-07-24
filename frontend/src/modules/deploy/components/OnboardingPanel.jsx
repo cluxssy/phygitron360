@@ -62,6 +62,9 @@ export default function OnboardingPanel() {
   const canSendInvite = hasPermission(P.DEPLOY_ONBOARD_SEND_INVITE);
   const canCancelInvite = hasPermission(P.DEPLOY_ONBOARD_CANCEL_INVITE);
   const canReviewSubmissions = hasPermission(P.DEPLOY_ONBOARD_REVIEW_SUBMISSIONS);
+  const canApproveBasic = hasPermission(P.DEPLOY_EMP_APPROVE_BASIC) || canReviewSubmissions;
+  const canApproveSensitive = hasPermission(P.DEPLOY_EMP_APPROVE_SENSITIVE) || canReviewSubmissions;
+  const canApproveFinancial = hasPermission(P.DEPLOY_EMP_APPROVE_FINANCIAL) || hasPermission(P.DEPLOY_EMP_EDIT_FINANCIAL);
 
   const [activeTab, setActiveTab] = useState('invites');
   const [invites, setInvites] = useState([]);
@@ -778,8 +781,12 @@ export default function OnboardingPanel() {
                      </td>
                      <td className="px-6 py-6">
                         <div className="flex flex-col gap-1.5">
-                            <span className="flex items-center gap-2 text-[9px] font-black uppercase text-emerald-500"><BadgeCheck size={10} /> Identity Verified</span>
-                            <span className="flex items-center gap-2 text-[9px] font-black uppercase text-amber-500"><Clock size={10} /> Awaiting Save</span>
+                            <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase ${app.hr_approved ? 'text-emerald-500' : 'text-amber-500'}`}>
+                              <BadgeCheck size={10} /> {app.hr_approved ? 'HR Approved' : 'Pending HR'}
+                            </span>
+                            <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase ${app.finance_approved ? 'text-emerald-500' : 'text-amber-500'}`}>
+                              <Clock size={10} /> {app.finance_approved ? 'Finance Approved' : 'Pending Finance'}
+                            </span>
                         </div>
                      </td>
                      <td className="px-6 py-6 text-right">
@@ -1581,8 +1588,11 @@ export default function OnboardingPanel() {
                           <Field label="PF Included" isLightMode={isLightMode}>
                             <select 
                               value={approveForm.pf}
+                              disabled={!canApproveFinancial}
                               onChange={e => setApproveForm({...approveForm, pf: e.target.value})}
                               className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
+                                !canApproveFinancial ? 'opacity-50 cursor-not-allowed' : ''
+                              } ${
                                 isLightMode 
                                   ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
                                   : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
@@ -1596,8 +1606,11 @@ export default function OnboardingPanel() {
                           <Field label="Mediclaim Included" isLightMode={isLightMode}>
                             <select 
                               value={approveForm.mediclaim}
+                              disabled={!canApproveFinancial}
                               onChange={e => setApproveForm({...approveForm, mediclaim: e.target.value})}
                               className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
+                                !canApproveFinancial ? 'opacity-50 cursor-not-allowed' : ''
+                              } ${
                                 isLightMode 
                                   ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
                                   : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
@@ -1623,29 +1636,97 @@ export default function OnboardingPanel() {
                          />
                        </Field>
 
-                       <div className="flex gap-4 pt-6">
-                          <button 
-                            type="button"
-                            onClick={() => setSelectedApproval(null)}
-                            className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                              isLightMode 
-                                ? 'border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff] hover:text-black' 
-                                : 'border border-white/10 text-white/40 hover:text-white'
-                            }`}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={submitting}
-                            className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all ${
-                              isLightMode
-                                ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg'
-                                : 'bg-primary text-black shadow-xl shadow-primary/20'
-                            }`}
-                          >
-                            {submitting ? 'Activating...' : 'Approve & Onboard'}
-                          </button>
+                       <div className="flex flex-col gap-4 pt-6 border-t border-purple-100">
+                          <div className="flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              disabled={submitting || selectedApproval?.hr_approved || !canApproveBasic}
+                              onClick={async () => {
+                                setSubmitting(true);
+                                try {
+                                  const r = await fetch(`/api/onboarding/approve-section/${selectedApproval.employee_code}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ section: 'hr' }),
+                                    credentials: 'include'
+                                  });
+                                  const d = await r.json();
+                                  if (d.success) {
+                                    toast.success('HR Sign-off recorded!');
+                                    loadApprovals();
+                                    setSelectedApproval(prev => prev ? ({ ...prev, hr_approved: 1 }) : null);
+                                  } else { toast.error(d.detail || 'Sign-off failed'); }
+                                } catch { toast.error('Sign-off error'); }
+                                finally { setSubmitting(false); }
+                              }}
+                              className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all ${
+                                selectedApproval?.hr_approved
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
+                                  : canApproveBasic
+                                    ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-sm'
+                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              }`}
+                            >
+                              {selectedApproval?.hr_approved ? '✓ HR Approved' : 'Sign Off HR Details'}
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={submitting || selectedApproval?.finance_approved || !canApproveFinancial}
+                              onClick={async () => {
+                                setSubmitting(true);
+                                try {
+                                  const r = await fetch(`/api/onboarding/approve-section/${selectedApproval.employee_code}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ section: 'finance' }),
+                                    credentials: 'include'
+                                  });
+                                  const d = await r.json();
+                                  if (d.success) {
+                                    toast.success('Finance Sign-off recorded!');
+                                    loadApprovals();
+                                    setSelectedApproval(prev => prev ? ({ ...prev, finance_approved: 1 }) : null);
+                                  } else { toast.error(d.detail || 'Sign-off failed'); }
+                                } catch { toast.error('Sign-off error'); }
+                                finally { setSubmitting(false); }
+                              }}
+                              className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all ${
+                                selectedApproval?.finance_approved
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
+                                  : canApproveFinancial
+                                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              }`}
+                            >
+                              {selectedApproval?.finance_approved ? '✓ Finance Approved' : 'Sign Off Finance Details'}
+                            </button>
+                          </div>
+
+                          <div className="flex gap-4">
+                            <button 
+                              type="button"
+                              onClick={() => setSelectedApproval(null)}
+                              className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                isLightMode 
+                                  ? 'border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff] hover:text-black' 
+                                  : 'border border-white/10 text-white/40 hover:text-white'
+                              }`}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={submitting}
+                              className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all ${
+                                isLightMode
+                                  ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg'
+                                  : 'bg-primary text-black shadow-xl shadow-primary/20'
+                              }`}
+                            >
+                              {submitting ? 'Activating...' : 'Approve Both & Activate'}
+                            </button>
+                          </div>
                        </div>
                     </form>
                  </div>

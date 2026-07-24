@@ -264,6 +264,18 @@ class OnboardingService:
 
         return {"success": True, "message": f"Personnel {final_code} identity activated."}
 
+    def approve_section(self, employee_code: str, section: str, tenant_id: str = 'public'):
+        res = self.repo.approve_section(employee_code, section, tenant_id=tenant_id)
+        if res.get('is_fully_approved'):
+            add_notification(
+                title="Account Activated",
+                message="Your profile has been fully reviewed and approved by HR and Finance. You now have full access to the platform.",
+                employee_code=employee_code,
+                n_type="Success",
+                tenant_id=tenant_id
+            )
+        return {"success": True, "data": res, "message": f"{section.upper()} sign-off recorded successfully."}
+
     def unify_admin_identity(self, user_id: int, username: str, emp_data: dict, file_metadata: dict, tenant_id: str = 'public'):
         """
         Completes the first-time setup for an Org Admin.

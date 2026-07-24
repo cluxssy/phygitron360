@@ -198,6 +198,8 @@ class OnboardingRepository:
                 cur.execute('''
                     UPDATE employees 
                     SET employment_status = 'Active',
+                        hr_approved = 1,
+                        finance_approved = 1,
                         reporting_manager = %s,
                         employment_type = %s,
                         pf_included = %s,
@@ -215,6 +217,41 @@ class OnboardingRepository:
                 cur.execute("UPDATE users SET is_active = 1 WHERE employee_code = %s", (final_code,))
                 conn.commit()
                 return final_code
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def approve_section(self, employee_code: str, section: str, tenant_id: str = 'public') -> Dict[str, Any]:
+        """
+        Signs off on either HR section ('hr') or Finance section ('finance').
+        If both hr_approved and finance_approved become 1, transitions employment_status to 'Active'.
+        """
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_path(cur, tenant_id)
+                if section == 'hr':
+                    cur.execute("UPDATE employees SET hr_approved = 1 WHERE employee_code = %s", (employee_code,))
+                elif section == 'finance':
+                    cur.execute("UPDATE employees SET finance_approved = 1 WHERE employee_code = %s", (employee_code,))
+                
+                cur.execute("SELECT hr_approved, finance_approved FROM employees WHERE employee_code = %s", (employee_code,))
+                row = cur.fetchone()
+                hr_ok = bool(row and (row.get('hr_approved') == 1 or row.get('hr_approved') is True))
+                fin_ok = bool(row and (row.get('finance_approved') == 1 or row.get('finance_approved') is True))
+                
+                is_fully_approved = hr_ok and fin_ok
+                if is_fully_approved:
+                    cur.execute("UPDATE employees SET employment_status = 'Active' WHERE employee_code = %s", (employee_code,))
+                    cur.execute("UPDATE users SET is_active = 1 WHERE employee_code = %s", (employee_code,))
+
+                conn.commit()
+                return {"hr_approved": hr_ok, "finance_approved": fin_ok, "is_fully_approved": is_fully_approved}
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
     
