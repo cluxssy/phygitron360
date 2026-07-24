@@ -12,8 +12,9 @@ import { useAuth } from '../../../core/auth/AuthContext';
 
 export default function AssessmentDashboard() {
   const navigate = useNavigate();
-  const { user, hasRole } = useAuth();
-  const isAdmin = hasRole(['org_admin', 'manager', 'assessor']);
+  const { user, hasPermission, hasRole } = useAuth();
+  const canViewAssessments = hasPermission('verify.assessments.view');
+  const isAdmin = canViewAssessments || hasRole(['org_admin', 'super_admin', 'manager']);
 
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({

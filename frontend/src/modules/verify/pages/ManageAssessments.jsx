@@ -220,7 +220,12 @@ function AssignModal({ assessment, onClose }) {
 export default function ManageAssessments() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { hasRole } = useAuth();
+  const { hasPermission } = useAuth();
+
+  const canManage = hasPermission('verify.assessments.manage');
+  const canAssign = hasPermission('verify.assessments.assign');
+  const canViewResults = hasPermission('verify.results.view');
+  const canViewLive = hasPermission('verify.monitoring.view');
 
   const [assessments, setAssessments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -364,7 +369,7 @@ export default function ManageAssessments() {
                 {filterStatus !== 'all' ? `No ${filterStatus} assessments` : 'Create your first assessment to get started'}
               </p>
             </div>
-            {filterStatus === 'all' && (
+            {filterStatus === 'all' && canManage && (
               <button
                 onClick={() => navigate('/verify?tab=builder')}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors duration-150 shadow-sm"
@@ -421,14 +426,16 @@ export default function ManageAssessments() {
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => navigate(`/verify?tab=builder&id=${asm.id}`)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-xs font-medium hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
-                  >
-                    <Edit3 size={13} /> Edit
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={() => navigate(`/verify?tab=builder&id=${asm.id}`)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-xs font-medium hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+                    >
+                      <Edit3 size={13} /> Edit
+                    </button>
+                  )}
 
-                  {asm.status?.toLowerCase() === 'draft' && (
+                  {canManage && asm.status?.toLowerCase() === 'draft' && (
                     <button
                       onClick={() => handlePublish(asm)}
                       disabled={publishing === asm.id}
@@ -440,33 +447,37 @@ export default function ManageAssessments() {
                   )}
 
                   {/* Status changer */}
-                  <div className="relative group/status">
-                    <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-100 transition-colors">
-                      <Lock size={13} /> Status <ChevronDown size={11} />
-                    </button>
-                    <div className="absolute top-full left-0 mt-1 z-20 bg-white rounded-xl border border-gray-200 shadow-lg p-2 min-w-[140px] opacity-0 invisible group-hover/status:opacity-100 group-hover/status:visible transition-all duration-150">
-                      {STATUSES.map(s => (
-                        <button
-                          key={s}
-                          onClick={() => handleStatusChange(asm, s)}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-gray-50 ${
-                            asm.status?.toLowerCase() === s ? 'text-purple-600 bg-purple-50' : 'text-gray-600'
-                          }`}
-                        >
-                          {s}
-                        </button>
-                      ))}
+                  {canManage && (
+                    <div className="relative group/status">
+                      <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-100 transition-colors">
+                        <Lock size={13} /> Status <ChevronDown size={11} />
+                      </button>
+                      <div className="absolute top-full left-0 mt-1 z-20 bg-white rounded-xl border border-gray-200 shadow-lg p-2 min-w-[140px] opacity-0 invisible group-hover/status:opacity-100 group-hover/status:visible transition-all duration-150">
+                        {STATUSES.map(s => (
+                          <button
+                            key={s}
+                            onClick={() => handleStatusChange(asm, s)}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-gray-50 ${
+                              asm.status?.toLowerCase() === s ? 'text-purple-600 bg-purple-50' : 'text-gray-600'
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <button
-                    onClick={() => navigate(`/verify?tab=analytics&asm_id=${asm.id}`)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 text-xs font-medium hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors"
-                  >
-                    <BarChart2 size={13} /> Results
-                  </button>
+                  {canViewResults && (
+                    <button
+                      onClick={() => navigate(`/verify?tab=analytics&asm_id=${asm.id}`)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 text-xs font-medium hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors"
+                    >
+                      <BarChart2 size={13} /> Results
+                    </button>
+                  )}
 
-                  {asm.status?.toLowerCase() === 'active' && (
+                  {canViewLive && asm.status?.toLowerCase() === 'active' && (
                     <button
                       onClick={() => navigate(`/verify?tab=live&asm_id=${asm.id}`)}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
@@ -475,21 +486,25 @@ export default function ManageAssessments() {
                     </button>
                   )}
 
-                  <button
-                    onClick={() => setAssignTarget(asm)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 text-xs font-medium hover:bg-purple-100 transition-colors"
-                  >
-                    <Users size={13} /> Assign
-                  </button>
+                  {canAssign && (
+                    <button
+                      onClick={() => setAssignTarget(asm)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 text-xs font-medium hover:bg-purple-100 transition-colors"
+                    >
+                      <Users size={13} /> Assign
+                    </button>
+                  )}
 
-                  <button
-                    onClick={() => handleDelete(asm)}
-                    disabled={deleting === asm.id}
-                    aria-label="Delete assessment permanently"
-                    className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
-                  >
-                    {deleting === asm.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={() => handleDelete(asm)}
+                      disabled={deleting === asm.id}
+                      aria-label="Delete assessment permanently"
+                      className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                    >
+                      {deleting === asm.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

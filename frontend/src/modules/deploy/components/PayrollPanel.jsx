@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 import {
   Upload, FileSpreadsheet, Send, Users, BarChart3,
   ChevronDown, Download, Search, CheckCircle, AlertCircle,
@@ -28,6 +30,12 @@ const fmt = (v) => {
 
 export default function PayrollPanel() {
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canUploadBulk = hasPermission(P.DEPLOY_PAYROLL_UPLOAD_BULK);
+  const canRunPayroll = hasPermission(P.DEPLOY_PAYROLL_RUN_PAYROLL);
+  const canApprove = hasPermission(P.DEPLOY_PAYROLL_APPROVE);
+  const canExport = hasPermission(P.DEPLOY_PAYROLL_EXPORT_REPORTS);
+
   const [tab, setTab] = useState('upload');
 
   // Upload state
@@ -319,13 +327,24 @@ export default function PayrollPanel() {
 
           {/* File Drop Zone */}
           <div
-            className={`${panelBase} p-10 text-center transition-all cursor-pointer border-2 border-dashed ${dragOver ? 'border-[#8b5cf6] bg-[#f5efff]' : 'border-[#ebe4ff]'}`}
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleFileDrop}
-            onClick={() => fileInputRef.current?.click()}
+            className={`${panelBase} p-10 text-center transition-all ${canUploadBulk ? 'cursor-pointer hover:border-[#8b5cf6]' : 'cursor-not-allowed opacity-50'} border-2 border-dashed ${dragOver ? 'border-[#8b5cf6] bg-[#f5efff]' : 'border-[#ebe4ff]'}`}
+            onDragOver={e => {
+              if (!canUploadBulk) return;
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => {
+              if (canUploadBulk) setDragOver(false);
+            }}
+            onDrop={e => {
+              if (!canUploadBulk) return;
+              handleFileDrop(e);
+            }}
+            onClick={() => {
+              if (canUploadBulk) fileInputRef.current?.click();
+            }}
           >
-            <input ref={fileInputRef} type="file" hidden accept=".xlsx,.xls" onChange={handleFileDrop} />
+            <input ref={fileInputRef} type="file" hidden accept=".xlsx,.xls" onChange={handleFileDrop} disabled={!canUploadBulk} />
             <div className={`w-20 h-20 rounded-[1.6rem] mx-auto mb-6 flex items-center justify-center transition-all ${dragOver ? 'bg-[#8b5cf6] text-white' : 'bg-[#f5efff] text-[#8b5cf6]'}`}>
               <FileSpreadsheet size={36} />
             </div>
@@ -376,14 +395,16 @@ export default function PayrollPanel() {
                     Pay Period: {MONTH_NAMES[payMonth]} {payYear}
                   </p>
                 </div>
-                <button
-                  onClick={pushPayCycle}
-                  disabled={isPushing}
-                  className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-[#10b981] to-[#059669] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:opacity-90 transition-all shadow-lg disabled:opacity-50"
-                >
-                  {isPushing ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                  {isPushing ? 'Pushing...' : 'New Pay Cycle — Send Payslips'}
-                </button>
+                {canRunPayroll && (
+                  <button
+                    onClick={pushPayCycle}
+                    disabled={isPushing}
+                    className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-[#10b981] to-[#059669] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:opacity-90 transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {isPushing ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                    {isPushing ? 'Pushing...' : 'New Pay Cycle — Send Payslips'}
+                  </button>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">

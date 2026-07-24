@@ -137,7 +137,7 @@ def edit_attendance(req: EditAttendanceRequest, user=Depends(require_permission(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/admin/employees")
-def get_active_employees(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+def get_active_employees(user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
     return service.get_active_employees()
 
 @router.get("/admin/employee/{employee_code}/history")

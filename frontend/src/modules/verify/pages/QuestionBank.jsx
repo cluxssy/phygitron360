@@ -3,6 +3,7 @@ import { Plus, Loader2, RefreshCw, Filter, Trash2, Edit3, Search, UploadCloud, L
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import { useAuth } from '../../../core/auth/AuthContext';
 
 const QTYPES = [
   { value: 'mcq', label: 'Multiple Choice' },
@@ -374,6 +375,9 @@ function ManualEntryModal({ onClose, onSaved, uniqueTopics, initialData = null }
 }
 
 export default function QuestionBank() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('verify.questions.manage');
+
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -520,16 +524,20 @@ export default function QuestionBank() {
             <button onClick={fetchQuestions} className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50" title="Refresh">
               <RefreshCw size={16} />
             </button>
-            <div className="h-6 w-px bg-gray-200 mx-1"></div>
-            <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-50 text-purple-700 font-medium hover:bg-purple-100 border border-purple-200 text-sm">
-              <UploadCloud size={16} /> Import File
-            </button>
-            <button onClick={() => setShowImportUrl(true)} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-50 text-purple-700 font-medium hover:bg-purple-100 border border-purple-200 text-sm">
-              <LinkIcon size={16} /> URL Scrape
-            </button>
-            <button onClick={() => setShowManual(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700 shadow-sm text-sm">
-              <Plus size={16} /> Manual Entry
-            </button>
+            {canManage && (
+              <>
+                <div className="h-6 w-px bg-gray-200 mx-1"></div>
+                <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-50 text-purple-700 font-medium hover:bg-purple-100 border border-purple-200 text-sm">
+                  <UploadCloud size={16} /> Import File
+                </button>
+                <button onClick={() => setShowImportUrl(true)} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-50 text-purple-700 font-medium hover:bg-purple-100 border border-purple-200 text-sm">
+                  <LinkIcon size={16} /> URL Scrape
+                </button>
+                <button onClick={() => setShowManual(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700 shadow-sm text-sm">
+                  <Plus size={16} /> Manual Entry
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -569,14 +577,16 @@ export default function QuestionBank() {
                   )}
                 </div>
                 
-                <div className="flex items-center gap-2 shrink-0 border-l border-gray-100 pl-4 py-2">
-                  <button onClick={() => handleEdit(q)} className="p-2 text-gray-400 hover:text-purple-600 bg-gray-50 hover:bg-purple-50 rounded-lg transition" title="Edit Question">
-                    <Edit3 size={16} />
-                  </button>
-                  <button onClick={() => handleDelete(q.id)} className="p-2 text-gray-400 hover:text-rose-600 bg-gray-50 hover:bg-rose-50 rounded-lg transition" title="Delete Question">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+                {canManage && (
+                  <div className="flex items-center gap-2 shrink-0 border-l border-gray-100 pl-4 py-2">
+                    <button onClick={() => handleEdit(q)} className="p-2 text-gray-400 hover:text-purple-600 bg-gray-50 hover:bg-purple-50 rounded-lg transition" title="Edit Question">
+                      <Edit3 size={16} />
+                    </button>
+                    <button onClick={() => handleDelete(q.id)} className="p-2 text-gray-400 hover:text-rose-600 bg-gray-50 hover:bg-rose-50 rounded-lg transition" title="Delete Question">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

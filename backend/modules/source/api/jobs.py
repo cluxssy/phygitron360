@@ -67,7 +67,10 @@ def get_job_service(user=Depends(get_current_user)):
     return JobService(tenant_id=user.get('tenant_id', 'public'))
 
 @router.get("/job-roles")
-def list_job_roles(service: JobService = Depends(get_job_service)):
+def list_job_roles(
+    current_user: dict = Depends(require_permission("source.jobs.view")),
+    service: JobService = Depends(get_job_service)
+):
     """List all job roles for this tenant."""
     roles = service.get_all_job_roles()
     return {"success": True, "data": roles}
@@ -76,6 +79,7 @@ def list_job_roles(service: JobService = Depends(get_job_service)):
 @router.post("/job-roles")
 async def create_job_role(
     body: JobRoleCreate,
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
     service: JobService = Depends(get_job_service),
 ):
     """
@@ -95,6 +99,7 @@ async def create_job_role(
 async def update_job_role(
     role_id: int,
     body: JobRoleUpdate,
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
     service: JobService = Depends(get_job_service),
 ):
     """Update an existing job role."""
@@ -142,6 +147,7 @@ def delete_all_job_roles(
 @router.get("/job-roles/{role_id}/rankings")
 def get_candidate_rankings(
     role_id: int,
+    current_user: dict = Depends(require_permission("source.jobs.view")),
     service: JobService = Depends(get_job_service)
 ):
     """Get candidates ranked by AI score for a specific job role."""
@@ -152,6 +158,7 @@ def get_candidate_rankings(
 @router.get("/job-roles/{role_id}/score-status")
 def get_score_status(
     role_id: int,
+    current_user: dict = Depends(require_permission("source.jobs.view")),
     service: JobService = Depends(get_job_service)
 ):
     """Return when scores were last computed for this role and how many candidates are scored."""
@@ -197,7 +204,7 @@ async def auto_rank_candidates(
 @router.post("/score-candidates")
 def score_candidates(
     body: ScoreRequest,
-    current_user: dict = Depends(require_permission("source.jobs.manage")),
+    current_user: dict = Depends(require_permission("source.evaluations.manage")),
     service: JobService = Depends(get_job_service)
 ):
     """

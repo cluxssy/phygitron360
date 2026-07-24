@@ -100,23 +100,39 @@ export const PERMISSIONS_CATEGORIES = [
     ]
   },
   {
-    group: 'Deployment: Learning (Forge)',
+    group: 'Forge: Learning Hub',
     perms: [
-      { key: 'deploy.assessments.view', label: 'View Learning Assessments' },
-      { key: 'deploy.assessments.manage', label: 'Manage Learning Assessments' },
-      { key: 'deploy.training.view', label: 'View Training' },
-      { key: 'deploy.training.manage', label: 'Manage Training' },
+      { key: 'forge.courses.view', label: 'View Courses' },
+      { key: 'forge.courses.manage', label: 'Manage Courses' },
+      { key: 'forge.courses.enroll', label: 'Course Enrollment' },
     ]
   },
   {
-    group: 'Verify & Source Ops',
+    group: 'Source: Talent Central',
     perms: [
-      { key: 'source.jobs.manage', label: 'Manage Recruitment' },
+      { key: 'source.jobs.view', label: 'View Jobs' },
+      { key: 'source.jobs.manage', label: 'Manage Jobs' },
       { key: 'source.candidates.view', label: 'View Candidates' },
       { key: 'source.candidates.manage', label: 'Manage Candidates' },
-      { key: 'verify.assessments.manage', label: 'Assessment Builder' },
-      { key: 'verify.assessments.assign', label: 'Assign Tests' },
-      { key: 'verify.assessments.view_results', label: 'View Results' },
+      { key: 'source.offers.view', label: 'View Offers' },
+      { key: 'source.offers.manage', label: 'Manage Offers' },
+      { key: 'source.offers.approve', label: 'Approve Offers' },
+      { key: 'source.evaluations.manage', label: 'Manage Evaluations' },
+      { key: 'source.interviews.manage', label: 'Manage Interviews' },
+    ]
+  },
+  {
+    group: 'Verify: Assessment Central',
+    perms: [
+      { key: 'verify.assessments.view', label: 'View Assessments List' },
+      { key: 'verify.assessments.manage', label: 'Manage & Build Assessments' },
+      { key: 'verify.assessments.assign', label: 'Assign Tests to Candidates' },
+      { key: 'verify.questions.view', label: 'View Question Bank' },
+      { key: 'verify.questions.manage', label: 'Manage Question Bank & AI Import' },
+      { key: 'verify.monitoring.view', label: 'Live Proctoring & Monitor' },
+      { key: 'verify.results.view', label: 'View Analytics & Results' },
+      { key: 'verify.results.manage', label: 'Release Results & Regrade' },
+      { key: 'verify.queries.manage', label: 'Manage Candidate Disputes' },
     ]
   },
   {

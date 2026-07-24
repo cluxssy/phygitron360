@@ -33,11 +33,11 @@ function StatusBadge({ status }) {
 }
 
 export default function OfferApprovals() {
-  const { hasRole } = useAuth();
+  const { hasPermission } = useAuth();
   
-  // RBAC Definition
-  const isManager = hasRole('manager');
-  const isAdmin = hasRole('org_admin') || hasRole('super_admin');
+  // PBAC Definition
+  const canManage = hasPermission('source.offers.manage');
+  const canApprove = hasPermission('source.offers.approve');
 
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -245,7 +245,7 @@ export default function OfferApprovals() {
             <div>
               <p className="text-lg font-black text-slate-900">No {filterStatus !== 'all' ? filterStatus.replace('_', ' ') : ''} offers found</p>
               <p className="text-sm font-medium text-slate-500 mt-1">
-                {isManager 
+                {canManage 
                   ? 'Generate offers from candidate profiles to see them here.' 
                   : 'There are no offers matching this status waiting for your review.'}
               </p>
@@ -260,10 +260,10 @@ export default function OfferApprovals() {
               
               // As clarified: HR is Manager. Admin (org_admin) cannot edit ever.
               // Manager can ONLY edit when changes_requested.
-              const canEditThis = isManager && status === 'changes_requested';
+              const canEditThis = canManage && status === 'changes_requested';
               
-              const canSendThis = (isManager || isAdmin) && status === 'approved';
-              const canApproveThis = isAdmin && status === 'pending';
+              const canSendThis = canManage && status === 'approved';
+              const canApproveThis = canApprove && status === 'pending';
 
               // Unwrap the nested offer_content from DB
               let parsedContent = unwrapContent(current.offer_content);

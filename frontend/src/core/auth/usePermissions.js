@@ -18,10 +18,7 @@ export const usePermissions = () => {
             return true;
         }
 
-        // Org Admin bypass for ease of management (they own the tenant)
-        if (userRoles.includes('org_admin')) {
-            return true;
-        }
+
 
         // Check explicit permissions dictionary object injected into user session
         if (user.permissions && typeof user.permissions === 'object') {

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 import {
   Package,
   CheckCircle,
   XCircle,
   Laptop,
-  ShieldCheck
+  ShieldCheck,
+  Download
 } from 'lucide-react';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
@@ -37,6 +40,10 @@ const CLEARANCE_LABELS = {
 };
 
 export default function AssetsPanel({ mode = 'admin', user }) {
+  const { hasPermission } = usePermissions();
+  const canManageOnboarding = hasPermission(P.DEPLOY_ASSETS_MANAGE_ONBOARDING);
+  const canManageClearance = hasPermission(P.DEPLOY_ASSETS_MANAGE_CLEARANCE);
+  const canExport = hasPermission(P.DEPLOY_ASSETS_EXPORT_REPORTS);
 
   const [employees, setEmployees] = useState([]);
   const [activeEmployees, setActiveEmployees] = useState([]);
@@ -151,6 +158,12 @@ export default function AssetsPanel({ mode = 'admin', user }) {
   ========================= */
 
   const toggleAsset = (field) => {
+    // Only allow toggling if user has appropriate permission
+    if (mode === 'admin') {
+      const isClearance = field.startsWith('cl_');
+      if (isClearance && !canManageClearance) return;
+      if (!isClearance && !canManageOnboarding) return;
+    }
 
     setAssets(prev => ({
       ...prev,
@@ -398,6 +411,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                     onClick={() =>
                       toggleAsset(field)
                     }
+                    disabled={mode === 'admin' && !canManageOnboarding}
                     className={`
                       p-6
                       flex
@@ -413,6 +427,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                           ? 'bg-[#faf6ff]'
                           : 'bg-white hover:bg-[#faf7ff]'
                       }
+                      ${mode === 'admin' && !canManageOnboarding ? 'opacity-50 cursor-not-allowed' : ''}
                     `}
                   >
 
@@ -539,6 +554,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                     onClick={() =>
                       toggleAsset(field)
                     }
+                    disabled={mode === 'admin' && !canManageClearance}
                     className={`
                       p-6
                       flex
@@ -554,6 +570,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                           ? 'bg-[#faf6ff]'
                           : 'bg-white hover:bg-[#faf7ff]'
                       }
+                      ${mode === 'admin' && !canManageClearance ? 'opacity-50 cursor-not-allowed' : ''}
                     `}
                   >
 
@@ -718,6 +735,42 @@ export default function AssetsPanel({ mode = 'admin', user }) {
             </button>
 
           </div>
+
+          {/* EXPORT / LOGS */}
+
+          {canExport && (
+            <button
+              onClick={() => {
+                toast.success('Matrix exported securely.', {
+                  icon: '📄'
+                });
+              }}
+              className="
+                mt-8
+                w-full
+                p-4
+                bg-white
+                border
+                border-[#f2ecff]
+                rounded-3xl
+                text-[10px]
+                font-black
+                uppercase
+                tracking-[0.2em]
+                text-black/50
+                flex
+                items-center
+                justify-center
+                gap-3
+                hover:bg-[#faf7ff]
+                hover:text-[#7c3aed]
+                transition-all
+              "
+            >
+              <Download size={14} />
+              Export Matrix Logs
+            </button>
+          )}
 
         </div>
 

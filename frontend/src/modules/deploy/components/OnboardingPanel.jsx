@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 import {
   UserPlus, Mail, CheckCircle, Clock, Trash2, Plus,
   FileText, Briefcase, GraduationCap, MapPin, Phone,
@@ -56,6 +58,11 @@ const Field = ({ label, children, isLightMode }) => (
 );
 
 export default function OnboardingPanel() {
+  const { hasPermission } = usePermissions();
+  const canSendInvite = hasPermission(P.DEPLOY_ONBOARD_SEND_INVITE);
+  const canCancelInvite = hasPermission(P.DEPLOY_ONBOARD_CANCEL_INVITE);
+  const canReviewSubmissions = hasPermission(P.DEPLOY_ONBOARD_REVIEW_SUBMISSIONS);
+
   const [activeTab, setActiveTab] = useState('invites');
   const [invites, setInvites] = useState([]);
   const [approvals, setApprovals] = useState([]);
@@ -558,21 +565,23 @@ export default function OnboardingPanel() {
             >
                Outbound Invites
             </button>
-            <button 
-            onClick={() => setActiveTab('approvals')}
-            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${
-              activeTab === 'approvals' 
-                ? (isLightMode ? 'bg-[#7c3aed] text-white shadow-md' : 'bg-primary text-black shadow-lg shadow-primary/20') 
-                : (isLightMode ? 'text-[#6b7280] hover:text-black' : 'text-white/40 hover:text-white')
-            }`}
-          >
-            Pending Approvals
-            {approvals.length > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white animate-pulse shadow-md shadow-red-500/30">
-                {approvals.length}
-              </span>
+            {canReviewSubmissions && (
+              <button 
+              onClick={() => setActiveTab('approvals')}
+              className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${
+                activeTab === 'approvals' 
+                  ? (isLightMode ? 'bg-[#7c3aed] text-white shadow-md' : 'bg-primary text-black shadow-lg shadow-primary/20') 
+                  : (isLightMode ? 'text-[#6b7280] hover:text-black' : 'text-white/40 hover:text-white')
+              }`}
+            >
+              Pending Approvals
+              {approvals.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white animate-pulse shadow-md shadow-red-500/30">
+                  {approvals.length}
+                </span>
+              )}
+            </button>
             )}
-          </button>
         </div>
       </div>
 
@@ -597,16 +606,18 @@ export default function OnboardingPanel() {
                    </div>
                  ))}
               </div>
-              <button 
-                onClick={() => setShowForm(true)}
-                className={`flex items-center gap-3 px-8 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all ${
-                  isLightMode 
-                    ? 'bg-[#7c3aed] text-white shadow-[0_10px_30px_rgba(139,92,246,0.15)] hover:opacity-95' 
-                    : 'bg-primary text-black hover:bg-white'
-                }`}
-              >
-                <Plus size={16} /> Onboard Employee
-              </button>
+              {canSendInvite && (
+                <button 
+                  onClick={() => setShowForm(true)}
+                  className={`flex items-center gap-3 px-8 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all ${
+                    isLightMode 
+                      ? 'bg-[#7c3aed] text-white shadow-[0_10px_30px_rgba(139,92,246,0.15)] hover:opacity-95' 
+                      : 'bg-primary text-black hover:bg-white'
+                  }`}
+                >
+                  <Plus size={16} /> Onboard Employee
+                </button>
+              )}
            </div>
 
            <div className={`overflow-x-auto rounded-[2rem] border ${
@@ -665,28 +676,32 @@ export default function OnboardingPanel() {
                 >
                   <Link size={14} />
                 </button>
-                <button
-                  onClick={() => revokeInvite(inv.id)}
-                  title="Revoke Invite"
-                  className={`p-2 rounded-lg border transition-all ${
-                    isLightMode
-                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100'
-                      : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
-                  }`}
-                >
-                  <Ban size={14} />
-                </button>
-                <button
-                  onClick={() => hardDeleteInvite(inv.id)}
-                  title="Delete Invite"
-                  className={`p-2 rounded-lg border transition-all ${
-                    isLightMode
-                      ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100'
-                      : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
-                  }`}
-                >
-                  <Trash2 size={14} />
-                </button>
+                {canCancelInvite && (
+                  <button
+                    onClick={() => revokeInvite(inv.id)}
+                    title="Revoke Invite"
+                    className={`p-2 rounded-lg border transition-all ${
+                      isLightMode
+                        ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100'
+                        : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
+                    }`}
+                  >
+                    <Ban size={14} />
+                  </button>
+                )}
+                {canCancelInvite && (
+                  <button
+                    onClick={() => hardDeleteInvite(inv.id)}
+                    title="Delete Invite"
+                    className={`p-2 rounded-lg border transition-all ${
+                      isLightMode
+                        ? 'text-[#6b7280] bg-[#faf7ff] border-[#ebe4ff] hover:bg-red-50 hover:text-red-500 hover:border-red-100'
+                        : 'text-white/40 bg-white/5 border-white/5 hover:text-error hover:bg-white/10'
+                    }`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </>
             )}
             {inv.status === 'Revoked' && (
@@ -768,16 +783,18 @@ export default function OnboardingPanel() {
                         </div>
                      </td>
                      <td className="px-6 py-6 text-right">
-                        <button 
-                          onClick={() => openApprovalReview(app)}
-                          className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all group ${
-                            isLightMode 
-                              ? 'bg-[#faf7ff] border border-[#ebe4ff] text-[#6b7280] hover:bg-gradient-to-r hover:from-[#c084fc] hover:to-[#8b5cf6] hover:text-white' 
-                              : 'bg-white/5 text-white hover:bg-primary hover:text-black'
-                          }`}
-                        >
-                          Review Profile <ChevronRight size={14} className="inline ml-1 group-hover:translate-x-1 transition-transform" />
-                        </button>
+                        {canReviewSubmissions && (
+                          <button 
+                            onClick={() => openApprovalReview(app)}
+                            className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all group ${
+                              isLightMode 
+                                ? 'bg-[#faf7ff] border border-[#ebe4ff] text-[#6b7280] hover:bg-gradient-to-r hover:from-[#c084fc] hover:to-[#8b5cf6] hover:text-white' 
+                                : 'bg-white/5 text-white hover:bg-primary hover:text-black'
+                            }`}
+                          >
+                            Review Profile <ChevronRight size={14} className="inline ml-1 group-hover:translate-x-1 transition-transform" />
+                          </button>
+                        )}
                      </td>
                    </tr>
                  ))}

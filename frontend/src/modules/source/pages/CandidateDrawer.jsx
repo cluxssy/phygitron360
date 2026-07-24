@@ -14,6 +14,7 @@ import {
   isValidUrl,
 } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import { useAuth } from '../../../core/auth/AuthContext';
 
 const LEVEL_COLOR = {
   beginner:     'bg-white/5 border-white/10 text-white/50',
@@ -34,6 +35,7 @@ const STATUS_STYLE = {
 export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, onRefresh, onConvert }) {
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const { hasPermission } = useAuth();
   useEscapeClose(onClose, !!candidate);
 
   // Edit Mode states
@@ -396,29 +398,31 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!isEditing ? (
-              <button
-                onClick={startEditing}
-                className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5"
-              >
-                <Edit size={12} /> Edit Profile
-              </button>
-            ) : (
-              <>
+            {hasPermission('source.candidates.manage') && (
+              !isEditing ? (
                 <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/50 hover:text-white transition-colors"
+                  onClick={startEditing}
+                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5"
                 >
-                  Cancel
+                  <Edit size={12} /> Edit Profile
                 </button>
-                <button
-                  onClick={saveProfile}
-                  disabled={savingProfile}
-                  className="px-4 py-2 bg-primary rounded-xl text-[10px] font-black uppercase tracking-widest text-black hover:bg-white transition-colors"
-                >
-                  Save
-                </button>
-              </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/50 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveProfile}
+                    disabled={savingProfile}
+                    className="px-4 py-2 bg-primary rounded-xl text-[10px] font-black uppercase tracking-widest text-black hover:bg-white transition-colors"
+                  >
+                    Save
+                  </button>
+                </>
+              )
             )}
             <button onClick={onClose} className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-colors">
               <X size={20} />
@@ -603,32 +607,36 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {data?.status?.toLowerCase() !== 'favourite' && (
-                      <button
-                        disabled={updatingStatus}
-                        onClick={() => handleStatusUpdate('Favourite')}
-                        className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black text-primary text-[10px] font-black uppercase tracking-widest transition-all"
-                      >
-                        Favorite
-                      </button>
-                    )}
-                    {data?.status?.toLowerCase() !== 'archived' && (
-                      <button
-                        disabled={updatingStatus}
-                        onClick={() => handleStatusUpdate('Archived')}
-                        className="px-3 py-1.5 rounded-lg bg-rose-400/10 border border-rose-400/20 hover:bg-rose-400 hover:text-white text-rose-400 text-[10px] font-black uppercase tracking-widest transition-all"
-                      >
-                        Archive
-                      </button>
-                    )}
-                    {(data?.status?.toLowerCase() === 'favourite' || data?.status?.toLowerCase() === 'archived' || data?.status?.toLowerCase() === 'rejected') && (
-                      <button
-                        disabled={updatingStatus}
-                        onClick={() => handleStatusUpdate('New')}
-                        className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white hover:text-black text-white/60 text-[10px] font-black uppercase tracking-widest transition-all"
-                      >
-                        Move to Active
-                      </button>
+                    {hasPermission('source.candidates.manage') && (
+                      <>
+                        {data?.status?.toLowerCase() !== 'favourite' && (
+                          <button
+                            disabled={updatingStatus}
+                            onClick={() => handleStatusUpdate('Favourite')}
+                            className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black text-primary text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            Favorite
+                          </button>
+                        )}
+                        {data?.status?.toLowerCase() !== 'archived' && (
+                          <button
+                            disabled={updatingStatus}
+                            onClick={() => handleStatusUpdate('Archived')}
+                            className="px-3 py-1.5 rounded-lg bg-rose-400/10 border border-rose-400/20 hover:bg-rose-400 hover:text-white text-rose-400 text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            Archive
+                          </button>
+                        )}
+                        {(data?.status?.toLowerCase() === 'favourite' || data?.status?.toLowerCase() === 'archived' || data?.status?.toLowerCase() === 'rejected') && (
+                          <button
+                            disabled={updatingStatus}
+                            onClick={() => handleStatusUpdate('New')}
+                            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white hover:text-black text-white/60 text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            Restore
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -882,19 +890,23 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
         {/* Footer action bar */}
         <div className="p-6 border-t border-white/5 shrink-0 flex gap-3">
-          <button
-            onClick={() => { setShowScoreForm(s => !s); setShowInviteForm(false); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors duration-150 ${showScoreForm ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
-          >
-            <Star size={14} /> Score
-          </button>
-          <button
-            onClick={() => { setShowInviteForm(s => !s); setShowScoreForm(false); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors duration-150 ${showInviteForm ? 'bg-indigo/10 border-indigo/30 text-indigo' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
-          >
-            <Send size={14} /> Invite
-          </button>
-          {data?.status?.toLowerCase() !== 'hired' && (
+          {hasPermission('source.evaluations.manage') && (
+            <button
+              onClick={() => { setShowScoreForm(s => !s); setShowInviteForm(false); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors duration-150 ${showScoreForm ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
+            >
+              <Star size={14} /> Score
+            </button>
+          )}
+          {hasPermission('source.interviews.manage') && (
+            <button
+              onClick={() => { setShowInviteForm(s => !s); setShowScoreForm(false); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors duration-150 ${showInviteForm ? 'bg-indigo/10 border-indigo/30 text-indigo' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
+            >
+              <Send size={14} /> Invite
+            </button>
+          )}
+          {hasPermission('source.offers.manage') && data?.status?.toLowerCase() !== 'hired' && (
             <button
               onClick={() => { setShowOfferForm(true); setOfferPreview(null); }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-xs font-black uppercase tracking-widest hover:bg-emerald-400/20 transition-colors duration-150"

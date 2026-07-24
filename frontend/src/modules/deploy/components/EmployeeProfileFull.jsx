@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HasPermission from '../../../components/common/HasPermission';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { P } from '../../../core/permissions';
 import {
   isValidEmail,
   isValidPhone,
@@ -46,6 +49,22 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const fileInputPfp = useRef();
     const fileInputCv = useRef();
     const fileInputId = useRef();
+
+    // ── Granular edit permissions ──
+    const { hasPermission } = usePermissions();
+    const { user } = useAuth();
+    const isSelf = user?.employee_code === employeeCode;
+
+    const canEditBasic     = hasPermission(P.DEPLOY_EMP_EDIT_BASIC) || isSelf;
+    const canEditJob       = hasPermission(P.DEPLOY_EMP_EDIT_JOB);
+    const canEditFinancial = hasPermission(P.DEPLOY_EMP_EDIT_FINANCIAL);
+    const canManageDocs    = hasPermission(P.DEPLOY_EMP_MANAGE_DOCS) || isSelf;
+
+    // Derived edit modes — only the relevant section becomes interactive
+    const editBasic     = editMode && canEditBasic;
+    const editJob       = editMode && canEditJob;
+    const editFinancial = editMode && canEditFinancial;
+    const editDocs      = editMode && (canManageDocs || canEditBasic);
 
     // ── Check if status is editable ──
     const isStatusEditable = () => {
@@ -185,32 +204,39 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     setIsSaving(true);
     try {
         const payload = {
-            first_name: formData.first_name,
-            middle_name: formData.middle_name,
-            last_name: formData.last_name,
-            designation: formData.designation,
-            team: formData.team,
-            employment_type: formData.employment_type,
-            reporting_manager: formData.reporting_manager,
-            location: formData.location,
-            contact_number: formData.contact_number,
+            // Basic fields — always included (user passed edit_basic to get here)
+            first_name:       formData.first_name,
+            middle_name:      formData.middle_name,
+            last_name:        formData.last_name,
+            email_id:         formData.email_id,
+            contact_number:   formData.contact_number,
             emergency_contact: formData.emergency_contact,
-            current_address: formData.current_address,
+            current_address:  formData.current_address,
             permanent_address: formData.permanent_address,
-            dob: formData.dob,
-            email_id: formData.email_id,
-            doj: formData.doj,
-            notes: formData.notes,
+            dob:              formData.dob,
+            notes:            formData.notes,
             education_details: formData.education_details,
-            pf_included: formData.pf_included,
-            mediclaim_included: formData.mediclaim_included,
-            primary_skillset: formData.primary_skillset,
+            primary_skillset:  formData.primary_skillset,
             secondary_skillset: formData.secondary_skillset,
-            experience_years: formData.experience_years,
-            bank_name: formData.bank_name,
-            bank_account_no: formData.bank_account_no,
-            pan_no: formData.pan_no,
-            employment_status: formData.employment_status,
+            // Job fields — only included when user has edit_job
+            ...(canEditJob && {
+                designation:       formData.designation,
+                team:              formData.team,
+                employment_type:   formData.employment_type,
+                reporting_manager: formData.reporting_manager,
+                location:          formData.location,
+                doj:               formData.doj,
+                employment_status: formData.employment_status,
+                experience_years:  formData.experience_years,
+            }),
+            // Financial fields — only included when user has edit_financial
+            ...(canEditFinancial && {
+                bank_name:        formData.bank_name,
+                bank_account_no:  formData.bank_account_no,
+                pan_no:           formData.pan_no,
+                pf_included:      formData.pf_included,
+                mediclaim_included: formData.mediclaim_included,
+            }),
         };
 
         const res = await fetch(`/api/employee/${details.employee_code}`, {
@@ -371,7 +397,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </button>
                         </>
                     ) : (
-                        <HasPermission permission="deploy.employees.edit">
+                        <HasPermission permission={['deploy.employees.edit_basic', 'deploy.employees.edit_job', 'deploy.employees.edit_financial']}>
                             <button 
                                 onClick={() => setEditMode(true)}
                                 className="flex items-center gap-2 px-8 py-2 bg-white border border-[#ece4ff] shadow-sm border-[#e9defd] text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#7c3aed] hover:text-white transition-all"
@@ -397,7 +423,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 details.name?.[0]
                             )}
                         </div>
-                        {editMode && (
+                        {editDocs && (
                             <button 
                                 onClick={() => fileInputPfp.current.click()}
                                 className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-1 rounded-3xl text-white text-[9px] font-black uppercase tracking-widest"
@@ -411,7 +437,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     <div className="flex-1 space-y-4">
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-4 flex-wrap">
-                                {editMode ? (
+                                {editBasic ? (
                                     <div className="grid grid-cols-3 gap-2 w-full">
                                         <input
                                             type="text"
@@ -441,7 +467,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                                 
                                 {/* ── EDITABLE STATUS TAG ── */}
-                                {editMode && isStatusEditable() ? (
+                                {editJob && isStatusEditable() ? (
                                     <select
                                         value={currentStatus}
                                         onChange={e => setFormData({...formData, employment_status: e.target.value})}
@@ -483,7 +509,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-3">
-                            {editMode ? (
+                            {editJob ? (
                                 <>
                                     <input 
                                         type="text" 
@@ -515,7 +541,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         <Mail size={12} className="text-[#7c3aed]" />
         <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Email</p>
     </div>
-    {editMode ? (
+    {editBasic ? (
         <div>
             <input
                 type="email"
@@ -532,12 +558,13 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     )}
 </div>
 
+{details?._meta?.can_view_sensitive !== false && (
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <Phone size={12} className="text-[#7c3aed]" />
         <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Contact</p>
     </div>
-    {editMode ? (
+    {editBasic ? (
         <div>
             <input
                 type="tel"
@@ -553,13 +580,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         <p className="text-xs font-normal text-black truncate">{formData.contact_number || '—'}</p>
     )}
 </div>
+)}
 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <MapPin size={12} className="text-[#7c3aed]" />
         <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Location</p>
     </div>
-    {editMode ? (
+    {editJob ? (
         <input
             type="text"
             value={formData.location || ''}
@@ -593,10 +621,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Personnel Statistics */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editMode} onChange={v => setFormData({...formData, doj: v})} error={errors.doj} />
-                        <EditStatCard label="Contract" value={formData.employment_type} sub="Engagement Mode" editMode={editMode} onChange={v => setFormData({...formData, employment_type: v})} />
-                        <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editMode} onChange={v => setFormData({...formData, experience_years: v})} error={errors.experience_years} />
-                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Hub" editMode={editMode} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} />
+                        <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editJob} onChange={v => setFormData({...formData, doj: v})} error={errors.doj} />
+                        <EditStatCard label="Contract" value={formData.employment_type} sub="Engagement Mode" editMode={editJob} onChange={v => setFormData({...formData, employment_type: v})} />
+                        <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editJob} onChange={v => setFormData({...formData, experience_years: v})} error={errors.experience_years} />
+                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Hub" editMode={editJob} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} />
                     </div>
 
                     {/* Skill Synergy */}
@@ -605,7 +633,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                             <div>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-[#7B1FFF] mb-4 italic">Primary SKILL</p>
-                                {editMode ? (
+                                {editBasic ? (
                                     <textarea 
                                         value={formData.primary_skillset}
                                         onChange={e => setFormData({...formData, primary_skillset: e.target.value})}
@@ -625,7 +653,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </div>
                             <div>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-[#7B1FFF] mb-4 italic">secondary SKILL</p>
-                                {editMode ? (
+                                {editBasic ? (
                                     <textarea 
                                         value={formData.secondary_skillset}
                                         onChange={e => setFormData({...formData, secondary_skillset: e.target.value})}
@@ -650,7 +678,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={GraduationCap} title="Academic Foundation Blocks" />
                         <div className="mt-6 space-y-4">
-                            {editMode ? (
+                            {editBasic ? (
                                 <div className="space-y-4">
                                     <textarea 
                                         value={typeof formData.education_details === 'string' ? formData.education_details : JSON.stringify(formData.education_details, null, 2)}
@@ -689,25 +717,28 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
 
                     {/* Compliance Toggles */}
+                    {details?._meta?.can_view_financial !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={ShieldCheck} title="Compliance Protocol" />
                         <div className="mt-6 space-y-4">
                             <ComplianceRow
                                 label="PF Included"
                                 active={formData.pf_included}
-                                editMode={editMode}
+                                editMode={editFinancial}
                                 onToggle={() => setFormData({...formData, pf_included: !formData.pf_included})}
                             />
                             <ComplianceRow
                                 label="Mediclaim Included"
                                 active={formData.mediclaim_included}
-                                editMode={editMode}
+                                editMode={editFinancial}
                                 onToggle={() => setFormData({...formData, mediclaim_included: !formData.mediclaim_included})}
                             />
                         </div>
                     </div>
+                    )}
 
                     {/* Documents */}
+                    {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={FileText} title="Document Artifacts" />
                         <div className="mt-6 space-y-3">
@@ -716,7 +747,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 path={details.cv_path}
                                 employeeCode={details.employee_code}
                                 docType="cv"
-                                editMode={editMode}
+                                editMode={editDocs}
                                 onUpload={() => fileInputCv.current.click()}
                             />
                             <FileCard
@@ -724,15 +755,17 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 path={details.id_proofs}
                                 employeeCode={details.employee_code}
                                 docType="id_proof"
-                                editMode={editMode}
+                                editMode={editDocs}
                                 onUpload={() => fileInputId.current.click()}
                             />
                         </div>
                         <input type="file" ref={fileInputCv} hidden accept=".pdf" onChange={e => handleFileUpload('cv', e.target.files[0])} />
                         <input type="file" ref={fileInputId} hidden accept=".pdf,image/jpeg,image/png" onChange={e => handleFileUpload('id', e.target.files[0])} />
                     </div>
+                    )}
 
                     {/* Allocation & Lifecycle Matrix */}
+                    {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/10 overflow-hidden rounded-2xl">
                         <div className="p-6 border-b border-[#ece4ff] bg-[#f4ecff] flex items-center justify-between">
                             <SectionHeader icon={Package} title="Allocation & Lifecycle Matrix" />
@@ -821,12 +854,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </button>
                         </div>
                     </div>
+                    )}
 
                     {/* Notes */}
+                    {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={FileText} title="Operator Notes" />
                         <div className="mt-6">
-                            {editMode ? (
+                            {editBasic ? (
                                 <textarea
                                     value={formData.notes || ''}
                                     onChange={e => setFormData({...formData, notes: e.target.value})}
@@ -841,6 +876,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             )}
                         </div>
                     </div>
+                    )}
 
                 </div>
                 {/* ── END LEFT COLUMN ── */}
@@ -849,6 +885,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 <div className="space-y-8">
 
                     {/* Geographic Anchors */}
+                    {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={Landmark} title="Location details" />
                         <div className="mt-6 space-y-6">
@@ -856,7 +893,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     Primary Operation Base
                                 </p>
-                                {editMode ? (
+                                {editBasic ? (
                                     <div>
                                         <textarea
                                             value={formData.current_address}
@@ -876,7 +913,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     Permanent Identity Anchor
                                 </p>
-                                {editMode ? (
+                                {editBasic ? (
                                     <div>
                                         <textarea
                                             value={formData.permanent_address}
@@ -894,8 +931,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </div>
                         </div>
                     </div>
+                    )}
 
                     {/* Financial Nodes */}
+                    {details?._meta?.can_view_financial !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={Landmark} title="Financial Info" />
                         <div className="mt-6 space-y-6">
@@ -903,7 +942,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     Bank Name
                                 </p>
-                                {editMode ? (
+                                {editFinancial ? (
                                     <input
                                         type="text"
                                         value={formData.bank_name || ''}
@@ -921,7 +960,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     Bank Account No.
                                 </p>
-                                {editMode ? (
+                                {editFinancial ? (
                                     <div>
                                         <input
                                             type="text"
@@ -943,7 +982,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
                                     PAN No.
                                 </p>
-                                {editMode ? (
+                                {editFinancial ? (
                                     <div>
                                         <input
                                             type="text"
@@ -963,12 +1002,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </div>
                         </div>
                     </div>
+                    )}
 
                     {/* Emergency Contact */}
+                    {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={Phone} title="Emergency Contact" />
                         <div className="mt-6">
-                            {editMode ? (
+                            {editBasic ? (
                                 <div>
                                     <input
                                         type="tel"
@@ -987,12 +1028,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             )}
                         </div>
                     </div>
+                    )}
 
                     {/* Date of Birth */}
+                    {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={Calendar} title="DOB" />
                         <div className="mt-6">
-                            {editMode ? (
+                            {editBasic ? (
                                 <div>
                                     <input
                                         type="date"
@@ -1010,10 +1053,11 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             )}
                         </div>
                     </div>
+                    )}
 
                     {/* Security & Access */}
                     {!isExited && (
-                        <HasPermission permission="deploy.employees.edit">
+                        <HasPermission permission="deploy.employees.edit_basic">
                             <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                                 <SectionHeader icon={Key} title="Security & Access" />
                                 <div className="mt-6 space-y-3">

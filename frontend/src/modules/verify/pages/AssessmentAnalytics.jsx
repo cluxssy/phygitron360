@@ -3,8 +3,11 @@ import { BarChart3, TrendingUp, Users, Award, ShieldAlert, Clock, Loader2, Chevr
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import { useAuth } from '../../../core/auth/AuthContext';
 
 export default function AssessmentAnalytics({ assessmentId: initialAssessmentId }) {
+  const { hasPermission } = useAuth();
+  const canViewResults = hasPermission('verify.results.view');
   const [assessmentsList, setAssessmentsList] = useState([]);
   const [usersList, setUsersList] = useState([]);
   

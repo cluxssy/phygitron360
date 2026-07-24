@@ -10,6 +10,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("SELECT id, username, role, employee_code FROM users ORDER BY id")
             rows = cur.fetchall()
             return [dict(r) for r in rows]
@@ -65,6 +66,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
             row = cur.fetchone()
             return dict(row) if row else None
@@ -75,6 +77,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
              cur = conn.cursor()
+             cur.execute(f'SET search_path TO "{self.tenant_id}"')
              cur.execute("INSERT INTO audit_logs (username, action, details, ip_address) VALUES (%s, %s, %s, %s)", 
                           (username, action, details, ip))
              conn.commit()
@@ -85,6 +88,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT %s", (limit,))
             rows = cur.fetchall()
             return [dict(r) for r in rows]
@@ -95,6 +99,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("SELECT role, permission FROM role_permissions WHERE is_allowed = 1")
             rows = cur.fetchall()
             perms = {}
@@ -110,6 +115,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("SELECT name, description, created_at FROM permission_templates ORDER BY created_at DESC")
             rows = cur.fetchall()
             return [dict(r) for r in rows]
@@ -120,6 +126,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute(
                 "INSERT INTO permission_templates (name, description) VALUES (%s, %s)",
                 (name, description)
@@ -132,6 +139,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("DELETE FROM permission_templates WHERE name = %s", (name,))
             # Also clean up role_permissions
             cur.execute("DELETE FROM role_permissions WHERE role = %s", (name,))
@@ -143,6 +151,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             # First set all to 0
             cur.execute("UPDATE role_permissions SET is_allowed = 0 WHERE role = %s", (role,))
             # Then insert/update to 1
@@ -207,6 +216,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("UPDATE users SET employee_code = %s WHERE id = %s", (employee_code, user_id))
             conn.commit()
         finally:
@@ -216,6 +226,7 @@ class AdminRepository:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
             cur.execute("UPDATE users SET role = %s, templates = %s WHERE id = %s", (role, templates or [], user_id))
             conn.commit()
         finally:

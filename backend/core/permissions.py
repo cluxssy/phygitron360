@@ -118,14 +118,25 @@ class P:
     SOURCE_CANDIDATES_VIEW   = "source.candidates.view"
     SOURCE_CANDIDATES_MANAGE = "source.candidates.manage"
 
-    # ── Verify: Assessments ──────────────────────────────────────────────────
-    VERIFY_ASSESS_VIEW        = "verify.assessments.view"
-    VERIFY_ASSESS_MANAGE      = "verify.assessments.manage"
-    VERIFY_ASSESS_ASSIGN      = "verify.assessments.assign"
-    VERIFY_ASSESS_VIEW_RESULTS = "verify.assessments.view_results"
+    # ── Source: Offers ───────────────────────────────────────────────────────
+    SOURCE_OFFERS_VIEW       = "source.offers.view"
+    SOURCE_OFFERS_MANAGE     = "source.offers.manage"
+    SOURCE_OFFERS_APPROVE    = "source.offers.approve"
 
-    # ── Verify: Submissions ──────────────────────────────────────────────────
-    VERIFY_SUBMISSIONS_MANAGE = "verify.submissions.manage"
+    # ── Source: Evaluations & Interviews ─────────────────────────────────────
+    SOURCE_EVALUATIONS_MANAGE = "source.evaluations.manage"
+    SOURCE_INTERVIEWS_MANAGE  = "source.interviews.manage"
+
+    # ── Verify: Assessment Central ───────────────────────────────────────────
+    VERIFY_ASSESS_VIEW         = "verify.assessments.view"
+    VERIFY_ASSESS_MANAGE       = "verify.assessments.manage"
+    VERIFY_ASSESS_ASSIGN       = "verify.assessments.assign"
+    VERIFY_QUESTIONS_VIEW      = "verify.questions.view"
+    VERIFY_QUESTIONS_MANAGE    = "verify.questions.manage"
+    VERIFY_MONITORING_VIEW     = "verify.monitoring.view"
+    VERIFY_RESULTS_VIEW        = "verify.results.view"
+    VERIFY_RESULTS_MANAGE      = "verify.results.manage"
+    VERIFY_QUERIES_MANAGE      = "verify.queries.manage"
 
     # ── Forge (future) ───────────────────────────────────────────────────────
     FORGE_COURSES_VIEW    = "forge.courses.view"
@@ -171,10 +182,13 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Source
         P.SOURCE_JOBS_VIEW, P.SOURCE_JOBS_MANAGE,
         P.SOURCE_CANDIDATES_VIEW, P.SOURCE_CANDIDATES_MANAGE,
+        P.SOURCE_OFFERS_VIEW, P.SOURCE_OFFERS_MANAGE, P.SOURCE_OFFERS_APPROVE,
+        P.SOURCE_EVALUATIONS_MANAGE, P.SOURCE_INTERVIEWS_MANAGE,
         # Verify
-        P.VERIFY_ASSESS_VIEW, P.VERIFY_ASSESS_MANAGE,
-        P.VERIFY_ASSESS_ASSIGN, P.VERIFY_ASSESS_VIEW_RESULTS,
-        P.VERIFY_SUBMISSIONS_MANAGE,
+        P.VERIFY_ASSESS_VIEW, P.VERIFY_ASSESS_MANAGE, P.VERIFY_ASSESS_ASSIGN,
+        P.VERIFY_QUESTIONS_VIEW, P.VERIFY_QUESTIONS_MANAGE,
+        P.VERIFY_MONITORING_VIEW, P.VERIFY_RESULTS_VIEW, P.VERIFY_RESULTS_MANAGE,
+        P.VERIFY_QUERIES_MANAGE,
         # Forge
         P.FORGE_COURSES_VIEW, P.FORGE_COURSES_MANAGE, P.FORGE_ENROLL,
     ],
@@ -202,10 +216,13 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.DEPLOY_DASH_ADMIN, P.DEPLOY_NOTIF_ADMIN,
         # Source
         P.SOURCE_JOBS_VIEW, P.SOURCE_JOBS_MANAGE,
-        P.SOURCE_CANDIDATES_VIEW,
+        P.SOURCE_CANDIDATES_VIEW, P.SOURCE_CANDIDATES_MANAGE,
+        P.SOURCE_OFFERS_VIEW, P.SOURCE_OFFERS_MANAGE,
+        P.SOURCE_EVALUATIONS_MANAGE, P.SOURCE_INTERVIEWS_MANAGE,
         # Verify
         P.VERIFY_ASSESS_VIEW, P.VERIFY_ASSESS_ASSIGN,
-        P.VERIFY_ASSESS_VIEW_RESULTS,
+        P.VERIFY_QUESTIONS_VIEW, P.VERIFY_MONITORING_VIEW,
+        P.VERIFY_RESULTS_VIEW, P.VERIFY_QUERIES_MANAGE,
         # Forge
         P.FORGE_COURSES_VIEW, P.FORGE_ENROLL,
     ],
@@ -318,11 +335,6 @@ def require_module(module_name: str) -> Callable:
             has_access = bool(perms.get(perm_key, False))
         else:
             has_access = False
-
-        # Fallback: legacy modules_enabled list (will be removed in future)
-        if not has_access:
-            enabled = current_user.get("modules_enabled", [])
-            has_access = module_name.lower() in [m.lower() for m in enabled]
 
         if not has_access:
             raise HTTPException(

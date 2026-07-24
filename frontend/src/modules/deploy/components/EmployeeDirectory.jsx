@@ -12,6 +12,8 @@ import { toast } from 'react-hot-toast';
 
 import AddEmployeeModal from './AddEmployeeModal';
 import HasPermission from '../../../components/common/HasPermission';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 
 // ── UPDATED STATUS COLORS ──
 const STATUS_COLORS = {
@@ -43,6 +45,8 @@ const normalizeStatus = (status) => {
 };
 
 export default function EmployeeDirectory() {
+  const { hasPermission } = usePermissions();
+  const canViewProfile = hasPermission(P.DEPLOY_EMP_VIEW_PROFILE);
 
   const navigate = useNavigate();
 
@@ -56,8 +60,7 @@ export default function EmployeeDirectory() {
   const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
-    fetchEmployees();
-    
+    fetchEmployees();    
   }, []);
 
   const fetchEmployees = async () => {
@@ -470,16 +473,17 @@ setEmployees(employeeList);
 
                   <tr
                     key={emp.employee_code || i}
-                    className="
+                    className={`
                       border-b
                       border-[#f1ecff]
-                      hover:bg-[#faf7ff]
                       transition-all
-                      cursor-pointer
-                    "
-                    onClick={() =>
-                      navigate(`/deploy?tab=profile&code=${emp.employee_code}`)
-                    }
+                      ${canViewProfile ? 'hover:bg-[#faf7ff] cursor-pointer' : ''}
+                    `}
+                    onClick={() => {
+                      if (canViewProfile) {
+                        navigate(`/deploy?tab=profile&code=${emp.employee_code}`);
+                      }
+                    }}
                   >
 
                     {/* EMPLOYEE */}
@@ -593,20 +597,22 @@ setEmployees(employeeList);
 
                     <td className="px-8 py-6">
 
-                      <button className="
-                        flex
-                        items-center
-                        gap-2
-                        text-[#7c3aed]
-                        font-black
-                        text-sm
-                      ">
+                      {canViewProfile && (
+                        <button className="
+                          flex
+                          items-center
+                          gap-2
+                          text-[#7c3aed]
+                          font-black
+                          text-sm
+                        ">
 
-                        Open
+                          Open
 
-                        <ArrowRight size={15} />
+                          <ArrowRight size={15} />
 
-                      </button>
+                        </button>
+                      )}
 
                     </td>
 

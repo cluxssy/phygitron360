@@ -22,19 +22,25 @@ import { getHubTabs } from "../../../core/navigation/hubTabs";
 import { useNotifications } from '../../../core/context/NotificationContext';
 
 export default function VerifyDashboard() {
-  const { hasRole } = useAuth();
-  const isAdmin = hasRole(['org_admin', 'manager', 'assessor']);
+  const { user, hasPermission, hasRole, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, hasPermission, logout } = useAuth();
   const { setShowNotifications } = useNotifications();
   const params = new URLSearchParams(location.search);
   
-  // Default to candidate if not admin
-  const tab = params.get('tab') || (isAdmin ? 'dashboard' : 'candidate');
+  // PBAC capability checks
+  const canViewAssessments   = hasPermission('verify.assessments.view');
+  const canManageAssessments = hasPermission('verify.assessments.manage');
+  const canViewQuestions     = hasPermission('verify.questions.view');
+  const canViewResults       = hasPermission('verify.results.view');
+  const canViewMonitoring    = hasPermission('verify.monitoring.view');
 
-  // NEW: Add a view toggle for admins, just like Deploy module
-  const [verifyView, setVerifyView] = useState(isAdmin ? 'management' : 'personal');
+  const isManagementAvailable = canViewAssessments || canManageAssessments || canViewQuestions || canViewResults || canViewMonitoring || hasRole(['org_admin', 'super_admin', 'manager']);
+
+  // Default to candidate if management view is not available
+  const tab = params.get('tab') || (isManagementAvailable ? 'dashboard' : 'candidate');
+
+  const [verifyView, setVerifyView] = useState(isManagementAvailable ? 'management' : 'personal');
 
   const setTab = (t) => navigate(`/verify?tab=${t}`);
   const displayName = user?.name || user?.email?.split('@')[0] || "User";
@@ -47,7 +53,6 @@ export default function VerifyDashboard() {
     if (hasRole?.('super_admin')) return 'Super Admin';
     if (hasRole?.('org_admin')) return 'Organization Admin';
     if (hasRole?.('manager')) return 'Manager';
-    if (hasRole?.('assessor')) return 'Assessor';
     return 'Employee';
   };
 
@@ -68,7 +73,7 @@ export default function VerifyDashboard() {
       case 'bank': return <QuestionBank />;
       case 'live': return <LiveMonitor />;
       case 'candidate': return <CandidateDashboard />;
-      default: return isAdmin ? <ManageAssessments /> : <CandidateDashboard />;
+      default: return isManagementAvailable ? <ManageAssessments /> : <CandidateDashboard />;
     }
   };
 
@@ -80,7 +85,7 @@ export default function VerifyDashboard() {
   const [loadingStats, setLoadingStats] = React.useState(true);
 
   React.useEffect(() => {
-    if (isAdmin && verifyView === 'management' && showHeader) {
+    if (isManagementAvailable && verifyView === 'management' && showHeader) {
       const fetchHeaderStats = async () => {
         try {
           const [assessmentsRes, submissionsRes] = await Promise.all([
@@ -99,7 +104,7 @@ export default function VerifyDashboard() {
       };
       fetchHeaderStats();
     }
-  }, [isAdmin, verifyView, showHeader]);
+  }, [isManagementAvailable, verifyView, showHeader]);
 
   return (
     <div className="dashboard-page light-theme-override" style={{ backgroundColor: '#FFFFFF' }}>
@@ -148,7 +153,7 @@ export default function VerifyDashboard() {
       <div className="dashboard-body">
         {/* SIDEBAR */}
         <div className="sidebar">
-          {isAdmin && (
+          {isManagementAvailable && (
             <div className="w-full flex bg-[#f3f0ff] p-1 rounded-xl border border-[#ebe4ff] mb-6">
               <button
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
@@ -173,16 +178,28 @@ export default function VerifyDashboard() {
             </div>
           )}
 
-          {verifyView === 'management' && isAdmin && (
+          {verifyView === 'management' && isManagementAvailable && (
             <>
-              <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>
-                Dashboard
-              </button>
-              <button className={tab === 'manage' ? 'active' : ''} onClick={() => setTab('manage')}>Manage</button>
-              <button className={tab === 'builder' ? 'active' : ''} onClick={() => setTab('builder')}>Builder</button>
-              <button className={tab === 'bank' ? 'active' : ''} onClick={() => setTab('bank')}>Question Bank</button>
-              <button className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>Analytics</button>
-              <button className={tab === 'live' ? 'active' : ''} onClick={() => setTab('live')}>Live Monitor</button>
+              {canViewAssessments && (
+                <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>
+                  Dashboard
+                </button>
+              )}
+              {canViewAssessments && (
+                <button className={tab === 'manage' ? 'active' : ''} onClick={() => setTab('manage')}>Manage</button>
+              )}
+              {canManageAssessments && (
+                <button className={tab === 'builder' ? 'active' : ''} onClick={() => setTab('builder')}>Builder</button>
+              )}
+              {canViewQuestions && (
+                <button className={tab === 'bank' ? 'active' : ''} onClick={() => setTab('bank')}>Question Bank</button>
+              )}
+              {canViewResults && (
+                <button className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>Analytics</button>
+              )}
+              {canViewMonitoring && (
+                <button className={tab === 'live' ? 'active' : ''} onClick={() => setTab('live')}>Live Monitor</button>
+              )}
             </>
           )}
 
@@ -224,7 +241,7 @@ export default function VerifyDashboard() {
                       }
                     </p>
                   </div>
-                  {verifyView === 'management' && isAdmin && tab !== 'dashboard' && (
+                  {verifyView === 'management' && canManageAssessments && tab !== 'dashboard' && (
                     <button 
                       onClick={() => setTab('builder')}
                       className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors duration-150 shadow-sm"

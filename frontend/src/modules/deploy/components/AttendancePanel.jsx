@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle } from 'lucide-react';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
@@ -8,6 +10,16 @@ import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 export default function AttendancePanel({ mode }) {
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  
+  // Granular Attendance Permissions
+  const canClockInOut = hasPermission(P.DEPLOY_ATT_CLOCK_IN_OUT);
+  const canReqCorrection = hasPermission(P.DEPLOY_ATT_REQ_CORRECTION);
+  const canAppCorrection = hasPermission(P.DEPLOY_ATT_APP_CORRECTION);
+  const canReqLeave = hasPermission(P.DEPLOY_LEAVES_REQUEST);
+  const canAppLeave = hasPermission(P.DEPLOY_LEAVES_APPROVE);
+  const canManagePolicies = hasPermission(P.DEPLOY_ATT_MANAGE_POLICIES);
+
   const isAdmin = mode === 'admin';
   const isEmployee = mode === 'employee';
   const [status, setStatus] = useState(null);
@@ -393,20 +405,27 @@ export default function AttendancePanel({ mode }) {
               )}
             </div>
             <div className="flex flex-col gap-3 w-full md:w-auto">
-              {status?.status === 'clocked_in' ? (
-                <button onClick={() => setShowClockOutModal(true)}
-                  className="flex items-center justify-center gap-3 px-8 py-4 bg-red-500 text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-red-400 transition-all font-display italic">
-                  <LogOut size={14} /> Terminate Session
-                </button>
-              ) : status?.status === 'not_started' ? (
-                <button onClick={clockIn}
-                  className="flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:opacity-90 transition-all shadow-xl shadow-transparent font-display italic">
-                  <LogIn size={18} /> Initiate Uplink
-                </button>
+              {canClockInOut ? (
+                status?.status === 'clocked_in' ? (
+                  <button onClick={() => setShowClockOutModal(true)}
+                    className="flex items-center justify-center gap-3 px-8 py-4 bg-red-500 text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-red-400 transition-all font-display italic">
+                    <LogOut size={14} /> Terminate Session
+                  </button>
+                ) : status?.status === 'not_started' ? (
+                  <button onClick={clockIn}
+                    className="flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:opacity-90 transition-all shadow-xl shadow-transparent font-display italic">
+                    <LogIn size={18} /> Initiate Uplink
+                  </button>
+                ) : (
+                    <div className="px-8 py-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3 opacity-50">
+                        <CheckCircle size={16} className="text-emerald-400" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Quota Satisfied</span>
+                    </div>
+                )
               ) : (
                   <div className="px-8 py-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3 opacity-50">
-                      <CheckCircle size={16} className="text-emerald-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Quota Satisfied</span>
+                      <Shield size={16} className="text-red-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Clock Restricted</span>
                   </div>
               )}
             </div>
@@ -436,15 +455,17 @@ export default function AttendancePanel({ mode }) {
                   </div>
               ))}
           </div>
-          <button 
-              onClick={() => setShowLeaveForm(true)}
-              className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-3 p-6 group"
-          >
-              <div className="w-12 h-12 rounded-2xl bg-[#f3e8ff] flex items-center justify-center text-[#8b5cf6] group-hover:bg-[#8b5cf6] group-hover:text-white transition-all">
-                  <Calendar size={24} />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] group-hover:text-black">Request Absence</span>
-          </button>
+          {canReqLeave && (
+            <button 
+                onClick={() => setShowLeaveForm(true)}
+                className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-3 p-6 group"
+            >
+                <div className="w-12 h-12 rounded-2xl bg-[#f3e8ff] flex items-center justify-center text-[#8b5cf6] group-hover:bg-[#8b5cf6] group-hover:text-white transition-all">
+                    <Calendar size={24} />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] group-hover:text-black">Request Absence</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -573,16 +594,18 @@ export default function AttendancePanel({ mode }) {
                       </td>
                       <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-xs truncate">{l.reason}</td>
                       <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          <button onClick={() => leaveAction(l.id, 'Approved')}
-                            className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
-                            <CheckCircle size={14} />
-                          </button>
-                          <button onClick={() => leaveAction(l.id, 'Rejected')}
-                            className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
-                            <XCircle size={14} />
-                          </button>
-                        </div>
+                        {canAppLeave && (
+                          <div className="flex gap-2">
+                            <button onClick={() => leaveAction(l.id, 'Approved')}
+                              className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
+                              <CheckCircle size={14} />
+                            </button>
+                            <button onClick={() => leaveAction(l.id, 'Rejected')}
+                              className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
+                              <XCircle size={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -621,16 +644,18 @@ export default function AttendancePanel({ mode }) {
                       </td>
                       <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-xs truncate">{c.reason}</td>
                       <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          <button onClick={() => actionCorrection(c.id, 'Approved')}
-                            className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
-                            <CheckCircle size={14} />
-                          </button>
-                          <button onClick={() => setSelectedCorrectionId(c.id)}
-                            className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
-                            <XCircle size={14} />
-                          </button>
-                        </div>
+                        {canAppCorrection && (
+                          <div className="flex gap-2">
+                            <button onClick={() => actionCorrection(c.id, 'Approved')}
+                              className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
+                              <CheckCircle size={14} />
+                            </button>
+                            <button onClick={() => setSelectedCorrectionId(c.id)}
+                              className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
+                              <XCircle size={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -925,7 +950,7 @@ export default function AttendancePanel({ mode }) {
                     {h.status === 'Absent' && isWithinLast7Days(h.date) && (
                       submittedCorrections.has(h.date) ? (
                         <span className="px-3 py-1 rounded text-[8px] font-black uppercase bg-amber-500/10 text-amber-500">Correction Pending</span>
-                      ) : (
+                      ) : canReqCorrection ? (
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -936,7 +961,7 @@ export default function AttendancePanel({ mode }) {
                         >
                           Request Correction
                         </button>
-                      )
+                      ) : null
                     )}
                   </div>
                 </div>

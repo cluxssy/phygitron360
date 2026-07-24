@@ -23,35 +23,74 @@ export const P = {
   VIEW_REPORTS:          'view_reports',
   MANAGE_OPS:            'manage_ops',
   ADMIN_USERS_MANAGE:    'admin.users.manage',
-  ADMIN_ROLES_MANAGE:    'admin.roles.manage',   // Manage role-level permission overrides
+  ADMIN_ROLES_MANAGE:    'admin.roles.manage',
 
   // ── Deploy: Employees ────────────────────────────────────────────────────
-  DEPLOY_EMP_VIEW:       'deploy.employees.view',
-  DEPLOY_EMP_CREATE:     'deploy.employees.create',
-  DEPLOY_EMP_EDIT:       'deploy.employees.edit',
-  DEPLOY_EMP_DELETE:     'deploy.employees.delete',
-  DEPLOY_EMP_OFFBOARD:   'deploy.employees.offboard',
+  DEPLOY_EMP_VIEW_LIST:            'deploy.employees.view_list',
+  DEPLOY_EMP_VIEW_PROFILE:         'deploy.employees.view_profile',
+  DEPLOY_EMP_VIEW_PROFILE_SENSITIVE: 'deploy.employees.view_profile_sensitive',
+  DEPLOY_EMP_VIEW_PROFILE_FINANCIAL: 'deploy.employees.view_profile_financial',
+  DEPLOY_EMP_CREATE:               'deploy.employees.create',
+  DEPLOY_EMP_OFFBOARD:             'deploy.employees.offboard',
+  DEPLOY_EMP_DELETE:               'deploy.employees.delete',
+  DEPLOY_EMP_EDIT_BASIC:           'deploy.employees.edit_basic',
+  DEPLOY_EMP_EDIT_JOB:             'deploy.employees.edit_job',
+  DEPLOY_EMP_EDIT_FINANCIAL:       'deploy.employees.edit_financial',
+  DEPLOY_EMP_EXPORT:               'deploy.employees.export',
+  DEPLOY_EMP_MANAGE_DOCS:          'deploy.employees.manage_documents',
 
   // ── Deploy: Assets ───────────────────────────────────────────────────────
-  DEPLOY_ASSETS_VIEW:    'deploy.assets.view',
-  DEPLOY_ASSETS_MANAGE:  'deploy.assets.manage',
+  DEPLOY_ASSETS_VIEW_PERSONAL:     'deploy.assets.view_personal',
+  DEPLOY_ASSETS_VIEW_ALL:          'deploy.assets.view_all',
+  DEPLOY_ASSETS_MANAGE_ONBOARDING: 'deploy.assets.manage_onboarding',
+  DEPLOY_ASSETS_MANAGE_CLEARANCE:  'deploy.assets.manage_clearance',
+  DEPLOY_ASSETS_EXPORT_REPORTS:    'deploy.assets.export_reports',
 
-  // ── Deploy: Attendance ───────────────────────────────────────────────────
-  DEPLOY_ATT_PERSONAL:   'deploy.attendance.view_personal',
-  DEPLOY_ATT_TEAM:       'deploy.attendance.view_team',
-  DEPLOY_ATT_MANAGE:     'deploy.attendance.manage',
+  // ── Deploy: Attendance & Leaves ──────────────────────────────────────────
+  DEPLOY_ATT_VIEW_PERSONAL:        'deploy.attendance.view_personal',
+  DEPLOY_ATT_VIEW_TEAM:            'deploy.attendance.view_team',
+  DEPLOY_ATT_VIEW_ALL:             'deploy.attendance.view_all',
+  DEPLOY_ATT_CLOCK_IN_OUT:         'deploy.attendance.clock_in_out',
+  DEPLOY_ATT_REQ_CORRECTION:       'deploy.attendance.request_correction',
+  DEPLOY_ATT_APP_CORRECTION:       'deploy.attendance.approve_correction',
+  DEPLOY_LEAVES_VIEW_PERSONAL:     'deploy.leaves.view_personal',
+  DEPLOY_LEAVES_VIEW_TEAM:         'deploy.leaves.view_team',
+  DEPLOY_LEAVES_VIEW_ALL:          'deploy.leaves.view_all',
+  DEPLOY_LEAVES_REQUEST:           'deploy.leaves.request',
+  DEPLOY_LEAVES_APPROVE:           'deploy.leaves.approve',
+  DEPLOY_LEAVES_MANAGE_BALANCES:   'deploy.leaves.manage_balances',
+  DEPLOY_ATT_MANAGE_POLICIES:      'deploy.attendance.manage_policies',
 
   // ── Deploy: Onboarding ───────────────────────────────────────────────────
-  DEPLOY_ONBOARD_VIEW:   'deploy.onboarding.view',
-  DEPLOY_ONBOARD_MANAGE: 'deploy.onboarding.manage',
+  DEPLOY_ONBOARD_VIEW:             'deploy.onboarding.view',
+  DEPLOY_ONBOARD_SEND_INVITE:      'deploy.onboarding.send_invite',
+  DEPLOY_ONBOARD_CANCEL_INVITE:    'deploy.onboarding.cancel_invite',
+  DEPLOY_ONBOARD_REVIEW_SUBMISSIONS: 'deploy.onboarding.review_submissions',
 
-  // ── Deploy: Learning / Performance ───────────────────────────────────────
+  // ── Deploy: Payroll ──────────────────────────────────────────────────────
+  DEPLOY_PAYROLL_VIEW_PERSONAL:    'deploy.payroll.view_personal',
+  DEPLOY_PAYROLL_VIEW_ALL:         'deploy.payroll.view_all',
+  DEPLOY_PAYROLL_RUN_PAYROLL:      'deploy.payroll.run_payroll',
+  DEPLOY_PAYROLL_EDIT_RECORDS:     'deploy.payroll.edit_records',
+  DEPLOY_PAYROLL_UPLOAD_BULK:      'deploy.payroll.upload_bulk',
+  DEPLOY_PAYROLL_APPROVE:          'deploy.payroll.approve',
+  DEPLOY_PAYROLL_EXPORT_REPORTS:   'deploy.payroll.export_reports',
+
+  // ── Deploy: Performance ──────────────────────────────────────────────────
+  DEPLOY_PERF_VIEW_PERSONAL:       'deploy.performance.view_personal',
+  DEPLOY_PERF_VIEW_TEAM:           'deploy.performance.view_team',
+  DEPLOY_PERF_VIEW_ALL:            'deploy.performance.view_all',
+  DEPLOY_PERF_ASSIGN_KRAS:         'deploy.performance.assign_kras',
+  DEPLOY_PERF_SUBMIT_SELF:         'deploy.performance.submit_self_rating',
+  DEPLOY_PERF_SUBMIT_MANAGER:      'deploy.performance.submit_manager_rating',
+  DEPLOY_PERF_MANAGE_ASSESSMENTS:  'deploy.performance.manage_assessments',
+  DEPLOY_PERF_EXPORT_REPORTS:      'deploy.performance.export_reports',
+
+  // ── Deploy: Learning & Development ───────────────────────────────────────
   DEPLOY_ASSESS_VIEW:    'deploy.assessments.view',
   DEPLOY_ASSESS_MANAGE:  'deploy.assessments.manage',
   DEPLOY_TRAIN_VIEW:     'deploy.training.view',
   DEPLOY_TRAIN_MANAGE:   'deploy.training.manage',
-  DEPLOY_PERF_VIEW:      'deploy.performance.view',
-  DEPLOY_PERF_MANAGE:    'deploy.performance.manage',
 
   // ── Deploy: Dashboard / Notifications ────────────────────────────────────
   DEPLOY_DASH_ADMIN:     'deploy.dashboard.view_admin',
@@ -66,12 +105,25 @@ export const P = {
   SOURCE_CANDIDATES_VIEW:   'source.candidates.view',
   SOURCE_CANDIDATES_MANAGE: 'source.candidates.manage',
 
-  // ── Verify: Assessments ──────────────────────────────────────────────────
-  VERIFY_ASSESS_VIEW:         'verify.assessments.view',
-  VERIFY_ASSESS_MANAGE:       'verify.assessments.manage',
-  VERIFY_ASSESS_ASSIGN:       'verify.assessments.assign',
-  VERIFY_ASSESS_VIEW_RESULTS: 'verify.assessments.view_results',
-  VERIFY_SUBMISSIONS_MANAGE:  'verify.submissions.manage',
+  // ── Source: Offers ───────────────────────────────────────────────────────
+  SOURCE_OFFERS_VIEW:       'source.offers.view',
+  SOURCE_OFFERS_MANAGE:     'source.offers.manage',
+  SOURCE_OFFERS_APPROVE:    'source.offers.approve',
+
+  // ── Source: Evaluations & Interviews ─────────────────────────────────────
+  SOURCE_EVALUATIONS_MANAGE: 'source.evaluations.manage',
+  SOURCE_INTERVIEWS_MANAGE:  'source.interviews.manage',
+
+  // ── Verify: Assessment Central ───────────────────────────────────────────
+  VERIFY_ASSESS_VIEW:      'verify.assessments.view',
+  VERIFY_ASSESS_MANAGE:    'verify.assessments.manage',
+  VERIFY_ASSESS_ASSIGN:    'verify.assessments.assign',
+  VERIFY_QUESTIONS_VIEW:   'verify.questions.view',
+  VERIFY_QUESTIONS_MANAGE: 'verify.questions.manage',
+  VERIFY_MONITORING_VIEW:  'verify.monitoring.view',
+  VERIFY_RESULTS_VIEW:     'verify.results.view',
+  VERIFY_RESULTS_MANAGE:   'verify.results.manage',
+  VERIFY_QUERIES_MANAGE:   'verify.queries.manage',
 
   // ── Forge ─────────────────────────────────────────────────────────────────
   FORGE_COURSES_VIEW:   'forge.courses.view',

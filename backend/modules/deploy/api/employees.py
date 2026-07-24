@@ -27,16 +27,60 @@ def get_employee(employee_code: str, current_user: dict = Depends(get_current_us
     employee = service.get_employee_full_details(employee_code)
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
+        
+    is_self = current_user.get("employee_code") == employee_code
+    roles = current_user.get("roles", [])
+    is_super = "super_admin" in roles or "superadmin" in roles
+    
+    perms = current_user.get('permissions', {})
+    if isinstance(perms, list):
+        can_view_sensitive = "deploy.employees.view_profile_sensitive" in perms
+        can_view_financial = "deploy.employees.view_profile_financial" in perms
+    elif isinstance(perms, dict):
+        can_view_sensitive = bool(perms.get("deploy.employees.view_profile_sensitive"))
+        can_view_financial = bool(perms.get("deploy.employees.view_profile_financial"))
+    else:
+        can_view_sensitive = False
+        can_view_financial = False
+
+    if not (is_self or is_super or can_view_sensitive):
+        sensitive_fields = ['dob', 'contact_number', 'emergency_contact', 'current_address', 'permanent_address', 'cv_path', 'id_proofs']
+        for f in sensitive_fields:
+            if f in employee and employee[f] is not None:
+                employee[f] = "***REDACTED***" if isinstance(employee[f], str) else None
+
+    if not (is_self or is_super or can_view_financial):
+        financial_fields = ['bank_name', 'bank_account_no', 'pan_no', 'pf_included', 'mediclaim_included']
+        for f in financial_fields:
+            if f in employee and employee[f] is not None:
+                employee[f] = "***REDACTED***" if isinstance(employee[f], str) else None
+
+    employee["_meta"] = {
+        "can_view_sensitive": is_self or is_super or can_view_sensitive,
+        "can_view_financial": is_self or is_super or can_view_financial
+    }
+
     return employee
 
 @router.get("/employee/{employee_code}/document/{doc_type}")
 def get_employee_document(employee_code: str, doc_type: str, download: bool = False, current_user: dict = Depends(get_current_user)):
-    """Serves an employee's uploaded photo/cv/id_proof. Reads the file server-side
-    (or redirects to a presigned S3 URL) rather than exposing a raw static path,
-    since locally-stored files aren't reachable via any static file route.
+    """Serves an employee's uploaded photo/cv/id_proof.
 
-    By default the file is served inline (viewable in a new tab); pass
-    ?download=true to force a "Save As" download instead."""
+    Access rules:
+    - The employee may always access their own documents (is_self).
+    - Admins/HR with deploy.employees.view_profile_sensitive may access any document.
+    - Everyone else gets a 403. Profile photos (doc_type='pfp') are public within
+      the tenant so they are always served (needed for directory avatars etc.)."""
+    is_self = current_user.get('employee_code') == employee_code
+    roles = current_user.get('roles', [])
+    is_super = 'super_admin' in roles or 'superadmin' in roles
+    perms = current_user.get('permissions', {})
+    can_view_sensitive = bool(perms.get('deploy.employees.view_profile_sensitive')) if isinstance(perms, dict) else False
+
+    # Profile photos are non-sensitive — any authenticated user can load them
+    if doc_type != 'pfp' and not (is_self or is_super or can_view_sensitive):
+        raise HTTPException(status_code=403, detail="You do not have permission to access this document.")
+
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     file_path = service.get_document_path(employee_code, doc_type)
@@ -144,13 +188,57 @@ async def create_employee(
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.edit_basic"))])
+# Field groups protected by specific permissions
+_FINANCIAL_FIELDS = frozenset({
+    'bank_name', 'bank_account_no', 'pan_no', 'pf_included', 'mediclaim_included'
+})
+_JOB_FIELDS = frozenset({
+    'designation', 'team', 'reporting_manager', 'location',
+    'employment_type', 'doj', 'employment_status', 'experience_years'
+})
+
+
+@router.put("/employee/{employee_code}")
 def update_employee(employee_code: str, data: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    """Update an employee record.
+
+    Field-level permission enforcement (defence-in-depth):
+    - Financial fields require deploy.employees.edit_financial
+    - Job / employment fields require deploy.employees.edit_job
+    - Basic fields are allowed for anyone with deploy.employees.edit_basic or if it's their own profile
+    Super-admins bypass all field restrictions.
+    """
+    roles = current_user.get('roles', [])
+    is_super = 'super_admin' in roles or 'superadmin' in roles
+    perms = current_user.get('permissions', {})
+    is_self = current_user.get('employee_code') == employee_code
+
+    if isinstance(perms, dict):
+        can_edit_basic = bool(perms.get('deploy.employees.edit_basic'))
+        can_edit_financial = bool(perms.get('deploy.employees.edit_financial'))
+        can_edit_job = bool(perms.get('deploy.employees.edit_job'))
+    else:
+        can_edit_basic = False
+        can_edit_financial = False
+        can_edit_job = False
+
+    if not (can_edit_basic or is_self):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    if not is_super:
+        # Strip fields the caller is not authorised to write
+        if not can_edit_financial:
+            for field in _FINANCIAL_FIELDS:
+                data.pop(field, None)
+        if not can_edit_job:
+            for field in _JOB_FIELDS:
+                data.pop(field, None)
+
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     try:
         result = service.update_employee(employee_code, data)
-        # Notify the employee if someone else (admin) edited their profile
+        # Notify the employee if someone else edited their profile
         if current_user.get('employee_code') != employee_code:
             add_notification(
                 title="Profile Updated",
@@ -163,7 +251,7 @@ def update_employee(employee_code: str, data: dict = Body(...), current_user: di
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/employee/{employee_code}/documents", dependencies=[Depends(require_permission("deploy.employees.manage_documents"))])
+@router.post("/employee/{employee_code}/documents")
 async def upload_documents(
     employee_code: str,
     photo_file: Optional[UploadFile] = File(None),
@@ -171,6 +259,14 @@ async def upload_documents(
     id_proof_file: Optional[UploadFile] = File(None),
     current_user: dict = Depends(get_current_user)
 ):
+    """Upload documents for an employee."""
+    perms = current_user.get('permissions', {})
+    can_manage_docs = bool(perms.get('deploy.employees.manage_documents')) if isinstance(perms, dict) else False
+    is_self = current_user.get('employee_code') == employee_code
+    
+    if not (can_manage_docs or is_self):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to manage documents")
+
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     updates = {}

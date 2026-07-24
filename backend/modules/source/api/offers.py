@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import io
 
-from backend.core.dependencies import get_current_user
+from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.source.services.offer_service import OfferService
 from backend.modules.deploy.services.notification_service import add_notification
 
@@ -49,6 +49,7 @@ def get_offer_service(user=Depends(get_current_user)):
 @router.get("")
 async def list_offers(
     status: Optional[str] = None,
+    current_user: dict = Depends(require_permission("source.offers.view")),
     service: OfferService = Depends(get_offer_service),
 ):
     """List all offer letters for the tenant. Optionally filter by status."""
@@ -59,6 +60,7 @@ async def list_offers(
 @router.get("/{offer_id}")
 async def get_offer(
     offer_id: int,
+    current_user: dict = Depends(require_permission("source.offers.view")),
     service: OfferService = Depends(get_offer_service),
 ):
     offer = service.get_offer_by_id(offer_id)
@@ -71,7 +73,7 @@ async def get_offer(
 async def update_offer(
     offer_id: int,
     body: OfferUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("source.offers.manage")),
     service: OfferService = Depends(get_offer_service),
 ):
     """HR edits an offer letter (only allowed if pending or changes_requested)."""
@@ -100,7 +102,7 @@ async def update_offer(
 @router.post("/{offer_id}/approve")
 async def approve_offer(
     offer_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("source.offers.approve")),
     service: OfferService = Depends(get_offer_service)
 ):
     """Manager/admin approves the offer letter."""
@@ -123,7 +125,7 @@ async def approve_offer(
 async def request_changes(
     offer_id: int,
     body: OfferFeedback,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("source.offers.manage")),
     service: OfferService = Depends(get_offer_service),
 ):
     """Manager requests changes with feedback text."""
@@ -146,7 +148,7 @@ async def request_changes(
 async def reject_offer(
     offer_id: int,
     body: OfferFeedback,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("source.offers.approve")),
     service: OfferService = Depends(get_offer_service),
 ):
     """Manager rejects the offer outright."""
@@ -168,6 +170,7 @@ async def reject_offer(
 @router.post("/{offer_id}/send")
 async def send_offer(
     offer_id: int,
+    current_user: dict = Depends(require_permission("source.offers.manage")),
     service: OfferService = Depends(get_offer_service),
 ):
     """
@@ -190,6 +193,7 @@ async def send_offer(
 @router.get("/{offer_id}/preview")
 async def preview_offer(
     offer_id: int,
+    current_user: dict = Depends(require_permission("source.offers.view")),
     service: OfferService = Depends(get_offer_service),
 ):
     """Generate a PDF preview of the offer letter."""

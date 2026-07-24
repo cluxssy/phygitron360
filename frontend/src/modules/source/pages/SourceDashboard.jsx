@@ -93,7 +93,7 @@ export default function SourceDashboard() {
 
   const isCandidate = hasRole('candidate');
 
-  if (!hasRole(['super_admin', 'org_admin', 'manager']) && !isCandidate) {
+  if (!hasPermission('module.source.access') && !isCandidate) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-center bg-gray-50">
         <Shield size={48} className="text-gray-300" />
@@ -826,11 +826,11 @@ export default function SourceDashboard() {
       <div className="dashboard-body">
         <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>Home</button>
-          <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>
-          <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>
-          <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>
-          <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>
-          <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Pipeline</button>
+          {hasPermission('source.candidates.view') && <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>}
+          {hasPermission('source.jobs.view') && <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>}
+          {hasPermission('source.candidates.manage') && <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>}
+          {hasPermission('source.offers.view') && <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>}
+          {hasPermission('source.candidates.view') && <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Pipeline</button>}
           <div className="sidebar-brand">
             <img src={ewandzLogo} alt="Ewandz" />
           </div>
@@ -946,7 +946,7 @@ export default function SourceDashboard() {
             </>
           )}
 
-          {currentTab === 'jobs' && (
+          {currentTab === 'jobs' && hasPermission('source.jobs.manage') && (
             <button
               onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'expert' }); setShowNewRole(true); }}
               className="

@@ -49,12 +49,32 @@ manager = ConnectionManager()
 async def live_monitor_endpoint(websocket: WebSocket, asm_id: int):
     """
     WebSocket endpoint for HR/Recruiters to listen to live candidate events.
-    In a real app, you would verify a token query parameter here.
+    Verifies session_token from query param or cookie before accepting.
     """
+    token = websocket.query_params.get("token") or websocket.cookies.get("session_token")
+    if not token:
+        await websocket.close(code=4001)
+        return
+
+    try:
+        from backend.core.database import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SET search_path TO public")
+            cur.execute("SELECT user_id, tenant_id FROM sessions WHERE session_token = %s", (token,))
+            sess = cur.fetchone()
+            if not sess:
+                await websocket.close(code=4001)
+                return
+    except Exception as e:
+        logger.error(f"WebSocket auth error: {e}")
+        await websocket.close(code=4000)
+        return
+
     await manager.connect(websocket, asm_id)
     try:
         while True:
-            # Keep connection open, perhaps receive pings or commands from HR
             data = await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, asm_id)
