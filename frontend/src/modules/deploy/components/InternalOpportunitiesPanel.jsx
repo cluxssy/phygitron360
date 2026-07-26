@@ -86,7 +86,7 @@ export default function InternalOpportunitiesPanel({ user }) {
                   <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-100">
                     <div className="flex items-center gap-2">
                       <CheckCircle size={14} className="text-emerald-500" />
-                      <span className="text-xs font-bold text-emerald-800">Pipeline</span>
+                      <span className="text-xs font-bold text-emerald-800">Application Status</span>
                     </div>
                     <span className="text-xs font-black text-emerald-600 uppercase">{app.invite_status}</span>
                   </div>

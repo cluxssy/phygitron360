@@ -33,7 +33,7 @@ export default function MasterConsole() {
     {
       name: 'Source',
       path: '/source',
-      desc: 'Candidate Sourcing Hub',
+      desc: 'Candidate Sourcing',
       icon: <Database size={24} />,
       color: '#CC97FF', // Luminous Purple
       stats: `${stats?.counts?.candidates || 0} Candidates Active`
@@ -49,7 +49,7 @@ export default function MasterConsole() {
     {
       name: 'Verify',
       path: '/verify',
-      desc: 'Assessment Hub',
+      desc: 'Assessments',
       icon: <ShieldCheck size={24} />,
       color: '#F59E0B', // Amber
       stats: `${stats?.counts?.jobs || 0} Open Requisitions`
@@ -60,7 +60,7 @@ export default function MasterConsole() {
       desc: 'Employee Management System',
       icon: <Rocket size={24} />,
       color: '#6366F1', // Indigo
-      stats: `${stats?.counts?.active || 0} Deployed Users`
+      stats: `${stats?.counts?.active || 0} Active Users`
     },
   ].filter(app => {
     if (user?.role === 'super_admin') return true;
@@ -74,7 +74,7 @@ export default function MasterConsole() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
             <h1 className="text-5xl font-display font-extrabold text-white tracking-tight mb-4">
-              Intelligence <span className="text-primary">Console</span>
+              Admin <span className="text-primary">Dashboard</span>
             </h1>
             <p className="text-lg text-on-surface-variant font-medium max-w-2xl leading-relaxed opacity-80">
               Phygitron 360 is operating normally. All systems are active across the {user?.username} domain.
@@ -93,7 +93,7 @@ export default function MasterConsole() {
       <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
           { label: 'Candidates', value: stats?.counts?.candidates || 0, sub: 'Total Records', icon: Users, color: '#CC97FF' },
-          { label: 'Active Users', value: stats?.counts?.active || 0, sub: 'Active Personnel', icon: Zap, color: '#10B981' },
+          { label: 'Active Users', value: stats?.counts?.active || 0, sub: 'Active Employees', icon: Zap, color: '#10B981' },
           { label: 'Positions', value: stats?.counts?.designations || 0, sub: 'Designations', icon: ShieldCheck, color: '#F59E0B' },
           { label: 'Uptime', value: '99.9%', sub: 'SLA Active', icon: Clock, color: '#6366F1' },
         ].map((m, i) => (
@@ -110,11 +110,11 @@ export default function MasterConsole() {
         ))}
       </section>
 
-      {/* Module Workspace Node Portals */}
+      {/* Platform module launcher cards */}
       <section>
         <div className="flex items-center gap-3 mb-8">
            <LayoutDashboard className="text-primary" size={24} />
-           <h2 className="text-2xl font-display font-bold text-white uppercase tracking-tight">Workspaces</h2>
+           <h2 className="text-2xl font-display font-bold text-white uppercase tracking-tight">Modules</h2>
         </div>
         
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -154,7 +154,7 @@ export default function MasterConsole() {
       </section>
 
       <div className="pb-12 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant opacity-20">
-         Phygitron 360 Platform // Standard Mission Hub
+         Phygitron 360 Platform // Main Dashboard
       </div>
 
       {/* EWANDZ Logo at bottom of sidebar */}

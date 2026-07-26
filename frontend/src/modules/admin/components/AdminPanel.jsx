@@ -286,7 +286,7 @@ export default function AdminPanel() {
   const TABS = [
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'permissions', label: 'Permissions', icon: Shield },
-    { id: 'modules', label: 'Modules', icon: Activity },
+    { id: 'modules', label: 'Features', icon: Activity },
     { id: 'logs', label: 'Activity Log', icon: Activity },
   ];
 
@@ -301,7 +301,7 @@ export default function AdminPanel() {
           </p>
 
           <h1 className="admin-title text-black">
-            Workspace Settings
+            Organisation Settings
           </h1>
 
           <p className="admin-subtitle">
@@ -343,7 +343,7 @@ export default function AdminPanel() {
           </div>
 
           <p className="text-[10px] text-primary font-black uppercase tracking-[0.3em] animate-pulse">
-            Syncing Neural Nodes...
+            Loading Users...
           </p>
 
         </div>
@@ -406,15 +406,15 @@ export default function AdminPanel() {
                       </th>
 
                       <th className="px-10 py-6 text-[10px] font-normal uppercase tracking-[0.2em] text-black">
-                        Clearance Level
+                        Permission Level
                       </th>
 
                       <th className="px-10 py-6 text-[10px] font-normal uppercase tracking-[0.2em] text-black">
-                        Personnel Link
+                        Employee Link
                       </th>
 
                       <th className="px-10 py-6 text-[10px] font-normal uppercase tracking-[0.2em] text-black text-right">
-                        Node Controls
+                        User Controls
                       </th>
 
                     </tr>
@@ -451,7 +451,7 @@ export default function AdminPanel() {
                               </p>
 
                               <p className="text-[9px] text-black font-mono mt-1 tracking-widest uppercase">
-                                ID: NODE_{u.id.toString().padStart(4, '0')}
+                                ID: USER_{u.id.toString().padStart(4, '0')}
                               </p>
 
                             </div>
@@ -492,7 +492,7 @@ export default function AdminPanel() {
                           </div>
                         </td>
 
-                        {/* PERSONNEL LINK */}
+                        {/* EMPLOYEE LINK */}
 
                         <td className="px-10 py-8">
 
@@ -504,7 +504,7 @@ export default function AdminPanel() {
                               type="text"
                               defaultValue={u.employee_code || ''}
                               onBlur={e => updateEmployeeCode(u.id, e.target.value)}
-                              placeholder="Link Neural Code"
+                              placeholder="Employee ID"
                               className="w-28 bg-transparent text-[10px] text-black/90 font-mono focus:outline-none placeholder:text-black/20"
                             />
 
@@ -524,7 +524,7 @@ export default function AdminPanel() {
                                 loadUserOverrides(u.id);
                               }}
                               className="w-11 h-11 flex items-center justify-center bg-white/90 backdrop-blur-xl text-black hover:text-violet-700 hover:bg-primary/10 rounded-2xl transition-all border border-primary/10 hover:border-primary/30 hover:shadow-[0_0_20px_rgba(180,140,255,0.12)] active:scale-95"
-                              title="Adjust Neural Clearance"
+                              title="Adjust Permission Level"
                             >
                               <Key size={16} strokeWidth={2.5} />
                             </button>
@@ -536,7 +536,7 @@ export default function AdminPanel() {
                                   ? 'bg-white border-primary/10 text-black hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5'
                                   : 'bg-red-500/10 text-red-500 border-red-500/20 hover:text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/30'
                               }`}
-                              title={u.is_active !== 0 ? "Lock Node" : "Restore Node"}
+                              title={u.is_active !== 0 ? "Disable User" : "Enable User"}
                             >
                               {u.is_active !== 0 ? <Lock size={16} strokeWidth={2.5} /> : <Unlock size={16} strokeWidth={2.5} />}
                             </button>
@@ -571,7 +571,7 @@ export default function AdminPanel() {
 
             <ClearanceMatrix
               rolesPerms={rolesPerms}
-              templatesList={templatesList}
+              customRolesList={templatesList}
               onRefreshRoles={loadData}
               onUpdate={(role, newList) =>
                 setRolesPerms(prev => ({

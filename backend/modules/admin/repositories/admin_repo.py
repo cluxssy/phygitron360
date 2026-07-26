@@ -147,6 +147,21 @@ class AdminRepository:
         finally:
             conn.close()
 
+    def rename_template(self, old_name: str, new_name: str):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
+            cur.execute("UPDATE permission_templates SET name = %s WHERE name = %s", (new_name, old_name))
+            cur.execute("UPDATE role_permissions SET role = %s WHERE role = %s", (new_name, old_name))
+            cur.execute(
+                "UPDATE users SET templates = array_replace(templates, %s, %s) WHERE %s = ANY(templates)",
+                (old_name, new_name, old_name)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
     def update_role_permissions(self, role: str, permissions: List[str]):
         conn = get_db_connection()
         try:
@@ -290,7 +305,7 @@ class AdminRepository:
             
             stats = {}
             # List of tables to count
-            tables = [('users', 'Users'), ('candidates', 'Candidates'), ('employees', 'Personnel')]
+            tables = [('users', 'Users'), ('candidates', 'Candidates'), ('employees', 'Employees')]
             
             for table_name, label in tables:
                 try:

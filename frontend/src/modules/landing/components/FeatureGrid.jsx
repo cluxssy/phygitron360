@@ -62,7 +62,7 @@ const FeatureGrid = () => {
           <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 leading-tight">
             One Platform.
             <br className="hidden sm:block" />
-            Four Powerful Workforce Engines.
+            Four Powerful Modules.
           </h2>
           <p className="text-gray-500 text-[15px] max-w-[620px] mx-auto mt-4 leading-relaxed">
             From hiring and onboarding to skill validation, learning, and

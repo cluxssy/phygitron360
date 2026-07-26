@@ -15,13 +15,39 @@ class EmployeeRepository:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             self._set_path(cur, tenant_id)
             cur.execute("""
-                SELECT e.employee_code, e.name, e.designation, e.team, e.reporting_manager, e.email_id, 
+                SELECT e.employee_code, e.name, e.designation, e.team, e.reporting_manager, e.email_id,
                        e.photo_path, e.employment_status, e.exit_date, e.doj, e.location, e.employment_type,
-                       MAX(u.role) as role
+                       e.hr_approved, e.finance_approved,
+                       MAX(u.role) as role,
+                       (
+                           COALESCE(e.dob, '') <> '' AND
+                           COALESCE(e.contact_number, '') <> '' AND
+                           COALESCE(e.emergency_contact, '') <> '' AND
+                           COALESCE(e.current_address, '') <> '' AND
+                           COALESCE(e.permanent_address, '') <> '' AND
+                           COALESCE(e.designation, '') <> '' AND
+                           COALESCE(e.team, '') <> '' AND
+                           COALESCE(e.location, '') <> '' AND
+                           COALESCE(e.reporting_manager, '') <> '' AND
+                           COALESCE(e.doj, '') <> '' AND
+                           COALESCE(e.pan_no, '') <> '' AND
+                           COALESCE(e.pf_included, '') <> '' AND
+                           COALESCE(e.mediclaim_included, '') <> '' AND
+                           COALESCE(e.photo_path, '') <> '' AND
+                           COALESCE(e.cv_path, '') <> '' AND
+                           COALESCE(e.id_proofs, '') <> '' AND
+                           e.education_details IS NOT NULL AND
+                           e.education_details::text NOT IN ('[]', 'null') AND
+                           COALESCE(MAX(s.primary_skillset), '') <> ''
+                       ) AS profile_complete
                 FROM employees e
                 LEFT JOIN users u ON e.employee_code = u.employee_code
-                GROUP BY e.employee_code, e.name, e.designation, e.team, e.reporting_manager, e.email_id, 
-                         e.photo_path, e.employment_status, e.exit_date, e.doj, e.location, e.employment_type
+                LEFT JOIN skill_matrix s ON e.employee_code = s.employee_code
+                GROUP BY e.employee_code, e.name, e.designation, e.team, e.reporting_manager, e.email_id,
+                         e.photo_path, e.employment_status, e.exit_date, e.doj, e.location, e.employment_type,
+                         e.hr_approved, e.finance_approved, e.dob, e.contact_number, e.emergency_contact,
+                         e.current_address, e.permanent_address, e.pan_no, e.pf_included, e.mediclaim_included,
+                         e.cv_path, e.id_proofs, e.education_details
             """)
             rows = cur.fetchall()
             return [dict(row) for row in rows]
@@ -405,12 +431,16 @@ class EmployeeRepository:
                 ORDER BY e.name
             """)
             managers = [{"name": r[0], "code": r[1], "role": r[2]} for r in cur.fetchall()]
-            
+
+            cur.execute("SELECT name FROM permission_templates WHERE lower(name) != 'candidate' ORDER BY name")
+            custom_roles = [r[0] for r in cur.fetchall()]
+
             return {
-                "teams": teams, 
-                "designations": designations, 
+                "teams": teams,
+                "designations": designations,
                 "managers": managers,
-                "locations": locations
+                "locations": locations,
+                "custom_roles": custom_roles
             }
         finally:
              conn.close()

@@ -106,27 +106,27 @@ export default function DeployDashboard() {
 
   // Dynamic role display based on current view
   const getRoleDisplay = () => {
-    // In employee/personal view, always show Employee Workspace
+    // In employee/personal view, always show Employee Portal
     if (deployView === 'employee') {
-      return 'Employee Workspace';
+      return 'Employee Portal';
     }
-    
+
     // In management view, show actual management role
     if (deployView === 'management') {
       if (hasRole?.('super_admin')) return 'Super Admin';
       if (hasRole?.('org_admin')) return 'Organization Admin';
       if (hasRole?.('manager')) return 'Manager';
-      return 'Employee Workspace';
+      return 'Employee Portal';
     }
-    
+
     // Fallback
     return hasRole?.('super_admin')
       ? 'Super Admin'
       : hasRole?.('org_admin')
       ? 'Organization Admin'
       : hasRole?.('manager')
-      ? 'Manager Workspace'
-      : 'Employee Workspace';
+      ? 'Manager Portal'
+      : 'Employee Portal';
   };
 
   useEffect(() => {
@@ -455,8 +455,7 @@ export default function DeployDashboard() {
           )}
 
           {deployView === 'employee' &&
-            currentTab === 'dashboard' &&
-            canViewDashboard && (
+            currentTab === 'dashboard' && (
 
             <EmployeeDashboard
               key="employee-dashboard"

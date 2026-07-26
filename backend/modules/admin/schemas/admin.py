@@ -38,3 +38,6 @@ class RoleUpdate(BaseModel):
 class PermissionTemplateCreate(BaseModel):
     name: str
     description: Optional[str] = None
+
+class PermissionTemplateRename(BaseModel):
+    new_name: str

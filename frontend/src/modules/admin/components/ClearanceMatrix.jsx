@@ -1,19 +1,20 @@
 import React from 'react';
-import { Shield, Check, X, Zap } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Shield, Check, X, Zap, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export const PERMISSIONS_CATEGORIES = [
   {
-    group: 'Module Access',
+    group: 'Feature Access',
     perms: [
-      { key: 'module.source.access', label: 'Source Module' },
-      { key: 'module.forge.access', label: 'Forge Module' },
-      { key: 'module.verify.access', label: 'Verify Module' },
-      { key: 'module.deploy.access', label: 'Deploy Module' },
+      { key: 'module.source.access', label: 'Talent Central Access' },
+      { key: 'module.forge.access', label: 'Learning Central Access' },
+      { key: 'module.verify.access', label: 'Assessment Central Access' },
+      { key: 'module.deploy.access', label: 'Employee Central Access' },
     ]
   },
   {
-    group: 'Deployment: Personnel',
+    group: 'Deployment: Employees',
     perms: [
       { key: 'deploy.employees.view_list', label: 'View Employee List' },
       { key: 'deploy.employees.view_profile', label: 'View Basic Profile' },
@@ -29,7 +30,7 @@ export const PERMISSIONS_CATEGORIES = [
       { key: 'deploy.employees.manage_documents', label: 'Manage Documents' },
       { key: 'deploy.employees.offboard', label: 'Offboard Access' },
       { key: 'deploy.employees.delete', label: 'Delete Employee' },
-      { key: 'deploy.employees.export', label: 'Export Personnel Data' },
+      { key: 'deploy.employees.export', label: 'Export Employee Data' },
     ]
   },
   {
@@ -103,7 +104,7 @@ export const PERMISSIONS_CATEGORIES = [
     ]
   },
   {
-    group: 'Forge: Learning Hub',
+    group: 'Forge: Learning Central',
     perms: [
       { key: 'forge.courses.view', label: 'View Courses' },
       { key: 'forge.courses.manage', label: 'Manage Courses' },
@@ -139,10 +140,10 @@ export const PERMISSIONS_CATEGORIES = [
     ]
   },
   {
-    group: 'Governance',
+    group: 'Administration',
     perms: [
       { key: 'admin.users.manage', label: 'User Management' },
-      { key: 'admin.tenants.provision', label: 'Tenant Provisioning' },
+      { key: 'admin.tenants.provision', label: 'Create Organisation' },
       { key: 'manage_system', label: 'System Settings' },
       { key: 'view_reports', label: 'Global Analytics' },
     ]
@@ -153,8 +154,14 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
   const [showCreateModal, setShowCreateModal] = React.useState(false);
   const [newRoleName, setNewRoleName] = React.useState('');
   const [newRoleDesc, setNewRoleDesc] = React.useState('');
+  const [editingRole, setEditingRole] = React.useState(null);
+  const [editRoleValue, setEditRoleValue] = React.useState('');
 
   const roles = Object.keys(rolesPerms);
+
+  const KEY_COL_WIDTH = 260;
+  const ROLE_COL_WIDTH = 150;
+  const tableMinWidth = KEY_COL_WIDTH + roles.length * ROLE_COL_WIDTH;
 
   const togglePermission = async (role, permKey) => {
     const currentList = rolesPerms[role] || [];
@@ -177,7 +184,7 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
 
       if (!res.ok) throw new Error();
       onUpdate(role, newList);
-      toast.success('Clearance Updated');
+      toast.success('Permissions Updated');
     } catch {
       toast.error('Sync Error');
     }
@@ -226,6 +233,41 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
     }
   };
 
+  const startEditingRole = (name) => {
+    setEditingRole(name);
+    setEditRoleValue(name);
+  };
+
+  const cancelEditingRole = () => {
+    setEditingRole(null);
+    setEditRoleValue('');
+  };
+
+  const renameCustomRole = async (oldName) => {
+    const newName = editRoleValue.trim();
+    if (!newName || newName === oldName) {
+      cancelEditingRole();
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/permissions/templates/${oldName}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_name: newName })
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || 'Rename failed');
+      }
+      toast.success('Template Renamed');
+      cancelEditingRole();
+      if (onRefreshRoles) onRefreshRoles();
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
   return (
     <div className="bg-white/70 backdrop-blur-2xl border border-primary/10 shadow-[0_10px_60px_rgba(180,140,255,0.08)] overflow-hidden animate-fade-in-up rounded-[2.5rem]">
       {/* HEADER */}
@@ -235,60 +277,98 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 text-primary shadow-[0_0_30px_rgba(180,140,255,0.15)]">
         <Shield size={22} />
       </div>
-      Identity Clearance Matrix
+      Permission Management
     </h3>
     <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-[0.25em] font-medium">
-      Standard Role Permission Governance
+      Standard Role Permissions
     </p>
   </div>
 
-  <div className="flex gap-3 flex-wrap items-center">
-    {roles.map(r => {
-      const isCustom = customRolesList && customRolesList.find(cr => cr.name === r);
-      return (
-        <div
-          key={r}
-          className="group relative px-4 py-2 bg-white border border-black rounded-2xl text-[10px] font-semibold uppercase tracking-[0.12em] text-black shadow-[0_0_20px_rgba(0,0,0,0.08)] flex items-center gap-2"
-        >
-          {r}
-          {isCustom && (
-            <button 
-              onClick={() => deleteCustomRole(r)}
-              className="hidden group-hover:flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 p-1 rounded-md transition-all absolute -top-2 -right-2 border border-red-200"
-              title="Delete Template"
-            >
-              <X size={12} strokeWidth={3} />
-            </button>
-          )}
-        </div>
-      );
-    })}
-    <button
-      onClick={() => setShowCreateModal(true)}
-      className="px-4 py-2 bg-black text-white rounded-2xl text-[10px] font-semibold uppercase tracking-[0.12em] shadow-[0_0_20px_rgba(0,0,0,0.08)] hover:bg-violet-700 transition-all flex items-center gap-1 active:scale-95"
-    >
-      <Check size={12} />
-      New Template
-    </button>
-  </div>
+  <button
+    onClick={() => setShowCreateModal(true)}
+    className="px-4 py-2 bg-black text-white rounded-2xl text-[10px] font-semibold uppercase tracking-[0.12em] shadow-[0_0_20px_rgba(0,0,0,0.08)] hover:bg-violet-700 transition-all flex items-center gap-1 active:scale-95"
+  >
+    <Check size={12} />
+    New Template
+  </button>
 </div>
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table
+          className="w-full text-left border-collapse"
+          style={{ tableLayout: 'fixed', minWidth: tableMinWidth }}
+        >
           <thead>
             <tr className="bg-gradient-to-r from-primary/[0.08] to-transparent border-b border-primary/10">
-              <th className="p-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500 w-1/3">
-                Clearance Key
+              <th
+                style={{ width: KEY_COL_WIDTH }}
+                className="p-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500 whitespace-nowrap"
+              >
+                Permission
               </th>
-              {roles.map(r => (
-                <th
-                  key={r}
-                  className="p-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500 text-center"
-                >
-                  {r}
-                </th>
-              ))}
+              {roles.map(r => {
+                const isCustom = customRolesList && customRolesList.find(cr => cr.name === r);
+                const isEditing = editingRole === r;
+                return (
+                  <th
+                    key={r}
+                    style={{ width: ROLE_COL_WIDTH }}
+                    className="px-3 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500 text-center group"
+                  >
+                    {isEditing ? (
+                      <div className="flex items-center justify-center gap-1">
+                        <input
+                          autoFocus
+                          value={editRoleValue}
+                          onChange={e => setEditRoleValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') renameCustomRole(r);
+                            if (e.key === 'Escape') cancelEditingRole();
+                          }}
+                          className="w-full min-w-0 bg-white border border-primary/30 rounded-lg px-2 py-1 text-[10px] normal-case text-black focus:outline-none focus:ring-1 focus:ring-primary/50"
+                        />
+                        <button
+                          onClick={() => renameCustomRole(r)}
+                          className="text-emerald-600 hover:text-emerald-700 shrink-0"
+                          title="Save"
+                        >
+                          <Check size={14} strokeWidth={3} />
+                        </button>
+                        <button
+                          onClick={cancelEditingRole}
+                          className="text-gray-400 hover:text-gray-600 shrink-0"
+                          title="Cancel"
+                        >
+                          <X size={14} strokeWidth={3} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="whitespace-nowrap truncate">{r}</span>
+                        {isCustom && (
+                          <span className="hidden group-hover:inline-flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => startEditingRole(r)}
+                              className="text-gray-400 hover:text-primary transition-colors"
+                              title="Rename Template"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              onClick={() => deleteCustomRole(r)}
+                              className="text-gray-400 hover:text-red-500 transition-colors"
+                              title="Delete Template"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
 
@@ -353,7 +433,7 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
         </table>
       </div>
 
-      {showCreateModal && (
+      {showCreateModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-[2rem] p-8 w-[400px] shadow-[0_20px_80px_rgba(0,0,0,0.2)] border border-primary/10">
             <h3 className="text-xl font-bold text-black uppercase tracking-tight mb-6 flex items-center gap-3">
@@ -404,7 +484,8 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* FOOTER */}
@@ -418,8 +499,8 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
               Permission Management
             </p>
             <p className="text-sm text-gray-500 font-normal mt-3 leading-relaxed max-w-4xl">
-              Changes to module permissions take effect immediately. Removing access to a module will instantly
-              disable that module for users without special permissions within this workspace.
+              Changes to feature permissions take effect immediately. Removing access to a feature will instantly
+              disable that feature for users without special permissions within this organisation.
               User data is preserved across access changes.
             </p>
           </div>

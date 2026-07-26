@@ -26,10 +26,10 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
         modules_enabled: updated
       });
 
-      toast.success(`${module.toUpperCase()} workspace updated`);
+      toast.success(`${module.toUpperCase()} feature updated`);
 
     } catch {
-      toast.error('Workspace sync failed');
+      toast.error('Feature update failed');
     }
   };
 
@@ -52,7 +52,7 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
     {
       id: 'deploy',
       label: 'Deploy',
-      desc: 'Employees & workspace operations'
+      desc: 'Employees & organisation management'
     },
   ];
 
@@ -174,7 +174,7 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
                     }
                   `}
                 >
-                  {isActive ? 'Disable Module' : 'Enable Module'}
+                  {isActive ? 'Disable Feature' : 'Enable Feature'}
                 </button>
               </div>
 
@@ -225,14 +225,14 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
 
               {/* Title adjusted to font-bold */}
               <h3 className="text-2xl font-bold uppercase tracking-tight text-[#8b5cf6] italic">
-                Workspace Controls
+                Feature Settings
               </h3>
             </div>
 
             {/* Description converted to font-normal neutral text-slate-500 */}
             <p className="text-[15px] leading-[1.9] font-normal text-slate-500">
-              Turning modules on or off updates access instantly across the workspace.
-              Disabled modules become unavailable to standard users while administrator
+              Turning features on or off updates access instantly across the organisation.
+              Disabled features become unavailable to standard users while administrator
               access remains protected.
             </p>
           </div>
@@ -248,7 +248,7 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
           >
             {/* Tag adjusted to font-semibold and crisp branding color alignment */}
             <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#c084fc]">
-              Workspace Mode : Enterprise
+              Organisation Mode : Enterprise
             </p>
           </div>
         </div>

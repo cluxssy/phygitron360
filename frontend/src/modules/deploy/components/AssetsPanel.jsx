@@ -481,7 +481,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                             <CheckCircle size={8} /> Allocated
                           </span>
                         ) : (
-                          <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[8px] font-black uppercase border border-red-200 shadow-sm">
+                          <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-[8px] font-black uppercase border border-gray-300 shadow-sm">
                             Not Allocated
                           </span>
                         )}
@@ -624,7 +624,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
                             <CheckCircle size={8} /> Resolved
                           </span>
                         ) : (
-                          <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[8px] font-black uppercase border border-blue-200 shadow-sm">
+                          <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-[8px] font-black uppercase border border-gray-300 shadow-sm">
                             Pending Verification
                           </span>
                         )}
@@ -741,7 +741,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
           {canExport && (
             <button
               onClick={() => {
-                toast.success('Matrix exported securely.', {
+                toast.success('Asset report exported securely.', {
                   icon: '📄'
                 });
               }}
@@ -768,7 +768,7 @@ export default function AssetsPanel({ mode = 'admin', user }) {
               "
             >
               <Download size={14} />
-              Export Matrix Logs
+              Export Asset Report
             </button>
           )}
 

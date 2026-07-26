@@ -238,7 +238,33 @@ class OnboardingService:
             raise ValueError("Pending approval not found")
         return {"success": True, "message": "Profile rejected and invite revoked."}
 
+    # Fields that must be filled in before an account can be activated from
+    # Pending Approvals. Checked against the persisted employee record (not
+    # the activation form payload) since these are edited via the "Save
+    # Changes" profile editor, not the activation form itself.
+    MANDATORY_ACTIVATION_FIELDS = {
+        'first_name': 'First Name',
+        'last_name': 'Last Name',
+        'email_id': 'Email',
+        'role': 'Access Role',
+        'dob': 'Date of Birth',
+        'contact_number': 'Contact Number',
+        'current_address': 'Current Address',
+        'bank_name': 'Bank Name',
+        'bank_account_no': 'Bank Account No.',
+        'cv_path': 'Resume / CV',
+        'id_proofs': 'ID Proof',
+    }
+
     def approve_onboarding(self, employee_code: str, approval_data: dict, tenant_id: str = 'public'):
+        from backend.modules.deploy.repositories.employee_repo import EmployeeRepository
+        employee = EmployeeRepository().get_employee_by_code(employee_code, tenant_id=tenant_id)
+        if not employee:
+            raise ValueError("Employee not found")
+        for field, label in self.MANDATORY_ACTIVATION_FIELDS.items():
+            if not str(employee.get(field) or '').strip():
+                raise ValueError(f"{label} is required before this account can be activated.")
+
         final_code = self.repo.approve_employee(employee_code, approval_data, tenant_id=tenant_id)
         final_code = final_code or employee_code
 

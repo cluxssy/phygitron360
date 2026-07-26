@@ -1114,6 +1114,24 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS exit_reason TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS clearance_status TEXT")
 
+        # Self-service profile edit requests: an employee proposes changes to their
+        # own profile, but nothing on the `employees` row changes until a reviewer
+        # acts on the request (review/approve UI is separate follow-up work).
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS profile_edit_requests (
+                id SERIAL PRIMARY KEY,
+                employee_code TEXT NOT NULL,
+                requested_fields JSONB NOT NULL,
+                supporting_docs JSONB,
+                notes TEXT,
+                status TEXT DEFAULT 'Pending',
+                reviewed_by TEXT,
+                reviewed_at TIMESTAMP,
+                review_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # Add extracted_text column to bulk_upload_job_items for pre-extracted resume text
         # This decouples text extraction (fast, CPU) from AI parsing (slow, API)
         cur.execute("ALTER TABLE bulk_upload_job_items ADD COLUMN IF NOT EXISTS extracted_text TEXT")

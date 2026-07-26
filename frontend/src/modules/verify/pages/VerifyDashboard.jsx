@@ -49,7 +49,7 @@ export default function VerifyDashboard() {
 
   // Dynamic role display based on actual user roles and view
   const getRoleDisplay = () => {
-    if (verifyView === 'personal') return 'Candidate Portal';
+    if (verifyView === 'personal') return 'My Assessments';
     if (hasRole?.('super_admin')) return 'Super Admin';
     if (hasRole?.('org_admin')) return 'Organization Admin';
     if (hasRole?.('manager')) return 'Manager';
@@ -189,7 +189,7 @@ export default function VerifyDashboard() {
                 <button className={tab === 'manage' ? 'active' : ''} onClick={() => setTab('manage')}>Manage</button>
               )}
               {canManageAssessments && (
-                <button className={tab === 'builder' ? 'active' : ''} onClick={() => setTab('builder')}>Builder</button>
+                <button className={tab === 'builder' ? 'active' : ''} onClick={() => setTab('builder')}>Create Assessment</button>
               )}
               {canViewQuestions && (
                 <button className={tab === 'bank' ? 'active' : ''} onClick={() => setTab('bank')}>Question Bank</button>

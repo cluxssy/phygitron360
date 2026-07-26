@@ -577,7 +577,7 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
       {!selectedView && (
         <div className="flex flex-col items-center justify-center p-20 text-center border border-dashed border-gray-300 rounded-2xl bg-gray-50">
           <BarChart3 size={48} className="text-gray-300 mb-4" />
-          <h3 className="text-lg font-bold text-gray-700">Global Reporting Hub</h3>
+          <h3 className="text-lg font-bold text-gray-700">Reports Overview</h3>
           <p className="text-gray-500 max-w-sm mt-2 text-sm">Select an assessment to view overall performance metrics, or select a specific user to review their testing history and proctoring evidence.</p>
         </div>
       )}

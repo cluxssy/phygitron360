@@ -98,7 +98,7 @@ export default function SuperadminDashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Workspace created: ${data.subdomain}.localhost`);
+        toast.success(`Organisation created: ${data.subdomain}.localhost`);
         setShowProvisionModal(false);
         setProvisionForm({ company_name: '', admin_email: '', admin_password: '' });
         setConfirmAdminPassword('');
@@ -184,7 +184,7 @@ export default function SuperadminDashboard() {
         credentials: 'include'
       });
       if (res.ok) {
-        toast.success('Workspace deleted successfully.');
+        toast.success('Organisation deleted successfully.');
         setShowOpsModal(false);
         fetchGlobalData();
       } else {
@@ -325,7 +325,7 @@ export default function SuperadminDashboard() {
         {/* ── SIDEBAR ── */}
         <div className="sidebar" onKeyDown={handleTabKeyNav}>
           {[
-            { id: 'tenants',  label: 'Tenants'      },
+            { id: 'tenants',  label: 'Organisations' },
             { id: 'demo',     label: 'Demo Archive'  },
             { id: 'license',  label: 'License Lab'   },
           ].map(tab => (
@@ -415,22 +415,22 @@ export default function SuperadminDashboard() {
                   fontSize: 25,
                   color: '#000',
                   marginBottom: 4
-                }}>Enterprise Tenants</p>
+                }}>Enterprise Organisations</p>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button style={S.ghostBtn}>
                     <Terminal size={13} style={{ marginRight: 4 }} />
                     Audit Log
                   </button>
                   <button style={S.primaryBtn} onClick={() => setShowProvisionModal(true)}>
-                    <Plus size={13} /> Provision Tenant
+                    <Plus size={13} /> Create Organisation
                   </button>
                 </div>
               </div>
 
               {loading ? (
-                <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>Loading tenants…</p>
+                <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>Loading organisations…</p>
               ) : tenants.length === 0 ? (
-                <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>No tenants provisioned yet.</p>
+                <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>No organisations created yet.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {tenants.map((t) => (
@@ -525,7 +525,7 @@ export default function SuperadminDashboard() {
                       <th>Company</th>
                       <th>Email</th>
                       <th>Job Title</th>
-                      <th>Modules</th>
+                      <th>Features</th>
                       <th style={{ textAlign: 'right' }}>Action</th>
                     </tr>
                   </thead>
@@ -548,7 +548,7 @@ export default function SuperadminDashboard() {
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <button style={{ ...S.primaryBtn, padding: '6px 14px', fontSize: 10 }}>
-                            Provision
+                            Create Organisation
                           </button>
                         </td>
                       </tr>
@@ -593,7 +593,7 @@ export default function SuperadminDashboard() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
               <h2 style={{ fontWeight: 900, fontSize: 16, color: '#000', margin: 0 }}>
-                Provision <span style={{ color: '#7c3aed' }}>Workspace</span>
+                Create <span style={{ color: '#7c3aed' }}>Organisation</span>
               </h2>
               <button onClick={() => setShowProvisionModal(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(0,0,0,.5)', fontSize: 22, lineHeight: 1 }}>×</button>
@@ -627,7 +627,7 @@ export default function SuperadminDashboard() {
               <button disabled={provisioning} type="submit"
                 style={{ ...S.primaryBtn, width: '100%', justifyContent: 'center', marginTop: 8, opacity: provisioning ? .7 : 1 }}>
                 {provisioning ? <Activity size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={14} />}
-                {provisioning ? 'Provisioning…' : 'Initialize Provisioning'}
+                {provisioning ? 'Creating…' : 'Create Organisation'}
               </button>
             </form>
           </div>
@@ -655,7 +655,7 @@ export default function SuperadminDashboard() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2 style={{ fontWeight: 900, fontSize: 16, color: '#000', margin: 0 }}>
-                  Enterprise <span style={{ color: '#7c3aed' }}>Operations</span>
+                  Organisation <span style={{ color: '#7c3aed' }}>Management</span>
                 </h2>
                 <p style={{ fontSize: 10, color: 'rgba(0,0,0,.4)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '.1em' }}>
                   ID: {selectedTenant.id}
@@ -667,7 +667,7 @@ export default function SuperadminDashboard() {
 
             {/* Stats row */}
             <div className="grid grid-cols-3" style={{ gap: 12 }}>
-              {['Personnel', 'Candidates', 'Users'].map(label => (
+              {['Employees', 'Candidates', 'Users'].map(label => (
                 <div key={label} style={{ ...S.card, padding: '14px' }}>
                   <p style={{ fontSize: 10, fontWeight: 900, color: 'rgba(0,0,0,.4)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>{label}</p>
                   <p style={{ fontSize: 24, fontWeight: 900, color: '#000' }}>
@@ -699,7 +699,7 @@ export default function SuperadminDashboard() {
 
               {/* Module toggles */}
               <div>
-                <label style={S.label}>Module Activation</label>
+                <label style={S.label}>Feature Activation</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: 10 }}>
                   {[
                     { id: 'source', name: 'Source', color: '#CC97FF', Icon: Database },
@@ -736,7 +736,7 @@ export default function SuperadminDashboard() {
               {/* Active toggle */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, background: '#faf7ff', border: '1px solid #e9ddff', borderRadius: 12 }}>
                 <div>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: '#000', margin: 0 }}>Tenant Status</p>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#000', margin: 0 }}>Organisation Status</p>
                   <p style={{ fontSize: 10, color: 'rgba(0,0,0,.4)', margin: '3px 0 0', textTransform: 'uppercase', letterSpacing: '.08em' }}>
                     {tenantOps.is_active ? 'Active' : 'Inactive'}
                   </p>

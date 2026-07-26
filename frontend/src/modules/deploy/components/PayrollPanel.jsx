@@ -16,6 +16,7 @@ import {
   validateFile,
 } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import PayrollDirectory from './PayrollDirectory';
 
 const MONTH_NAMES = {
   1: 'January', 2: 'February', 3: 'March', 4: 'April',
@@ -36,7 +37,7 @@ export default function PayrollPanel() {
   const canApprove = hasPermission(P.DEPLOY_PAYROLL_APPROVE);
   const canExport = hasPermission(P.DEPLOY_PAYROLL_EXPORT_REPORTS);
 
-  const [tab, setTab] = useState('upload');
+  const [tab, setTab] = useState('directory');
 
   // Upload state
   const [file, setFile] = useState(null);
@@ -55,19 +56,12 @@ export default function PayrollPanel() {
   const [cycleDetail, setCycleDetail] = useState([]);
   const [loadingCycles, setLoadingCycles] = useState(false);
 
-  // Directory state
-  const [employees, setEmployees] = useState([]);
-  const [selectedEmp, setSelectedEmp] = useState(null);
-  const [empPayslips, setEmpPayslips] = useState([]);
-  const [loadingEmpPayslips, setLoadingEmpPayslips] = useState(false);
-
   // Preview modal
   const [previewRecord, setPreviewRecord] = useState(null);
   useEscapeClose(() => setPreviewRecord(null), !!previewRecord);
 
   useEffect(() => {
     if (tab === 'manage') fetchCycles();
-    if (tab === 'directory') fetchEmployees();
   }, [tab]);
 
   const fetchCycles = async () => {
@@ -86,24 +80,6 @@ export default function PayrollPanel() {
       const data = await res.json();
       setCycleDetail(Array.isArray(data) ? data : []);
     } catch { toast.error('Failed to load cycle details'); }
-  };
-
-  const fetchEmployees = async () => {
-    try {
-      const res = await fetch('/api/employees', { credentials: 'include' });
-      const data = await res.json();
-      setEmployees(Array.isArray(data) ? data : []);
-    } catch { toast.error('Failed to load employees'); }
-  };
-
-  const fetchEmpPayslips = async (code) => {
-    setLoadingEmpPayslips(true);
-    try {
-      const res = await fetch(`/api/payroll/employee/${code}`, { credentials: 'include' });
-      const data = await res.json();
-      setEmpPayslips(Array.isArray(data) ? data : []);
-    } catch { toast.error('Failed to load payslips'); }
-    finally { setLoadingEmpPayslips(false); }
   };
 
   const handleFileDrop = (e) => {
@@ -257,8 +233,8 @@ export default function PayrollPanel() {
   const tabInactive = "bg-[#f5efff] border border-[#ebe4ff] text-[#6b7280] hover:text-black hover:bg-[#ede9fe] transition-all";
 
   const tabs = [
-    { id: 'upload', label: 'Bulk Data Upload', icon: Upload },
     { id: 'directory', label: 'Employee Directory', icon: Users },
+    { id: 'upload', label: 'Bulk Data Upload', icon: Upload },
     { id: 'manage', label: 'Manage Cycles', icon: BarChart3 },
   ];
 
@@ -452,101 +428,7 @@ export default function PayrollPanel() {
       )}
 
       {/* ── TAB: EMPLOYEE DIRECTORY ── */}
-      {tab === 'directory' && (
-  <div className={`${panelBase} p-8`}>
-    <p className="text-[15px] font-black uppercase tracking-[0.3em] text-[#00000] mb-6">Employee Payroll Directory</p>
-    <div className="max-w-md mb-8">
-      <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Select Employee</label>
-      <div style={{ position: 'relative' }}>
-        <select
-          value={selectedEmp?.employee_code || ''}
-          onChange={e => {
-            const emp = employees.find(em => em.employee_code === e.target.value);
-            setSelectedEmp(emp);
-            if (emp) fetchEmpPayslips(emp.employee_code);
-          }}
-          className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm px-4 py-3 rounded-xl focus:outline-none focus:border-[#c084fc] transition-all appearance-none"
-          style={{ 
-            position: 'relative',
-            zIndex: 10
-          }}
-        >
-          <option value="">Select an employee...</option>
-          {employees
-            .filter(e => 
-              e.employment_status === 'Active' || 
-              e.employment_status === 'active' ||
-              e.is_active === 1 ||
-              e.is_active === true
-            )
-            .map(e => (
-              <option key={e.employee_code} value={e.employee_code}>
-                {e.name} ({e.employee_code})
-              </option>
-            ))}
-        </select>
-        {/* Downward arrow indicator */}
-        <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-[#8b8ba3]">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-      </div>
-    </div>
-
-    {selectedEmp && (
-      <div>
-        <div className="flex items-center gap-4 bg-[#f5efff] border border-[#ebe4ff] rounded-2xl p-4 mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#c084fc] to-[#8b5cf6] flex items-center justify-center text-white font-black text-xl">
-            {selectedEmp.name?.charAt(0)}
-          </div>
-          <div>
-            <p className="font-black text-black uppercase italic text-sm">{selectedEmp.name}</p>
-            <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{selectedEmp.employee_code} · {selectedEmp.designation}</p>
-          </div>
-        </div>
-
-        {loadingEmpPayslips ? (
-          <div className="flex justify-center p-10"><div className="w-8 h-8 border-2 border-[#8b5cf6] border-t-transparent rounded-full animate-spin" /></div>
-        ) : empPayslips.length === 0 ? (
-          <p className="text-center text-[10px] font-black uppercase tracking-widest text-[#b6b6c7] py-10">No payslips found for this employee</p>
-        ) : (
-          <div className="space-y-3">
-            {empPayslips.map((ps, i) => (
-              <div key={i} className="flex items-center justify-between bg-white border border-[#ebe4ff] rounded-2xl px-6 py-4 hover:bg-[#faf7ff] transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-[#f5efff] flex items-center justify-center text-[#8b5cf6]">
-                    <Calendar size={18} />
-                  </div>
-                  <div>
-                    <p className="font-black text-black italic text-sm uppercase">{MONTH_NAMES[ps.pay_month]} {ps.pay_year}</p>
-                    <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">CTC: {fmt(ps.gross_ctc)} · Ded: {fmt(ps.total_deductions)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">{fmt(ps.net_in_hand)}</span>
-                  <button
-                    onClick={() => downloadPDF(ps.employee_code, ps.pay_year, ps.pay_month)}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#f5efff] text-[#8b5cf6] text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-[#8b5cf6] hover:text-white transition-all"
-                  >
-                    <Download size={13} /> PDF
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    )}
-
-    {!selectedEmp && (
-      <div className="text-center py-16 opacity-30">
-        <Users size={48} className="mx-auto mb-4 text-[#8b8ba3]" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Select an employee to view their payslip history</p>
-      </div>
-    )}
-  </div>
-)}
+      {tab === 'directory' && <PayrollDirectory />}
 
       {/* ── TAB: MANAGE CYCLES ── */}
       {tab === 'manage' && (

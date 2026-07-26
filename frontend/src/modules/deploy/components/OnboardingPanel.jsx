@@ -65,12 +65,14 @@ export default function OnboardingPanel() {
   const canApproveBasic = hasPermission(P.DEPLOY_EMP_APPROVE_BASIC) || canReviewSubmissions;
   const canApproveSensitive = hasPermission(P.DEPLOY_EMP_APPROVE_SENSITIVE) || canReviewSubmissions;
   const canApproveFinancial = hasPermission(P.DEPLOY_EMP_APPROVE_FINANCIAL) || hasPermission(P.DEPLOY_EMP_EDIT_FINANCIAL);
+  const canEditApprovalPanel = canApproveBasic || canApproveSensitive || canApproveFinancial;
 
   const [activeTab, setActiveTab] = useState('invites');
   const [invites, setInvites] = useState([]);
   const [approvals, setApprovals] = useState([]);
   const [managers, setManagers] = useState([]);
   const [activeManagers, setActiveManagers] = useState([]);
+  const [customRoles, setCustomRoles] = useState([]);
   const [locations, setLocations] = useState([]);
   const [dynDesignations, setDynDesignations] = useState([]);
   const [dynDepartments, setDynDepartments] = useState([]);
@@ -99,13 +101,24 @@ export default function OnboardingPanel() {
     doj: ''
   });
 
-  useEffect(() => { 
+  useEffect(() => {
     if (activeTab === 'invites') loadInvites();
-    else {
-        loadApprovals();
-        loadOptions();
-    }
+    else loadApprovals();
+    loadOptions();
   }, [activeTab]);
+
+  // Keep the "Pending Approvals" badge count accurate from the moment this
+  // panel mounts, not just after the user has opened that tab at least once.
+  // Fetched silently (no shared `loading` toggle) so it can't fight with
+  // whichever tab's own spinner is currently showing.
+  useEffect(() => {
+    if (!canReviewSubmissions) return;
+    fetch('/api/onboarding/approvals', { credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setApprovals(data); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadOptions = async () => {
     try {
@@ -180,6 +193,9 @@ export default function OnboardingPanel() {
       setLocations(optionsData.locations || []);
       setDynDesignations(optionsData.designations || []);
       setDynDepartments(optionsData.departments || []);
+      setCustomRoles(
+        (optionsData.custom_roles || []).filter(name => String(name).trim().toLowerCase() !== 'candidate')
+      );
 
     } catch (error) {
       console.error('Error loading options:', error);
@@ -481,8 +497,34 @@ export default function OnboardingPanel() {
     }
   };
 
+  // Fields that must be filled in (on the profile itself, via "Save Changes")
+  // before an account can be activated. Bank name/account number are locked
+  // in this panel but still checked — they come from the candidate's original
+  // onboarding submission.
+  const MANDATORY_ACTIVATION_FIELDS = [
+    ['first_name', 'First Name'],
+    ['last_name', 'Last Name'],
+    ['email_id', 'Email'],
+    ['role', 'Access Role'],
+    ['dob', 'Date of Birth'],
+    ['contact_number', 'Contact Number'],
+    ['current_address', 'Current Address'],
+    ['bank_name', 'Bank Name'],
+    ['bank_account_no', 'Bank Account No.'],
+    ['cv_path', 'Resume / CV'],
+    ['id_proofs', 'ID Proof'],
+  ];
+
   const handleApprove = async (e) => {
     e.preventDefault();
+
+    // ── Mandatory field gate ──
+    for (const [field, label] of MANDATORY_ACTIVATION_FIELDS) {
+      if (!String(editApprovalForm?.[field] || '').trim()) {
+        toast.error(`${label} is required before this account can be activated. Fill it in and click "Save Changes" first.`);
+        return;
+      }
+    }
 
     // ── Validation ──
     // Only validate fields that have values
@@ -957,7 +999,8 @@ export default function OnboardingPanel() {
                     {[
                       { id: 'org_admin', label: 'Org Admin (L2)' },
                       { id: 'manager', label: 'Manager (L3)' },
-                      { id: 'employee', label: 'Employee (L4)' }
+                      { id: 'employee', label: 'Employee (L4)' },
+                      ...customRoles.map(name => ({ id: name, label: name }))
                     ].map(r => (
                       <option key={r.id} value={r.id} className={isLightMode ? 'text-black bg-white' : 'text-white bg-[#080f1f]'}>{r.label}</option>
                     ))}
@@ -1021,20 +1064,28 @@ export default function OnboardingPanel() {
                     <div className="flex items-center gap-3 shrink-0">
                        <button
                          onClick={handleSaveApprovalEdit}
+                         disabled={!canEditApprovalPanel}
+                         title={!canEditApprovalPanel ? "You don't have permission to edit onboarding profiles" : undefined}
                          className={`flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-lg text-[9px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
-                           isLightMode
-                             ? 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed] shadow-lg shadow-[#8b5cf6]/20'
-                             : 'bg-primary text-black hover:bg-white shadow-lg shadow-primary/20'
+                           !canEditApprovalPanel
+                             ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-400'
+                             : isLightMode
+                               ? 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed] shadow-lg shadow-[#8b5cf6]/20'
+                               : 'bg-primary text-black hover:bg-white shadow-lg shadow-primary/20'
                          }`}
                        >
                          <Save size={11} /> Save Changes
                        </button>
                        <button
                          onClick={handleRejectProfile}
+                         disabled={!canReviewSubmissions}
+                         title={!canReviewSubmissions ? "You don't have permission to reject profiles" : undefined}
                          className={`flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-lg border text-[9px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
-                           isLightMode
-                             ? 'bg-[#faf7ff] border-[#ebe4ff] text-[#6b7280] hover:bg-red-50 hover:text-red-500'
-                             : 'bg-white/5 border-white/10 text-white/30 hover:text-error hover:bg-error/10'
+                           !canReviewSubmissions
+                             ? 'opacity-50 cursor-not-allowed'
+                             : isLightMode
+                               ? 'bg-[#faf7ff] border-[#ebe4ff] text-[#6b7280] hover:bg-red-50 hover:text-red-500'
+                               : 'bg-white/5 border-white/10 text-white/30 hover:text-error hover:bg-error/10'
                          }`}
                        >
                          <Trash2 size={11} /> Reject Profile
@@ -1045,7 +1096,7 @@ export default function OnboardingPanel() {
                  {/* Full Onboarding Profile */}
                  <div className="space-y-6">
                     <SectionHeader icon={User} label="Identity" isLightMode={isLightMode} />
-                    <div className={`space-y-4 p-6 rounded-3xl border ${
+                    <fieldset disabled={!canApproveBasic} className={`m-0 space-y-4 p-6 rounded-3xl border disabled:opacity-50 ${
                       isLightMode
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
@@ -1130,12 +1181,12 @@ export default function OnboardingPanel() {
                           />
                         </Field>
                       </div>
-                    </div>
+                    </fieldset>
                  </div>
 
                  <div className="space-y-6">
                     <SectionHeader icon={Phone} label="Contact" isLightMode={isLightMode} />
-                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border ${
+                    <fieldset disabled={!canApproveSensitive} className={`m-0 grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border disabled:opacity-50 ${
                       isLightMode
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
@@ -1192,12 +1243,12 @@ export default function OnboardingPanel() {
                           placeholder="e.g. +91 9876543210"
                         />
                       </Field>
-                    </div>
+                    </fieldset>
                  </div>
 
                  <div className="space-y-6">
                     <SectionHeader icon={MapPin} label="Address" isLightMode={isLightMode} />
-                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border ${
+                    <fieldset disabled={!canApproveSensitive} className={`m-0 grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border disabled:opacity-50 ${
                       isLightMode
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
@@ -1228,12 +1279,12 @@ export default function OnboardingPanel() {
                           placeholder="Permanent address"
                         />
                       </Field>
-                    </div>
+                    </fieldset>
                  </div>
 
                  <div className="space-y-6">
                     <SectionHeader icon={Briefcase} label="Role Parameters" isLightMode={isLightMode} />
-                    <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 p-6 rounded-3xl border ${
+                    <fieldset disabled={!canApproveBasic} className={`m-0 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 rounded-3xl border disabled:opacity-50 ${
                       isLightMode
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
@@ -1273,12 +1324,12 @@ export default function OnboardingPanel() {
                           ))}
                         </select>
                       </Field>
-                    </div>
+                    </fieldset>
                  </div>
 
                  <div className="space-y-6">
                     <SectionHeader icon={BadgeCheck} label="Skills" isLightMode={isLightMode} />
-                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border ${
+                    <fieldset disabled={!canApproveBasic} className={`m-0 grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-3xl border disabled:opacity-50 ${
                       isLightMode
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
@@ -1309,7 +1360,7 @@ export default function OnboardingPanel() {
                           placeholder="e.g. Docker, AWS"
                         />
                       </Field>
-                    </div>
+                    </fieldset>
                  </div>
 
                  <div className="space-y-6">
@@ -1318,14 +1369,15 @@ export default function OnboardingPanel() {
                       <button
                         type="button"
                         onClick={addApprovalEducation}
-                        className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all ${
+                        disabled={!canApproveBasic}
+                        className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                           isLightMode ? 'bg-[#f3e8ff] text-[#8b5cf6] hover:bg-[#ebe0ff]' : 'bg-primary/10 text-primary hover:bg-primary/20'
                         }`}
                       >
                         <Plus size={12} /> Add
                       </button>
                     </div>
-                    <div className={`space-y-4 p-6 rounded-3xl border ${
+                    <fieldset disabled={!canApproveBasic} className={`m-0 space-y-4 p-6 rounded-3xl border disabled:opacity-50 ${
                       isLightMode
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
@@ -1383,7 +1435,7 @@ export default function OnboardingPanel() {
                           </button>
                         </div>
                       ))}
-                    </div>
+                    </fieldset>
                  </div>
 
                  <div className="space-y-6">
@@ -1436,7 +1488,7 @@ export default function OnboardingPanel() {
                         <Lock size={9} /> Bank details locked
                       </span>
                     </div>
-                    <div className={`space-y-4 p-6 rounded-3xl border ${
+                    <fieldset disabled={!canApproveFinancial} className={`m-0 space-y-4 p-6 rounded-3xl border disabled:opacity-50 ${
                       isLightMode
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
@@ -1512,7 +1564,7 @@ export default function OnboardingPanel() {
                           placeholder="Any additional notes or remarks..."
                         />
                       </Field>
-                    </div>
+                    </fieldset>
                  </div>
 
                  {/* Approval Form */}
@@ -1523,6 +1575,7 @@ export default function OnboardingPanel() {
                         ? 'bg-[#faf7ff] border-[#f1ebff]' 
                         : 'bg-white/5 border-white/5'
                     }`}>
+                       <fieldset disabled={!canApproveBasic} className="m-0 p-0 border-0 space-y-6 disabled:opacity-50">
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <Field label="Reporting Manager" isLightMode={isLightMode}>
                             <ComboBox 
@@ -1568,10 +1621,12 @@ export default function OnboardingPanel() {
                             />
                           </Field>
                        </div>
+                       </fieldset>
 
+                       <fieldset disabled={!canApproveBasic} className="m-0 p-0 border-0 disabled:opacity-50">
                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                           <Field label="Employment Type" isLightMode={isLightMode}>
-                            <select 
+                            <select
                               value={approveForm.type}
                               onChange={e => setApproveForm({...approveForm, type: e.target.value})}
                               className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
@@ -1622,14 +1677,18 @@ export default function OnboardingPanel() {
                             </select>
                           </Field>
                        </div>
+                       </fieldset>
 
                        <Field label="Additional Notes" isLightMode={isLightMode}>
-                         <textarea 
+                         <textarea
+                           disabled={!canApproveBasic}
                            value={approveForm.notes}
                            onChange={e => setApproveForm({...approveForm, notes: e.target.value})}
                            className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all resize-none min-h-[80px] ${
-                             isLightMode 
-                               ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                             !canApproveBasic ? 'opacity-50 cursor-not-allowed' : ''
+                           } ${
+                             isLightMode
+                               ? 'bg-white border border-[#ebe4ff] text-black focus:border-[#c084fc]'
                                : 'glass-panel border border-white/5 text-white bg-black/20 focus:border-primary/40'
                            }`}
                            placeholder="Any additional notes or remarks..."
@@ -1637,79 +1696,13 @@ export default function OnboardingPanel() {
                        </Field>
 
                        <div className="flex flex-col gap-4 pt-6 border-t border-purple-100">
-                          <div className="flex flex-wrap gap-3">
-                            <button
-                              type="button"
-                              disabled={submitting || selectedApproval?.hr_approved || !canApproveBasic}
-                              onClick={async () => {
-                                setSubmitting(true);
-                                try {
-                                  const r = await fetch(`/api/onboarding/approve-section/${selectedApproval.employee_code}`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ section: 'hr' }),
-                                    credentials: 'include'
-                                  });
-                                  const d = await r.json();
-                                  if (d.success) {
-                                    toast.success('HR Sign-off recorded!');
-                                    loadApprovals();
-                                    setSelectedApproval(prev => prev ? ({ ...prev, hr_approved: 1 }) : null);
-                                  } else { toast.error(d.detail || 'Sign-off failed'); }
-                                } catch { toast.error('Sign-off error'); }
-                                finally { setSubmitting(false); }
-                              }}
-                              className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all ${
-                                selectedApproval?.hr_approved
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
-                                  : canApproveBasic
-                                    ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-sm'
-                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              }`}
-                            >
-                              {selectedApproval?.hr_approved ? '✓ HR Approved' : 'Sign Off HR Details'}
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={submitting || selectedApproval?.finance_approved || !canApproveFinancial}
-                              onClick={async () => {
-                                setSubmitting(true);
-                                try {
-                                  const r = await fetch(`/api/onboarding/approve-section/${selectedApproval.employee_code}`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ section: 'finance' }),
-                                    credentials: 'include'
-                                  });
-                                  const d = await r.json();
-                                  if (d.success) {
-                                    toast.success('Finance Sign-off recorded!');
-                                    loadApprovals();
-                                    setSelectedApproval(prev => prev ? ({ ...prev, finance_approved: 1 }) : null);
-                                  } else { toast.error(d.detail || 'Sign-off failed'); }
-                                } catch { toast.error('Sign-off error'); }
-                                finally { setSubmitting(false); }
-                              }}
-                              className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all ${
-                                selectedApproval?.finance_approved
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
-                                  : canApproveFinancial
-                                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
-                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              }`}
-                            >
-                              {selectedApproval?.finance_approved ? '✓ Finance Approved' : 'Sign Off Finance Details'}
-                            </button>
-                          </div>
-
                           <div className="flex gap-4">
-                            <button 
+                            <button
                               type="button"
                               onClick={() => setSelectedApproval(null)}
                               className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                isLightMode 
-                                  ? 'border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff] hover:text-black' 
+                                isLightMode
+                                  ? 'border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff] hover:text-black'
                                   : 'border border-white/10 text-white/40 hover:text-white'
                               }`}
                             >
@@ -1717,14 +1710,17 @@ export default function OnboardingPanel() {
                             </button>
                             <button
                               type="submit"
-                              disabled={submitting}
+                              disabled={submitting || !canApproveBasic || !canApproveFinancial}
+                              title={(!canApproveBasic || !canApproveFinancial) ? "You need both HR and Finance approval rights to activate this employee" : undefined}
                               className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all ${
-                                isLightMode
-                                  ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg'
-                                  : 'bg-primary text-black shadow-xl shadow-primary/20'
+                                (!canApproveBasic || !canApproveFinancial)
+                                  ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-400'
+                                  : isLightMode
+                                    ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg'
+                                    : 'bg-primary text-black shadow-xl shadow-primary/20'
                               }`}
                             >
-                              {submitting ? 'Activating...' : 'Approve Both & Activate'}
+                              {submitting ? 'Activating...' : 'Activate Profile'}
                             </button>
                           </div>
                        </div>

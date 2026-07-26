@@ -9,7 +9,7 @@ from backend.modules.deploy.repositories.attendance_repo import AttendanceReposi
 from backend.modules.deploy.schemas.employee import UpdateEmployeeRequest, OffboardRequest
 from backend.modules.deploy.repositories.user_repo import UserRepository
 from backend.common.services.email_service import EmailService
-from backend.common.utils.name_utils import join_name_parts
+from backend.common.utils.name_utils import join_name_parts, split_full_name
 from passlib.hash import pbkdf2_sha256
 
 class EmployeeService:
@@ -221,9 +221,22 @@ class EmployeeService:
         old_email = old_employee.get('email_id') if old_employee else None
 
         if any(k in data for k in ('first_name', 'middle_name', 'last_name')):
-            first_name = data.get('first_name', (old_employee or {}).get('first_name'))
-            middle_name = data.get('middle_name', (old_employee or {}).get('middle_name'))
-            last_name = data.get('last_name', (old_employee or {}).get('last_name'))
+            old_first = (old_employee or {}).get('first_name')
+            old_middle = (old_employee or {}).get('middle_name')
+            old_last = (old_employee or {}).get('last_name')
+            # Legacy/seeded rows may only have the combined `name` column populated,
+            # with first/middle/last never split out. Falling back straight to those
+            # (empty) columns would let editing just one name part wipe the other two
+            # out of `name` entirely, so recover the missing parts from `name` first.
+            if not (old_first and old_last):
+                parsed_first, parsed_middle, parsed_last = split_full_name((old_employee or {}).get('name'))
+                old_first = old_first or parsed_first
+                old_middle = old_middle or parsed_middle
+                old_last = old_last or parsed_last
+
+            first_name = data.get('first_name', old_first)
+            middle_name = data.get('middle_name', old_middle)
+            last_name = data.get('last_name', old_last)
             data['name'] = join_name_parts(first_name, middle_name, last_name)
 
         import json
