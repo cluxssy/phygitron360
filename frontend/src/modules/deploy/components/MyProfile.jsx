@@ -18,11 +18,13 @@ export default function MyProfile() {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [assets, setAssets] = useState(null);
   const [pendingRequest, setPendingRequest] = useState(null);
+  const [rejectedRequest, setRejectedRequest] = useState(null);
 
   useEffect(() => {
       if (user?.employee_code) {
           fetchDetails(user.employee_code);
           fetchPendingRequest(user.employee_code);
+          fetchLatestDecision(user.employee_code);
           fetch(`/api/assets/${user.employee_code}`, { credentials: 'include' })
               .then(r => r.json()).then(d => setAssets(d)).catch(() => {});
       } else {
@@ -51,6 +53,27 @@ export default function MyProfile() {
       const data = await res.json();
       setPendingRequest(data || null);
     } catch { /* non-critical */ }
+  };
+
+  const fetchLatestDecision = async (code) => {
+    try {
+      const res = await fetch(`/api/employee/${code}/edit-requests/latest-decision`, { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setRejectedRequest(data || null);
+    } catch { /* non-critical */ }
+  };
+
+  const dismissRejectedRequest = async () => {
+    if (!rejectedRequest) return;
+    try {
+      await fetch(`/api/employee/${user.employee_code}/edit-requests/${rejectedRequest.id}/acknowledge`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch { /* non-critical */ } finally {
+      setRejectedRequest(null);
+    }
   };
 
   if (loading) return <HorizontalLoader label="Loading dashboard..." />;
@@ -95,6 +118,22 @@ export default function MyProfile() {
           </button>
         </div>
       </div>
+
+      {rejectedRequest && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-[1.5rem] px-6 py-4">
+          <AlertCircle size={16} className="text-red-600 shrink-0" />
+          <p className="text-xs font-bold text-red-700 flex-1">
+            Your edits were rejected ({(rejectedRequest.requested_fields || []).map(f => f.label).join(', ')}).
+            {rejectedRequest.review_notes ? ` Reason: ${rejectedRequest.review_notes}` : ''}
+          </p>
+          <button
+            onClick={dismissRejectedRequest}
+            className="text-[10px] font-black uppercase tracking-widest text-red-700 hover:text-red-900 shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {pendingRequest && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-[1.5rem] px-6 py-4">

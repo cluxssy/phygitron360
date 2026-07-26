@@ -65,6 +65,9 @@ class ProfileEditRequestService:
         if not field_values and not doc_files:
             raise ValueError("Select at least one field to edit.")
 
+        if not any(upload and getattr(upload, 'filename', None) for upload in (supporting_files or [])):
+            raise ValueError("Attach at least one supporting document as proof.")
+
         skill_matrix = self.employee_repo.get_skill_matrix(employee_code, self.tenant_id) or {}
 
         requested_fields = []
@@ -75,6 +78,8 @@ class ProfileEditRequestService:
                 old_value = skill_matrix.get(field, '')
             else:
                 old_value = employee.get(field, '')
+            if str(new_value).strip().lower() == str(old_value or '').strip().lower():
+                raise ValueError(f"{TEXT_FIELDS[field]} can't be same as old one")
             requested_fields.append({
                 'field': field,
                 'label': TEXT_FIELDS[field],
@@ -130,6 +135,16 @@ class ProfileEditRequestService:
 
     def get_pending_request(self, employee_code: str) -> Optional[Dict[str, Any]]:
         return self.repo.get_pending_request(employee_code, self.tenant_id)
+
+    def get_latest_unacknowledged_decision(self, employee_code: str) -> Optional[Dict[str, Any]]:
+        return self.repo.get_latest_unacknowledged_decision(employee_code, self.tenant_id)
+
+    def acknowledge_request(self, request_id: int, employee_code: str) -> Dict[str, Any]:
+        req = self.get_request_by_id(request_id)
+        if not req or req['employee_code'] != employee_code:
+            raise ValueError("Edit request not found")
+        self.repo.acknowledge_request(request_id, self.tenant_id)
+        return {"success": True}
 
     def list_pending_requests(self) -> List[Dict[str, Any]]:
         return self.repo.get_pending_requests(self.tenant_id)
