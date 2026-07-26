@@ -168,7 +168,7 @@ function LayoutContent({ children }) {
       icon: Zap,
       perm: 'module.forge.access',
       options: [
-        { label: 'Academy', icon: Home, search: '?tab=academy', default: true },
+        { label: 'Learning Home', icon: Home, search: '?tab=academy', default: true },
         { label: 'Courses', icon: Layers, search: '?tab=courses' },
         { label: 'My Learning', icon: Star, search: '?tab=my-learning' },
       ],
@@ -180,8 +180,8 @@ function LayoutContent({ children }) {
       icon: Shield,
       perm: 'module.verify.access',
       options: [
-        { label: 'Skill Check', icon: Home, search: '?tab=home', default: true },
-        { label: 'Builder', icon: Cpu, search: '?tab=builder' },
+        { label: 'Assessments', icon: Home, search: '?tab=home', default: true },
+        { label: 'Create Assessment', icon: Cpu, search: '?tab=builder' },
         { label: 'Results', icon: Activity, search: '?tab=results' },
       ],
     },
@@ -195,7 +195,7 @@ function LayoutContent({ children }) {
         deployView === 'admin'
           ? [
             { label: 'Analytics', icon: LayoutDashboard, search: '?tab=dashboard', default: true },
-            { label: 'Personnel', icon: Users, search: '?tab=personnel' },
+            { label: 'Employees', icon: Users, search: '?tab=personnel' },
             { label: 'Assets', icon: Package, search: '?tab=allocations' },
           ]
           : [

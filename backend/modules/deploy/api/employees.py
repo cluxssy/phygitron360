@@ -286,6 +286,125 @@ async def upload_documents(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/employee-edit-requests/pending", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+def list_pending_edit_requests(current_user: dict = Depends(get_current_user)):
+    """HR-facing list of all employees' pending self-service edit requests."""
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    return ProfileEditRequestService(tenant_id=tenant_id).list_pending_requests()
+
+def _can_review_edit_requests(current_user: dict) -> bool:
+    roles = [r.lower() for r in (current_user.get('roles') or [current_user.get('role')]) if r]
+    is_admin = 'super_admin' in roles or 'superadmin' in roles or 'org_admin' in roles
+    perms = current_user.get('permissions', {})
+    has_perm = isinstance(perms, dict) and (perms.get('deploy.employees.approve_basic') or perms.get('deploy.onboarding.review_submissions'))
+    return bool(is_admin or has_perm)
+
+def _serve_stored_document(path: Optional[str]):
+    if not path:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if path.startswith("http://") or path.startswith("https://"):
+        from fastapi.responses import RedirectResponse
+        from backend.common.services.storage_service import generate_presigned_url
+        return RedirectResponse(url=generate_presigned_url(path, expiry_seconds=900))
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File missing from storage")
+    from fastapi.responses import FileResponse
+    return FileResponse(path, filename=os.path.basename(path), content_disposition_type="inline")
+
+@router.get("/employee-edit-requests/{request_id}/preview/field/{field_key}", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+def preview_edit_request_field(request_id: int, field_key: str, current_user: dict = Depends(get_current_user)):
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    path = ProfileEditRequestService(tenant_id=tenant_id).resolve_document_path(request_id, 'field', field_key)
+    return _serve_stored_document(path)
+
+@router.get("/employee-edit-requests/{request_id}/preview/support/{index}", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+def preview_edit_request_support(request_id: int, index: int, current_user: dict = Depends(get_current_user)):
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    path = ProfileEditRequestService(tenant_id=tenant_id).resolve_document_path(request_id, 'support', str(index))
+    return _serve_stored_document(path)
+
+@router.post("/employee-edit-requests/{request_id}/review")
+def review_edit_request(
+    request_id: int,
+    decision: str = Body(..., embed=True),
+    review_notes: Optional[str] = Body(None, embed=True),
+    current_user: dict = Depends(get_current_user)
+):
+    if not _can_review_edit_requests(current_user):
+        raise HTTPException(status_code=403, detail="Missing permission to review edit requests")
+
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = ProfileEditRequestService(tenant_id=tenant_id)
+    try:
+        return service.review_request(request_id, decision, current_user.get('username'), review_notes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/employee/{employee_code}/edit-requests/pending")
+def get_pending_edit_request(employee_code: str, current_user: dict = Depends(get_current_user)):
+    """Lets the profile page show a 'request already pending' banner instead of
+    silently failing when the employee tries to submit a second one."""
+    if current_user.get('employee_code') != employee_code:
+        raise HTTPException(status_code=403, detail="You can only view your own edit requests")
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    return ProfileEditRequestService(tenant_id=tenant_id).get_pending_request(employee_code)
+
+@router.post("/employee/{employee_code}/edit-requests")
+async def submit_edit_request(
+    employee_code: str,
+    fields: str = Form(...),
+    notes: Optional[str] = Form(None),
+    photo_file: Optional[UploadFile] = File(None),
+    cv_file: Optional[UploadFile] = File(None),
+    id_proof_file: Optional[UploadFile] = File(None),
+    supporting_files: List[UploadFile] = File(default=[]),
+    current_user: dict = Depends(get_current_user)
+):
+    """Self-service: an employee proposes changes to their own profile. Nothing
+    on the employees row changes here — this only records the request and
+    notifies the employee + admins. Reviewing/applying it is separate work."""
+    if current_user.get('employee_code') != employee_code:
+        raise HTTPException(status_code=403, detail="You can only request edits to your own profile")
+
+    import json
+    try:
+        field_values = json.loads(fields)
+        if not isinstance(field_values, dict):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid fields payload")
+
+    doc_files = {}
+    if photo_file and photo_file.filename:
+        doc_files['photo_path'] = photo_file
+    if cv_file and cv_file.filename:
+        doc_files['cv_path'] = cv_file
+    if id_proof_file and id_proof_file.filename:
+        doc_files['id_proofs'] = id_proof_file
+
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = ProfileEditRequestService(tenant_id=tenant_id)
+    try:
+        return service.submit_request(
+            employee_code,
+            field_values,
+            doc_files,
+            [f for f in (supporting_files or []) if f and f.filename],
+            notes
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.delete("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.delete"))])
 def delete_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')

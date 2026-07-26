@@ -23,6 +23,17 @@ import {
   isPositiveNumber
 } from '../../../core/utils/validators';
 
+// Splits a combined display name into first/middle/last, for records where
+// first_name/middle_name/last_name were never split out in the database
+// (legacy/seeded rows) — mirrors backend split_full_name().
+const splitFullName = (fullName) => {
+    const words = (fullName || '').trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return { first_name: '', middle_name: '', last_name: '' };
+    if (words.length === 1) return { first_name: words[0], middle_name: '', last_name: '' };
+    if (words.length === 2) return { first_name: words[0], middle_name: '', last_name: words[1] };
+    return { first_name: words[0], middle_name: words.slice(1, -1).join(' '), last_name: words[words.length - 1] };
+};
+
 // ── STATUS CONFIG ──
 const STATUS_OPTIONS = ['Active', 'Notice Period', 'On Leave', 'Inactive'];
 const EXITED_STATUSES = ['Exited', 'Terminated'];
@@ -83,8 +94,18 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             if (!res.ok) throw new Error();
             const data = await res.json();
             setDetails(data);
+            // Legacy/seeded rows may only have the combined `name` column
+            // populated, with first/middle/last never split out — fall back to
+            // splitting `name` so the edit form isn't blank for those employees.
+            const needsNameSplit = !(data.first_name && data.last_name);
+            const nameParts = needsNameSplit ? splitFullName(data.name) : {};
             setFormData({
                 ...data,
+                ...(needsNameSplit ? {
+                    first_name: data.first_name || nameParts.first_name,
+                    middle_name: data.middle_name || nameParts.middle_name,
+                    last_name: data.last_name || nameParts.last_name,
+                } : {}),
                 primary_skillset: data.skill_matrix?.primary_skillset || '',
                 secondary_skillset: data.skill_matrix?.secondary_skillset || '',
                 experience_years: data.skill_matrix?.experience_years || '0',
@@ -332,7 +353,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 body: JSON.stringify({ exit_date: exitDate, exit_reason: 'Administrative Exit', exit_type: 'Immediate' })
             });
             if (res.ok) {
-                toast.success("Personnel decoupled successfully");
+                toast.success("Employee offboarded successfully");
                 window.location.reload();
             }
         } catch {
@@ -397,7 +418,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 disabled={isSaving}
                                 className="flex items-center gap-2 px-8 py-2 bg-primary text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white transition-all shadow-lg shadow-primary/20"
                             >
-                                {isSaving ? 'Syncing...' : <><Save size={14} /> Synchronize Profile</>}
+                                {isSaving ? 'Saving...' : <><Save size={14} /> Save Profile</>}
                             </button>
                         </>
                     ) : (
@@ -442,26 +463,26 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-4 flex-wrap">
                                 {editBasic ? (
-                                    <div className="grid grid-cols-3 gap-2 w-full">
+                                    <div className="grid grid-cols-3 gap-2 w-full max-w-md">
                                         <input
                                             type="text"
                                             value={formData.first_name || ''}
                                             onChange={e => setFormData({...formData, first_name: e.target.value})}
-                                            className="text-2xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                            className="text-xs font-bold text-black uppercase tracking-tight bg-[#faf7ff] border border-[#e9defd] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-primary w-full"
                                             placeholder="First Name"
                                         />
                                         <input
                                             type="text"
                                             value={formData.middle_name || ''}
                                             onChange={e => setFormData({...formData, middle_name: e.target.value})}
-                                            className="text-2xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                            className="text-xs font-bold text-black uppercase tracking-tight bg-[#faf7ff] border border-[#e9defd] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-primary w-full"
                                             placeholder="Middle Name"
                                         />
                                         <input
                                             type="text"
                                             value={formData.last_name || ''}
                                             onChange={e => setFormData({...formData, last_name: e.target.value})}
-                                            className="text-2xl font-display font-black text-black uppercase tracking-tighter italic bg-[#faf7ff] border border-[#e9defd] rounded-xl px-4 py-1 focus:outline-none focus:border-primary w-full"
+                                            className="text-xs font-bold text-black uppercase tracking-tight bg-[#faf7ff] border border-[#e9defd] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-primary w-full"
                                             placeholder="Last Name"
                                         />
                                         {renderError('name')}
@@ -623,12 +644,12 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 {/* ── LEFT COLUMN ── */}
                 <div className="lg:col-span-2 space-y-8">
 
-                    {/* Personnel Statistics */}
+                    {/* Employee Statistics */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editJob} onChange={v => setFormData({...formData, doj: v})} error={errors.doj} />
                         <EditStatCard label="Contract" value={formData.employment_type} sub="Engagement Mode" editMode={editJob} onChange={v => setFormData({...formData, employment_type: v})} />
                         <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editJob} onChange={v => setFormData({...formData, experience_years: v})} error={errors.experience_years} />
-                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Hub" editMode={editJob} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} />
+                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Manager" editMode={editJob} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} />
                     </div>
 
                     {/* Skill Synergy */}
@@ -723,7 +744,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     {/* Compliance Toggles */}
                     {details?._meta?.can_view_financial !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={ShieldCheck} title="Compliance Protocol" />
+                        <SectionHeader icon={ShieldCheck} title="Compliance Checklist" />
                         <div className="mt-6 space-y-4">
                             <ComplianceRow
                                 label="PF Included"
@@ -768,19 +789,19 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
                     )}
 
-                    {/* Allocation & Lifecycle Matrix */}
+                    {/* Allocated Assets */}
                     {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/10 overflow-hidden rounded-2xl">
                         <div className="p-6 border-b border-[#ece4ff] bg-[#f4ecff] flex items-center justify-between">
-                            <SectionHeader icon={Package} title="Allocation & Lifecycle Matrix" />
+                            <SectionHeader icon={Package} title="Allocated Assets" />
                         </div>
 
-                        <div className="p-2 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar">
+                        <div className="p-2 grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[#ece4ff]">
                             {/* Onboarding Section */}
-                            <div className="space-y-1">
+                            <div className="space-y-1 md:pr-2 max-h-[400px] overflow-y-auto custom-scrollbar">
                                 <div className="px-4 py-2 bg-[#f4ecff] rounded-lg mb-2 border border-[#e9ddff]">
                                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#7c3aed] italic">
-                                        I. Onboarding Protocol
+                                        I. Onboarding Checklist
                                     </p>
                                 </div>
                                 {[
@@ -789,13 +810,13 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     { key: 'ob_headphones', label: 'Headphones' },
                                     { key: 'ob_mouse', label: 'External Mouse' },
                                     { key: 'ob_id_card', label: 'Identity Card' },
-                                    { key: 'ob_email_access', label: 'Email Node' },
+                                    { key: 'ob_email_access', label: 'Email Access' },
                                     { key: 'ob_groups', label: 'Group Access' },
                                     { key: 'ob_mediclaim', label: 'Mediclaim' },
                                     { key: 'ob_pf', label: 'Provident Fund' }
                                 ].map(a => (
                                     <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#f4ecff] transition-all border-b border-[#ece4ff] last:border-0 group">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-[#6d28d9] transition-colors">
+                                        <span className="text-[10px] font-medium uppercase tracking-widest text-black group-hover:text-[#6d28d9] transition-colors">
                                             {a.label}
                                         </span>
                                         {assets?.[a.key] ? (
@@ -812,9 +833,9 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </div>
 
                             {/* Clearance Section */}
-                            <div className="space-y-1 pt-4">
+                            <div className="space-y-1 pt-4 md:pt-0 md:pl-2 max-h-[400px] overflow-y-auto custom-scrollbar">
                                 <div className="px-4 py-2 bg-[#f4ecff] rounded-lg mb-2 border border-[#e9ddff]">
-                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-600 italic">
+                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#7c3aed] italic">
                                         II. Access Permissions
                                     </p>
                                 </div>
@@ -831,7 +852,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                     { key: 'cl_relieving_letter', label: 'Relieving Letter' }
                                 ].map(a => (
                                     <div key={a.key} className="flex items-center justify-between p-3 px-6 hover:bg-[#f4ecff] transition-all border-b border-[#ece4ff] last:border-0 group">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-[#7c3aed] transition-colors">
+                                        <span className="text-[10px] font-medium uppercase tracking-widest text-black group-hover:text-[#7c3aed] transition-colors">
                                             {a.label}
                                         </span>
                                         {assets?.[a.key] ? (
@@ -848,13 +869,13 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </div>
                         </div>
 
-                        {/* ── FIXED: Open Deployment Command Button ── */}
+                        {/* Manage Employee Assets Button */}
                         <div className="p-4 bg-[#faf7ff] border-t border-[#ece4ff]">
                             <button
                                 onClick={() => window.location.href = `/deploy?tab=assets&code=${details.employee_code}`}
                                 className="w-full py-3 px-4 rounded-xl border border-[#d8c7ff] bg-white text-[#6d28d9] text-[9px] font-black uppercase tracking-[0.2em] hover:bg-[#7c3aed] hover:text-white hover:scale-[1.02] hover:shadow-lg hover:shadow-[#7c3aed]/20 transition-all"
                             >
-                                Open Deployment Command
+                                Manage Employee Assets
                             </button>
                         </div>
                     </div>
@@ -895,7 +916,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <div className="mt-6 space-y-6">
                             <div>
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
-                                    Primary Operation Base
+                                    Work Location
                                 </p>
                                 {editBasic ? (
                                     <div>
@@ -937,7 +958,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
                     )}
 
-                    {/* Financial Nodes */}
+                    {/* Financial Details */}
                     {details?._meta?.can_view_financial !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                         <SectionHeader icon={Landmark} title="Financial Info" />
@@ -1177,7 +1198,7 @@ function EditStatCard({ label, value, sub, editMode, onChange, type = "text", op
                     {error && <p className="text-red-500 text-[9px] font-bold mt-1">{error}</p>}
                 </>
             ) : (
-                <p className="text-lg font-display font-normal text-black uppercase truncate">
+                <p className="text-xs font-bold text-black uppercase truncate">
                     {displayValue || value || '—'}
                 </p>
             )}

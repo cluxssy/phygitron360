@@ -127,7 +127,7 @@ export default function SourceDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
             <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-               <Activity size={16} className="text-purple-600" /> Active Pipeline
+               <Activity size={16} className="text-purple-600" /> Active Candidates
             </h3>
             <div className="space-y-3">
                <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 flex justify-between items-center">
@@ -830,7 +830,7 @@ export default function SourceDashboard() {
           {hasPermission('source.jobs.view') && <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>}
           {hasPermission('source.candidates.manage') && <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>}
           {hasPermission('source.offers.view') && <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>}
-          {hasPermission('source.candidates.view') && <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Pipeline</button>}
+          {hasPermission('source.candidates.view') && <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Candidates</button>}
           <div className="sidebar-brand">
             <img src={ewandzLogo} alt="Ewandz" />
           </div>
@@ -847,7 +847,7 @@ export default function SourceDashboard() {
              currentTab === 'jobs' ? 'JOB MANAGEMENT' :
              currentTab === 'home' ? 'RECRUITMENT ANALYTICS' :
              currentTab === 'offers' ? 'OFFER MANAGEMENT' :
-             currentTab === 'active' ? 'HIRING PIPELINE' :
+             currentTab === 'active' ? 'RECRUITMENT STAGES' :
              currentTab === 'invite-status' ? 'CANDIDATE INVITATIONS' :
              currentTab === 'archive' ? 'CANDIDATE ARCHIVE' :
              'CANDIDATE DATABASE'}
@@ -862,7 +862,7 @@ export default function SourceDashboard() {
             ) : currentTab === 'offers' ? (
               <>Offer Management</>
             ) : currentTab === 'active' ? (
-              <>Hiring Pipeline</>
+              <>Recruitment Stages</>
             ) : currentTab === 'invite-status' ? (
               <>Candidate Invitations</>
             ) : (

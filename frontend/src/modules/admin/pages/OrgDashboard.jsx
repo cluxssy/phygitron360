@@ -423,9 +423,9 @@ export default function OrgDashboard() {
                   marginBottom: "20px",
                 }}
               >
-                {/* TALENT INTELLIGENCE FUNNEL (PIE CHART) - USING RECHARTS */}
+                {/* RECRUITMENT FUNNEL (PIE CHART) - USING RECHARTS */}
                 <div className="section boxed" style={{ margin: 0, display: "flex", flexDirection: "column" }}>
-                  <h3 style={{ marginBottom: "24px" }}>Talent Pipeline</h3>
+                  <h3 style={{ marginBottom: "24px" }}>Candidate Pipeline</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: "40px", flex: 1 }}>
                     <div style={{ width: "180px", height: "180px", flexShrink: 0 }}>
                       <ResponsiveContainer width="100%" height="100%">

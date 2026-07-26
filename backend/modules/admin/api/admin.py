@@ -4,8 +4,8 @@ from pydantic import BaseModel
 from backend.core.dependencies import require_permission, get_current_user
 from backend.modules.admin.services.admin_service import AdminService
 from backend.modules.admin.schemas.admin import (
-    UserCreate, UserResponse, LogResponse, RolePermissionsUpdate, 
-    UserOverrideUpdate, RoleUpdate, PermissionTemplateCreate
+    UserCreate, UserResponse, LogResponse, RolePermissionsUpdate,
+    UserOverrideUpdate, RoleUpdate, PermissionTemplateCreate, PermissionTemplateRename
 )
 from backend.modules.deploy.services.notification_service import add_notification
 
@@ -91,6 +91,15 @@ def create_template(data: PermissionTemplateCreate, current_user: dict = Depends
 def delete_template(name: str, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
     try:
         return service.delete_template(name, current_user['username'])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/permissions/templates/{name}")
+def rename_template(name: str, data: PermissionTemplateRename, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
+    try:
+        return service.rename_template(name, data.new_name, current_user['username'])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

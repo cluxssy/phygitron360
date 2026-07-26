@@ -152,6 +152,21 @@ class AdminService:
         self.repo.log_action(actor, "DELETE_CUSTOM_ROLE", f"Deleted custom role: {name}")
         return {"success": True, "message": f"Custom role {name} deleted"}
 
+    def rename_template(self, old_name: str, new_name: str, actor: str):
+        new_name = new_name.strip()
+        if not new_name:
+            raise ValueError("Name cannot be empty")
+        if new_name == old_name:
+            return {"success": True, "message": "No changes"}
+
+        existing_names = {t['name'] for t in self.repo.get_templates()}
+        if new_name in existing_names:
+            raise ValueError(f"A template named {new_name} already exists")
+
+        self.repo.rename_template(old_name, new_name)
+        self.repo.log_action(actor, "RENAME_CUSTOM_ROLE", f"Renamed custom role {old_name} to {new_name}")
+        return {"success": True, "message": f"Renamed {old_name} to {new_name}"}
+
     def update_role_permissions(self, role: str, permissions: List[str], actor: str):
         self.repo.update_role_permissions(role, permissions)
         self.repo.log_action(actor, "UPDATE_ROLE_PERMISSIONS", f"Updated permissions for role {role}")

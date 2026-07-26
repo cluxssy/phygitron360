@@ -143,7 +143,7 @@ export default function ForgeDashboard() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-                    Learning Forge
+                    Learning Portal
                   </h1>
                   <p className="text-sm text-gray-500 mt-1">
                     Create and manage learning paths, track employee progress, and build workforce capabilities.

@@ -239,6 +239,8 @@ def approve_onboarding(
     try:
         tenant_id = current_user.get("tenant_id", "public")
         return service.approve_onboarding(employee_code, approval_data, tenant_id=tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         import traceback
         traceback.print_exc()

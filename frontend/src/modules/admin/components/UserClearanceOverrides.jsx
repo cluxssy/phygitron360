@@ -79,7 +79,7 @@ export default function UserClearanceOverrides({
                   text-[#8b5cf6]
                 "
               >
-                Permission Override Center
+                Individual Permission Settings
               </p>
             </div>
 

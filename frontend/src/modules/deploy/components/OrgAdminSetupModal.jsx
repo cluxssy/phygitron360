@@ -230,7 +230,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
         {/* HEADER */}
         <div className="mb-8 flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-6">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Phygitron 360 // Security Node</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Phygitron 360 // Security Setup</span>
             <h2 className="text-2xl sm:text-3xl font-display font-black text-slate-900 uppercase tracking-tighter mt-1">Identity <span className="text-primary text-glow">Initialization</span></h2>
           </div>
 

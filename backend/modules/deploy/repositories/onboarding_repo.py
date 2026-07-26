@@ -196,10 +196,9 @@ class OnboardingRepository:
                     cur.execute("DELETE FROM employees WHERE employee_code = %s", (employee_code,))
                 
                 cur.execute('''
-                    UPDATE employees 
+                    UPDATE employees
                     SET employment_status = 'Active',
                         hr_approved = 1,
-                        finance_approved = 1,
                         reporting_manager = %s,
                         employment_type = %s,
                         pf_included = %s,
