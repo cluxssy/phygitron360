@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, User, Mail, Landmark, Briefcase, GraduationCap,
-  FileText, Save, Download, ShieldCheck
+  FileText, Download, ShieldCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { usePermissions } from '../../../core/auth/usePermissions';
@@ -10,11 +10,9 @@ import { P } from '../../../core/permissions';
 import { isValidBankAccount } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
-// Finance-facing read-only review of an active employee's onboarding profile,
-// with bank name / account number left open for correction. All other fields
-// stay locked — financial edits go through the same PUT /api/employee/{code}
-// endpoint EmployeeProfileFull uses, so server-side field-permission stripping
-// (deploy.employees.edit_financial) still applies as defence-in-depth.
+// Finance-facing review of an active employee's onboarding profile, with bank
+// name / account number left open for correction. There's no separate save
+// step — approving commits whatever's currently in those fields in one shot.
 export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
   const { hasPermission } = usePermissions();
   const canEditFinancial = hasPermission(P.DEPLOY_EMP_EDIT_FINANCIAL);
@@ -24,7 +22,6 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
   const [loading, setLoading] = useState(true);
   const [bankForm, setBankForm] = useState({ bank_name: '', bank_account_no: '' });
   const [errors, setErrors] = useState({});
-  const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
 
   useEscapeClose(onClose, !!employeeCode);
@@ -53,38 +50,28 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
     }
   };
 
-  const handleSave = async () => {
+  const handleApproveDetails = async () => {
     if (bankForm.bank_account_no && !isValidBankAccount(bankForm.bank_account_no)) {
       setErrors({ bank_account_no: 'Enter a valid bank account number (9-18 digits)' });
       return;
     }
     setErrors({});
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/employee/${employeeCode}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bank_name: bankForm.bank_name,
-          bank_account_no: bankForm.bank_account_no,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || 'Failed to save bank details');
-      toast.success('Bank details updated');
-      setDetails(prev => ({ ...prev, bank_name: bankForm.bank_name, bank_account_no: bankForm.bank_account_no }));
-      onSaved?.();
-    } catch (e) {
-      toast.error(e.message || 'Failed to save bank details');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleApproveDetails = async () => {
     setApproving(true);
     try {
+      if (canEditFinancial) {
+        const saveRes = await fetch(`/api/employee/${employeeCode}`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bank_name: bankForm.bank_name,
+            bank_account_no: bankForm.bank_account_no,
+          }),
+        });
+        const saveData = await saveRes.json().catch(() => ({}));
+        if (!saveRes.ok) throw new Error(saveData.detail || 'Failed to save bank details');
+      }
+
       const res = await fetch(`/api/onboarding/approve-section/${employeeCode}`, {
         method: 'POST',
         credentials: 'include',
@@ -94,7 +81,7 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.success === false) throw new Error(data.detail || 'Failed to approve details');
       toast.success('Finance sign-off recorded');
-      setDetails(prev => ({ ...prev, finance_approved: 1 }));
+      setDetails(prev => ({ ...prev, finance_approved: 1, bank_name: bankForm.bank_name, bank_account_no: bankForm.bank_account_no }));
       onSaved?.();
     } catch (e) {
       toast.error(e.message || 'Failed to approve details');
@@ -161,18 +148,6 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
                   >
                     <ShieldCheck size={11} /> {financeApproved ? 'Profile Approved' : approving ? 'Approving...' : 'Approve Profile'}
                   </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={!canEditFinancial || saving}
-                    title={!canEditFinancial ? "You don't have permission to edit bank details" : undefined}
-                    className={`flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-lg text-[9px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
-                      !canEditFinancial || saving
-                        ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-400'
-                        : 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed] shadow-lg shadow-[#8b5cf6]/20'
-                    }`}
-                  >
-                    <Save size={11} /> {saving ? 'Saving...' : 'Save Bank Details'}
-                  </button>
                   <button onClick={onClose} className="p-2 rounded-xl bg-[#f5efff] text-[#6b7280] hover:bg-[#8b5cf6] hover:text-white transition-all">
                     <X size={16} />
                   </button>
@@ -187,13 +162,13 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
                       label="Bank Name"
                       value={bankForm.bank_name}
                       onChange={v => setBankForm(f => ({ ...f, bank_name: v }))}
-                      disabled={!canEditFinancial}
+                      disabled={!canEditFinancial || financeApproved}
                     />
                     <EditableField
                       label="Account Number"
                       value={bankForm.bank_account_no}
                       onChange={v => setBankForm(f => ({ ...f, bank_account_no: v }))}
-                      disabled={!canEditFinancial}
+                      disabled={!canEditFinancial || financeApproved}
                       error={errors.bank_account_no}
                     />
                     <ReadField label="PAN Number" value={details.pan_no} />

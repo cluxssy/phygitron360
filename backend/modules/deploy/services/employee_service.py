@@ -40,7 +40,16 @@ class EmployeeService:
         employee = self.repo.get_employee_by_code(employee_code, self.tenant_id)
         if not employee:
             return None
-            
+
+        # Legacy/seeded rows may only have the combined `name` column populated,
+        # with first/middle/last never split out. Recover them for display so
+        # fields like the Request Edits modal don't show a blank current value.
+        if not (employee.get('first_name') and employee.get('last_name')):
+            parsed_first, parsed_middle, parsed_last = split_full_name(employee.get('name'))
+            employee['first_name'] = employee.get('first_name') or parsed_first
+            employee['middle_name'] = employee.get('middle_name') or parsed_middle
+            employee['last_name'] = employee.get('last_name') or parsed_last
+
         # Securely generate temporary access URLs for private documents
         from backend.common.services.storage_service import generate_presigned_url
         if employee.get('cv_path'):

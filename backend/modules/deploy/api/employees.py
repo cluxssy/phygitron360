@@ -356,6 +356,28 @@ def get_pending_edit_request(employee_code: str, current_user: dict = Depends(ge
     tenant_id = current_user.get('tenant_id', 'public')
     return ProfileEditRequestService(tenant_id=tenant_id).get_pending_request(employee_code)
 
+@router.get("/employee/{employee_code}/edit-requests/latest-decision")
+def get_latest_edit_request_decision(employee_code: str, current_user: dict = Depends(get_current_user)):
+    """Lets the profile page show a one-time 'your edits were rejected' banner
+    for the most recent rejection the employee hasn't dismissed yet."""
+    if current_user.get('employee_code') != employee_code:
+        raise HTTPException(status_code=403, detail="You can only view your own edit requests")
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    return ProfileEditRequestService(tenant_id=tenant_id).get_latest_unacknowledged_decision(employee_code)
+
+@router.post("/employee/{employee_code}/edit-requests/{request_id}/acknowledge")
+def acknowledge_edit_request(employee_code: str, request_id: int, current_user: dict = Depends(get_current_user)):
+    """Dismisses the rejection banner so it doesn't keep reappearing."""
+    if current_user.get('employee_code') != employee_code:
+        raise HTTPException(status_code=403, detail="You can only manage your own edit requests")
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    try:
+        return ProfileEditRequestService(tenant_id=tenant_id).acknowledge_request(request_id, employee_code)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 @router.post("/employee/{employee_code}/edit-requests")
 async def submit_edit_request(
     employee_code: str,

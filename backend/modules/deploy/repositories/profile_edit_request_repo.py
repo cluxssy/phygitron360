@@ -22,6 +22,31 @@ class ProfileEditRequestRepository:
         finally:
             conn.close()
 
+    def get_latest_unacknowledged_decision(self, employee_code: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute(
+                "SELECT * FROM profile_edit_requests WHERE employee_code = %s AND status = 'Rejected' AND acknowledged = FALSE "
+                "ORDER BY reviewed_at DESC LIMIT 1",
+                (employee_code,)
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def acknowledge_request(self, request_id: int, tenant_id: str = 'public'):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            self._set_path(cur, tenant_id)
+            cur.execute("UPDATE profile_edit_requests SET acknowledged = TRUE WHERE id = %s", (request_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
     def get_pending_requests(self, tenant_id: str = 'public') -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:

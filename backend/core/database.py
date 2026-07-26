@@ -1131,6 +1131,9 @@ def create_tables(schema_name='public'):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # Lets the profile page show a one-time "your edits were rejected" banner
+        # that the employee can dismiss, instead of it reappearing on every visit.
+        cur.execute("ALTER TABLE profile_edit_requests ADD COLUMN IF NOT EXISTS acknowledged BOOLEAN DEFAULT FALSE")
 
         # Add extracted_text column to bulk_upload_job_items for pre-extracted resume text
         # This decouples text extraction (fast, CPU) from AI parsing (slow, API)

@@ -241,7 +241,8 @@ class OnboardingService:
     # Fields that must be filled in before an account can be activated from
     # Pending Approvals. Checked against the persisted employee record (not
     # the activation form payload) since these are edited via the "Save
-    # Changes" profile editor, not the activation form itself.
+    # Changes" profile editor, not the activation form itself. Bank details
+    # are not required — accounts can be activated without them.
     MANDATORY_ACTIVATION_FIELDS = {
         'first_name': 'First Name',
         'last_name': 'Last Name',
@@ -250,8 +251,6 @@ class OnboardingService:
         'dob': 'Date of Birth',
         'contact_number': 'Contact Number',
         'current_address': 'Current Address',
-        'bank_name': 'Bank Name',
-        'bank_account_no': 'Bank Account No.',
         'cv_path': 'Resume / CV',
         'id_proofs': 'ID Proof',
     }

@@ -824,7 +824,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                                 <CheckCircle size={8} /> Allocated
                                             </span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[8px] font-black uppercase border border-amber-200 shadow-sm">
+                                            <span className="px-3 py-1 bg-black/5 text-black rounded-full text-[8px] font-black uppercase border border-black/5">
                                                 Not Allocated
                                             </span>
                                         )}
@@ -860,7 +860,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                                 <CheckCircle size={8} /> Resolved
                                             </span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[8px] font-black uppercase border border-blue-200 shadow-sm">
+                                            <span className="px-3 py-1 bg-black/5 text-black rounded-full text-[8px] font-black uppercase border border-black/5">
                                                 Pending Verification
                                             </span>
                                         )}

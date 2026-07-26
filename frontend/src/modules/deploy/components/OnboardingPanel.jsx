@@ -498,9 +498,8 @@ export default function OnboardingPanel() {
   };
 
   // Fields that must be filled in (on the profile itself, via "Save Changes")
-  // before an account can be activated. Bank name/account number are locked
-  // in this panel but still checked — they come from the candidate's original
-  // onboarding submission.
+  // before an account can be activated. Bank details are not required —
+  // accounts can be activated without them.
   const MANDATORY_ACTIVATION_FIELDS = [
     ['first_name', 'First Name'],
     ['last_name', 'Last Name'],
@@ -509,8 +508,6 @@ export default function OnboardingPanel() {
     ['dob', 'Date of Birth'],
     ['contact_number', 'Contact Number'],
     ['current_address', 'Current Address'],
-    ['bank_name', 'Bank Name'],
-    ['bank_account_no', 'Bank Account No.'],
     ['cv_path', 'Resume / CV'],
     ['id_proofs', 'ID Proof'],
   ];

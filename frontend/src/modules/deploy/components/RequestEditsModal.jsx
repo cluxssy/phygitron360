@@ -96,6 +96,11 @@ export default function RequestEditsModal({ details, onClose, onSubmitted }) {
         toast.error(`Enter the new value for ${field.label}`);
         return false;
       }
+      const oldValue = (oldValueFor(details, field) || '').trim();
+      if (value.toLowerCase() === oldValue.toLowerCase()) {
+        toast.error(`${field.label} can't be same as old one`);
+        return false;
+      }
       if (field.key === 'email_id' && !isValidEmail(value)) {
         toast.error('Enter a valid email address');
         return false;
@@ -113,6 +118,12 @@ export default function RequestEditsModal({ details, onClose, onSubmitted }) {
         return false;
       }
     }
+
+    if (supportingFiles.length === 0) {
+      toast.error('Attach at least one supporting document as proof');
+      return false;
+    }
+
     return true;
   };
 
@@ -282,7 +293,7 @@ export default function RequestEditsModal({ details, onClose, onSubmitted }) {
 
         {/* Supporting documents */}
         <div>
-          <label className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-1.5 block">Supporting Documents (optional)</label>
+          <label className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-1.5 block">Supporting Documents *</label>
           <button
             type="button"
             onClick={() => supportInputRef.current?.click()}
