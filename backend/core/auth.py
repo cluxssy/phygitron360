@@ -153,7 +153,7 @@ def get_current_user(request: Request) -> dict:
             cur.execute(f'SET search_path TO "{tenant_id}"')
             cur.execute(
                 """
-                SELECT u.id, u.username, u.role, u.templates, u.employee_code, u.is_active,
+                SELECT u.id, u.username, u.role, u.templates, u.roles, u.employee_code, u.is_active,
                        e.name AS employee_name, e.first_name AS employee_first_name,
                        c.full_name AS candidate_name, c.first_name AS candidate_first_name
                 FROM users u
@@ -171,7 +171,7 @@ def get_current_user(request: Request) -> dict:
             if not user_row.get("is_active", 1):
                 raise HTTPException(status_code=403, detail="Account is deactivated.")
 
-            raw_roles  = user_row.get("templates") or []
+            raw_roles = list(user_row.get("templates") or []) + list(user_row.get("roles") or [])
             raw_roles.append(user_row.get("role"))
             norm_roles = _normalize_roles(raw_roles)
 

@@ -315,11 +315,11 @@ class OnboardingRepository:
                     ))
 
                     # 2. User UPDATE or INSERT
-                    cur.execute("UPDATE users SET password_hash = %s, role = %s, roles = ARRAY[%s]::varchar[], is_active = 0, employee_code = %s, password_must_change = 0 WHERE username = %s", 
-                            (user_data['password_hash'], user_data['role'], user_data['role'], user_data['employee_code'], user_data['email']))
+                    cur.execute("UPDATE users SET password_hash = %s, role = %s, roles = ARRAY[%s]::varchar[], templates = ARRAY[%s]::varchar[], is_active = 0, employee_code = %s, password_must_change = 0 WHERE username = %s", 
+                            (user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code'], user_data['email']))
                     if cur.rowcount == 0:
-                        cur.execute("INSERT INTO users (username, password_hash, role, roles, employee_code, is_active, password_must_change) VALUES (%s, %s, %s, ARRAY[%s]::varchar[], %s, 0, 0)", 
-                            (user_data['email'], user_data['password_hash'], user_data['role'], user_data['role'], user_data['employee_code']))
+                        cur.execute("INSERT INTO users (username, password_hash, role, roles, templates, employee_code, is_active, password_must_change) VALUES (%s, %s, %s, ARRAY[%s]::varchar[], ARRAY[%s]::varchar[], %s, 0, 0)", 
+                            (user_data['email'], user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code']))
                     
                     # 3. Skills UPDATE or INSERT
                     cur.execute('''
@@ -355,16 +355,17 @@ class OnboardingRepository:
 
                     # 2. User INSERT or UPDATE
                     cur.execute('''
-                        INSERT INTO users (username, password_hash, role, roles, employee_code, is_active, password_must_change) 
-                        VALUES (%s, %s, %s, ARRAY[%s]::varchar[], %s, 0, 0)
+                        INSERT INTO users (username, password_hash, role, roles, templates, employee_code, is_active, password_must_change) 
+                        VALUES (%s, %s, %s, ARRAY[%s]::varchar[], ARRAY[%s]::varchar[], %s, 0, 0)
                         ON CONFLICT (username) 
                         DO UPDATE SET password_hash = EXCLUDED.password_hash, 
                                       role = EXCLUDED.role, 
                                       roles = EXCLUDED.roles,
+                                      templates = EXCLUDED.templates,
                                       employee_code = EXCLUDED.employee_code, 
                                       is_active = EXCLUDED.is_active, 
                                       password_must_change = EXCLUDED.password_must_change
-                    ''', (user_data['email'], user_data['password_hash'], user_data['role'], user_data['role'], user_data['employee_code']))
+                    ''', (user_data['email'], user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code']))
                     
                     # 3. Skills INSERT
                     cur.execute('''

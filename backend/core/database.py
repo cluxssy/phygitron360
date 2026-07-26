@@ -243,6 +243,8 @@ def create_tables(schema_name='public'):
                 password_changed_by TEXT
             )
         ''')
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roles TEXT[]")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS templates TEXT[]")
         
         # 2a) Password Reset Tokens Table
         cur.execute('''
