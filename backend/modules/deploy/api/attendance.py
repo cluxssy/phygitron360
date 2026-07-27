@@ -177,17 +177,17 @@ def trigger_missed_clockout_reminders(
 # --- Two-Track Correction Endpoints ---
 
 @router.get("/correction/window")
-def get_correction_window(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
-    """Returns the correctable dates window (current + previous week) with statuses and track rules."""
+def get_correction_window(client_date: str = None, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+    """Returns the correctable dates window with statuses and track rules. client_date should be YYYY-MM-DD in the employee's local timezone."""
     emp_code = _require_employee_code(user)
-    return service.get_correction_window(emp_code)
+    return service.get_correction_window(emp_code, client_date=client_date)
 
 @router.post("/correction/self-service")
 def apply_self_service_correction(req: SelfServiceCorrectionRequest, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
     """Employee self-corrects a date within the open weekly window."""
     emp_code = _require_employee_code(user)
     try:
-        return service.apply_self_service_correction(emp_code, req.date, req.clock_in, req.clock_out, req.reason)
+        return service.apply_self_service_correction(emp_code, req.date, req.clock_in, req.clock_out, req.reason, client_date=getattr(req, 'client_date', None))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
