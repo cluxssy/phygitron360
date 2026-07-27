@@ -6,7 +6,7 @@ from backend.modules.deploy.services.attendance_service import AttendanceService
 from backend.modules.deploy.schemas.attendance import (
     ClockInRequest, ClockOutRequest, LeaveRequest, AttendanceStatus, 
     LeaveBalance, LeaveRecord, AttendanceRecord, EditAttendanceRequest,
-    CorrectionRequest, CorrectionActionRequest
+    SelfServiceCorrectionRequest, CorrectionRequestSchema, CorrectionActionRequest, CorrectionWindowDay
 )
 
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
@@ -174,35 +174,62 @@ def trigger_missed_clockout_reminders(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/correction/apply")
-def apply_correction(req: CorrectionRequest, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+# --- Two-Track Correction Endpoints ---
+
+@router.get("/correction/window")
+def get_correction_window(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+    """Returns the correctable dates window (current + previous week) with statuses and track rules."""
+    emp_code = _require_employee_code(user)
+    return service.get_correction_window(emp_code)
+
+@router.post("/correction/self-service")
+def apply_self_service_correction(req: SelfServiceCorrectionRequest, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+    """Employee self-corrects a date within the open weekly window."""
     emp_code = _require_employee_code(user)
     try:
-        return service.apply_attendance_correction(emp_code, req.date, req.clock_in, req.clock_out, req.reason)
+        return service.apply_self_service_correction(emp_code, req.date, req.clock_in, req.clock_out, req.reason)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/correction/pending")
-def get_pending_corrections(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+@router.post("/correction/request")
+def apply_correction_request(req: CorrectionRequestSchema, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+    """Employee requests correction for a date outside the self-service window (needs manager approval)."""
+    emp_code = _require_employee_code(user)
+    try:
+        return service.apply_correction_request(emp_code, req.date, req.clock_in, req.clock_out, req.reason)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/correction/my-history")
+def get_my_corrections(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+    """Employee views their own correction history (both self-service and requested)."""
+    emp_code = _require_employee_code(user)
+    return service.get_my_corrections(emp_code)
+
+@router.get("/correction/pending-requests")
+def get_pending_correction_requests(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
+    """Manager/Admin views pending correction requests for their team."""
     role = user.get('role', 'employee')
-    # If the user has view_team permission, treat them as a manager to view their team's queue
     if role == 'employee' and user.get("permissions", {}).get("deploy.attendance.view_team", False):
         role = 'manager'
-    return service.get_pending_corrections(role, user.get('employee_code'))
+    return service.get_pending_correction_requests(role, user.get('employee_code'))
 
-@router.post("/correction/action/{correction_id}")
-def approve_reject_correction(
+@router.post("/correction/request/{correction_id}/action")
+def approve_reject_correction_request(
     correction_id: int,
     req: CorrectionActionRequest,
     user=Depends(get_current_user),
     service: AttendanceService = Depends(get_service)
 ):
+    """Manager approves or rejects a pending correction request."""
     if req.action not in ['Approved', 'Rejected']:
         raise HTTPException(status_code=400, detail="Invalid action")
     try:
-        return service.approve_reject_correction(correction_id, req.action, req.rejection_reason, user['role'], user.get('employee_code'))
+        return service.approve_reject_correction_request(correction_id, req.action, req.rejection_reason, user['role'], user.get('employee_code'))
     except ValueError as e:
         msg = str(e)
         if "not found" in msg:

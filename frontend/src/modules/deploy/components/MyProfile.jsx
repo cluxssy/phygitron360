@@ -175,7 +175,7 @@ export default function MyProfile() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
             <ProfileField icon={Mail} label="Email" value={details.email_id} />
             <ProfileField icon={Phone} label="Contact" value={details.contact_number} />
-            <ProfileField icon={MapPin} label="Location" value={details.location} />
+            <ProfileField icon={MapPin} label="Work Location" value={details.location} />
             <ProfileField icon={Calendar} label="DOJ" value={(details.doj || '').split('T')[0]} />
           </div>
         </div>

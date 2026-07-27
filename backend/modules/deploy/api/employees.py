@@ -469,7 +469,7 @@ from fastapi.responses import StreamingResponse
 @router.get("/employees/bulk-upload/template", dependencies=[Depends(require_permission("deploy.employees.create"))])
 def get_bulk_upload_template():
     columns = [
-        "Employee Code", "First Name", "Middle Name", "Last Name", "Email ID", "Role", "Date of Joining",
+        "Employee Code", "First Name", "Middle Name", "Last Name", "Guardian Name", "Email ID", "Role", "Date of Joining",
         "Designation", "Team / Department", "Employment Type", "Reporting Manager", 
         "Base Location", "Employment Status", "Date of Birth", "Contact Number", 
         "Emergency Contact Name", "Emergency Contact", "Current Address", "Permanent Address", 
@@ -512,6 +512,11 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
         "errors": []
     }
     
+    clean_rows = []
+    emails_seen = set()
+    codes_seen = set()
+    
+    # PASS 1: Pre-validate all rows
     for idx, row in enumerate(employees):
         try:
             # First Name and Last Name are mandatory - everything else can be blank/None
@@ -527,6 +532,7 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
                 "first_name": first_name,
                 "middle_name": middle_name,
                 "last_name": last_name,
+                "guardian_name": str(row.get("Guardian Name", "")).strip() or None,
                 "dob": str(row.get("Date of Birth", "")).strip() or None,
                 "phone": str(row.get("Contact Number", "")).strip() or None,
                 "emergency": str(row.get("Emergency Contact", "")).strip() or None,
@@ -598,25 +604,58 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
                     clean_data[k] = v
                 elif k == "education_details":  # Keep empty list
                     clean_data[k] = v
+                elif k == "guardian_name":
+                    clean_data[k] = v
             
             # Make sure we have at least the mandatory fields
             clean_data.setdefault("first_name", first_name)
             clean_data.setdefault("last_name", last_name)
+            
+            # Check for intra-file duplicates
+            if clean_data.get('email'):
+                if clean_data['email'] in emails_seen:
+                    raise ValueError(f"Duplicate email '{clean_data['email']}' within the upload file.")
+                emails_seen.add(clean_data['email'])
+                
+            if clean_data.get('code'):
+                if clean_data['code'] in codes_seen:
+                    raise ValueError(f"Duplicate Employee Code '{clean_data['code']}' within the upload file.")
+                codes_seen.add(clean_data['code'])
 
-            service.create_employee(clean_data)
-            results["success"] += 1
+            # Pre-validate with service (checks DB for conflicts and valid roles)
+            service.validate_employee_data(clean_data)
+            clean_rows.append(clean_data)
             
         except Exception as e:
             results["failed"] += 1
             error_detail = str(e)
-            # Log the error for debugging
-            print(f"Error on row {idx + 1}: {error_detail}")
-            print(f"Row data: {row}")
             results["errors"].append({
                 "row": idx + 1,
                 "code": str(row.get("Employee Code", "Unknown")),
                 "name": f"{row.get('First Name', '')} {row.get('Last Name', '')}".strip() or "Unknown",
                 "error": error_detail
+            })
+            
+    # If ANY row failed validation, reject the entire file
+    if results["errors"]:
+        results["success"] = 0
+        results["failed"] = len(employees)
+        return results
+        
+    # PASS 2: Execution (all rows validated successfully)
+    for idx, clean_data in enumerate(clean_rows):
+        try:
+            service.create_employee(clean_data)
+            results["success"] += 1
+        except Exception as e:
+            # Should not happen as we pre-validated, but handle just in case
+            results["failed"] += 1
+            error_detail = str(e)
+            results["errors"].append({
+                "row": idx + 1,
+                "code": clean_data.get("code", "Unknown"),
+                "name": f"{clean_data.get('first_name', '')} {clean_data.get('last_name', '')}".strip() or "Unknown",
+                "error": f"Database insertion failed: {error_detail}"
             })
             
     return results

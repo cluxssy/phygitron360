@@ -16,7 +16,7 @@ import {
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
-const ROLES = ['org_admin', 'manager', 'employee', 'candidate'];
+const ROLES = ['org_admin', 'manager', 'employee', 'trainee'];
 
 const Field = ({ label, k, type = 'text', options, form, set, required = false }) => (
   <div>
@@ -36,13 +36,19 @@ const Field = ({ label, k, type = 'text', options, form, set, required = false }
 export default function AddEmployeeModal({ onClose, onSuccess }) {
   const [activeTab, setActiveTab] = useState('single'); // 'single' or 'bulk'
   const [managers, setManagers] = useState([]);
+  const [dynamicRoles, setDynamicRoles] = useState(ROLES);
   useEscapeClose(onClose);
   const handleTabKeyNav = useTabListKeyNav();
 
   useEffect(() => {
     fetch('/api/options', { credentials: 'include' })
       .then(r => r.json())
-      .then(data => setManagers(data.managers || []))
+      .then(data => {
+        setManagers(data.managers || []);
+        if (data.custom_roles) {
+          setDynamicRoles([...ROLES, ...data.custom_roles]);
+        }
+      })
       .catch(() => {});
   }, []);
   
@@ -133,7 +139,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     }
     
     // Role - only validate if filled
-    if (form.role && !ROLES.includes(form.role)) {
+    if (form.role && !dynamicRoles.includes(form.role)) {
       return 'Select a valid system access role.';
     }
     
@@ -273,8 +279,8 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       const dob = String(row["Date of Birth"] || '').trim();
       const doj = String(row["Date of Joining"] || '').trim();
       const exp = row["Experience Years"];
-      const bankAccount = String(row["Bank Account No"] || '').trim();
-      const pan = String(row["PAN No"] || '').trim();
+      const bankAccount = String(row["Bank Account No."] || '').trim();
+      const pan = String(row["PAN No."] || '').trim();
 
       // ── FIRST NAME AND LAST NAME ARE MANDATORY ──
       if (!firstName || !lastName) return `Row ${rowNo}: First Name and Last Name are mandatory.`;
@@ -391,7 +397,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                   </div>
                   <Field label="Work Location" k="location" form={form} set={set} />
                   <Field label="Employment Type" k="type" options={['Full-time', 'Part-time', 'Contract', 'Intern']} form={form} set={set} />
-                  <Field label="System Access Role" k="role" options={ROLES} form={form} set={set} />
+                  <Field label="System Access Role" k="role" options={dynamicRoles} form={form} set={set} />
                 </div>
               )}
 
