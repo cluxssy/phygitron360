@@ -254,7 +254,7 @@ class AttendanceService:
                     d_str = curr.strftime('%Y-%m-%d')
                     correction = self.repo.get_pending_correction_for_date(leave['employee_code'], d_str, self.tenant_id)
                     if correction:
-                        self.repo.update_correction_status(
+                        self.repo.update_correction_request_status(
                             correction['id'],
                             'Cancelled',
                             admin_code,
@@ -570,47 +570,262 @@ class AttendanceService:
             "message": f"Processed missed clock-outs. Sent {reminders_sent} reminders."
         }
 
-    def apply_attendance_correction(self, employee_code: str, date_str: str, clock_in: Optional[str], clock_out: Optional[str], reason: str):
-        # 1. Date Validation
+    # ─── Two-Track Correction Service Methods ────────────────────────────────
+
+    @staticmethod
+    def _is_self_service_date(target_date, today) -> bool:
+        """
+        Returns True if `target_date` is within its self-service correction window.
+
+        Window rule: Each week (Mon–Sun) can be self-corrected until the NEXT Monday.
+        e.g. week of Jul 21–27 can be corrected up to and including Jul 28 (next Monday).
+        Once Jul 29 arrives, Jul 21–27 require manager approval.
+        """
+        from datetime import date as date_type
+        if isinstance(target_date, str):
+            target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+        if isinstance(today, str):
+            today = datetime.strptime(today, '%Y-%m-%d').date()
+
+        if target_date >= today:   # Can't correct today or future
+            return False
+
+        # Monday of the target date's week (weekday: Mon=0)
+        target_monday = target_date - timedelta(days=target_date.weekday())
+        # Self-service window closes on the NEXT Monday after that week
+        window_close = target_monday + timedelta(days=7)
+        return today <= window_close
+
+    def get_correction_window(self, employee_code: str) -> Dict[str, Any]:
+        """
+        Returns the list of days visible in the correction UI.
+        Shows: current week + previous week (14 days back from this Monday).
+        Each day is tagged with: status, clock-in/out, track, and any pending correction.
+        """
+        today = datetime.now().date()
+        today_str = today.strftime('%Y-%m-%d')
+
+        # Look back approx 3 months (12 weeks before this_monday, so 13 weeks total including current)
+        this_monday = today - timedelta(days=today.weekday())
+        
+        doj = self.repo.get_employee_doj(employee_code, self.tenant_id)
+        
+        WEEKS_BACK = 12
+        start_monday = this_monday - timedelta(weeks=WEEKS_BACK)
+
+        # Fetch attendance records for the window
+        window_start_str = start_monday.strftime('%Y-%m-%d')
+        window_end_str = (this_monday + timedelta(days=6)).strftime('%Y-%m-%d')  # next Sunday
+        att_records = self.repo.get_attendance_in_range(employee_code, window_start_str, window_end_str, self.tenant_id)
+        att_map = {r['date']: r for r in att_records}
+
+        # Fetch pending correction requests in this range
+        pending_corrections = self.repo.get_my_corrections(employee_code, self.tenant_id)
+        pending_map = {
+            c['date']: c for c in pending_corrections
+            if c['status'] == 'Pending' and c['date'] >= window_start_str
+        }
+
+        weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        days_out = []
+
+        # Build window (start_monday through this Sunday)
+        total_days = (WEEKS_BACK + 1) * 7
+        for i in range(total_days):
+            d = start_monday + timedelta(days=i)
+            d_str = d.strftime('%Y-%m-%d')
+            att = att_map.get(d_str)
+
+            if doj and d < doj:
+                track = 'before_join'
+            elif d == today:
+                track = 'today'
+            elif d > today:
+                track = 'future'
+            elif self._is_self_service_date(d, today):
+                track = 'self_service'
+            else:
+                track = 'requested'
+
+            # Compute effective status from attendance record
+            status = 'No Record'
+            clock_in = None
+            clock_out = None
+            work_log = None
+
+            if att:
+                clock_in = att.get('clock_in')
+                clock_out = att.get('clock_out')
+                work_log = att.get('work_log')
+
+                if clock_in and clock_out:
+                    try:
+                        fmt = '%H:%M:%S'
+                        t_in = datetime.strptime(str(clock_in), fmt)
+                        t_out = datetime.strptime(str(clock_out), fmt)
+                        hrs = (t_out - t_in).total_seconds() / 3600.0
+                        if hrs >= 8.0:
+                            status = 'Present'
+                        elif hrs >= 4.0:
+                            status = 'Half Day (First Half)' if t_in.hour < 13 else 'Half Day (Second Half)'
+                        else:
+                            status = 'Absent'
+                    except:
+                        status = 'Present'
+                elif clock_in:
+                    status = 'Active' if d_str == today_str else 'Missing Clock-Out'
+                else:
+                    status = 'Absent'
+
+            days_out.append({
+                'date': d_str,
+                'weekday': weekday_names[d.weekday()],
+                'status': status,
+                'clock_in': str(clock_in) if clock_in else None,
+                'clock_out': str(clock_out) if clock_out else None,
+                'work_log': work_log,
+                'track': track,
+                'pending_correction': pending_map.get(d_str)
+            })
+
+        return {
+            'today': today_str,
+            'this_monday': this_monday.strftime('%Y-%m-%d'),
+            'start_monday': start_monday.strftime('%Y-%m-%d'),
+            'days': days_out
+        }
+
+    def _compute_attendance_status(self, clock_in: Optional[str], clock_out: Optional[str]) -> str:
+        """Reusable helper to compute attendance status from clock times."""
+        if clock_in and clock_out:
+            try:
+                fmt = '%H:%M:%S'
+                t_in = datetime.strptime(str(clock_in), fmt)
+                t_out = datetime.strptime(str(clock_out), fmt)
+                hrs = (t_out - t_in).total_seconds() / 3600.0
+                if hrs >= 8.0:
+                    return 'Present'
+                elif hrs >= 4.0:
+                    return 'Half Day (First Half)' if t_in.hour < 13 else 'Half Day (Second Half)'
+                else:
+                    return 'Absent'
+            except:
+                return 'Present'
+        elif clock_in:
+            return 'Present'
+        return 'Absent'
+
+    def apply_self_service_correction(self, employee_code: str, date_str: str,
+                                      clock_in: Optional[str], clock_out: Optional[str],
+                                      reason: str):
+        """
+        Employee self-corrects within the open weekly window.
+        Immediately upserts the attendance record — no manager approval needed.
+        """
         try:
             target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             raise ValueError("Invalid date format. Must be YYYY-MM-DD.")
-        
+
         today = datetime.now().date()
-        if target_date > today:
-            raise ValueError("Cannot apply for correction for a future date.")
-        
-        days_diff = (today - target_date).days
-        if days_diff > 7:
-            raise ValueError("Correction requests can only be submitted within 7 days of the attendance date.")
-            
-        # 2. Check for existing attendance record
-        existing_att = self.repo.get_todays_attendance(employee_code, date_str, self.tenant_id)
-        attendance_id = existing_att['id'] if existing_att else None
-        
-        # 3. Create correction
-        self.repo.create_attendance_correction(
-            attendance_id,
-            employee_code,
-            date_str,
-            clock_in,
-            clock_out,
-            reason,
-            self.tenant_id
+
+        if target_date >= today:
+            raise ValueError("Cannot correct today or a future date.")
+
+        if not self._is_self_service_date(target_date, today):
+            raise ValueError(
+                "This date is outside the self-service window. "
+                "Please submit a correction request for manager approval instead."
+            )
+
+        if clock_out and clock_in and clock_out < clock_in:
+            raise ValueError("Clock-out time cannot be earlier than clock-in time.")
+
+        # Compute attendance status
+        status = self._compute_attendance_status(clock_in, clock_out)
+
+        # Apply immediately to attendance table
+        self.repo.upsert_attendance(
+            employee_code=employee_code,
+            date=date_str,
+            clock_in=clock_in,
+            clock_out=clock_out,
+            work_log=f"Self-service correction: {reason}",
+            status=status,
+            tenant_id=self.tenant_id
         )
-        
-        # 4. Trigger notification and email to manager
+
+        # Log the correction for audit trail
+        self.repo.create_self_service_correction(
+            employee_code=employee_code,
+            date=date_str,
+            clock_in=clock_in,
+            clock_out=clock_out,
+            reason=reason,
+            tenant_id=self.tenant_id
+        )
+
+        # Clear any stale reminders
+        att = self.repo.get_todays_attendance(employee_code, date_str, self.tenant_id)
+        if att:
+            self.repo.clear_reminders_for_attendance(att['id'], self.tenant_id)
+
+        # Notify the employee of the applied correction
+        add_notification(
+            title="Attendance Correction Applied",
+            message=f"Your attendance record for {date_str} has been self-corrected (status: {status}).",
+            employee_code=employee_code,
+            n_type="Success",
+            tenant_id=self.tenant_id
+        )
+        return {"success": True, "message": "Self-service correction applied", "status": status}
+
+    def apply_correction_request(self, employee_code: str, date_str: str,
+                                 clock_in: Optional[str], clock_out: Optional[str],
+                                 reason: str):
+        """
+        Submit a correction request for a date outside the self-service window.
+        Requires manager approval before being applied.
+        """
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            raise ValueError("Invalid date format. Must be YYYY-MM-DD.")
+
+        today = datetime.now().date()
+
+        if target_date >= today:
+            raise ValueError("Cannot request correction for today or a future date.")
+
+        if self._is_self_service_date(target_date, today):
+            raise ValueError(
+                "This date is still within the self-service window. "
+                "Please use the self-service correction instead."
+            )
+
+        if clock_out and clock_in and clock_out < clock_in:
+            raise ValueError("Clock-out time cannot be earlier than clock-in time.")
+
+        # Create correction request (Pending, requires manager approval)
+        self.repo.create_correction_request(
+            employee_code=employee_code,
+            date=date_str,
+            clock_in=clock_in,
+            clock_out=clock_out,
+            reason=reason,
+            tenant_id=self.tenant_id
+        )
+
+        # Notify manager
         manager_code = self.repo.get_manager_code(employee_code, self.tenant_id)
         if manager_code:
             add_notification(
                 title="Attendance Correction Request",
-                message=f"Employee {employee_code} has submitted an attendance correction request for {date_str}.",
+                message=f"Employee {employee_code} has submitted a correction request for {date_str}.",
                 employee_code=manager_code,
                 n_type="AdminAlert",
                 tenant_id=self.tenant_id
             )
-            
             manager_email = self.repo.get_employee_email(manager_code, self.tenant_id)
             if manager_email:
                 employee_name = self.repo.get_employee_name(employee_code, self.tenant_id)
@@ -620,109 +835,102 @@ class AttendanceService:
                     to_email=manager_email,
                     candidate_name=manager_name,
                     notification_subject="Attendance Correction Pending Approval",
-                    notification_message=f"Employee {employee_name} ({employee_code}) has submitted an attendance correction request for {date_str}. Please review and approve/reject it.",
+                    notification_message=(
+                        f"Employee {employee_name} ({employee_code}) submitted a correction request "
+                        f"for {date_str}. Requested times: "
+                        f"{clock_in or 'N/A'} → {clock_out or 'N/A'}. Reason: {reason}"
+                    ),
                     company_name=self.tenant_id
                 )
-        
-        return {"success": True, "message": "Attendance correction request submitted successfully"}
 
-    def get_pending_corrections(self, role: str, employee_code: Optional[str]):
+        # Confirm to employee
+        add_notification(
+            title="Correction Request Submitted",
+            message=f"Your correction request for {date_str} has been submitted and is pending manager approval.",
+            employee_code=employee_code,
+            n_type="Info",
+            tenant_id=self.tenant_id
+        )
+        return {"success": True, "message": "Correction request submitted successfully"}
+
+    def get_my_corrections(self, employee_code: str):
+        """Employee's full correction history (both self-service and requested)."""
+        return self.repo.get_my_corrections(employee_code, self.tenant_id)
+
+    def get_pending_correction_requests(self, role: str, employee_code: Optional[str]):
+        """Manager/Admin: get pending requested corrections for their team."""
         if role == 'employee':
             if employee_code and self.repo.is_reporting_manager(employee_code, self.tenant_id):
                 role = 'manager'
             else:
-                # Employees only see their own
-                corrections = self.repo.get_pending_corrections(None, self.tenant_id)
-                return [c for c in corrections if c['employee_code'] == employee_code]
-            
+                return []
         manager_code = employee_code if role == 'manager' else None
-        return self.repo.get_pending_corrections(manager_code, self.tenant_id)
+        return self.repo.get_pending_correction_requests(manager_code, self.tenant_id)
 
-    def approve_reject_correction(self, correction_id: int, action: str, rejection_reason: Optional[str], admin_role: str, admin_code: Optional[str]):
-        correction = self.repo.get_correction_by_id(correction_id, self.tenant_id)
+    def approve_reject_correction_request(self, correction_id: int, action: str,
+                                          rejection_reason: Optional[str],
+                                          admin_role: str, admin_code: Optional[str]):
+        correction = self.repo.get_correction_request_by_id(correction_id, self.tenant_id)
         if not correction:
             raise ValueError("Correction request not found")
-            
+
+        if correction.get('correction_track') != 'requested':
+            raise ValueError("Only manager-requested corrections can be approved here.")
+
         # Prevent self-approval
         if admin_code and correction['employee_code'] == admin_code:
             raise ValueError("You cannot approve your own correction request.")
-            
+
         # Hierarchy check
         applicant_role = self.repo.get_user_role(correction['employee_code'], self.tenant_id)
-        
-        # If the admin is their direct manager, they can approve it regardless of role
-        is_direct_manager = (admin_code and self.repo.get_manager_code(correction['employee_code'], self.tenant_id) == admin_code)
-        
+        is_direct_manager = (
+            admin_code and
+            self.repo.get_manager_code(correction['employee_code'], self.tenant_id) == admin_code
+        )
         if not is_direct_manager and applicant_role in ['org_admin', 'manager'] and admin_role not in ['org_admin', 'super_admin']:
-             raise ValueError("Administrative correction requests can only be approved by an Organization Admin.")
-             
-        # Update status
-        self.repo.update_correction_status(
+            raise ValueError("Administrative correction requests can only be approved by an Organization Admin.")
+
+        # Update correction status
+        self.repo.update_correction_request_status(
             correction_id=correction_id,
             status=action,
             approved_by=admin_code,
             rejection_reason=rejection_reason,
             tenant_id=self.tenant_id
         )
-        
+
         if action == 'Approved':
-            # Upsert the correction to the main attendance table
             clock_in = correction['clock_in']
             clock_out = correction['clock_out']
             date = correction['date']
             emp_code = correction['employee_code']
-            
-            # Calculate status
-            status = 'Absent'
-            if clock_in and clock_out:
-                try:
-                    fmt = '%H:%M:%S'
-                    t_in = datetime.strptime(clock_in, fmt)
-                    t_out = datetime.strptime(clock_out, fmt)
-                    duration_hours = (t_out - t_in).total_seconds() / 3600.0
-                    
-                    if duration_hours >= 8.0:
-                        status = 'Present'
-                    elif duration_hours >= 4.0:
-                        if t_in.hour < 13:
-                            status = 'Half Day (First Half)'
-                        else:
-                            status = 'Half Day (Second Half)'
-                    else:
-                        status = 'Absent'
-                except:
-                    status = 'Present'
-            elif clock_in:
-                status = 'Present'
-                
+
+            status = self._compute_attendance_status(clock_in, clock_out)
+
             self.repo.upsert_attendance(
                 employee_code=emp_code,
                 date=date,
                 clock_in=clock_in,
                 clock_out=clock_out,
-                work_log="Correction approved: " + (correction.get('reason') or ''),
+                work_log="Correction approved by manager: " + (correction.get('reason') or ''),
                 status=status,
                 tenant_id=self.tenant_id
             )
-            
-            # Clear reminders
-            if correction.get('attendance_id'):
-                self.repo.clear_reminders_for_attendance(correction['attendance_id'], self.tenant_id)
-            else:
-                # Also find the attendance record that was just inserted/updated to clean up if we can
-                new_att = self.repo.get_todays_attendance(emp_code, date, self.tenant_id)
-                if new_att:
-                    self.repo.clear_reminders_for_attendance(new_att['id'], self.tenant_id)
-            
-        # Notify employee
+
+            # Clear any stale clock-out reminders
+            att = self.repo.get_todays_attendance(emp_code, date, self.tenant_id)
+            if att:
+                self.repo.clear_reminders_for_attendance(att['id'], self.tenant_id)
+
+        # Notify employee of the decision
         add_notification(
-            title=f"Attendance Correction {action}",
+            title=f"Correction Request {action}",
             message=f"Your attendance correction request for {correction['date']} has been {action.lower()}.",
             employee_code=correction['employee_code'],
             n_type="Success" if action == 'Approved' else "Alert",
             tenant_id=self.tenant_id
         )
-        
+
         return {"success": True, "message": f"Correction request has been {action.lower()}"}
 
     def get_bimonthly_report(self, year: int, month: int, cycle: int, manager_code: Optional[str] = None):

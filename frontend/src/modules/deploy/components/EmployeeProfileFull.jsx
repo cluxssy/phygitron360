@@ -610,7 +610,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <MapPin size={12} className="text-[#7c3aed]" />
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Location</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Work Location</p>
     </div>
     {editJob ? (
         <input

@@ -175,20 +175,21 @@ class EmployeeRepository:
             # Set defaults for ALL fields
             cur.execute('''
                 INSERT INTO employees (
-                    employee_code, name, first_name, middle_name, last_name, dob, contact_number, emergency_contact, email_id, doj,
+                    employee_code, name, first_name, middle_name, last_name, guardian_name, dob, contact_number, emergency_contact, email_id, doj,
                     team, designation, employment_type, reporting_manager, location,
                     current_address, permanent_address, education_details,
                     pf_included, mediclaim_included,
                     photo_path, cv_path, id_proofs, notes,
                     bank_name, bank_account_no, pan_no,
                     employment_status
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 employee_code,
                 data.get('name', 'Unknown'),
                 data.get('first_name', None),
                 data.get('middle_name', None),
                 data.get('last_name', None),
+                data.get('guardian_name', None),
                 data.get('dob', None),
                 data.get('phone', None),
                 data.get('emergency', None),

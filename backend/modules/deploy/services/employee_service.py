@@ -77,10 +77,47 @@ class EmployeeService:
 
         return employee
 
-    def create_employee(self, data: Dict[str, Any]):
-        # First name and last name are mandatory, middle name is optional
+    def validate_employee_data(self, data: Dict[str, Any]):
         if not data.get('first_name') or not data.get('last_name'):
             raise ValueError("Employee first name and last name are required.")
+            
+        if data.get('email') and str(data['email']).strip():
+            try:
+                existing_emp_by_email = self.repo.get_employee_by_email(data['email'], self.tenant_id)
+                if existing_emp_by_email and existing_emp_by_email.get('employment_status') != 'Exited':
+                    raise ValueError(f"Email ID '{data['email']}' is already in use.")
+            except ValueError:
+                raise
+            except Exception:
+                pass
+        
+        # Validate Role
+        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee']
+        try:
+            options = self.repo.get_dropdown_options(self.tenant_id)
+            valid_roles.extend([r.lower() for r in options.get('custom_roles', [])])
+        except Exception:
+            pass
+            
+        if data.get('code') and str(data['code']).strip():
+            try:
+                existing_emp_by_code = self.repo.get_employee_by_code(data['code'], self.tenant_id)
+                if existing_emp_by_code:
+                    raise ValueError(f"Employee Code '{data['code']}' is already in use.")
+            except ValueError:
+                raise
+            except Exception:
+                pass
+                
+        role = str(data.get('role') or 'employee').strip().lower()
+        if role not in valid_roles:
+            raise ValueError(f"Role '{role}' does not exist in the system.")
+        data['role'] = role
+
+    def create_employee(self, data: Dict[str, Any]):
+        # Run validations
+        self.validate_employee_data(data)
+        
         data['name'] = join_name_parts(data.get('first_name'), data.get('middle_name'), data.get('last_name'))
 
         # Generate employee code if not provided
@@ -88,31 +125,14 @@ class EmployeeService:
             import uuid
             data['code'] = f"EMP{uuid.uuid4().hex[:8].upper()}"
         
-        # Check if employee code already exists
-        existing_emp_by_code = self.repo.get_employee_by_code(data['code'], self.tenant_id)
-        if existing_emp_by_code:
-            # Generate a new code if conflict
+        # Generate employee code if not provided
+        if not data.get('code'):
             import uuid
             data['code'] = f"EMP{uuid.uuid4().hex[:8].upper()}"
-            # Re-check (simple approach - just use the new code)
-        
-        # Check for existing employee by email ONLY if email is provided AND not empty
-        if data.get('email') and str(data['email']).strip():
-            try:
-                existing_emp_by_email = self.repo.get_employee_by_email(data['email'], self.tenant_id)
-                if existing_emp_by_email and existing_emp_by_email.get('employment_status') != 'Exited':
-                    # If email exists, we can either skip or generate a unique email
-                    # For now, let's generate a unique email to avoid conflict
-                    import uuid
-                    data['email'] = f"user_{uuid.uuid4().hex[:8]}@temp.local"
-            except Exception:
-                # If there's any error with email check, just proceed
-                pass
         
         # Set defaults for any missing fields
         data.setdefault('employment_status', 'Active')
         data.setdefault('type', 'Full-time')
-        data.setdefault('role', 'employee')
         data.setdefault('pf', 'No')
         data.setdefault('mediclaim', 'No')
         data.setdefault('education_details', [])

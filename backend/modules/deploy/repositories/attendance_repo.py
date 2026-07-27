@@ -3,6 +3,24 @@ from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 class AttendanceRepository:
+    def get_employee_doj(self, employee_code: str, tenant_id: str = 'public'):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            self._set_path(cur, tenant_id)
+            cur.execute("SELECT doj FROM employees WHERE employee_code = %s", (employee_code,))
+            row = cur.fetchone()
+            if row and row[0]:
+                if hasattr(row[0], 'date'):
+                    return row[0].date()
+                if isinstance(row[0], str):
+                    from datetime import datetime
+                    return datetime.strptime(row[0], '%Y-%m-%d').date()
+                return row[0]
+            return None
+        finally:
+            conn.close()
+
     def _set_path(self, cur, tenant_id='public'):
         cur.execute(f'SET search_path TO "{tenant_id}", public')
 
@@ -92,6 +110,34 @@ class AttendanceRepository:
         finally:
             conn.close()
 
+    def get_attendance_in_range(self, employee_code: str, start_date: str, end_date: str, tenant_id: str = 'public') -> List[Dict[str, Any]]:
+        """Fetch attendance records for a specific employee within a date range (used by correction window)."""
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute('''
+                SELECT * FROM attendance
+                WHERE employee_code = %s AND date BETWEEN %s AND %s
+                ORDER BY date ASC
+            ''', (employee_code, start_date, end_date))
+            records = cur.fetchall()
+            # Normalize date to string
+            result = []
+            for r in records:
+                row = dict(r)
+                if hasattr(row.get('date'), 'strftime'):
+                    row['date'] = row['date'].strftime('%Y-%m-%d')
+                if row.get('clock_in') and hasattr(row['clock_in'], 'strftime'):
+                    row['clock_in'] = str(row['clock_in'])
+                if row.get('clock_out') and hasattr(row['clock_out'], 'strftime'):
+                    row['clock_out'] = str(row['clock_out'])
+                result.append(row)
+            return result
+        finally:
+            conn.close()
+
+
     def get_leave_balance(self, employee_code: str, year: int, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
@@ -167,10 +213,12 @@ class AttendanceRepository:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             self._set_path(cur, tenant_id)
             query = '''
-                SELECT l.*, e.name as employee_name, COALESCE(u.role, 'Employee') as applicant_role
+                SELECT l.*, e.name as employee_name, COALESCE(u.role, 'Employee') as applicant_role,
+                       m.name as manager_name
                 FROM leaves l 
                 JOIN employees e ON l.employee_code = e.employee_code 
                 LEFT JOIN users u ON l.employee_code = u.employee_code
+                LEFT JOIN employees m ON e.reporting_manager = m.employee_code
                 WHERE l.status = 'Pending'
             '''
             params = []
@@ -375,44 +423,126 @@ class AttendanceRepository:
         finally:
             conn.close()
 
-    def create_attendance_correction(self, attendance_id: Optional[int], employee_code: str, date: str, clock_in: Optional[str], clock_out: Optional[str], reason: str, tenant_id: str = 'public'):
+    # ─── Two-Track Correction Repository Methods ───────────────────────────────
+
+    def create_self_service_correction(self, employee_code: str, date: str,
+                                       clock_in: Optional[str], clock_out: Optional[str],
+                                       reason: str, tenant_id: str = 'public') -> int:
+        """Log a self-service correction (no approval needed). Returns the correction ID."""
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
+            # Resolve attendance_id if record exists
+            cur.execute("SELECT id FROM attendance WHERE employee_code = %s AND date = %s",
+                        (employee_code, date))
+            att_row = cur.fetchone()
+            attendance_id = att_row[0] if att_row else None
             cur.execute('''
-                INSERT INTO attendance_corrections (attendance_id, employee_code, date, clock_in, clock_out, reason, status)
-                VALUES (%s, %s, %s, %s, %s, %s, 'Pending')
+                INSERT INTO attendance_corrections
+                    (attendance_id, employee_code, date, clock_in, clock_out, reason, status, correction_track)
+                VALUES (%s, %s, %s, %s, %s, %s, 'Applied', 'self_service')
+                ON CONFLICT (employee_code, date) 
+                DO UPDATE SET
+                    clock_in = EXCLUDED.clock_in,
+                    clock_out = EXCLUDED.clock_out,
+                    reason = EXCLUDED.reason,
+                    status = 'Applied',
+                    correction_track = 'self_service',
+                    applied_at = CURRENT_TIMESTAMP
+                RETURNING id
             ''', (attendance_id, employee_code, date, clock_in, clock_out, reason))
+            row = cur.fetchone()
             conn.commit()
+            return row[0] if row else -1
         finally:
             conn.close()
 
-    def get_pending_corrections(self, manager_code: Optional[str], tenant_id: str = 'public') -> List[Dict[str, Any]]:
+    def create_correction_request(self, employee_code: str, date: str,
+                                  clock_in: Optional[str], clock_out: Optional[str],
+                                  reason: str, tenant_id: str = 'public') -> int:
+        """Create a manager-approval correction request. Returns the correction ID."""
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            self._set_path(cur, tenant_id)
+            cur.execute("SELECT id FROM attendance WHERE employee_code = %s AND date = %s",
+                        (employee_code, date))
+            att_row = cur.fetchone()
+            attendance_id = att_row[0] if att_row else None
+            cur.execute('''
+                INSERT INTO attendance_corrections
+                    (attendance_id, employee_code, date, clock_in, clock_out, reason, status, correction_track)
+                VALUES (%s, %s, %s, %s, %s, %s, 'Pending', 'requested')
+                ON CONFLICT (employee_code, date) 
+                DO UPDATE SET
+                    clock_in = EXCLUDED.clock_in,
+                    clock_out = EXCLUDED.clock_out,
+                    reason = EXCLUDED.reason,
+                    status = 'Pending',
+                    correction_track = 'requested',
+                    applied_at = NULL
+                RETURNING id
+            ''', (attendance_id, employee_code, date, clock_in, clock_out, reason))
+            row = cur.fetchone()
+            conn.commit()
+            return row[0] if row else -1
+        finally:
+            conn.close()
+
+
+    def get_my_corrections(self, employee_code: str, tenant_id: str = 'public') -> List[Dict[str, Any]]:
+        """Employee's full correction history (both tracks)."""
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute('''
+                SELECT ac.*, e.name as employee_name
+                FROM attendance_corrections ac
+                JOIN employees e ON ac.employee_code = e.employee_code
+                WHERE ac.employee_code = %s
+                ORDER BY ac.applied_at DESC
+                LIMIT 60
+            ''', (employee_code,))
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def get_pending_correction_requests(self, manager_code: Optional[str], tenant_id: str = 'public') -> List[Dict[str, Any]]:
+        """Manager's queue of pending requested corrections (track='requested' only)."""
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             self._set_path(cur, tenant_id)
             if manager_code:
                 cur.execute('''
-                    SELECT ac.*, e.name as employee_name
+                    SELECT ac.*, e.name as employee_name, e.designation, m.name as manager_name
                     FROM attendance_corrections ac
                     JOIN employees e ON ac.employee_code = e.employee_code
-                    WHERE ac.status = 'Pending' AND e.reporting_manager = %s
+                    LEFT JOIN employees m ON e.reporting_manager = m.employee_code
+                    WHERE ac.status = 'Pending'
+                      AND ac.correction_track = 'requested'
+                      AND e.reporting_manager = %s
+                    ORDER BY ac.applied_at ASC
                 ''', (manager_code,))
             else:
                 cur.execute('''
-                    SELECT ac.*, e.name as employee_name
+                    SELECT ac.*, e.name as employee_name, e.designation, m.name as manager_name
                     FROM attendance_corrections ac
                     JOIN employees e ON ac.employee_code = e.employee_code
+                    LEFT JOIN employees m ON e.reporting_manager = m.employee_code
                     WHERE ac.status = 'Pending'
+                      AND ac.correction_track = 'requested'
+                    ORDER BY ac.applied_at ASC
                 ''')
             rows = cur.fetchall()
             return [dict(row) for row in rows]
         finally:
             conn.close()
 
-    def get_correction_by_id(self, correction_id: int, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
+    def get_correction_request_by_id(self, correction_id: int, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -423,7 +553,10 @@ class AttendanceRepository:
         finally:
             conn.close()
 
-    def update_correction_status(self, correction_id: int, status: str, approved_by: Optional[str], rejection_reason: Optional[str] = None, tenant_id: str = 'public'):
+    def update_correction_request_status(self, correction_id: int, status: str,
+                                         approved_by: Optional[str],
+                                         rejection_reason: Optional[str] = None,
+                                         tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
@@ -436,6 +569,7 @@ class AttendanceRepository:
             conn.commit()
         finally:
             conn.close()
+
 
     def clear_reminders_for_attendance(self, attendance_id: int, tenant_id: str = 'public'):
         conn = get_db_connection()

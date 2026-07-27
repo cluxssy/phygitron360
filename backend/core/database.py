@@ -867,7 +867,8 @@ def create_tables(schema_name='public'):
         ''')
         cur.execute('CREATE INDEX IF NOT EXISTS idx_attendance_reminders_attendance_id ON attendance_reminders(attendance_id)')
 
-        # 16.2) Attendance Corrections Table (Pre-designed for M2)
+        # 16.2) Attendance Corrections Table — Two-Track Model
+        # correction_track: 'self_service' (applied immediately) or 'requested' (requires manager approval)
         cur.execute('''
             CREATE TABLE IF NOT EXISTS attendance_corrections (
                 id SERIAL PRIMARY KEY,
@@ -877,14 +878,27 @@ def create_tables(schema_name='public'):
                 clock_in TEXT,
                 clock_out TEXT,
                 reason TEXT NOT NULL,
-                status TEXT DEFAULT 'Pending',
+                status TEXT DEFAULT 'Pending',      -- 'Applied' (self-service) | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'
+                correction_track TEXT DEFAULT 'requested',  -- 'self_service' | 'requested'
                 rejection_reason TEXT,
                 applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 approved_by TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 approved_at TIMESTAMP
             )
         ''')
+        # Migration: add new columns to existing table if upgrading
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='attendance_corrections' AND column_name='correction_track' AND table_schema=current_schema()) THEN
+                    ALTER TABLE attendance_corrections ADD COLUMN correction_track TEXT DEFAULT 'requested';
+                END IF;
+            END$$;
+        """)
         cur.execute('CREATE INDEX IF NOT EXISTS idx_attendance_corrections_emp_date ON attendance_corrections(employee_code, date)')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_attendance_corrections_track_status ON attendance_corrections(correction_track, status)')
+
 
         # 17) Leaves Table
         cur.execute('''
