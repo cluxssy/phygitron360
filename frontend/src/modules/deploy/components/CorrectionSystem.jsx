@@ -22,10 +22,12 @@ export default function CorrectionSystem({ isManager }) {
 
     const loadData = async () => {
         setLoading(true);
+        // Send the browser's local date so the server knows the employee's "today"
+        const clientDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
         try {
             if (!isManager) {
                 const [wRes, hRes] = await Promise.all([
-                    fetch('/api/attendance/correction/window', { credentials: 'include' }),
+                    fetch(`/api/attendance/correction/window?client_date=${clientDate}`, { credentials: 'include' }),
                     fetch('/api/attendance/correction/my-history', { credentials: 'include' })
                 ]);
                 if (wRes.ok) setWindowData(await wRes.json());
@@ -73,7 +75,8 @@ export default function CorrectionSystem({ isManager }) {
                     date: selectedDay.date,
                     clock_in: form.clock_in || null,
                     clock_out: form.clock_out || null,
-                    reason: form.reason
+                    reason: form.reason,
+                    client_date: new Date().toLocaleDateString('en-CA')
                 })
             });
             const data = await res.json();

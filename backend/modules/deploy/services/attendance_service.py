@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import calendar
 from typing import List, Dict, Any, Optional
 from backend.modules.deploy.repositories.attendance_repo import AttendanceRepository
@@ -7,13 +7,22 @@ from backend.modules.deploy.schemas.attendance import (
     ClockOutRequest, AttendanceStatus, LeaveBalance, LeaveRequest, EditAttendanceRequest
 )
 
+# Always use IST (UTC+5:30) for business-date calculations so that the
+# server's physical timezone (e.g. Frankfurt UTC+2) never leaks into logic.
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+def _today_utc():
+    """Fallback: return today in UTC when no client date is available."""
+    return datetime.utcnow().date()
+
+
 class AttendanceService:
     def __init__(self, tenant_id: str = 'public'):
         self.repo = AttendanceRepository()
         self.tenant_id = tenant_id
 
     def get_status(self, employee_code: str) -> AttendanceStatus:
-        today = datetime.now().strftime('%Y-%m-%d')
+        today = datetime.now(_IST).strftime('%Y-%m-%d')
         record = self.repo.get_todays_attendance(employee_code, today, self.tenant_id)
         
         if not record:
@@ -27,8 +36,8 @@ class AttendanceService:
              return AttendanceStatus(status="clocked_in", data=record)
 
     def clock_in(self, employee_code: str, ip_address: str, local_date: Optional[str] = None, local_time: Optional[str] = None):
-        today = local_date if local_date else datetime.now().strftime('%Y-%m-%d')
-        now = local_time if local_time else datetime.now().strftime('%H:%M:%S')
+        today = local_date if local_date else datetime.now(_IST).strftime('%Y-%m-%d')
+        now = local_time if local_time else datetime.now(_IST).strftime('%H:%M:%S')
         
         existing = self.repo.get_todays_attendance(employee_code, today, self.tenant_id)
         if existing:
@@ -38,8 +47,8 @@ class AttendanceService:
         return {"success": True, "message": "Clocked in successfully", "time": now}
 
     def clock_out(self, employee_code: str, data: ClockOutRequest):
-        today = data.local_date if data.local_date else datetime.now().strftime('%Y-%m-%d')
-        now = data.local_time if data.local_time else datetime.now().strftime('%H:%M:%S')
+        today = data.local_date if data.local_date else datetime.now(_IST).strftime('%Y-%m-%d')
+        now = data.local_time if data.local_time else datetime.now(_IST).strftime('%H:%M:%S')
         
         active_records = self.repo.get_history(employee_code, limit=1, tenant_id=self.tenant_id)
         if not active_records or active_records[0].get('status') != 'Active':
@@ -85,7 +94,7 @@ class AttendanceService:
                 except:
                     log['status'] = 'Present'
             elif clock_in:
-                 today_str = datetime.now().strftime('%Y-%m-%d')
+                 today_str = datetime.now(_IST).strftime('%Y-%m-%d')
                  if log['date'] != today_str:
                      log['status'] = 'Absent'
                  else:
@@ -112,7 +121,7 @@ class AttendanceService:
         return history[:30]
 
     def get_leave_balance(self, employee_code: str) -> Dict[str, Any]:
-        year = datetime.now().year
+        year = datetime.now(_IST).year
         balance = self.repo.get_leave_balance(employee_code, year, self.tenant_id)
         
         if not balance:
@@ -136,7 +145,7 @@ class AttendanceService:
         if self.repo.check_overlapping_leaves(employee_code, req.start_date, req.end_date, self.tenant_id):
             raise ValueError("Leave dates overlap with an existing leave request.")
             
-        cutoff = datetime.now().date() - timedelta(days=15)
+        cutoff = _today_ist() - timedelta(days=15)
         if d1.date() < cutoff and user_role not in ['org_admin', 'super_admin']:
             raise ValueError("Leave applications cannot be more than 15 days in the past.")
 
@@ -200,7 +209,7 @@ class AttendanceService:
 
     def get_daily_log(self, date_str: Optional[str] = None, role: str = 'employee', employee_code: Optional[str] = None):
         if date_str is None:
-            date_str = datetime.now().strftime('%Y-%m-%d')
+            date_str = datetime.now(_IST).strftime('%Y-%m-%d')
             
         if role == 'employee':
             if employee_code and self.repo.is_reporting_manager(employee_code, self.tenant_id):
@@ -326,7 +335,7 @@ class AttendanceService:
                     att_map[e_code][d_str] = 'Present' # Fallback
             elif clock_in:
                 # Clocked in but not clocked out yet
-                today_str = datetime.now().strftime('%Y-%m-%d')
+                today_str = datetime.now(_IST).strftime('%Y-%m-%d')
                 if d_str == today_str:
                     att_map[e_code][d_str] = 'Active'
                 else:
@@ -393,7 +402,7 @@ class AttendanceService:
                     try:
                         dt = datetime(year, month, day)
                         dt_date = dt.date()
-                        today_date = datetime.now().date()
+                        today_date = _today_ist()
                         
                         if dt.weekday() >= 5: 
                             status = 'Weekend'
@@ -596,13 +605,21 @@ class AttendanceService:
         window_close = target_monday + timedelta(days=7)
         return today <= window_close
 
-    def get_correction_window(self, employee_code: str) -> Dict[str, Any]:
+    def get_correction_window(self, employee_code: str, client_date: str = None) -> Dict[str, Any]:
         """
         Returns the list of days visible in the correction UI.
         Shows: current week + previous week (14 days back from this Monday).
         Each day is tagged with: status, clock-in/out, track, and any pending correction.
         """
-        today = datetime.now().date()
+        # Use client-supplied date if provided (employee's local date),
+        # else fall back to UTC (avoids server-timezone bugs for global teams).
+        if client_date:
+            try:
+                today = datetime.strptime(client_date, '%Y-%m-%d').date()
+            except ValueError:
+                today = _today_utc()
+        else:
+            today = _today_utc()
         today_str = today.strftime('%Y-%m-%d')
 
         # Look back approx 3 months (12 weeks before this_monday, so 13 weeks total including current)
@@ -717,7 +734,7 @@ class AttendanceService:
 
     def apply_self_service_correction(self, employee_code: str, date_str: str,
                                       clock_in: Optional[str], clock_out: Optional[str],
-                                      reason: str):
+                                      reason: str, client_date: str = None):
         """
         Employee self-corrects within the open weekly window.
         Immediately upserts the attendance record — no manager approval needed.
@@ -727,7 +744,13 @@ class AttendanceService:
         except ValueError:
             raise ValueError("Invalid date format. Must be YYYY-MM-DD.")
 
-        today = datetime.now().date()
+        if client_date:
+            try:
+                today = datetime.strptime(client_date, '%Y-%m-%d').date()
+            except ValueError:
+                today = _today_utc()
+        else:
+            today = _today_utc()
 
         if target_date >= today:
             raise ValueError("Cannot correct today or a future date.")
@@ -792,7 +815,7 @@ class AttendanceService:
         except ValueError:
             raise ValueError("Invalid date format. Must be YYYY-MM-DD.")
 
-        today = datetime.now().date()
+        today = _today_ist()
 
         if target_date >= today:
             raise ValueError("Cannot request correction for today or a future date.")
@@ -985,7 +1008,7 @@ class AttendanceService:
                 except:
                     att_map[e_code][d_str] = 'Present'
             elif clock_in:
-                today_str = datetime.now().strftime('%Y-%m-%d')
+                today_str = datetime.now(_IST).strftime('%Y-%m-%d')
                 if d_str == today_str:
                     att_map[e_code][d_str] = 'Active'
                 else:
@@ -1053,7 +1076,7 @@ class AttendanceService:
                     try:
                         dt = datetime(year, month, day)
                         dt_date = dt.date()
-                        today_date = datetime.now().date()
+                        today_date = _today_ist()
                         
                         if dt.weekday() >= 5: 
                             status = 'Weekend'
