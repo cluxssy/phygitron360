@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { toast } from 'react-hot-toast';
 import { X, FileText, ExternalLink, Check, Ban } from 'lucide-react';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 
 // Maps our internal document field keys to the existing employee-document
 // viewer's doc_type strings, so "Current" can reuse that endpoint.
@@ -13,6 +15,9 @@ const CURRENT_DOC_TYPE = {
 };
 
 export default function EditRequestReviewPanel({ request, onClose, onReviewed }) {
+  const { hasPermission } = usePermissions();
+  const canApprove = hasPermission(P.DEPLOY_EMP_APPROVE_BASIC);
+
   const [rejecting, setRejecting] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -181,43 +186,49 @@ export default function EditRequestReviewPanel({ request, onClose, onReviewed })
               </div>
             )}
 
-            <div className="flex gap-4">
-              {rejecting ? (
-                <>
-                  <button
-                    onClick={() => setRejecting(false)}
-                    disabled={submitting}
-                    className="flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff] transition-all disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmReject}
-                    disabled={submitting}
-                    className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] bg-red-500 text-white shadow-lg hover:bg-red-600 transition-all disabled:opacity-50"
-                  >
-                    <Ban size={13} /> {submitting ? 'Submitting...' : 'Confirm Rejection'}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setRejecting(true)}
-                    disabled={submitting}
-                    className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-200 text-red-500 hover:bg-red-50 transition-all disabled:opacity-50"
-                  >
-                    <Ban size={13} /> Reject
-                  </button>
-                  <button
-                    onClick={handleAccept}
-                    disabled={submitting}
-                    className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] bg-emerald-600 text-white shadow-lg hover:bg-emerald-700 transition-all disabled:opacity-50"
-                  >
-                    <Check size={13} /> {submitting ? 'Submitting...' : 'Accept'}
-                  </button>
-                </>
-              )}
-            </div>
+            {canApprove ? (
+              <div className="flex gap-4">
+                {rejecting ? (
+                  <>
+                    <button
+                      onClick={() => setRejecting(false)}
+                      disabled={submitting}
+                      className="flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff] transition-all disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={confirmReject}
+                      disabled={submitting}
+                      className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] bg-red-500 text-white shadow-lg hover:bg-red-600 transition-all disabled:opacity-50"
+                    >
+                      <Ban size={13} /> {submitting ? 'Submitting...' : 'Confirm Rejection'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setRejecting(true)}
+                      disabled={submitting}
+                      className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-200 text-red-500 hover:bg-red-50 transition-all disabled:opacity-50"
+                    >
+                      <Ban size={13} /> Reject
+                    </button>
+                    <button
+                      onClick={handleAccept}
+                      disabled={submitting}
+                      className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] bg-emerald-600 text-white shadow-lg hover:bg-emerald-700 transition-all disabled:opacity-50"
+                    >
+                      <Check size={13} /> {submitting ? 'Submitting...' : 'Accept'}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="p-3 text-center rounded-xl bg-gray-50 border border-gray-200 text-xs font-medium text-gray-500">
+                View only — missing permission to review edit requests
+              </div>
+            )}
           </div>
         </div>
       </div>

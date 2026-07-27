@@ -29,8 +29,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 from backend.core.database import get_db_connection
 from backend.core.permissions import DEFAULT_PERMISSIONS
 
-# Base roles managed by the seed matrix
-BASE_ROLES = list(DEFAULT_PERMISSIONS.keys())  # ['org_admin', 'manager', 'employee', 'candidate']
+# Base roles managed by the seed matrix (dynamically pulled from DEFAULT_PERMISSIONS)
+BASE_ROLES = list(DEFAULT_PERMISSIONS.keys())  # ['org_admin', 'manager', 'employee', 'trainee']
 
 # Deprecated/stale keys replaced during module PBAC refactors
 STALE_KEYS = [

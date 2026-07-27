@@ -295,10 +295,10 @@ def list_pending_edit_requests(current_user: dict = Depends(get_current_user)):
 
 def _can_review_edit_requests(current_user: dict) -> bool:
     roles = [r.lower() for r in (current_user.get('roles') or [current_user.get('role')]) if r]
-    is_admin = 'super_admin' in roles or 'superadmin' in roles or 'org_admin' in roles
+    is_super = 'super_admin' in roles or 'superadmin' in roles
     perms = current_user.get('permissions', {})
     has_perm = isinstance(perms, dict) and (perms.get('deploy.employees.approve_basic') or perms.get('deploy.onboarding.review_submissions'))
-    return bool(is_admin or has_perm)
+    return bool(is_super or has_perm)
 
 def _serve_stored_document(path: Optional[str]):
     if not path:

@@ -50,6 +50,7 @@ const normalizeStatus = (status) => {
 export default function EmployeeDirectory() {
   const { hasPermission } = usePermissions();
   const canViewProfile = hasPermission(P.DEPLOY_EMP_VIEW_PROFILE);
+  const canReviewEditRequests = hasPermission(P.DEPLOY_EMP_APPROVE_BASIC);
 
   const navigate = useNavigate();
 
@@ -69,14 +70,14 @@ export default function EmployeeDirectory() {
 
   useEffect(() => {
     fetchEmployees();
-    // Fetched on mount (not just when the tab is opened) so the badge count
-    // is accurate the moment this panel loads.
-    fetchPendingRequests();
-  }, []);
+    if (canReviewEditRequests) {
+      fetchPendingRequests();
+    }
+  }, [canReviewEditRequests]);
 
   useEffect(() => {
-    if (activeTab === 'requests') fetchPendingRequests();
-  }, [activeTab]);
+    if (activeTab === 'requests' && canReviewEditRequests) fetchPendingRequests();
+  }, [activeTab, canReviewEditRequests]);
 
   const fetchPendingRequests = async () => {
     try {
@@ -227,24 +228,26 @@ setEmployees(employeeList);
         >
           All Employees
         </button>
-        <button
-          onClick={() => setActiveTab('requests')}
-          className={`relative px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-            activeTab === 'requests'
-              ? 'bg-[#7c3aed] text-white shadow-md'
-              : 'text-[#6b7280] hover:text-black'
-          }`}
-        >
-          Pending Edit Requests
-          {pendingRequests.length > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-md shadow-red-500/30">
-              {pendingRequests.length}
-            </span>
-          )}
-        </button>
+        {canReviewEditRequests && (
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`relative px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activeTab === 'requests'
+                ? 'bg-[#7c3aed] text-white shadow-md'
+                : 'text-[#6b7280] hover:text-black'
+            }`}
+          >
+            Pending Edit Requests
+            {pendingRequests.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-md shadow-red-500/30">
+                {pendingRequests.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
-      {activeTab === 'requests' ? (
+      {activeTab === 'requests' && canReviewEditRequests ? (
         <div className="overflow-x-auto rounded-[2rem] border border-[#ebe7ff] bg-white">
           {loadingRequests ? (
             <div className="flex items-center justify-center h-52">

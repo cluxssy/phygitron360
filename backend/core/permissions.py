@@ -251,12 +251,13 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Forge: learn
         P.FORGE_COURSES_VIEW, P.FORGE_ENROLL,
     ],
-    "candidate": [
+    "trainee": [
         P.MODULE_VERIFY_ACCESS,
-        P.MODULE_SOURCE_ACCESS,
-        # Can view jobs and submit tests assigned to them
-        P.SOURCE_JOBS_VIEW,
+        P.MODULE_FORGE_ACCESS,
+        # Access to view personal profile and take assessments/courses
+        P.DEPLOY_EMP_VIEW_PROFILE,
         P.VERIFY_ASSESS_VIEW,
+        P.FORGE_COURSES_VIEW, P.FORGE_ENROLL,
     ],
 }
 

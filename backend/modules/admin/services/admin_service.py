@@ -201,7 +201,7 @@ class AdminService:
         return {"success": True}
 
     def update_role(self, user_id: int, role: str, actor: str, actor_role: str, templates: List[str] = None):
-        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'candidate']
+        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee']
         if role not in valid_roles:
             raise ValueError(f"Invalid role. Must be one of {valid_roles}")
             
@@ -211,10 +211,10 @@ class AdminService:
         if not user:
             raise ValueError("User not found")
             
-        if actor_role == 'manager' and role not in ['employee', 'candidate']:
-             raise ValueError("Manager can only assign employee or candidate roles.")
-        if actor_role == 'manager' and user['role'] not in ['employee', 'candidate', 'Employee', 'Candidate']:
-             raise ValueError("Manager can only modify employee or candidate roles.")
+        if actor_role == 'manager' and role not in ['employee', 'trainee']:
+             raise ValueError("Manager can only assign employee or trainee roles.")
+        if actor_role == 'manager' and user['role'] not in ['employee', 'trainee', 'Employee', 'Trainee']:
+             raise ValueError("Manager can only modify employee or trainee accounts.")
             
         from backend.core.database import get_db_connection
         conn = get_db_connection()

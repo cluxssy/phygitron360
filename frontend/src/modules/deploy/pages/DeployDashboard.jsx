@@ -78,14 +78,6 @@ export default function DeployDashboard() {
 
   const canViewOnboarding = hasPermission?.('deploy.onboarding.view');
 
-  console.log('--- DEBUG PERMISSIONS ---');
-  console.log('User roles:', user?.roles, user?.role);
-  console.log('Has super_admin?', hasRole?.('super_admin'));
-  console.log('User permissions object:', user?.permissions);
-  console.log('canViewAttendance:', canViewAttendance);
-  console.log('canViewOnboarding:', canViewOnboarding);
-  console.log('deploy.employees.view_list:', hasPermission?.('deploy.employees.view_list'));
-  console.log('-------------------------');
 
   /* =========================================
      NAVIGATION
