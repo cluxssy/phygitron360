@@ -4,14 +4,19 @@ import {
   Search,
   Plus,
   ArrowRight,
-  MapPin
+  MapPin,
+  AlertTriangle,
+  ClipboardList
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
 import AddEmployeeModal from './AddEmployeeModal';
+import EditRequestReviewPanel from './EditRequestReviewPanel';
 import HasPermission from '../../../components/common/HasPermission';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 
 // ── UPDATED STATUS COLORS ──
 const STATUS_COLORS = {
@@ -43,6 +48,9 @@ const normalizeStatus = (status) => {
 };
 
 export default function EmployeeDirectory() {
+  const { hasPermission } = usePermissions();
+  const canViewProfile = hasPermission(P.DEPLOY_EMP_VIEW_PROFILE);
+  const canReviewEditRequests = hasPermission(P.DEPLOY_EMP_APPROVE_BASIC);
 
   const navigate = useNavigate();
 
@@ -55,10 +63,35 @@ export default function EmployeeDirectory() {
 
   const [showAddModal, setShowAddModal] = useState(false);
 
+  const [activeTab, setActiveTab] = useState('employees');
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+
   useEffect(() => {
     fetchEmployees();
-    
-  }, []);
+    if (canReviewEditRequests) {
+      fetchPendingRequests();
+    }
+  }, [canReviewEditRequests]);
+
+  useEffect(() => {
+    if (activeTab === 'requests' && canReviewEditRequests) fetchPendingRequests();
+  }, [activeTab, canReviewEditRequests]);
+
+  const fetchPendingRequests = async () => {
+    try {
+      setLoadingRequests(true);
+      const res = await fetch('/api/employee-edit-requests/pending', { credentials: 'include' });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setPendingRequests(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error('Failed to load pending edit requests');
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
 
   const fetchEmployees = async () => {
 
@@ -173,7 +206,7 @@ setEmployees(employeeList);
       <div className="rounded-[2.5rem] border border-[#ebe7ff] bg-[#f7f3ff] px-10 py-10">
 
         <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">
-          Personnel Management
+          Employee Management
         </p>
 
         <h1 className="text-5xl font-black text-black tracking-tight leading-none">
@@ -181,6 +214,101 @@ setEmployees(employeeList);
         </h1>
 
       </div>
+
+      {/* SUB-TABS */}
+
+      <div className="flex gap-2 p-1.5 rounded-2xl border bg-[#f5efff] border-[#ece2ff] w-fit">
+        <button
+          onClick={() => setActiveTab('employees')}
+          className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+            activeTab === 'employees'
+              ? 'bg-[#7c3aed] text-white shadow-md'
+              : 'text-[#6b7280] hover:text-black'
+          }`}
+        >
+          All Employees
+        </button>
+        {canReviewEditRequests && (
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`relative px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activeTab === 'requests'
+                ? 'bg-[#7c3aed] text-white shadow-md'
+                : 'text-[#6b7280] hover:text-black'
+            }`}
+          >
+            Pending Edit Requests
+            {pendingRequests.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-md shadow-red-500/30">
+                {pendingRequests.length}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+
+      {activeTab === 'requests' && canReviewEditRequests ? (
+        <div className="overflow-x-auto rounded-[2rem] border border-[#ebe7ff] bg-white">
+          {loadingRequests ? (
+            <div className="flex items-center justify-center h-52">
+              <div className="w-10 h-10 border-4 border-[#8b5cf6] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : pendingRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-52 gap-5">
+              <ClipboardList size={48} className="text-black/10" />
+              <p className="text-sm font-bold text-black/40">No pending edit requests</p>
+            </div>
+          ) : (
+            <table className="w-full min-w-[700px]">
+              <thead className="bg-[#f7f3ff] border-b border-[#ebe7ff]">
+                <tr>
+                  {['Employee', 'Requested Fields', 'Submitted'].map((h) => (
+                    <th key={h} className="px-8 py-6 text-left text-[11px] uppercase tracking-[0.25em] font-black text-black/50">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pendingRequests.map((req) => (
+                  <tr
+                    key={req.id}
+                    onClick={() => setSelectedRequest(req)}
+                    className="border-b border-[#f1ecff] cursor-pointer hover:bg-[#faf7ff] transition-colors"
+                  >
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl overflow-hidden border border-[#e9ddff] bg-[#f5edff] flex items-center justify-center font-black text-[#7c3aed] text-base shrink-0">
+                          {req.photo_path ? (
+                            <img
+                              src={req.photo_path.startsWith('http') ? req.photo_path : `/${req.photo_path.replace(/^\//, '')}`}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            (req.employee_name || '?')?.[0]?.toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-base font-black text-black">{req.employee_name || 'Unknown'}</p>
+                          <p className="text-xs text-black/40 font-bold mt-1">{req.employee_code}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6 text-sm text-black/70 font-semibold">
+                      {(req.requested_fields || []).map(f => f.label).join(', ')}
+                    </td>
+                    <td className="px-8 py-6 text-sm text-black/50">
+                      {req.created_at ? new Date(req.created_at).toLocaleDateString() : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : (
+      <>
 
       {/* TOOLBAR */}
 
@@ -307,7 +435,7 @@ setEmployees(employeeList);
 
             <Plus size={16} />
 
-            Add Personnel
+            Add Employee
 
           </button>
 
@@ -391,7 +519,7 @@ setEmployees(employeeList);
 
       {/* TABLE */}
 
-      <div className="overflow-hidden rounded-[2rem] border border-[#ebe7ff] bg-white">
+      <div className="overflow-x-auto rounded-[2rem] border border-[#ebe7ff] bg-white">
 
         {loading ? (
 
@@ -415,7 +543,7 @@ setEmployees(employeeList);
 
         ) : (
 
-          <table className="w-full">
+          <table className="w-full min-w-[900px]">
 
             <thead className="bg-[#f7f3ff] border-b border-[#ebe7ff]">
 
@@ -470,16 +598,17 @@ setEmployees(employeeList);
 
                   <tr
                     key={emp.employee_code || i}
-                    className="
+                    className={`
                       border-b
                       border-[#f1ecff]
-                      hover:bg-[#faf7ff]
                       transition-all
-                      cursor-pointer
-                    "
-                    onClick={() =>
-                      navigate(`/deploy?tab=profile&code=${emp.employee_code}`)
-                    }
+                      ${canViewProfile ? 'hover:bg-[#faf7ff] cursor-pointer' : ''}
+                    `}
+                    onClick={() => {
+                      if (canViewProfile) {
+                        navigate(`/deploy?tab=profile&code=${emp.employee_code}`);
+                      }
+                    }}
                   >
 
                     {/* EMPLOYEE */}
@@ -488,34 +617,47 @@ setEmployees(employeeList);
 
                       <div className="flex items-center gap-4">
 
-                        <div className="
-                          w-14
-                          h-14
-                          rounded-2xl
-                          overflow-hidden
-                          border
-                          border-[#e9ddff]
-                          bg-[#f5edff]
-                          flex
-                          items-center
-                          justify-center
-                          font-black
-                          text-[#7c3aed]
-                          text-lg
-                        ">
+                        <div className="relative shrink-0">
 
-                          {emp.photo_path ? (
+                          <div className="
+                            w-14
+                            h-14
+                            rounded-2xl
+                            overflow-hidden
+                            border
+                            border-[#e9ddff]
+                            bg-[#f5edff]
+                            flex
+                            items-center
+                            justify-center
+                            font-black
+                            text-[#7c3aed]
+                            text-lg
+                          ">
 
-                            <img
-                              src={emp.photo_path.startsWith('http') ? emp.photo_path : `/${emp.photo_path.replace(/^\//, '')}`}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
+                            {emp.photo_path ? (
 
-                          ) : (
+                              <img
+                                src={emp.photo_path.startsWith('http') ? emp.photo_path : `/${emp.photo_path.replace(/^\//, '')}`}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
 
-                            employeeName?.[0]?.toUpperCase()
+                            ) : (
 
+                              employeeName?.[0]?.toUpperCase()
+
+                            )}
+
+                          </div>
+
+                          {!emp.profile_complete && (
+                            <span
+                              title="Incomplete profile"
+                              className="absolute -top-1.5 -left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-amber-200"
+                            >
+                              <AlertTriangle size={12} className="text-amber-500" fill="#fef3c7" />
+                            </span>
                           )}
 
                         </div>
@@ -593,20 +735,22 @@ setEmployees(employeeList);
 
                     <td className="px-8 py-6">
 
-                      <button className="
-                        flex
-                        items-center
-                        gap-2
-                        text-[#7c3aed]
-                        font-black
-                        text-sm
-                      ">
+                      {canViewProfile && (
+                        <button className="
+                          flex
+                          items-center
+                          gap-2
+                          text-[#7c3aed]
+                          font-black
+                          text-sm
+                        ">
 
-                        Open
+                          Open
 
-                        <ArrowRight size={15} />
+                          <ArrowRight size={15} />
 
-                      </button>
+                        </button>
+                      )}
 
                     </td>
 
@@ -636,6 +780,21 @@ setEmployees(employeeList);
           }}
         />
 
+      )}
+
+      </>
+      )}
+
+      {selectedRequest && (
+        <EditRequestReviewPanel
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+          onReviewed={() => {
+            setSelectedRequest(null);
+            fetchPendingRequests();
+            fetchEmployees();
+          }}
+        />
       )}
 
     </div>

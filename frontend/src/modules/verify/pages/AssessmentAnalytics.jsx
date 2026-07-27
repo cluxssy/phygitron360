@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Users, Award, ShieldAlert, Clock, Loader2, ChevronDown, ChevronUp, AlertTriangle, Play, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import { useAuth } from '../../../core/auth/AuthContext';
 
 export default function AssessmentAnalytics({ assessmentId: initialAssessmentId }) {
+  const { hasPermission } = useAuth();
+  const canViewResults = hasPermission('verify.results.view');
   const [assessmentsList, setAssessmentsList] = useState([]);
   const [usersList, setUsersList] = useState([]);
   
@@ -18,6 +22,7 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
   const [resultDetailsCache, setResultDetailsCache] = useState({});
   const [loadingDetailsId, setLoadingDetailsId] = useState(null);
   const [lightboxImage, setLightboxImage] = useState(null);
+  useEscapeClose(() => setLightboxImage(null), !!lightboxImage);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
@@ -352,8 +357,8 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
         </div>
 
         {/* History Table */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-sm">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-x-auto">
+          <table className="w-full text-left text-sm min-w-[680px]">
             <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3">Assessment</th>
@@ -572,7 +577,7 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
       {!selectedView && (
         <div className="flex flex-col items-center justify-center p-20 text-center border border-dashed border-gray-300 rounded-2xl bg-gray-50">
           <BarChart3 size={48} className="text-gray-300 mb-4" />
-          <h3 className="text-lg font-bold text-gray-700">Global Reporting Hub</h3>
+          <h3 className="text-lg font-bold text-gray-700">Reports Overview</h3>
           <p className="text-gray-500 max-w-sm mt-2 text-sm">Select an assessment to view overall performance metrics, or select a specific user to review their testing history and proctoring evidence.</p>
         </div>
       )}

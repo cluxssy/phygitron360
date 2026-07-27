@@ -15,10 +15,12 @@ import OrgAdminSetupModal from '../modules/deploy/components/OrgAdminSetupModal'
 import { MODULE_CONFIG } from '../core/config/modules';
 import { NotificationProvider, useNotifications } from '../core/context/NotificationContext';
 import ewandzLogo from '../assets/EWANDZ.png';
+import useEscapeClose from '../core/hooks/useEscapeClose';
 
 // ── Notification Dropdown Component ──
 function NotificationDropdown() {
   const { notifications, showNotifications, setShowNotifications, markRead, markAllRead } = useNotifications();
+  useEscapeClose(() => setShowNotifications(false), showNotifications);
 
   if (!showNotifications) return null;
 
@@ -31,11 +33,11 @@ function NotificationDropdown() {
       />
       
       {/* Dropdown positioned under bell icon */}
-      <div 
-        className="fixed z-[9999] bg-white rounded-2xl shadow-2xl w-96 max-h-[500px] overflow-hidden border border-[#ece4ff]"
+      <div
+        className="fixed z-[9999] bg-white rounded-2xl shadow-2xl w-[calc(100vw-2rem)] sm:w-96 max-h-[500px] overflow-hidden border border-[#ece4ff]"
         style={{
           top: '72px',
-          right: '100px',
+          right: '1rem',
           transformOrigin: 'top right',
         }}
       >
@@ -166,7 +168,7 @@ function LayoutContent({ children }) {
       icon: Zap,
       perm: 'module.forge.access',
       options: [
-        { label: 'Academy', icon: Home, search: '?tab=academy', default: true },
+        { label: 'Learning Home', icon: Home, search: '?tab=academy', default: true },
         { label: 'Courses', icon: Layers, search: '?tab=courses' },
         { label: 'My Learning', icon: Star, search: '?tab=my-learning' },
       ],
@@ -178,8 +180,8 @@ function LayoutContent({ children }) {
       icon: Shield,
       perm: 'module.verify.access',
       options: [
-        { label: 'Skill Check', icon: Home, search: '?tab=home', default: true },
-        { label: 'Builder', icon: Cpu, search: '?tab=builder' },
+        { label: 'Assessments', icon: Home, search: '?tab=home', default: true },
+        { label: 'Create Assessment', icon: Cpu, search: '?tab=builder' },
         { label: 'Results', icon: Activity, search: '?tab=results' },
       ],
     },
@@ -193,7 +195,7 @@ function LayoutContent({ children }) {
         deployView === 'admin'
           ? [
             { label: 'Analytics', icon: LayoutDashboard, search: '?tab=dashboard', default: true },
-            { label: 'Personnel', icon: Users, search: '?tab=personnel' },
+            { label: 'Employees', icon: Users, search: '?tab=personnel' },
             { label: 'Assets', icon: Package, search: '?tab=allocations' },
           ]
           : [
@@ -253,7 +255,7 @@ function LayoutContent({ children }) {
       {!isAdminDashboard && !isForgePage && (
         <>
           {/* PRIMARY SIDEBAR */}
-          <aside className="w-[88px] flex flex-col items-center py-8 bg-[#060E20] border-r border-white/5" data-no-tooltip>
+          <aside className="hidden lg:flex w-[88px] flex-col items-center py-8 bg-[#060E20] border-r border-white/5" data-no-tooltip>
             <div
               onClick={() => navigate('/')}
               className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center mb-10 cursor-pointer"
@@ -280,7 +282,7 @@ function LayoutContent({ children }) {
           </aside>
 
           {/* SECOND SIDEBAR */}
-          <aside className="w-[260px] bg-[#060E20]/60 border-r border-white/5 p-6" data-no-tooltip>
+          <aside className="hidden lg:block w-[260px] bg-[#060E20]/60 border-r border-white/5 p-6" data-no-tooltip>
             <h2 className="text-lg font-bold mb-6">{activeModule?.name}</h2>
 
             {filteredOptions.map((opt, i) => (

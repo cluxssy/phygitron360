@@ -11,7 +11,7 @@ import logging
 from typing import List, Optional, Any
 from datetime import datetime
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Form
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import os
@@ -21,6 +21,7 @@ from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.source.services.candidate_service import CandidateService
 from backend.core.email_service_extended import send_generic_notification_email
 from backend.modules.deploy.repositories.notification_repo import NotificationRepository
+from backend.modules.deploy.services.notification_service import add_notification
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/source/candidates", tags=["Source - Candidates"])
@@ -30,7 +31,9 @@ router = APIRouter(prefix="/api/source/candidates", tags=["Source - Candidates"]
 # ---------------------------------------------------------------------------
 
 class ManualCandidateCreate(BaseModel):
-    full_name: str
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: str
     email: str
     phone: Optional[str] = None
     location: Optional[str] = None
@@ -43,7 +46,9 @@ class ManualCandidateCreate(BaseModel):
 
 
 class CandidateUpdate(BaseModel):
-    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
@@ -101,6 +106,8 @@ def get_candidate_service(user=Depends(get_current_user)):
 @router.post("/upload")
 async def upload_and_parse_resume(
     file: UploadFile = File(...),
+    tenant_id: str = Form("public"),
+    current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Upload a single resume PDF/DOCX/TXT and run AI parse pipeline."""
@@ -235,14 +242,14 @@ async def retry_failed_bulk_upload(
 
 @router.post("/manual")
 def create_manual_candidate(
-    data: ManualCandidateCreate,
-    current_user: dict = Depends(get_current_user),
+    body: ManualCandidateCreate,
+    current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Create a candidate record from a manual entry form (no resume)."""
     try:
         actor_name = current_user.get("name") or current_user.get("username")
-        candidate_id = service.create_manual_candidate(data.dict(), actor_name)
+        candidate_id = service.create_manual_candidate(body.dict(), actor_name)
         return {"success": True, "message": "Candidate created successfully", "data": {"candidate_id": candidate_id}}
     except Exception as exc:
         logger.error(f"Manual candidate creation failed: {exc}")
@@ -275,7 +282,10 @@ def search_candidates(
 
 
 @router.get("/active")
-def list_active_candidates(service: CandidateService = Depends(get_candidate_service)):
+def list_active_candidates(
+    current_user: dict = Depends(require_permission("source.candidates.view")),
+    service: CandidateService = Depends(get_candidate_service)
+):
     """List active candidates (those that have first_login or employee-type status)."""
     try:
         rows = service.get_active_candidates()
@@ -288,6 +298,7 @@ def list_active_candidates(service: CandidateService = Depends(get_candidate_ser
 @router.get("/activity")
 def get_global_activity(
     limit: int = Query(10, ge=1, le=100),
+    current_user: dict = Depends(require_permission("source.candidates.view")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Get recent global activity logs across all candidates."""
@@ -352,6 +363,7 @@ def get_my_applications(
 def get_candidate(
     candidate_id: int,
     role_id: Optional[int] = Query(None),
+    current_user: dict = Depends(require_permission("source.candidates.view")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Full candidate profile with skills, notes, AI scores, and latest offer letter."""
@@ -371,7 +383,7 @@ def get_candidate(
 def update_candidate(
     candidate_id: int,
     body: CandidateUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Manually update candidate details and skill taxonomy mapping."""
@@ -390,7 +402,8 @@ def update_candidate(
 
 @router.get("/{candidate_id}/resume")
 def get_candidate_resume(
-    candidate_id: int, 
+    candidate_id: int,
+    current_user: dict = Depends(require_permission("source.candidates.view")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Download the candidate's stored resume file."""
@@ -423,7 +436,7 @@ def get_candidate_resume(
 def update_status(
     candidate_id: int,
     body: StatusUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Update a candidate's pipeline status."""
@@ -433,6 +446,31 @@ def update_status(
 
     author = current_user.get("name") or current_user.get("username")
     service.repo.log_activity(candidate_id, author, "status_changed", f"Status changed to {body.status}")
+
+    # Notify the candidate in-app if they have a user account
+    try:
+        candidate = service.get_candidate(candidate_id)
+        if candidate and candidate.get('user_id'):
+            status_messages = {
+                'Shortlisted': 'Good news! Your profile has been shortlisted.',
+                'Interview Scheduled': 'Your interview has been scheduled. Please check with the recruiter for details.',
+                'Rejected': 'Thank you for your application. We have reviewed your profile and will keep it on file.',
+                'Hired': 'Congratulations! You have been selected.',
+                'Offered': 'An offer letter is being prepared for you.',
+                'Assessment': 'You have been invited to complete an assessment. Please check your assignments.',
+            }
+            n_type = 'Success' if body.status in ('Hired', 'Offered', 'Shortlisted') else \
+                     'Alert' if body.status == 'Rejected' else 'Info'
+            add_notification(
+                title=f"Application Update: {body.status}",
+                message=status_messages.get(body.status, f'Your application status has been updated to: {body.status}.'),
+                user_id=candidate['user_id'],
+                n_type=n_type,
+                tenant_id=current_user.get('tenant_id', 'public')
+            )
+    except Exception:
+        pass  # Non-blocking
+
     return {"success": True, "message": "Status updated successfully"}
 
 
@@ -440,7 +478,7 @@ def update_status(
 def add_note(
     candidate_id: int,
     body: NoteCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("source.evaluations.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Add a note to the candidate's timeline."""
@@ -453,14 +491,14 @@ def add_note(
 async def offer_preview(
     candidate_id: int,
     body: OfferPreviewRequest,
-    user: dict = Depends(get_current_user),
-    service: CandidateService = Depends(get_candidate_service)
+    current_user: dict = Depends(require_permission("source.offers.manage")),
+    service: CandidateService = Depends(get_candidate_service),
 ):
     """
     Generate an AI offer letter preview for a candidate.
     Does NOT persist — returns content only.
     """
-    tenant_id = user.get("tenant_id", "public")
+    tenant_id = current_user.get("tenant_id", "public")
     company = tenant_id.replace("tenant_", "").upper() if tenant_id != "public" else "Phygitron 360"
     
     hiring_details = {
@@ -483,14 +521,14 @@ async def offer_preview(
 async def convert_to_offer(
     candidate_id: int,
     body: ConvertRequest,
-    user: dict = Depends(get_current_user),
-    service: CandidateService = Depends(get_candidate_service)
+    current_user: dict = Depends(require_permission("source.offers.manage")),
+    service: CandidateService = Depends(get_candidate_service),
 ):
     """
     Create an offer letter (starts in 'pending' status).
     Moves candidate to 'Offered' status.
     """
-    tenant_id = user.get("tenant_id", "public")
+    tenant_id = current_user.get("tenant_id", "public")
     company = tenant_id.replace("tenant_", "").upper() if tenant_id != "public" else "Phygitron 360"
     
     hiring_details = {
@@ -504,6 +542,21 @@ async def convert_to_offer(
     
     try:
         await service.convert_to_offer(candidate_id, hiring_details, body.offer_content)
+
+        # Notify the candidate in-app if they have a linked user account
+        try:
+            candidate = service.get_candidate(candidate_id)
+            if candidate and candidate.get('user_id'):
+                add_notification(
+                    title="Offer Letter Prepared",
+                    message=f"Congratulations! An offer letter for the role of {body.role_title} is being prepared for you.",
+                    user_id=candidate['user_id'],
+                    n_type="Success",
+                    tenant_id=tenant_id
+                )
+        except Exception:
+            pass  # Non-blocking
+
         return {"success": True, "message": "Offer letter created"}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

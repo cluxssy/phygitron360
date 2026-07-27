@@ -8,6 +8,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { isEmail, validatePassword } from '../../../core/utils/validators';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 import logo from '../../../assets/phy360.png';
 import bellIcon from '../../../assets/bell.png';
@@ -21,12 +22,14 @@ export default function SuperadminDashboard() {
   const location = useLocation();
 
   const [activeSideTab, setActiveSideTab] = useState('tenants');
+  const handleTabKeyNav = useTabListKeyNav();
 
   const [tenants, setTenants] = useState([]);
   const [demoRequests, setDemoRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showProvisionModal, setShowProvisionModal] = useState(false);
   const [provisionForm, setProvisionForm] = useState({ company_name: '', admin_email: '', admin_password: '' });
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
   const [provisioning, setProvisioning] = useState(false);
 
   const [showOpsModal, setShowOpsModal] = useState(false);
@@ -62,7 +65,7 @@ export default function SuperadminDashboard() {
       <div className="dashboard-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
           <Shield size={48} style={{ color: '#7c3aed', opacity: 0.2, margin: '0 auto 16px' }} />
-          <h2 style={{ fontWeight: 900, color: '#000', textTransform: 'uppercase', fontStyle: 'italic' }}>
+          <h2 style={{ fontWeight: 900, color: '#000', textTransform: 'uppercase' }}>
             Access Denied: Insufficient Permissions
           </h2>
         </div>
@@ -83,6 +86,7 @@ export default function SuperadminDashboard() {
     if (provisionForm.admin_password) {
       const passwordError = validatePassword(provisionForm.admin_password);
       if (passwordError) return toast.error(passwordError);
+      if (provisionForm.admin_password !== confirmAdminPassword) return toast.error('Passwords do not match.');
     }
     setProvisioning(true);
     try {
@@ -94,9 +98,10 @@ export default function SuperadminDashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Workspace created: ${data.subdomain}.localhost`);
+        toast.success(`Organisation created: ${data.subdomain}.localhost`);
         setShowProvisionModal(false);
         setProvisionForm({ company_name: '', admin_email: '', admin_password: '' });
+        setConfirmAdminPassword('');
         fetchGlobalData();
       } else {
         toast.error(data.detail || 'Setup failed.');
@@ -179,7 +184,7 @@ export default function SuperadminDashboard() {
         credentials: 'include'
       });
       if (res.ok) {
-        toast.success('Workspace deleted successfully.');
+        toast.success('Organisation deleted successfully.');
         setShowOpsModal(false);
         fetchGlobalData();
       } else {
@@ -318,9 +323,9 @@ export default function SuperadminDashboard() {
       <div className="dashboard-body">
 
         {/* ── SIDEBAR ── */}
-        <div className="sidebar">
+        <div className="sidebar" onKeyDown={handleTabKeyNav}>
           {[
-            { id: 'tenants',  label: 'Tenants'      },
+            { id: 'tenants',  label: 'Organisations' },
             { id: 'demo',     label: 'Demo Archive'  },
             { id: 'license',  label: 'License Lab'   },
           ].map(tab => (
@@ -339,9 +344,8 @@ export default function SuperadminDashboard() {
 
           {/* ── STAT STRIP ── */}
           <div
+            className="grid grid-cols-2 sm:grid-cols-4"
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
               gap: '20px',
               marginBottom: '24px'
             }}
@@ -411,24 +415,24 @@ export default function SuperadminDashboard() {
                   fontSize: 25,
                   color: '#000',
                   marginBottom: 4
-                }}>Enterprise Tenants</p>
+                }}>Enterprise Organisations</p>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button style={S.ghostBtn}>
                     <Terminal size={13} style={{ marginRight: 4 }} />
                     Audit Log
                   </button>
                   <button style={S.primaryBtn} onClick={() => setShowProvisionModal(true)}>
-                    <Plus size={13} /> Provision Tenant
+                    <Plus size={13} /> Create Organisation
                   </button>
                 </div>
               </div>
 
               {loading ? (
-                <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>Loading tenants…</p>
+                <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>Loading organisations…</p>
               ) : tenants.length === 0 ? (
-                <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>No tenants provisioned yet.</p>
+                <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>No organisations created yet.</p>
               ) : (
-                <div className="cards" style={{ flexWrap: 'wrap', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {tenants.map((t) => (
                     <div key={t.id} style={{ ...S.card, minWidth: 220, position: 'relative' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -465,10 +469,10 @@ export default function SuperadminDashboard() {
                             .map((mod, index) => (
                               <div
                                 key={mod.id}
+                                className="rounded-full"
                                 style={{
                                   width: 34,
                                   height: 34,
-                                  borderRadius: '50%',
                                   background: mod.color,
                                   display: 'flex',
                                   alignItems: 'center',
@@ -514,13 +518,14 @@ export default function SuperadminDashboard() {
               {demoRequests.length === 0 ? (
                 <p style={{ color: 'rgba(0,0,0,.4)', fontSize: 13 }}>No demo requests yet.</p>
               ) : (
-                <table>
+                <div style={{ overflowX: 'auto' }}>
+                <table style={{ minWidth: 640 }}>
                   <thead>
                     <tr>
                       <th>Company</th>
                       <th>Email</th>
                       <th>Job Title</th>
-                      <th>Modules</th>
+                      <th>Features</th>
                       <th style={{ textAlign: 'right' }}>Action</th>
                     </tr>
                   </thead>
@@ -528,7 +533,7 @@ export default function SuperadminDashboard() {
                     {demoRequests.map((d) => (
                       <tr key={d.id}>
                         <td style={{ fontWeight: 700 }}>{d.company_name}</td>
-                        <td style={{ color: 'rgba(0,0,0,.5)', fontStyle: 'italic', fontSize: 12 }}>{d.work_email}</td>
+                        <td style={{ color: 'rgba(0,0,0,.5)', fontSize: 12 }}>{d.work_email}</td>
                         <td>{d.job_title}</td>
                         <td>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -543,13 +548,14 @@ export default function SuperadminDashboard() {
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <button style={{ ...S.primaryBtn, padding: '6px 14px', fontSize: 10 }}>
-                            Provision
+                            Create Organisation
                           </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           )}
@@ -574,19 +580,20 @@ export default function SuperadminDashboard() {
       {showProvisionModal && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-          background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)'
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)', overflowY: 'auto'
         }}>
           <div style={{ position: 'absolute', inset: 0 }} onClick={() => !provisioning && setShowProvisionModal(false)} />
           <div style={{
             position: 'relative', width: '100%', maxWidth: 480,
             background: '#fff', borderRadius: '1.5rem',
-            border: '1px solid #e9ddff', padding: '2rem',
-            boxShadow: '0 20px 60px rgba(124,58,237,.12)'
+            border: '1px solid #e9ddff', padding: '1.5rem',
+            boxShadow: '0 20px 60px rgba(124,58,237,.12)',
+            margin: '32px 0', maxHeight: '85vh', overflowY: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
               <h2 style={{ fontWeight: 900, fontSize: 16, color: '#000', margin: 0 }}>
-                Provision <span style={{ color: '#7c3aed' }}>Workspace</span>
+                Create <span style={{ color: '#7c3aed' }}>Organisation</span>
               </h2>
               <button onClick={() => setShowProvisionModal(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(0,0,0,.5)', fontSize: 22, lineHeight: 1 }}>×</button>
@@ -611,10 +618,16 @@ export default function SuperadminDashboard() {
                   value={provisionForm.admin_password}
                   onChange={e => setProvisionForm({ ...provisionForm, admin_password: e.target.value })} />
               </div>
+              <div>
+                <label style={S.label}>Confirm Root Password</label>
+                <input type="password" placeholder="••••••••" style={S.input}
+                  value={confirmAdminPassword}
+                  onChange={e => setConfirmAdminPassword(e.target.value)} />
+              </div>
               <button disabled={provisioning} type="submit"
                 style={{ ...S.primaryBtn, width: '100%', justifyContent: 'center', marginTop: 8, opacity: provisioning ? .7 : 1 }}>
                 {provisioning ? <Activity size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={14} />}
-                {provisioning ? 'Provisioning…' : 'Initialize Provisioning'}
+                {provisioning ? 'Creating…' : 'Create Organisation'}
               </button>
             </form>
           </div>
@@ -625,22 +638,24 @@ export default function SuperadminDashboard() {
       {showOpsModal && selectedTenant && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
           background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)'
         }}>
           <div style={{ position: 'absolute', inset: 0 }} onClick={() => !savingOps && setShowOpsModal(false)} />
-          <div style={{
-            position: 'relative', width: '100%', maxWidth: 600,
-            background: '#fff', borderRadius: '1.5rem',
-            border: '1px solid #e9ddff', padding: '2rem',
-            boxShadow: '0 20px 60px rgba(124,58,237,.12)',
-            display: 'flex', flexDirection: 'column', gap: 20,
-            maxHeight: '90vh', overflowY: 'auto'
-          }}>
+          <div
+            className="p-5 sm:p-8"
+            style={{
+              position: 'relative', width: '100%', maxWidth: 600,
+              background: '#fff', borderRadius: '1.5rem',
+              border: '1px solid #e9ddff',
+              boxShadow: '0 20px 60px rgba(124,58,237,.12)',
+              display: 'flex', flexDirection: 'column', gap: 20,
+              maxHeight: '90vh', overflowY: 'auto'
+            }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2 style={{ fontWeight: 900, fontSize: 16, color: '#000', margin: 0 }}>
-                  Enterprise <span style={{ color: '#7c3aed' }}>Operations</span>
+                  Organisation <span style={{ color: '#7c3aed' }}>Management</span>
                 </h2>
                 <p style={{ fontSize: 10, color: 'rgba(0,0,0,.4)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '.1em' }}>
                   ID: {selectedTenant.id}
@@ -651,8 +666,8 @@ export default function SuperadminDashboard() {
             </div>
 
             {/* Stats row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-              {['Personnel', 'Candidates', 'Users'].map(label => (
+            <div className="grid grid-cols-3" style={{ gap: 12 }}>
+              {['Employees', 'Candidates', 'Users'].map(label => (
                 <div key={label} style={{ ...S.card, padding: '14px' }}>
                   <p style={{ fontSize: 10, fontWeight: 900, color: 'rgba(0,0,0,.4)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>{label}</p>
                   <p style={{ fontSize: 24, fontWeight: 900, color: '#000' }}>
@@ -664,7 +679,7 @@ export default function SuperadminDashboard() {
 
             <form onSubmit={handleUpdateOps} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               {/* Name + Plan */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
                 <div>
                   <label style={S.label}>Company Alias</label>
                   <input style={S.input} value={tenantOps.company_name}
@@ -684,8 +699,8 @@ export default function SuperadminDashboard() {
 
               {/* Module toggles */}
               <div>
-                <label style={S.label}>Module Activation</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+                <label style={S.label}>Feature Activation</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: 10 }}>
                   {[
                     { id: 'source', name: 'Source', color: '#CC97FF', Icon: Database },
                     { id: 'forge',  name: 'Forge',  color: '#10B981', Icon: School },
@@ -721,7 +736,7 @@ export default function SuperadminDashboard() {
               {/* Active toggle */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, background: '#faf7ff', border: '1px solid #e9ddff', borderRadius: 12 }}>
                 <div>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: '#000', margin: 0 }}>Tenant Status</p>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#000', margin: 0 }}>Organisation Status</p>
                   <p style={{ fontSize: 10, color: 'rgba(0,0,0,.4)', margin: '3px 0 0', textTransform: 'uppercase', letterSpacing: '.08em' }}>
                     {tenantOps.is_active ? 'Active' : 'Inactive'}
                   </p>
@@ -751,7 +766,7 @@ export default function SuperadminDashboard() {
                 <button type="submit" disabled={savingOps}
                   style={{ ...S.primaryBtn, flex: 1, justifyContent: 'center', opacity: savingOps ? .7 : 1 }}>
                   {savingOps ? <Activity size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={14} />}
-                  Sync
+                  Save
                 </button>
               </div>
             </form>

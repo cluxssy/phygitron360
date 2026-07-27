@@ -31,9 +31,10 @@ class NotificationService:
         self.repo.mark_notifications_by_query(title, message_part, self.tenant_id)
 
 # Global helper for easy import
-def add_notification(title: str, message: str, employee_code: Optional[str] = None, n_type: str = 'Info', tenant_id: str = 'public'):
+def add_notification(title: str, message: str, employee_code: Optional[str] = None, n_type: str = 'Info', tenant_id: str = 'public', user_id: Optional[int] = None):
     service = NotificationService(tenant_id=tenant_id)
-    if employee_code:
-        service.notify_user(employee_code, title, message, n_type)
+    if employee_code or user_id:
+        # Direct repo call so we can pass both employee_code and user_id
+        service.repo.create_notification(employee_code, title, message, n_type, tenant_id=tenant_id, user_id=user_id)
     else:
         service.notify_admins(title, message, n_type)

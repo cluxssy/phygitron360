@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
+from backend.core.notification_manager import notification_manager
 
 class NotificationRepository:
     def _set_path(self, cur, tenant_id='public'):
@@ -9,13 +10,29 @@ class NotificationRepository:
     def create_notification(self, employee_code: Optional[str], title: str, message: str, n_type: str = 'Info', tenant_id: str = 'public', user_id: Optional[int] = None):
         conn = get_db_connection()
         try:
-            with conn.cursor() as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur, tenant_id)
                 cur.execute('''
                     INSERT INTO notifications (employee_code, user_id, title, message, type)
                     VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, employee_code, user_id, title, message, type, is_read, created_at
                 ''', (employee_code, user_id, title, message, n_type))
+                row = cur.fetchone()
                 conn.commit()
+
+            # Real-time SSE push — fire and forget (non-blocking)
+            if row:
+                payload = dict(row)
+                # serialise datetime so json.dumps works on the frontend
+                if payload.get('created_at'):
+                    payload['created_at'] = payload['created_at'].isoformat()
+                is_admin_alert = (n_type == 'AdminAlert') or (employee_code is None and user_id is None)
+                notification_manager.push_sync(
+                    payload=payload,
+                    employee_code=employee_code,
+                    user_id=user_id,
+                    is_admin_alert=is_admin_alert,
+                )
         finally:
             conn.close()
 

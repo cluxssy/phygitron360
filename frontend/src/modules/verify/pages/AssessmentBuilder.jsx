@@ -12,6 +12,7 @@ import {
   isPositiveNumber,
   isValidUrl,
 } from '../../../core/utils/validators';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 const QUESTION_TYPES = [
   { id: 'mcq', label: 'Multiple Choice (Single)' },
@@ -76,6 +77,8 @@ export default function AssessmentBuilder() {
   // Bank Import
   const [showBankImport, setShowBankImport] = useState(false);
   const [bankQuestions, setBankQuestions] = useState([]);
+  useEscapeClose(() => setShowImportUrl(false), showImportUrl);
+  useEscapeClose(() => setShowBankImport(false), showBankImport);
   const [loadingBank, setLoadingBank] = useState(false);
 
   const fetchBankQuestions = async () => {
@@ -286,7 +289,7 @@ export default function AssessmentBuilder() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Assessment Builder</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Create Assessment</h2>
           <p className="text-sm text-gray-500 mt-1">Create and configure skills assessments</p>
         </div>
         <div className="flex gap-2">
@@ -568,8 +571,8 @@ export default function AssessmentBuilder() {
 
       {/* Import Modal */}
       {showImportUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowImportUrl(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg p-8 relative shadow-2xl border border-gray-200" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={() => setShowImportUrl(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowImportUrl(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
               <X size={18} />
             </button>

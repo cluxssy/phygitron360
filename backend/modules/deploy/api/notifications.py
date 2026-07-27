@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
-from backend.core.dependencies import get_current_user, require_permission
+import asyncio
+import json
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from backend.core.dependencies import get_current_user
 from backend.modules.deploy.services.notification_service import NotificationService
+from backend.core.notification_manager import notification_manager
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -54,3 +58,51 @@ def mark_all_read(user=Depends(get_current_user), service: NotificationService =
     is_admin_viewer = user_perms.get('deploy.notifications.view_admin', False)
     service.mark_all_read(user.get('employee_code'), is_admin_viewer, user_id=user.get('id'))
     return {"success": True}
+
+
+# ── Real-time SSE stream ──────────────────────────────────────────────────────
+
+@router.get("/stream")
+async def notification_stream(user=Depends(get_current_user)):
+    """
+    Server-Sent Events endpoint.
+    The browser keeps this connection open and receives pushed events the
+    instant a notification is written to the database — no polling required.
+
+    Protocol:
+      event: notification   → a new notification payload (JSON)
+      event: ping           → heartbeat every 25s (keeps proxies from timing out)
+    """
+    user_perms = user.get('permissions', {})
+    is_admin = user_perms.get('deploy.notifications.view_admin', False)
+    emp_code = user.get('employee_code')
+    user_id = user.get('id')
+
+    queue = await notification_manager.connect_user(emp_code, user_id, is_admin)
+
+    async def event_generator():
+        try:
+            while True:
+                try:
+                    # Wait up to 25 seconds for a real notification, then send ping
+                    payload = await asyncio.wait_for(queue.get(), timeout=25.0)
+                    data = json.dumps(payload, default=str)
+                    yield f"event: notification\ndata: {data}\n\n"
+                except asyncio.TimeoutError:
+                    # Heartbeat — keeps the connection alive through load balancers
+                    yield "event: ping\ndata: ping\n\n"
+        except asyncio.CancelledError:
+            # Client disconnected
+            pass
+        finally:
+            await notification_manager.disconnect_user(emp_code, user_id, is_admin, queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # disable Nginx buffering
+            "Connection": "keep-alive",
+        },
+    )

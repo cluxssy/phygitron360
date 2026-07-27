@@ -28,7 +28,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.core.dependencies import get_current_user
+from backend.core.dependencies import get_current_user, require_permission
 from backend.common.services.ai.agents import AIAgents
 
 logger = logging.getLogger(__name__)
@@ -728,7 +728,7 @@ async def execute_code(
 @router.post("/generate-coding-meta")
 async def generate_coding_meta(
     body: GenerateCodingMetaRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("verify.questions.manage")),
 ):
     """
     AI-generate starter code, test cases, and programming language

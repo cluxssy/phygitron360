@@ -14,7 +14,7 @@ def get_service():
     return OnboardingService()
 
 @router.post("/invite", dependencies=[Depends(require_module("deploy"))])
-def send_invite(invite: InviteRequest, current_user: dict = Depends(require_permission("deploy.onboarding.manage")), service: OnboardingService = Depends(get_service)):
+def send_invite(invite: InviteRequest, current_user: dict = Depends(require_permission("deploy.onboarding.send_invite")), service: OnboardingService = Depends(get_service)):
     try:
         tenant_id = current_user.get("tenant_id", "public")
         return service.create_invite(invite.dict(), tenant_id=tenant_id)
@@ -28,11 +28,11 @@ def get_invites(current_user: dict = Depends(require_permission("deploy.onboardi
     tenant_id = current_user.get("tenant_id", "public")
     return service.get_all_invites(tenant_id=tenant_id)
 
-@router.delete("/invite/{invite_id}", dependencies=[Depends(require_permission("deploy.onboarding.manage")), Depends(require_module("deploy"))])
+@router.delete("/invite/{invite_id}", dependencies=[Depends(require_permission("deploy.onboarding.cancel_invite")), Depends(require_module("deploy"))])
 def revoke_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
     return service.revoke_invite(invite_id)
 
-@router.delete("/invite/{invite_id}/delete", dependencies=[Depends(require_permission("deploy.onboarding.manage")), Depends(require_module("deploy"))])
+@router.delete("/invite/{invite_id}/delete", dependencies=[Depends(require_permission("deploy.onboarding.cancel_invite")), Depends(require_module("deploy"))])
 def delete_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
     return service.delete_invite(invite_id)
 
@@ -114,7 +114,9 @@ def onboard_admin(
     dob: str = Form(...),
     current_address: str = Form(...),
     permanent_address: str = Form(None),
-    full_name: str = Form(None),
+    first_name: str = Form(None),
+    middle_name: str = Form(None),
+    last_name: str = Form(None),
     location: str = Form(None),
     education_details: str = Form(None),
     primary_skills: str = Form(None),
@@ -127,7 +129,7 @@ def onboard_admin(
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
-    current_user: dict = Depends(require_permission("deploy.onboarding.manage")),
+    current_user: dict = Depends(require_permission("deploy.onboarding.review_submissions")),
     service: OnboardingService = Depends(get_service)
 ):
     user_id = current_user['id']
@@ -145,7 +147,9 @@ def onboard_admin(
     }
     
     emp_data = {
-        "name": full_name,
+        "first_name": first_name,
+        "middle_name": middle_name,
+        "last_name": last_name,
         "contact_number": contact_number,
         "emergency_contact": emergency_contact,
         "dob": dob,
@@ -172,6 +176,42 @@ def get_pending_approvals(current_user: dict = Depends(require_permission("deplo
     tenant_id = current_user.get("tenant_id", "public")
     return service.get_pending_approvals(tenant_id=tenant_id)
 
+@router.put("/approval/{employee_code}", dependencies=[Depends(require_module("deploy"))])
+def update_pending_approval(
+    employee_code: str,
+    data: dict = Body(...),
+    current_user: dict = Depends(require_permission("deploy.onboarding.manage"))
+):
+    """Edit a pending-approval employee's details before final approval.
+
+    Bank name/account number are intentionally excluded here regardless of
+    what the client sends — HR cannot edit those fields from this panel.
+    """
+    from backend.modules.deploy.services.employee_service import EmployeeService
+    tenant_id = current_user.get("tenant_id", "public")
+    data.pop("bank_name", None)
+    data.pop("bank_account_no", None)
+    try:
+        return EmployeeService(tenant_id=tenant_id).update_employee(employee_code, data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/reject/{employee_code}", dependencies=[Depends(require_module("deploy"))])
+def reject_pending_approval(
+    employee_code: str,
+    current_user: dict = Depends(require_permission("deploy.onboarding.manage")),
+    service: OnboardingService = Depends(get_service)
+):
+    """Reject a pending-approval profile: deletes the submitted record and
+    revokes its invite so HR can send a fresh onboarding link."""
+    tenant_id = current_user.get("tenant_id", "public")
+    try:
+        return service.reject_pending_approval(employee_code, tenant_id=tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/approve/{employee_code}", dependencies=[Depends(require_module("deploy"))])
 def approve_onboarding(
     employee_code: str,
@@ -183,7 +223,7 @@ def approve_onboarding(
     mediclaim_included: str = Form("No"),
     location: str = Form(None),
     notes: str = Form(None),
-    current_user: dict = Depends(require_permission("deploy.onboarding.manage")),
+    current_user: dict = Depends(require_permission("deploy.onboarding.review_submissions")),
     service: OnboardingService = Depends(get_service)
 ):
     approval_data = {
@@ -199,7 +239,32 @@ def approve_onboarding(
     try:
         tenant_id = current_user.get("tenant_id", "public")
         return service.approve_onboarding(employee_code, approval_data, tenant_id=tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/approve-section/{employee_code}", dependencies=[Depends(require_module("deploy"))])
+def approve_onboarding_section(
+    employee_code: str,
+    section: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user),
+    service: OnboardingService = Depends(get_service)
+):
+    perms = current_user.get("permissions", {})
+    roles = [r.lower() for r in (current_user.get("roles") or [current_user.get("role")]) if r]
+    is_admin = "super_admin" in roles or "superadmin" in roles or "org_admin" in roles
+
+    if section == "hr":
+        if not is_admin and not perms.get("deploy.employees.approve_basic") and not perms.get("deploy.employees.approve_sensitive") and not perms.get("deploy.onboarding.review_submissions"):
+            raise HTTPException(status_code=403, detail="Missing HR approval clearance")
+    elif section == "finance":
+        if not is_admin and not perms.get("deploy.employees.approve_financial"):
+            raise HTTPException(status_code=403, detail="Missing Finance approval clearance")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid section. Must be 'hr' or 'finance'.")
+
+    tenant_id = current_user.get("tenant_id", "public")
+    return service.approve_section(employee_code, section, tenant_id=tenant_id)

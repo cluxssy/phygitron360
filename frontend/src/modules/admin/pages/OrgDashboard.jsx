@@ -17,6 +17,7 @@ import AdminPanel from "../components/AdminPanel";
 
 // ── Import the notification hook ──
 import { useNotifications } from "../../../core/context/NotificationContext";
+import useTabListKeyNav from "../../../core/hooks/useTabListKeyNav";
 
 axios.defaults.withCredentials = true;
 
@@ -54,6 +55,7 @@ export default function OrgDashboard() {
   const { setShowNotifications } = useNotifications();
 
   const [activeSideTab, setActiveSideTab] = useState("overview");
+  const handleTabKeyNav = useTabListKeyNav();
 
   const [stats, setStats] = useState({});
   const [funnel, setFunnel] = useState([]);
@@ -121,9 +123,9 @@ export default function OrgDashboard() {
 
   const getRoleDisplay = () => {
     if (hasRole?.("super_admin")) return "Super Admin";
-    if (hasRole?.("org_admin")) return "Organisation Admin";
+    if (hasRole?.("org_admin")) return "Organization Admin";
     if (hasRole?.("manager")) return "Manager";
-    return "Organisation Admin";
+    return "Organization Admin";
   };
 
   // ── Card Click Handlers ──
@@ -153,7 +155,7 @@ export default function OrgDashboard() {
   // ── KPI CARDS - ONLY 4 ──
   const kpiItems = [
     {
-      label: "Candidates",
+      label: "Potential Candidates",
       value: stats.total_candidates || 0,
       subtitle: "Total Candidates",
       accent: "#8b5cf6",
@@ -169,7 +171,7 @@ export default function OrgDashboard() {
       )
     },
     {
-      label: "Training",
+      label: "Ongoing Training",
       value: stats.currently_training || 0,
       subtitle: "In Training",
       accent: "#F59E0B",
@@ -183,9 +185,9 @@ export default function OrgDashboard() {
       )
     },
     {
-      label: "Verified",
+      label: "Assesment Assigned",
       value: stats.verified_ready || 0,
-      subtitle: "Verified & Ready",
+      subtitle: "Proctured & Ready",
       accent: "#10B981",
       bgIcon: "#d1fae5",
       onClick: handleVerifiedClick,
@@ -197,7 +199,7 @@ export default function OrgDashboard() {
       )
     },
     {
-      label: "Employees",
+      label: "Onboarded Employees",
       value: stats.active_employees || 0,
       subtitle: "Active Employees",
       accent: "#e731ad",
@@ -279,7 +281,7 @@ export default function OrgDashboard() {
       {/* BODY */}
       <div className="dashboard-body">
         {/* SIDEBAR */}
-        <div className="sidebar" data-no-tooltip>
+        <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
           <button
             className={activeSideTab === "overview" ? "active" : ""}
             onClick={() => setActiveSideTab("overview")}
@@ -304,13 +306,12 @@ export default function OrgDashboard() {
           {/* OVERVIEW */}
           {activeSideTab === "overview" && (
             <>
-              <h2>Welcome, {displayName}</h2>
+              <h2 style={{ marginBottom: "32px" }}>Welcome, {displayName}</h2>
 
               {/* KPI CARDS - 4 columns */}
               <div
+                className="grid grid-cols-2 sm:grid-cols-4"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, 1fr)",
                   gap: "20px",
                   marginBottom: "28px",
                 }}
@@ -416,16 +417,15 @@ export default function OrgDashboard() {
 
               {/* ROW 1: FUNNEL & ACTIVITY */}
               <div
+                className="grid grid-cols-1 lg:[grid-template-columns:1.5fr_1fr]"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.5fr 1fr",
                   gap: "20px",
                   marginBottom: "20px",
                 }}
               >
-                {/* TALENT INTELLIGENCE FUNNEL (PIE CHART) - USING RECHARTS */}
+                {/* RECRUITMENT FUNNEL (PIE CHART) - USING RECHARTS */}
                 <div className="section boxed" style={{ margin: 0, display: "flex", flexDirection: "column" }}>
-                  <h3 style={{ marginBottom: "24px" }}>Talent Pipeline</h3>
+                  <h3 style={{ marginBottom: "24px" }}>Candidate Pipeline</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: "40px", flex: 1 }}>
                     <div style={{ width: "180px", height: "180px", flexShrink: 0 }}>
                       <ResponsiveContainer width="100%" height="100%">
@@ -518,7 +518,8 @@ export default function OrgDashboard() {
               {/* ROW 2: CORE TEAM OVERVIEW */}
               <div className="section boxed" style={{ margin: 0, width: "100%" }}>
                 <h3 style={{ marginBottom: "20px" }}>Core Team Overview</h3>
-                <table style={{ width: "100%", textAlign: "left", borderCollapse: "collapse" }}>
+                <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", minWidth: "480px", textAlign: "left", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #eaeaea" }}>
                       <th style={{ paddingBottom: "12px" }}>User</th>
@@ -527,14 +528,24 @@ export default function OrgDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {team.map((u, i) => (
-                      <tr key={i} style={{ borderBottom: "1px solid #f5f5f5" }}>
-                        <td style={{ padding: "12px 0" }}>
+                    {team.map((u, i) => {
+                      const cellStyle = {
+                        padding: "14px 0",
+                        verticalAlign: "middle",
+                        borderTop: "none",
+                        borderBottom: "1px solid #f5f5f5",
+                        lineHeight: 1.2,
+                      };
+                      return (
+                      <tr key={i}>
+                        <td style={cellStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                             <div
                               style={{
                                 width: "38px",
                                 height: "38px",
+                                minWidth: "38px",
+                                flexShrink: 0,
                                 borderRadius: "50%",
                                 background: "#CC97FF",
                                 display: "flex",
@@ -551,27 +562,31 @@ export default function OrgDashboard() {
                             </div>
                           </div>
                         </td>
-                        <td style={{ padding: "12px 0" }}>
+                        <td style={cellStyle}>
                           <span
                             style={{
+                              display: "inline-block",
                               background: "#f4ecff",
                               color: "#7c3aed",
                               padding: "6px 12px",
                               borderRadius: "999px",
                               fontSize: "12px",
                               fontWeight: 700,
+                              lineHeight: 1.2,
                             }}
                           >
                             {u.role}
                           </span>
                         </td>
-                        <td style={{ padding: "12px 0", color: "#666", fontSize: "14px" }}>
+                        <td style={{ ...cellStyle, color: "#666", fontSize: "14px" }}>
                           {u.last_active ? new Date(u.last_active).toLocaleDateString() : "-"}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
+                </div>
               </div>
             </>
           )}

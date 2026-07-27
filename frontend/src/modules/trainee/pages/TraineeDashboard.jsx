@@ -66,7 +66,7 @@ export default function TraineeDashboard() {
       </div>
 
       {/* Navbar */}
-      <nav className="relative z-10 px-8 py-6 flex items-center justify-between border-b border-white/5 bg-black/50 backdrop-blur-md">
+      <nav className="relative z-10 px-4 sm:px-8 py-4 sm:py-6 flex items-center justify-between border-b border-white/5 bg-black/50 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <img src={logo} alt="Phygitron 360" className="h-8 object-contain drop-shadow-lg" />
           <div className="h-4 w-px bg-white/20 mx-2"></div>
@@ -75,10 +75,10 @@ export default function TraineeDashboard() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-black text-xs">
-              {user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'T'}
+              {user?.name?.charAt(0) || user?.username?.charAt(0) || 'T'}
             </div>
             <div className="hidden md:block text-right">
-              <p className="text-xs font-bold text-white">{user?.full_name || user?.username || 'Trainee'}</p>
+              <p className="text-xs font-bold text-white">{user?.name || user?.username || 'Trainee'}</p>
               <p className="text-[10px] uppercase tracking-widest text-primary/80">{user?.company_name || 'Phygitron 360'}</p>
             </div>
           </div>
@@ -89,11 +89,11 @@ export default function TraineeDashboard() {
       </nav>
 
       {/* Main Content */}
-      <main className="relative z-10 max-w-4xl mx-auto px-6 py-12">
+      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Welcome Banner */}
         <div className="mb-12">
           <h1 className="text-4xl md:text-5xl font-display font-black tracking-tighter mb-4">
-            Welcome, <span className="text-primary italic pr-2">{user?.full_name?.split(' ')[0] || user?.username || 'Trainee'}</span>
+            Welcome, <span className="text-primary italic pr-2">{user?.first_name || user?.username || 'Trainee'}</span>
           </h1>
           <p className="text-white/60 text-sm max-w-xl leading-relaxed">
             Your candidate journey is now active. Check below for any assignments, interview links, or updates from the Talent Acquisition team.
@@ -101,7 +101,7 @@ export default function TraineeDashboard() {
         </div>
 
         {/* Notifications Panel */}
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
+        <div className="bg-white/5 border border-white/10 rounded-3xl p-5 sm:p-8 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
             <Bell size={120} />
           </div>
@@ -135,7 +135,7 @@ export default function TraineeDashboard() {
             ) : (
               notifications.map((notif) => (
                 <div key={notif.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all duration-300">
-                  <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
                     <h3 className="text-base font-bold text-white">{notif.title}</h3>
                     <span className="text-[10px] text-white/30 font-bold uppercase tracking-widest whitespace-nowrap bg-black/50 px-3 py-1 rounded-full">
                       {new Date(notif.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}

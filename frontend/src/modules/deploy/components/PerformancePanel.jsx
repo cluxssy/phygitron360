@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 import { Activity, Download, Save, Send, CheckCircle, Plus, AlertCircle, BarChart3, TrendingUp } from 'lucide-react';
 import {
   isValidEmail,
@@ -47,6 +49,13 @@ const STATUS_CONFIG = {
 
 export default function PerformancePanel({ isAdmin, user: propUser }) {
   const { user: authUser } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canAssignKRAs = hasPermission(P.DEPLOY_PERF_ASSIGN_KRAS);
+  const canSubmitSelf = hasPermission(P.DEPLOY_PERF_SUBMIT_SELF);
+  const canSubmitManager = hasPermission(P.DEPLOY_PERF_SUBMIT_MANAGER);
+  const canManageAssessments = hasPermission(P.DEPLOY_PERF_MANAGE_ASSESSMENTS);
+  const canExport = hasPermission(P.DEPLOY_PERF_EXPORT_REPORTS);
+
   const user = propUser || authUser;
   const currentEmployeeCode = user?.employee_code || '';
   const [employees, setEmployees] = useState([]);
@@ -266,8 +275,8 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
   const empName = isAdmin ? (activeEmployees.find(e => e.employee_code === selectedEmp)?.name || selectedEmp) : user?.name;
   const periodStatus = (p) => assessments.find(a => a.period_value === p);
 
-  const canEmployeeEdit = !isAdmin && (localData?.status === 'Draft' || localData?.status === 'Requested');
-  const canManagerEdit = isAdmin && localData?.status !== 'Finalized';
+  const canEmployeeEdit = canSubmitSelf && !isAdmin && (localData?.status === 'Draft' || localData?.status === 'Requested');
+  const canManagerEdit = canSubmitManager && isAdmin && localData?.status !== 'Finalized';
   const statusCfg = STATUS_CONFIG[localData?.status] || STATUS_CONFIG['Draft'];
 
   const isLightMode = window.location.pathname.startsWith('/deploy');
@@ -403,8 +412,8 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
 
             <h1 className="text-5xl font-black text-black tracking-tight leading-none">
               {isAdmin
-                ? 'Performance Intelligence Panel'
-                : 'My Success Matrix'}
+                ? 'Performance Reviews'
+                : 'My Performance Review'}
             </h1>
           </div>
 
@@ -545,7 +554,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
 </div>
 
       {/* Period Overview Stats */}
-      <div className={`grid gap-4 ${periodType === 'Quarterly' ? 'grid-cols-4' : 'grid-cols-6 md:grid-cols-12'}`}>
+      <div className={`grid gap-4 ${periodType === 'Quarterly' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3 sm:grid-cols-6 md:grid-cols-12'}`}>
         {PERIODS.map(p => {
           const ast = periodStatus(p);
           return (
@@ -610,7 +619,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
               {isAdmin ? `No assessment started for ${empName} - ${activePeriod} ${year}` : `Your ${activePeriod} self-assessment hasn't been initialized yet`}
             </p>
           </div>
-          {!isAdmin && (
+          {!isAdmin && canSubmitSelf && (
             <button
               onClick={createNewAssessment}
               className={styles.btnInitiateEmp}
@@ -618,7 +627,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
               <Plus size={18} /> Initiate {activePeriod} Self-Assessment
             </button>
           )}
-          {isAdmin && (
+          {isAdmin && canAssignKRAs && (
             <button
               onClick={createNewAssessment}
               className={styles.btnInitiateAdmin}
@@ -648,7 +657,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
             </div>
             <div className="text-right flex gap-6">
               <div>
-                <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>Self Matrix</p>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>Self Rating</p>
                 <p className="text-4xl font-display font-black" style={{ color: (localData.self_percentage || 0) >= 80 ? '#10B981' : (localData.self_percentage || 0) >= 60 ? '#F59E0B' : '#F43F5E' }}>
                   {localData.self_percentage ?? 0}%
                 </p>
@@ -658,7 +667,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
               </div>
               <div className="w-px bg-black/10" />
               <div>
-                <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>Manager Matrix</p>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${styles.subtitleText}`}>Manager Rating</p>
                 <p className="text-4xl font-display font-black" style={{ color: (localData.manager_percentage || 0) >= 80 ? '#10B981' : (localData.manager_percentage || 0) >= 60 ? '#F59E0B' : '#F43F5E' }}>
                   {localData.manager_percentage ?? 0}%
                 </p>
@@ -755,7 +764,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
             {saving && (
               <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${styles.mutedText}`}>
                 <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                Syncing Matrix...
+                Saving Changes...
               </div>
             )}
 
@@ -785,7 +794,7 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
                 )}
                 {(localData.status === 'Reviewed' || localData.status === 'Finalized') && (
                   <div className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-600' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'}`}>
-                    <CheckCircle size={14} /> Protocol Finalized
+                    <CheckCircle size={14} /> Review Finalized
                   </div>
                 )}
               </>
@@ -794,27 +803,33 @@ export default function PerformancePanel({ isAdmin, user: propUser }) {
             {/* Admin Actions (Manager View) */}
             {isAdmin && !saving && (
               <>
-                <button
-                  onClick={() => saveAssessment(localData.status || 'Draft')}
-                  className={styles.btnSaveDraft}
-                >
-                  <Save size={14} /> Save Changes
-                </button>
-                <button
-                  onClick={() => saveAssessment('Reviewed')}
-                  className={isLightMode ? "flex items-center gap-2 px-8 py-2.5 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-100" : "flex items-center gap-2 px-8 py-2.5 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/20"}
-                >
-                  <CheckCircle size={14} /> Finalize Protocol
-                </button>
+                {canSubmitManager && (
+                  <button
+                    onClick={() => saveAssessment(localData.status || 'Draft')}
+                    className={styles.btnSaveDraft}
+                  >
+                    <Save size={14} /> Save Changes
+                  </button>
+                )}
+                {canManageAssessments && (
+                  <button
+                    onClick={() => saveAssessment('Reviewed')}
+                    className={isLightMode ? "flex items-center gap-2 px-8 py-2.5 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-100" : "flex items-center gap-2 px-8 py-2.5 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/20"}
+                  >
+                    <CheckCircle size={14} /> Finalize Review
+                  </button>
+                )}
               </>
             )}
             
-            <button
-               onClick={exportXLSX}
-               className={styles.btnExport}
-            >
-              <Download size={14} /> Export Node
-            </button>
+            {canExport && (
+              <button
+                 onClick={exportXLSX}
+                 className={styles.btnExport}
+              >
+                <Download size={14} /> Export Report
+              </button>
+            )}
           </div>
         </div>
       )}

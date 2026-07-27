@@ -173,6 +173,12 @@ def create_tables(schema_name='public'):
                 clearance_status TEXT
             )
         ''')
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS middle_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS last_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS guardian_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS hr_approved INT DEFAULT 0")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS finance_approved INT DEFAULT 0")
         # 1.1) Skill Matrix Table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS skill_matrix (
@@ -183,6 +189,15 @@ def create_tables(schema_name='public'):
                 secondary_skillset TEXT,
                 experience_years TEXT,
                 cv_upload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 1.4) Permission Templates (previously custom_roles)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS permission_templates (
+                name TEXT PRIMARY KEY,
+                description TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -218,7 +233,7 @@ def create_tables(schema_name='public'):
                 role TEXT CHECK(role IN (
                     'super_admin', 'org_admin', 'manager', 'employee', 'candidate', 'trainee'
                 )) NOT NULL,
-                roles TEXT[],
+                templates TEXT[],
                 employee_code TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 is_active INTEGER DEFAULT 1,
                 last_login TIMESTAMP,
@@ -228,6 +243,8 @@ def create_tables(schema_name='public'):
                 password_changed_by TEXT
             )
         ''')
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roles TEXT[]")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS templates TEXT[]")
         
         # 2a) Password Reset Tokens Table
         cur.execute('''
@@ -260,6 +277,12 @@ def create_tables(schema_name='public'):
                 expires_at TIMESTAMP
             )
         ''')
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS first_name TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS middle_name TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS last_name TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS employee_code TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS guardian_name TEXT")
+        cur.execute("ALTER TABLE onboarding_invites ADD COLUMN IF NOT EXISTS doj TEXT")
 
         # 3) Talent Vault: Candidates Table
         cur.execute('''
@@ -290,6 +313,9 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS primary_skills TEXT[] DEFAULT '{}'::text[]")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS secondary_skills TEXT[] DEFAULT '{}'::text[]")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS current_designation TEXT")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS first_name TEXT")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS middle_name TEXT")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS last_name TEXT")
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS current_company")
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS expected_salary")
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS notice_period")
@@ -1089,6 +1115,27 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS exit_date TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS exit_reason TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS clearance_status TEXT")
+
+        # Self-service profile edit requests: an employee proposes changes to their
+        # own profile, but nothing on the `employees` row changes until a reviewer
+        # acts on the request (review/approve UI is separate follow-up work).
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS profile_edit_requests (
+                id SERIAL PRIMARY KEY,
+                employee_code TEXT NOT NULL,
+                requested_fields JSONB NOT NULL,
+                supporting_docs JSONB,
+                notes TEXT,
+                status TEXT DEFAULT 'Pending',
+                reviewed_by TEXT,
+                reviewed_at TIMESTAMP,
+                review_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        # Lets the profile page show a one-time "your edits were rejected" banner
+        # that the employee can dismiss, instead of it reappearing on every visit.
+        cur.execute("ALTER TABLE profile_edit_requests ADD COLUMN IF NOT EXISTS acknowledged BOOLEAN DEFAULT FALSE")
 
         # Add extracted_text column to bulk_upload_job_items for pre-extracted resume text
         # This decouples text extraction (fast, CPU) from AI parsing (slow, API)

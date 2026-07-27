@@ -582,6 +582,7 @@ img {
   color: #ccc;
   overflow: hidden;
   box-sizing: border-box;
+  font-size: 13px;
 }
 
 /* TOP */
@@ -591,30 +592,30 @@ img {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 20px;
-  padding: 28px 60px;
+  gap: 14px;
+  padding: 14px 48px;
 }
 
 .footer-brand {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .footer-logo-glow {
-  height: 60px;
+  height: 36px;
   width: auto;
-  filter: drop-shadow(0 0 20px rgba(124, 92, 255, 0.55));
+  filter: drop-shadow(0 0 14px rgba(124, 92, 255, 0.5));
 }
 
 .footer-brand-divider {
   width: 1px;
-  height: 36px;
+  height: 24px;
   background: rgba(255, 255, 255, 0.25);
 }
 
 .footer-title p {
-  font-size: 19px;
+  font-size: 13px;
   font-weight: 500;
   color: #fff;
   margin: 0;
@@ -624,9 +625,9 @@ img {
 .footer-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px 34px;
-  font-size: 15px;
+  gap: 6px;
+  padding: 9px 20px;
+  font-size: 12px;
   font-weight: 500;
   border-radius: 2px;
 
@@ -655,7 +656,7 @@ img {
   display: grid;
   grid-template-columns: 60% 40%;
   gap: 0;
-  padding: 58px 64px 54px;
+  padding: 28px 48px 24px;
   box-sizing: border-box;
 }
 
@@ -666,43 +667,43 @@ img {
 }
 
 .footer-phygitron {
-  width: 300px;
+  width: 190px;
   height: auto;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   display: block;
 }
 
 .footer-left p {
-  font-size: 16px;
-  line-height: 1.8;
+  font-size: 12.5px;
+  line-height: 1.65;
   color: #8d8d8d;
-  max-width: 500px;
-  margin: 0 0 22px 0;
+  max-width: 460px;
+  margin: 0 0 16px 0;
 }
 
 /* SOCIAL */
 .footer-social-wrapper {
-  margin-bottom: 18px;
+  margin-bottom: 0;
 }
 
 .footer-label {
   color: #888;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  margin: 0 0 10px 0;
+  margin: 0 0 8px 0;
 }
 
 .footer-socials {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 10px;
   margin: 0;
 }
 
 .footer-socials img {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   opacity: 0.9;
   cursor: pointer;
@@ -714,10 +715,10 @@ img {
 }
 
 .footer-contact {
-  font-size: 13px;
+  font-size: 11.5px;
   line-height: 1.6;
   color: #b0b0b0;
-  margin: 0;
+  margin: 12px 0 0 0;
 }
 
 .footer-contact a {
@@ -728,16 +729,16 @@ img {
 /* RIGHT */
 .footer-right {
   justify-self: start;
-  padding-left: 40px;
+  padding-left: 32px;
 }
 
 .footer-right h4 {
   color: #888;
-  font-size: 14px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 1px;
   text-transform: uppercase;
-  margin: 0 0 26px 0;
+  margin: 0 0 14px 0;
 }
 
 .footer-right ul {
@@ -747,9 +748,9 @@ img {
 }
 
 .footer-right li {
-  font-size: 16px;
+  font-size: 12.5px;
   color: #fff;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   cursor: pointer;
   transition: color 0.2s ease;
 }
@@ -761,37 +762,44 @@ img {
 /* OFFICES ROW */
 .footer-offices {
   display: grid;
-  grid-template-columns: 240px repeat(4, 1fr);
-  align-items: start;
-  gap: 24px;
-  padding: 36px 64px;
+  grid-template-columns: 200px repeat(4, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 22px 48px;
   box-sizing: border-box;
 }
 
 .footer-offices .footer-social-wrapper {
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  padding-right: 34px;
-  margin-right: 12px;
-  margin-bottom: 0;
+  padding-right: 24px;
+  margin-right: 6px;
+  align-self: start;
 }
 
+/* Fixed-height frame keeps all four office badges the same size and
+   baseline regardless of each source image's own aspect ratio — the
+   old fixed-width rule let shorter/wider logos read bigger than the
+   rest of the row. object-fit: contain never stretches the artwork. */
 .footer-offices img {
-  width: 170px;
-  max-width: 100%;
-  height: auto;
+  height: 64px;
+  width: 100%;
+  max-width: 170px;
+  object-fit: contain;
+  object-position: left center;
   display: block;
-  border-radius: 4px;
+  justify-self: start;
 }
 
 .footer-offices .footer-socials img {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 /* BOTTOM */
 .footer-bottom {
-  padding: 18px 64px;
-  font-size: 12px;
+  padding: 12px 48px;
+  font-size: 11px;
   color: #777;
 }
 
@@ -799,7 +807,7 @@ img {
 @media (max-width: 1024px) {
   .footer-main {
     grid-template-columns: 1fr;
-    gap: 30px;
+    gap: 20px;
   }
 
   .footer-right {
@@ -822,15 +830,15 @@ img {
   .footer-top {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
-    padding: 20px 24px;
+    gap: 12px;
+    padding: 16px 20px;
   }
 
   .footer-main,
   .footer-offices,
   .footer-bottom {
-    padding-left: 24px;
-    padding-right: 24px;
+    padding-left: 20px;
+    padding-right: 20px;
   }
 
   .footer-offices {

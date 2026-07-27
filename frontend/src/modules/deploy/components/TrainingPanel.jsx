@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { BookOpen, Plus, CheckCircle, Clock, Users } from 'lucide-react';
 import { isDateString } from '../../../core/utils/validators';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 export default function TrainingPanel() {
   const [programs, setPrograms] = useState([]);
@@ -10,6 +11,7 @@ export default function TrainingPanel() {
   const [employees, setEmployees] = useState([]);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [form, setForm] = useState({ employee_codes: [], program_id: '', date: '', duration: '' });
+  useEscapeClose(() => setShowAssignForm(false), showAssignForm);
 
   useEffect(() => { loadData(); }, []);
 
@@ -77,7 +79,7 @@ export default function TrainingPanel() {
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Programs', value: programs.length, color: '#CC97FF' },
           { label: 'Assigned', value: assignments.length, color: '#F59E0B' },
@@ -118,11 +120,11 @@ export default function TrainingPanel() {
       </div>
 
       {/* Assignments Table */}
-      <div className="glass-panel border-white/5 overflow-hidden">
+      <div className="glass-panel border-white/5 overflow-x-auto">
         <div className="px-6 py-4 border-b border-white/10 bg-white/5 flex items-center gap-3">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40">Active Assignments</h3>
         </div>
-        <table className="w-full text-left">
+        <table className="w-full text-left min-w-[640px]">
           <thead className="border-b border-white/5">
             <tr>
               {['Employee', 'Program', 'Date', 'Duration', 'Status', 'Action'].map(h => (
@@ -160,8 +162,8 @@ export default function TrainingPanel() {
 
       {/* Assign Modal */}
       {showAssignForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="glass-panel border-white/10 rounded-3xl p-8 w-full max-w-md mx-4 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto p-4">
+          <div className="glass-panel border-white/10 rounded-3xl p-6 sm:p-8 w-full max-w-md space-y-5 my-8 max-h-[85vh] overflow-y-auto">
             <h3 className="text-sm font-black uppercase tracking-widest text-white">Assign Training</h3>
             <select
               value={form.program_id}

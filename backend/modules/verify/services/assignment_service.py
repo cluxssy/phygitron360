@@ -63,13 +63,22 @@ class AssignmentService:
             elif question_ids and not generate_variants:
                 self.repo.update_custom_questions(asm_id, uid, base_questions)
 
-        # Best-effort email notification
+        # Best-effort email + in-app notification
         try:
             from backend.core.email_service_extended import send_assessment_notification_email
+            from backend.modules.deploy.services.notification_service import add_notification
+            asm_title = asm.get('title', 'a new assessment')
             for uid in user_ids:
                 send_assessment_notification_email(uid, asm_id, self.tenant_id)
+                add_notification(
+                    title="New Assessment Assigned",
+                    message=f"You have been assigned: {asm_title}. Please complete it before the deadline.",
+                    user_id=uid,
+                    n_type="Alert",
+                    tenant_id=self.tenant_id
+                )
         except Exception as e:
-            logger.warning(f"Assessment notification email failed (non-blocking): {e}")
+            logger.warning(f"Assessment notification failed (non-blocking): {e}")
 
         # Generate AI variants in background
         if generate_variants and base_questions:

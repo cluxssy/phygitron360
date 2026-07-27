@@ -33,6 +33,8 @@ import {
 
 // ── Import Notification Context ──
 import { useNotifications } from '../../../core/context/NotificationContext';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
@@ -83,7 +85,7 @@ export default function SourceDashboard() {
   // Dynamic role display based on actual user roles
   const getRoleDisplay = () => {
     if (hasRole?.('super_admin')) return 'Super Admin';
-    if (hasRole?.('org_admin')) return 'Organisation Admin';
+    if (hasRole?.('org_admin')) return 'Organization Admin';
     if (hasRole?.('manager')) return 'Manager';
     if (hasRole?.('recruiter')) return 'Recruiter';
     return 'Employee';
@@ -91,7 +93,7 @@ export default function SourceDashboard() {
 
   const isCandidate = hasRole('candidate');
 
-  if (!hasRole(['super_admin', 'org_admin', 'manager']) && !isCandidate) {
+  if (!hasPermission('module.source.access') && !isCandidate) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-center bg-gray-50">
         <Shield size={48} className="text-gray-300" />
@@ -125,7 +127,7 @@ export default function SourceDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
             <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-               <Activity size={16} className="text-purple-600" /> Active Pipeline
+               <Activity size={16} className="text-purple-600" /> Active Candidates
             </h3>
             <div className="space-y-3">
                <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 flex justify-between items-center">
@@ -208,6 +210,8 @@ export default function SourceDashboard() {
   // Invite-status tab: role selector
   const [inviteStatusRoleId, setInviteStatusRoleId] = useState('');
   const [showInviteStatus, setShowInviteStatus] = useState(false);
+
+  const handleTabKeyNav = useTabListKeyNav();
 
   // Form states
   const [uploading, setUploading] = useState(false);
@@ -495,7 +499,7 @@ export default function SourceDashboard() {
         credentials: 'include' 
       });
       if (r.ok) {
-        toast.success('Queue cancelled successfully');
+        toast.success('Queue canceled successfully');
         setBulkJobId(null);
         setBulkJobProgress(null);
         setBulkUploadTriggered(false);
@@ -503,7 +507,7 @@ export default function SourceDashboard() {
         toast.error('Failed to cancel queue');
       }
     } catch {
-      toast.error('Error cancelling queue');
+      toast.error('Error canceling queue');
     }
   };
 
@@ -708,7 +712,7 @@ export default function SourceDashboard() {
     
     if (!window.confirm(`Are you sure you want to cancel the invite for ${ids.length} candidate(s)? This will unlink their user account if they are a trainee and convert them back to an active candidate.`)) return;
 
-    const tid = toast.loading('Cancelling invites...');
+    const tid = toast.loading('Canceling invites...');
     try {
       const r = await fetch('/api/source/cancel-invite', {
         method: 'POST',
@@ -717,7 +721,7 @@ export default function SourceDashboard() {
       });
       const d = await r.json();
       if (r.ok) {
-        toast.success(d.message || `Cancelled invites for ${ids.length} candidate(s)!`, { id: tid });
+        toast.success(d.message || `Canceled invites for ${ids.length} candidate(s)!`, { id: tid });
         clearSel();
         fetchCandidates();
         fetchActivities();
@@ -820,13 +824,13 @@ export default function SourceDashboard() {
       </div>
 
       <div className="dashboard-body">
-        <div className="sidebar" data-no-tooltip>
+        <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>Home</button>
-          <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>
-          <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>
-          <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>
-          <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>
-          <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Pipeline</button>
+          {hasPermission('source.candidates.view') && <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>}
+          {hasPermission('source.jobs.view') && <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>}
+          {hasPermission('source.candidates.manage') && <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>}
+          {hasPermission('source.offers.view') && <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>}
+          {hasPermission('source.candidates.view') && <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Candidates</button>}
           <div className="sidebar-brand">
             <img src={ewandzLogo} alt="Ewandz" />
           </div>
@@ -843,7 +847,7 @@ export default function SourceDashboard() {
              currentTab === 'jobs' ? 'JOB MANAGEMENT' :
              currentTab === 'home' ? 'RECRUITMENT ANALYTICS' :
              currentTab === 'offers' ? 'OFFER MANAGEMENT' :
-             currentTab === 'active' ? 'HIRING PIPELINE' :
+             currentTab === 'active' ? 'RECRUITMENT STAGES' :
              currentTab === 'invite-status' ? 'CANDIDATE INVITATIONS' :
              currentTab === 'archive' ? 'CANDIDATE ARCHIVE' :
              'CANDIDATE DATABASE'}
@@ -858,7 +862,7 @@ export default function SourceDashboard() {
             ) : currentTab === 'offers' ? (
               <>Offer Management</>
             ) : currentTab === 'active' ? (
-              <>Hiring Pipeline</>
+              <>Recruitment Stages</>
             ) : currentTab === 'invite-status' ? (
               <>Candidate Invitations</>
             ) : (
@@ -942,7 +946,7 @@ export default function SourceDashboard() {
             </>
           )}
 
-          {currentTab === 'jobs' && (
+          {currentTab === 'jobs' && hasPermission('source.jobs.manage') && (
             <button
               onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'expert' }); setShowNewRole(true); }}
               className="
@@ -1004,8 +1008,8 @@ export default function SourceDashboard() {
 
       {/* ── KPI CARDS ── (Purple, Yellow, Green, Pink) */}
       {currentTab === 'home' && (
-        <div className="grid grid-cols-4 gap-4">
-        <div 
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div
           className="bg-white border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer border-t-4 border-t-purple-600"
           onClick={() => setTab('directory')}
         >
@@ -1584,7 +1588,7 @@ export default function SourceDashboard() {
                 >
                   <option value="all">All</option>
                   <option value="new">New</option>
-                  <option value="favourite">Favourite</option>
+                  <option value="favourite">Favorite</option>
                   <option value="invited">Invited</option>
                   <option value="hired">Hired</option>
                   <option value="archived">Archived</option>
@@ -1991,7 +1995,7 @@ export default function SourceDashboard() {
                     <ul className="list-disc list-inside mt-1 space-y-0.5">
                       <li><code className="text-purple-600">{`{candidate_name}`}</code> - Full name</li>
                       <li><code className="text-purple-600">{`{role}`}</code> - Job role title</li>
-                      <li><code className="text-purple-600">{`{org_name}`}</code> - Organisation name</li>
+                      <li><code className="text-purple-600">{`{org_name}`}</code> - Organization name</li>
                       <li><code className="text-purple-600">{`{assessment_link}`}</code> - URL to access the portal</li>
                       <li><code className="text-purple-600">{`{temp_password}`}</code> - Temporary password</li>
                     </ul>
@@ -2074,10 +2078,11 @@ export default function SourceDashboard() {
 
 // ── Reusable sub-components ───────────────────────────────────────────────────
 function Modal({ children, title, onClose }) {
+  useEscapeClose(onClose);
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/50 backdrop-blur-sm overflow-y-auto">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-2xl p-8 shadow-2xl border border-gray-200 overflow-hidden">
+      <div className="relative w-full max-w-lg bg-white rounded-2xl p-5 sm:p-8 shadow-2xl border border-gray-200 my-8 max-h-[85vh] overflow-y-auto">
         <div className="relative flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-800">{title}</h2>
           <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X size={18} /></button>

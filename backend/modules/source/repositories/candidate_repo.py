@@ -24,13 +24,16 @@ class CandidateRepository:
             
             # 1. Main Candidate Row
             cur.execute('''
-                INSERT INTO candidates 
-                (full_name, email, phone, location, total_experience_years, 
-                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO candidates
+                (full_name, first_name, middle_name, last_name, email, phone, location, total_experience_years,
+                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 data.get("full_name"),
+                data.get("first_name"),
+                data.get("middle_name"),
+                data.get("last_name"),
                 data.get("email"),
                 data.get("phone"),
                 data.get("location"),
@@ -126,8 +129,8 @@ class CandidateRepository:
             
             # Update main table
             cur.execute('''
-                UPDATE candidates 
-                SET full_name = %s, phone = %s, location = %s, total_experience_years = %s,
+                UPDATE candidates
+                SET full_name = %s, first_name = %s, middle_name = %s, last_name = %s, phone = %s, location = %s, total_experience_years = %s,
                     current_designation = %s,
                     ai_summary = %s, linkedin_url = %s, portfolio_url = %s,
                     certifications = %s, primary_skills = %s, secondary_skills = %s,
@@ -136,6 +139,9 @@ class CandidateRepository:
                 WHERE id = %s
             ''', (
                 data.get("full_name"),
+                data.get("first_name"),
+                data.get("middle_name"),
+                data.get("last_name"),
                 data.get("phone"),
                 data.get("location"),
                 data.get("total_experience_years", 0),

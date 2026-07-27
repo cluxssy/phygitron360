@@ -5,6 +5,7 @@ from backend.modules.deploy.services.employee_service import EmployeeService
 from backend.modules.deploy.schemas.employee import UpdateEmployeeRequest, OffboardRequest
 from backend.core.database import DATA_DIR
 from backend.common.services.storage_service import save_uploaded_file
+from backend.modules.deploy.services.notification_service import add_notification
 import os
 import shutil
 
@@ -13,25 +14,101 @@ router = APIRouter(prefix="/api", tags=["employees"])
 def get_service(tenant_id: str = 'public'):
     return EmployeeService(tenant_id=tenant_id)
 
-@router.get("/employees", dependencies=[Depends(require_permission("deploy.employees.view"))])
+@router.get("/employees", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
 def get_employees(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     return service.get_all_employees()
 
-@router.get("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.view"))])
+@router.get("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.view_profile"))])
 def get_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     employee = service.get_employee_full_details(employee_code)
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
+        
+    is_self = current_user.get("employee_code") == employee_code
+    roles = current_user.get("roles", [])
+    is_super = "super_admin" in roles or "superadmin" in roles
+    
+    perms = current_user.get('permissions', {})
+    if isinstance(perms, list):
+        can_view_sensitive = "deploy.employees.view_profile_sensitive" in perms
+        can_view_financial = "deploy.employees.view_profile_financial" in perms
+    elif isinstance(perms, dict):
+        can_view_sensitive = bool(perms.get("deploy.employees.view_profile_sensitive"))
+        can_view_financial = bool(perms.get("deploy.employees.view_profile_financial"))
+    else:
+        can_view_sensitive = False
+        can_view_financial = False
+
+    if not (is_self or is_super or can_view_sensitive):
+        sensitive_fields = ['dob', 'contact_number', 'emergency_contact', 'current_address', 'permanent_address', 'cv_path', 'id_proofs']
+        for f in sensitive_fields:
+            if f in employee and employee[f] is not None:
+                employee[f] = "***REDACTED***" if isinstance(employee[f], str) else None
+
+    if not (is_self or is_super or can_view_financial):
+        financial_fields = ['bank_name', 'bank_account_no', 'pan_no', 'pf_included', 'mediclaim_included']
+        for f in financial_fields:
+            if f in employee and employee[f] is not None:
+                employee[f] = "***REDACTED***" if isinstance(employee[f], str) else None
+
+    employee["_meta"] = {
+        "can_view_sensitive": is_self or is_super or can_view_sensitive,
+        "can_view_financial": is_self or is_super or can_view_financial
+    }
+
     return employee
+
+@router.get("/employee/{employee_code}/document/{doc_type}")
+def get_employee_document(employee_code: str, doc_type: str, download: bool = False, current_user: dict = Depends(get_current_user)):
+    """Serves an employee's uploaded photo/cv/id_proof.
+
+    Access rules:
+    - The employee may always access their own documents (is_self).
+    - Admins/HR with deploy.employees.view_profile_sensitive may access any document.
+    - Everyone else gets a 403. Profile photos (doc_type='pfp') are public within
+      the tenant so they are always served (needed for directory avatars etc.)."""
+    is_self = current_user.get('employee_code') == employee_code
+    roles = current_user.get('roles', [])
+    is_super = 'super_admin' in roles or 'superadmin' in roles
+    perms = current_user.get('permissions', {})
+    can_view_sensitive = bool(perms.get('deploy.employees.view_profile_sensitive')) if isinstance(perms, dict) else False
+
+    # Profile photos are non-sensitive — any authenticated user can load them
+    if doc_type != 'pfp' and not (is_self or is_super or can_view_sensitive):
+        raise HTTPException(status_code=403, detail="You do not have permission to access this document.")
+
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
+    file_path = service.get_document_path(employee_code, doc_type)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if file_path.startswith("http://") or file_path.startswith("https://"):
+        from fastapi.responses import RedirectResponse
+        from backend.common.services.storage_service import generate_presigned_url
+        presigned = generate_presigned_url(file_path, expiry_seconds=900)
+        return RedirectResponse(url=presigned)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File missing from storage")
+
+    from fastapi.responses import FileResponse
+    return FileResponse(
+        file_path,
+        filename=os.path.basename(file_path),
+        content_disposition_type="attachment" if download else "inline"
+    )
 
 @router.post("/employee", dependencies=[Depends(require_permission("deploy.employees.create"))])
 async def create_employee(
-    # Only name is mandatory, all others optional
-    name: str = Form(...),
+    # First and last name are mandatory, middle name is optional, all others optional
+    first_name: str = Form(...),
+    middle_name: Optional[str] = Form(None),
+    last_name: str = Form(...),
     code: Optional[str] = Form(None),
     dob: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
@@ -75,7 +152,9 @@ async def create_employee(
         id_proofs_path = save_uploaded_file(id_proof_file, tenant_id, 'deploy', 'identification_docs', code or 'unknown', 'id_proof')
 
     data = {
-        "name": name,  # name is mandatory
+        "first_name": first_name,
+        "middle_name": middle_name,
+        "last_name": last_name,
         "code": code,
         "dob": dob,
         "phone": phone,
@@ -109,16 +188,70 @@ async def create_employee(
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.edit"))])
+# Field groups protected by specific permissions
+_FINANCIAL_FIELDS = frozenset({
+    'bank_name', 'bank_account_no', 'pan_no', 'pf_included', 'mediclaim_included'
+})
+_JOB_FIELDS = frozenset({
+    'designation', 'team', 'reporting_manager', 'location',
+    'employment_type', 'doj', 'employment_status', 'experience_years'
+})
+
+
+@router.put("/employee/{employee_code}")
 def update_employee(employee_code: str, data: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    """Update an employee record.
+
+    Field-level permission enforcement (defence-in-depth):
+    - Financial fields require deploy.employees.edit_financial
+    - Job / employment fields require deploy.employees.edit_job
+    - Basic fields are allowed for anyone with deploy.employees.edit_basic or if it's their own profile
+    Super-admins bypass all field restrictions.
+    """
+    roles = current_user.get('roles', [])
+    is_super = 'super_admin' in roles or 'superadmin' in roles
+    perms = current_user.get('permissions', {})
+    is_self = current_user.get('employee_code') == employee_code
+
+    if isinstance(perms, dict):
+        can_edit_basic = bool(perms.get('deploy.employees.edit_basic'))
+        can_edit_financial = bool(perms.get('deploy.employees.edit_financial'))
+        can_edit_job = bool(perms.get('deploy.employees.edit_job'))
+    else:
+        can_edit_basic = False
+        can_edit_financial = False
+        can_edit_job = False
+
+    if not (can_edit_basic or is_self):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    if not is_super:
+        # Strip fields the caller is not authorised to write
+        if not can_edit_financial:
+            for field in _FINANCIAL_FIELDS:
+                data.pop(field, None)
+        if not can_edit_job:
+            for field in _JOB_FIELDS:
+                data.pop(field, None)
+
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     try:
-        return service.update_employee(employee_code, data)
+        result = service.update_employee(employee_code, data)
+        # Notify the employee if someone else edited their profile
+        if current_user.get('employee_code') != employee_code:
+            add_notification(
+                title="Profile Updated",
+                message="Your employee profile has been updated by admin.",
+                employee_code=employee_code,
+                n_type="Info",
+                tenant_id=tenant_id
+            )
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/employee/{employee_code}/documents", dependencies=[Depends(require_permission("deploy.employees.edit"))])
+@router.post("/employee/{employee_code}/documents")
 async def upload_documents(
     employee_code: str,
     photo_file: Optional[UploadFile] = File(None),
@@ -126,6 +259,14 @@ async def upload_documents(
     id_proof_file: Optional[UploadFile] = File(None),
     current_user: dict = Depends(get_current_user)
 ):
+    """Upload documents for an employee."""
+    perms = current_user.get('permissions', {})
+    can_manage_docs = bool(perms.get('deploy.employees.manage_documents')) if isinstance(perms, dict) else False
+    is_self = current_user.get('employee_code') == employee_code
+    
+    if not (can_manage_docs or is_self):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to manage documents")
+
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     updates = {}
@@ -145,6 +286,147 @@ async def upload_documents(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/employee-edit-requests/pending", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+def list_pending_edit_requests(current_user: dict = Depends(get_current_user)):
+    """HR-facing list of all employees' pending self-service edit requests."""
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    return ProfileEditRequestService(tenant_id=tenant_id).list_pending_requests()
+
+def _can_review_edit_requests(current_user: dict) -> bool:
+    roles = [r.lower() for r in (current_user.get('roles') or [current_user.get('role')]) if r]
+    is_super = 'super_admin' in roles or 'superadmin' in roles
+    perms = current_user.get('permissions', {})
+    has_perm = isinstance(perms, dict) and (perms.get('deploy.employees.approve_basic') or perms.get('deploy.onboarding.review_submissions'))
+    return bool(is_super or has_perm)
+
+def _serve_stored_document(path: Optional[str]):
+    if not path:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if path.startswith("http://") or path.startswith("https://"):
+        from fastapi.responses import RedirectResponse
+        from backend.common.services.storage_service import generate_presigned_url
+        return RedirectResponse(url=generate_presigned_url(path, expiry_seconds=900))
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File missing from storage")
+    from fastapi.responses import FileResponse
+    return FileResponse(path, filename=os.path.basename(path), content_disposition_type="inline")
+
+@router.get("/employee-edit-requests/{request_id}/preview/field/{field_key}", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+def preview_edit_request_field(request_id: int, field_key: str, current_user: dict = Depends(get_current_user)):
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    path = ProfileEditRequestService(tenant_id=tenant_id).resolve_document_path(request_id, 'field', field_key)
+    return _serve_stored_document(path)
+
+@router.get("/employee-edit-requests/{request_id}/preview/support/{index}", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+def preview_edit_request_support(request_id: int, index: int, current_user: dict = Depends(get_current_user)):
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    path = ProfileEditRequestService(tenant_id=tenant_id).resolve_document_path(request_id, 'support', str(index))
+    return _serve_stored_document(path)
+
+@router.post("/employee-edit-requests/{request_id}/review")
+def review_edit_request(
+    request_id: int,
+    decision: str = Body(..., embed=True),
+    review_notes: Optional[str] = Body(None, embed=True),
+    current_user: dict = Depends(get_current_user)
+):
+    if not _can_review_edit_requests(current_user):
+        raise HTTPException(status_code=403, detail="Missing permission to review edit requests")
+
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = ProfileEditRequestService(tenant_id=tenant_id)
+    try:
+        return service.review_request(request_id, decision, current_user.get('username'), review_notes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/employee/{employee_code}/edit-requests/pending")
+def get_pending_edit_request(employee_code: str, current_user: dict = Depends(get_current_user)):
+    """Lets the profile page show a 'request already pending' banner instead of
+    silently failing when the employee tries to submit a second one."""
+    if current_user.get('employee_code') != employee_code:
+        raise HTTPException(status_code=403, detail="You can only view your own edit requests")
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    return ProfileEditRequestService(tenant_id=tenant_id).get_pending_request(employee_code)
+
+@router.get("/employee/{employee_code}/edit-requests/latest-decision")
+def get_latest_edit_request_decision(employee_code: str, current_user: dict = Depends(get_current_user)):
+    """Lets the profile page show a one-time 'your edits were rejected' banner
+    for the most recent rejection the employee hasn't dismissed yet."""
+    if current_user.get('employee_code') != employee_code:
+        raise HTTPException(status_code=403, detail="You can only view your own edit requests")
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    return ProfileEditRequestService(tenant_id=tenant_id).get_latest_unacknowledged_decision(employee_code)
+
+@router.post("/employee/{employee_code}/edit-requests/{request_id}/acknowledge")
+def acknowledge_edit_request(employee_code: str, request_id: int, current_user: dict = Depends(get_current_user)):
+    """Dismisses the rejection banner so it doesn't keep reappearing."""
+    if current_user.get('employee_code') != employee_code:
+        raise HTTPException(status_code=403, detail="You can only manage your own edit requests")
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    try:
+        return ProfileEditRequestService(tenant_id=tenant_id).acknowledge_request(request_id, employee_code)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/employee/{employee_code}/edit-requests")
+async def submit_edit_request(
+    employee_code: str,
+    fields: str = Form(...),
+    notes: Optional[str] = Form(None),
+    photo_file: Optional[UploadFile] = File(None),
+    cv_file: Optional[UploadFile] = File(None),
+    id_proof_file: Optional[UploadFile] = File(None),
+    supporting_files: List[UploadFile] = File(default=[]),
+    current_user: dict = Depends(get_current_user)
+):
+    """Self-service: an employee proposes changes to their own profile. Nothing
+    on the employees row changes here — this only records the request and
+    notifies the employee + admins. Reviewing/applying it is separate work."""
+    if current_user.get('employee_code') != employee_code:
+        raise HTTPException(status_code=403, detail="You can only request edits to your own profile")
+
+    import json
+    try:
+        field_values = json.loads(fields)
+        if not isinstance(field_values, dict):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid fields payload")
+
+    doc_files = {}
+    if photo_file and photo_file.filename:
+        doc_files['photo_path'] = photo_file
+    if cv_file and cv_file.filename:
+        doc_files['cv_path'] = cv_file
+    if id_proof_file and id_proof_file.filename:
+        doc_files['id_proofs'] = id_proof_file
+
+    from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = ProfileEditRequestService(tenant_id=tenant_id)
+    try:
+        return service.submit_request(
+            employee_code,
+            field_values,
+            doc_files,
+            [f for f in (supporting_files or []) if f and f.filename],
+            notes
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.delete("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.delete"))])
 def delete_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
@@ -156,7 +438,7 @@ def delete_employee(employee_code: str, current_user: dict = Depends(get_current
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/options", dependencies=[Depends(require_permission("deploy.employees.view"))])
+@router.get("/options", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
 def get_dropdown_options(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
@@ -167,7 +449,15 @@ def offboard_employee(employee_code: str, data: OffboardRequest, current_user: d
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     try:
-        return service.offboard_employee(employee_code, data)
+        result = service.offboard_employee(employee_code, data)
+        add_notification(
+            title="Offboarding Initiated",
+            message="Your offboarding process has been initiated. Please complete any pending exit formalities and return company assets.",
+            employee_code=employee_code,
+            n_type="Alert",
+            tenant_id=tenant_id
+        )
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -179,7 +469,7 @@ from fastapi.responses import StreamingResponse
 @router.get("/employees/bulk-upload/template", dependencies=[Depends(require_permission("deploy.employees.create"))])
 def get_bulk_upload_template():
     columns = [
-        "Employee Code", "Name", "Email ID", "Role", "Date of Joining", 
+        "Employee Code", "First Name", "Middle Name", "Last Name", "Email ID", "Role", "Date of Joining",
         "Designation", "Team / Department", "Employment Type", "Reporting Manager", 
         "Base Location", "Employment Status", "Date of Birth", "Contact Number", 
         "Emergency Contact Name", "Emergency Contact", "Current Address", "Permanent Address", 
@@ -224,15 +514,19 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
     
     for idx, row in enumerate(employees):
         try:
-            # Only name is mandatory - everything else can be blank/None
-            name = str(row.get("Name", "")).strip()
-            if not name:
-                raise ValueError("Name is mandatory")
-            
+            # First Name and Last Name are mandatory - everything else can be blank/None
+            first_name = str(row.get("First Name", "")).strip()
+            middle_name = str(row.get("Middle Name", "")).strip() or None
+            last_name = str(row.get("Last Name", "")).strip()
+            if not first_name or not last_name:
+                raise ValueError("First Name and Last Name are mandatory")
+
             # Build data dict with safe defaults for ALL fields
             data = {
                 "code": str(row.get("Employee Code", "")).strip() or None,
-                "name": name,
+                "first_name": first_name,
+                "middle_name": middle_name,
+                "last_name": last_name,
                 "dob": str(row.get("Date of Birth", "")).strip() or None,
                 "phone": str(row.get("Contact Number", "")).strip() or None,
                 "emergency": str(row.get("Emergency Contact", "")).strip() or None,
@@ -285,12 +579,12 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
                 data["education_details"] = []
             
             # Remove None values so service uses defaults
-            # But keep name and any other fields that might have values
+            # But keep name parts and any other fields that might have values
             clean_data = {}
             for k, v in data.items():
                 if v is not None:
                     clean_data[k] = v
-                elif k == "name":  # Always keep name
+                elif k in ("first_name", "last_name"):  # Always keep mandatory name parts
                     clean_data[k] = v
                 elif k == "employment_status":  # Keep defaults
                     clean_data[k] = v
@@ -306,9 +600,9 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
                     clean_data[k] = v
             
             # Make sure we have at least the mandatory fields
-            if "name" not in clean_data:
-                clean_data["name"] = name
-            
+            clean_data.setdefault("first_name", first_name)
+            clean_data.setdefault("last_name", last_name)
+
             service.create_employee(clean_data)
             results["success"] += 1
             
@@ -321,7 +615,7 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
             results["errors"].append({
                 "row": idx + 1,
                 "code": str(row.get("Employee Code", "Unknown")),
-                "name": str(row.get("Name", "Unknown")),
+                "name": f"{row.get('First Name', '')} {row.get('Last Name', '')}".strip() or "Unknown",
                 "error": error_detail
             })
             

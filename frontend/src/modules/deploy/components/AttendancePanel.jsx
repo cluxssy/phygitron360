@@ -1,11 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle } from 'lucide-react';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 export default function AttendancePanel({ mode }) {
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  
+  // Granular Attendance Permissions
+  const canClockInOut = hasPermission(P.DEPLOY_ATT_CLOCK_IN_OUT);
+  const canReqCorrection = hasPermission(P.DEPLOY_ATT_REQ_CORRECTION);
+  const canAppCorrection = hasPermission(P.DEPLOY_ATT_APP_CORRECTION);
+  const canReqLeave = hasPermission(P.DEPLOY_LEAVES_REQUEST);
+  const canAppLeave = hasPermission(P.DEPLOY_LEAVES_APPROVE);
+  const canManagePolicies = hasPermission(P.DEPLOY_ATT_MANAGE_POLICIES);
+
   const isAdmin = mode === 'admin';
   const isEmployee = mode === 'employee';
   const [status, setStatus] = useState(null);
@@ -38,6 +52,14 @@ export default function AttendancePanel({ mode }) {
   const [selectedLog, setSelectedLog] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchedEmployeeHistory, setSearchedEmployeeHistory] = useState([]);
+
+  useEscapeClose(() => setShowCorrectionForm(false), showCorrectionForm);
+  useEscapeClose(() => setShowLeaveForm(false), showLeaveForm);
+  useEscapeClose(() => setShowClockOutModal(false), showClockOutModal);
+  useEscapeClose(() => setSelectedCorrectionId(null), !!selectedCorrectionId);
+  useEscapeClose(() => setEditingRecord(null), !!editingRecord);
+  useEscapeClose(() => setSelectedLog(null), !!selectedLog);
+  const handleTabKeyNav = useTabListKeyNav();
   const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -224,12 +246,12 @@ export default function AttendancePanel({ mode }) {
             body: JSON.stringify(editForm)
         });
         if (!res.ok) throw new Error();
-        toast.success("Matrix Synchronized");
+        toast.success("Changes Saved");
         setEditingRecord(null);
         setEditForm({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
         loadData();
     } catch {
-        toast.error("Synchronization Failed");
+        toast.error("Couldn't Save Changes");
     }
   };
 
@@ -362,7 +384,7 @@ export default function AttendancePanel({ mode }) {
           </div>
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8b5cf6] mb-3">Live Session // Matrix Sync</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8b5cf6] mb-3">Live Session // Attendance</p>
               <div className="flex items-center gap-4">
                 <div className={`w-3 h-3 rounded-full ${status?.status === 'clocked_in' ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-white/10'} ${status?.status === 'clocked_in' ? 'animate-pulse' : ''}`} />
                 <p className="text-3xl font-display font-black text-black uppercase tracking-tighter italic">
@@ -383,20 +405,27 @@ export default function AttendancePanel({ mode }) {
               )}
             </div>
             <div className="flex flex-col gap-3 w-full md:w-auto">
-              {status?.status === 'clocked_in' ? (
-                <button onClick={() => setShowClockOutModal(true)}
-                  className="flex items-center justify-center gap-3 px-8 py-4 bg-red-500 text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-red-400 transition-all font-display italic">
-                  <LogOut size={14} /> Terminate Session
-                </button>
-              ) : status?.status === 'not_started' ? (
-                <button onClick={clockIn}
-                  className="flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:opacity-90 transition-all shadow-xl shadow-transparent font-display italic">
-                  <LogIn size={18} /> Initiate Uplink
-                </button>
+              {canClockInOut ? (
+                status?.status === 'clocked_in' ? (
+                  <button onClick={() => setShowClockOutModal(true)}
+                    className="flex items-center justify-center gap-3 px-8 py-4 bg-red-500 text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-red-400 transition-all font-display italic">
+                    <LogOut size={14} /> Terminate Session
+                  </button>
+                ) : status?.status === 'not_started' ? (
+                  <button onClick={clockIn}
+                    className="flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:opacity-90 transition-all shadow-xl shadow-transparent font-display italic">
+                    <LogIn size={18} /> Initiate Uplink
+                  </button>
+                ) : (
+                    <div className="px-8 py-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3 opacity-50">
+                        <CheckCircle size={16} className="text-emerald-400" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Quota Satisfied</span>
+                    </div>
+                )
               ) : (
                   <div className="px-8 py-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3 opacity-50">
-                      <CheckCircle size={16} className="text-emerald-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Quota Satisfied</span>
+                      <Shield size={16} className="text-red-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Clock Restricted</span>
                   </div>
               )}
             </div>
@@ -409,8 +438,8 @@ export default function AttendancePanel({ mode }) {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                  { label: 'Available Protocol', value: (leaveBalance?.total_leaves || 15) - (leaveBalance?.used_leaves || 0), total: leaveBalance?.total_leaves || 15, color: '#10B981', icon: Shield, suffix: 'Days' },
-                  { label: 'Extended Matrix', value: leaveBalance?.extended_leaves || 0, total: 100, color: '#F43F5E', icon: Activity, suffix: 'Days' },
+                  { label: 'Available Leave Balance', value: (leaveBalance?.total_leaves || 15) - (leaveBalance?.used_leaves || 0), total: leaveBalance?.total_leaves || 15, color: '#10B981', icon: Shield, suffix: 'Days' },
+                  { label: 'Additional Leave Balance', value: leaveBalance?.extended_leaves || 0, total: 100, color: '#F43F5E', icon: Activity, suffix: 'Days' },
               ].map((lb, i) => (
                   <div key={i} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] p-6 border-white/5 relative overflow-hidden group">
                       <div className="absolute top-0 right-0 p-4 text-black/5 group-hover:text-black/10 transition-colors">
@@ -426,15 +455,17 @@ export default function AttendancePanel({ mode }) {
                   </div>
               ))}
           </div>
-          <button 
-              onClick={() => setShowLeaveForm(true)}
-              className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-3 p-6 group"
-          >
-              <div className="w-12 h-12 rounded-2xl bg-[#f3e8ff] flex items-center justify-center text-[#8b5cf6] group-hover:bg-[#8b5cf6] group-hover:text-white transition-all">
-                  <Calendar size={24} />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] group-hover:text-black">Request Absence</span>
-          </button>
+          {canReqLeave && (
+            <button 
+                onClick={() => setShowLeaveForm(true)}
+                className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-3 p-6 group"
+            >
+                <div className="w-12 h-12 rounded-2xl bg-[#f3e8ff] flex items-center justify-center text-[#8b5cf6] group-hover:bg-[#8b5cf6] group-hover:text-white transition-all">
+                    <Calendar size={24} />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] group-hover:text-black">Request Absence</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -442,13 +473,13 @@ export default function AttendancePanel({ mode }) {
       {isAdmin && (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex gap-2">
+            <div onKeyDown={handleTabKeyNav} className="flex gap-2">
                 {[
                 { id: 'today', label: "Daily Log", icon: Users },
                 { id: 'leaves', label: 'Absence Queue', icon: Clock },
                 { id: 'corrections', label: 'Corrections Queue', icon: Edit },
-                { id: 'heatmap', label: 'Team Matrix', icon: BarChart3 },
-                { id: 'search', label: 'Personnel Search', icon: Search },
+                { id: 'heatmap', label: 'Team Attendance Overview', icon: BarChart3 },
+                { id: 'search', label: 'Employee Search', icon: Search },
                 ].map(t => (
                 <button key={t.id} onClick={() => setAdminTab(t.id)}
                     className={`relative flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
@@ -485,11 +516,11 @@ export default function AttendancePanel({ mode }) {
           </div>
 
           {adminTab === 'today' && (
-            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-hidden animate-fade-in-up">
-              <table className="w-full text-left">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-x-auto animate-fade-in-up">
+              <table className="w-full text-left min-w-[720px]">
                 <thead className="bg-white/5 border-b border-white/10">
                   <tr>
-                    {['Personnel', 'Clock In', 'Clock Out', 'Status', 'Mission Log', 'Control'].map(h => (
+                    {['Employee', 'Clock In', 'Clock Out', 'Status', 'Work Summary', 'Control'].map(h => (
                       <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3]">{h}</th>
                     ))}
                   </tr>
@@ -536,11 +567,11 @@ export default function AttendancePanel({ mode }) {
           )}
 
           {adminTab === 'leaves' && (
-            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-hidden animate-fade-in-up">
-              <table className="w-full text-left">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/5 overflow-x-auto animate-fade-in-up">
+              <table className="w-full text-left min-w-[640px]">
                 <thead className="bg-[#f5efff] border-b border-[#ebe4ff]">
                   <tr>
-                    {['Applicant', 'Protocol', 'Window', 'Rationale', 'Control'].map(h => (
+                    {['Applicant', 'Leave Type', 'Window', 'Reason', 'Control'].map(h => (
                       <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3]">{h}</th>
                     ))}
                   </tr>
@@ -563,16 +594,18 @@ export default function AttendancePanel({ mode }) {
                       </td>
                       <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-xs truncate">{l.reason}</td>
                       <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          <button onClick={() => leaveAction(l.id, 'Approved')}
-                            className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
-                            <CheckCircle size={14} />
-                          </button>
-                          <button onClick={() => leaveAction(l.id, 'Rejected')}
-                            className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
-                            <XCircle size={14} />
-                          </button>
-                        </div>
+                        {canAppLeave && (
+                          <div className="flex gap-2">
+                            <button onClick={() => leaveAction(l.id, 'Approved')}
+                              className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
+                              <CheckCircle size={14} />
+                            </button>
+                            <button onClick={() => leaveAction(l.id, 'Rejected')}
+                              className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
+                              <XCircle size={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -582,11 +615,11 @@ export default function AttendancePanel({ mode }) {
           )}
 
           {adminTab === 'corrections' && (
-            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden animate-fade-in-up">
-              <table className="w-full text-left">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-x-auto animate-fade-in-up">
+              <table className="w-full text-left min-w-[640px]">
                 <thead className="bg-[#f5efff] border-b border-[#ece2ff]">
                   <tr>
-                    {['Personnel', 'Time Vector (Date)', 'Correction Type', 'Requested Signals', 'Rationale', 'Control'].map(h => (
+                    {['Employee', 'Time Vector (Date)', 'Correction Type', 'Requested Times', 'Reason', 'Control'].map(h => (
                       <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3]">{h}</th>
                     ))}
                   </tr>
@@ -611,16 +644,18 @@ export default function AttendancePanel({ mode }) {
                       </td>
                       <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-xs truncate">{c.reason}</td>
                       <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          <button onClick={() => actionCorrection(c.id, 'Approved')}
-                            className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
-                            <CheckCircle size={14} />
-                          </button>
-                          <button onClick={() => setSelectedCorrectionId(c.id)}
-                            className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
-                            <XCircle size={14} />
-                          </button>
-                        </div>
+                        {canAppCorrection && (
+                          <div className="flex gap-2">
+                            <button onClick={() => actionCorrection(c.id, 'Approved')}
+                              className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
+                              <CheckCircle size={14} />
+                            </button>
+                            <button onClick={() => setSelectedCorrectionId(c.id)}
+                              className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
+                              <XCircle size={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -629,7 +664,7 @@ export default function AttendancePanel({ mode }) {
             </div>
           )}
 
-          {/* TEAM MATRIX HEATMAP TAB */}
+          {/* TEAM ATTENDANCE OVERVIEW TAB */}
           {adminTab === 'heatmap' && (
               <div className="space-y-4 animate-fade-in-up">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -657,7 +692,7 @@ export default function AttendancePanel({ mode }) {
                       <table className="w-full text-left border-collapse min-w-[1200px]">
                           <thead>
                               <tr className="bg-[#f8f5ff]">
-                                  <th className="sticky left-0 bg-[#f8f5ff] px-6 py-3 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3] border-r border-[#ece2ff] z-20">Personnel Matrix</th>
+                                  <th className="sticky left-0 bg-[#f8f5ff] px-6 py-3 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3] border-r border-[#ece2ff] z-20">Employee Attendance</th>
                                   {Array.from({length: new Date(selectedYear, selectedMonth, 0).getDate()}, (_, i) => (
                                       <th
                                           key={i + 1}
@@ -915,7 +950,7 @@ export default function AttendancePanel({ mode }) {
                     {h.status === 'Absent' && isWithinLast7Days(h.date) && (
                       submittedCorrections.has(h.date) ? (
                         <span className="px-3 py-1 rounded text-[8px] font-black uppercase bg-amber-500/10 text-amber-500">Correction Pending</span>
-                      ) : (
+                      ) : canReqCorrection ? (
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -926,7 +961,7 @@ export default function AttendancePanel({ mode }) {
                         >
                           Request Correction
                         </button>
-                      )
+                      ) : null
                     )}
                   </div>
                 </div>
@@ -947,7 +982,7 @@ export default function AttendancePanel({ mode }) {
               ) : myLeaves.map((l, i) => (
                 <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
                   <div>
-                    <p className="text-xs font-black text-black italic">{l.leave_type} Protocol {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
+                    <p className="text-xs font-black text-black italic">{l.leave_type} Request {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
                     <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
                   </div>
                   <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
@@ -963,13 +998,13 @@ export default function AttendancePanel({ mode }) {
 
       {/* Correction Request Modal */}
       {showCorrectionForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
-          <form onSubmit={applyCorrection} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
+          <form onSubmit={applyCorrection} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-6 sm:p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff] my-8 max-h-[85vh] overflow-y-auto">
             <div className="absolute top-0 right-0 p-8 opacity-5"><Edit size={100} /></div>
             
             <div className="relative z-10">
-                <h3 className="text-xl font-display font-black text-black uppercase italic tracking-widest mb-1">Fix <span className="text-[#8b5cf6]">Matrix Record</span></h3>
-                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#8b8ba3] mb-8">Correction Protocol</p>
+                <h3 className="text-xl font-display font-black text-black uppercase italic tracking-widest mb-1">Correct <span className="text-[#8b5cf6]">Attendance Record</span></h3>
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#8b8ba3] mb-8">Attendance Correction Request</p>
                 
                 <div className="space-y-4">
                     <div>
@@ -1022,7 +1057,7 @@ export default function AttendancePanel({ mode }) {
                     </div>
 
                     <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Correction Rationale</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Reason for Correction</label>
                         <textarea 
                             required
                             placeholder="Explain why correction is needed..."
@@ -1056,17 +1091,17 @@ export default function AttendancePanel({ mode }) {
 
       {/* Absence Request Modal */}
       {showLeaveForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
-          <form onSubmit={applyLeave} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
+          <form onSubmit={applyLeave} className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] p-6 sm:p-10 w-full max-w-md space-y-6 relative overflow-hidden bg-[#faf7ff] my-8 max-h-[85vh] overflow-y-auto">
             <div className="absolute top-0 right-0 p-8 opacity-5"><Calendar size={100} /></div>
             
             <div className="relative z-10">
                 <h3 className="text-xl font-display font-black text-black uppercase italic tracking-widest mb-1">Request <span className="text-[#8b5cf6]">Absence</span></h3>
-                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#8b8ba3] mb-8">Authorization Protocol 77-A</p>
-                
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#8b8ba3] mb-8">Leave Request</p>
+
                 <div className="space-y-4">
                     <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Protocol Type</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Leave Type</label>
                         <input 
                             disabled
                             value="Standard Leave"
@@ -1207,7 +1242,7 @@ export default function AttendancePanel({ mode }) {
                     )}
 
                     <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Protocol Rationale</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Reason</label>
                         <textarea 
                             required
                             placeholder="State mission-critical reasons for absence..."
@@ -1241,17 +1276,17 @@ export default function AttendancePanel({ mode }) {
       
       {/* Clock Out Modal */}
       {showClockOutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl animate-fade-in p-4">
-          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 p-10 w-full max-w-md space-y-8 relative overflow-hidden bg-[#0B1326]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl animate-fade-in p-4 overflow-y-auto">
+          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 p-6 sm:p-10 w-full max-w-md space-y-8 relative overflow-hidden bg-[#0B1326] my-8 max-h-[85vh] overflow-y-auto">
              <div className="absolute top-0 right-0 p-8 opacity-5 text-red-500"><LogOut size={120} /></div>
              
              <div className="relative z-10 text-center">
                     <h3 className="text-2xl font-display font-black text-black uppercase italic tracking-widest mb-2">Finalize <span className="text-red-500">Session</span></h3>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/30 mb-8">Debrief Protocol Required</p>
-                 
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/30 mb-8">Work Summary Required</p>
+
                  <div className="space-y-6 text-left">
                     <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-red-400/60 mb-3 block ml-1">Work Rationale / Summary</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-red-400/60 mb-3 block ml-1">Work Summary</label>
                         <textarea 
                             required
                             placeholder="State your accomplishments for the session..."
@@ -1297,7 +1332,7 @@ export default function AttendancePanel({ mode }) {
                   </div>
                   <div className="p-8 space-y-6">
                       <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-red-500 mb-2 block ml-1">Rejection Rationale (Optional)</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-red-500 mb-2 block ml-1">Rejection Reason (Optional)</label>
                         <textarea 
                             value={rejectionReason}
                             onChange={e => setRejectionReason(e.target.value)}
@@ -1323,8 +1358,8 @@ export default function AttendancePanel({ mode }) {
               <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 w-full max-w-lg relative z-10 animate-fade-in-up overflow-hidden">
                   <div className="p-6 border-b border-[#ece2ff] bg-[#faf7ff] flex justify-between items-center">
                       <div>
-                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black italic">Matrix Synchronization</h3>
-                          <p className="text-[9px] text-[#8b8ba3] uppercase font-bold mt-1">Personnel Record Adjustment Protocol</p>
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black italic">Update Attendance Record</h3>
+                          <p className="text-[9px] text-[#8b8ba3] uppercase font-bold mt-1">Employee Attendance Adjustment</p>
                       </div>
                       <button onClick={() => setEditingRecord(null)} className="p-2 text-[#8b8ba3] hover:text-black transition-colors">
                           <XCircle size={20} />
@@ -1333,14 +1368,14 @@ export default function AttendancePanel({ mode }) {
                   <div className="p-8 space-y-6">
                       <div className="grid grid-cols-2 gap-6">
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Personnel Node</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Employee</label>
                             {editingRecord.isNew ? (
-                                <select 
+                                <select
                                     value={editForm.employee_code}
                                     onChange={e => setEditForm({...editForm, employee_code: e.target.value})}
                                     className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none"
                                 >
-                                    <option value="" className="bg-white">Select Node...</option>
+                                    <option value="" className="bg-white">Select Employee...</option>
                                     {employees.map(e => (
                                         <option key={e.employee_code} value={e.employee_code} className="text-black">{e.name} ({e.employee_code})</option>
                                     ))}
@@ -1365,7 +1400,7 @@ export default function AttendancePanel({ mode }) {
 
                       <div className="grid grid-cols-2 gap-6">
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Signal Start (Clock In)</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Clock-in Time</label>
                             <input 
                                 type="time"
                                 step="1"
@@ -1375,7 +1410,7 @@ export default function AttendancePanel({ mode }) {
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Signal End (Clock Out)</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Clock-out Time</label>
                             <input 
                                 type="time"
                                 step="1"
@@ -1387,7 +1422,7 @@ export default function AttendancePanel({ mode }) {
                       </div>
 
                       <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Mission Rationale (Work Log)</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Work Summary</label>
                         <textarea 
                             value={editForm.work_log}
                             onChange={e => setEditForm({...editForm, work_log: e.target.value})}
@@ -1401,7 +1436,7 @@ export default function AttendancePanel({ mode }) {
                         disabled={!editForm.employee_code || !editForm.date}
                         className="w-full py-4 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:opacity-90 transition-all shadow-xl shadow-transparent disabled:opacity-50"
                       >
-                        Synchronize Matrix Record
+                        Update Attendance Record
                       </button>
                   </div>
               </div>
@@ -1417,7 +1452,7 @@ export default function AttendancePanel({ mode }) {
                       <div className="absolute top-0 right-0 p-4 opacity-5"><Activity size={60} /></div>
                       <div className="relative z-10">
                           <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black italic">
-                              {selectedLog.type === 'leave' ? 'Absence Rationale' : 'Session Debrief'}
+                              {selectedLog.type === 'leave' ? 'Reason for Leave' : 'Work Summary'}
                           </h3>
                           <p className="text-[9px] text-[#8b8ba3] uppercase font-bold mt-1">
                               {selectedLog.type === 'leave' ? `${selectedLog.start_date} to ${selectedLog.end_date}` : `${selectedLog.date} (${selectedLog.clock_in} - ${selectedLog.clock_out || 'Active'})`}
@@ -1434,8 +1469,8 @@ export default function AttendancePanel({ mode }) {
                           </div>
                           <p className="text-sm text-black whitespace-pre-wrap font-medium">
                               {selectedLog.type === 'leave' 
-                                  ? selectedLog.reason || <span className="text-[#8b8ba3] italic">No rationale provided.</span>
-                                  : selectedLog.work_log || <span className="text-[#8b8ba3] italic">No work log recorded for this session.</span>
+                                  ? selectedLog.reason || <span className="text-[#8b8ba3] italic">No reason provided.</span>
+                                  : selectedLog.work_log || <span className="text-[#8b8ba3] italic">No work summary recorded for this session.</span>
                               }
                           </p>
                       </div>

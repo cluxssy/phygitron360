@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/assessments", tags=["Performance"])
 def get_service(user=Depends(get_current_user)):
     return PerformanceService(tenant_id=user.get('tenant_id', 'public'))
 
-@router.get("/{employee_code}/{year}", dependencies=[Depends(require_permission("deploy.assessments.view"))])
+@router.get("/{employee_code}/{year}", dependencies=[Depends(require_permission("deploy.performance.view_personal"))])
 def get_assessments(employee_code: str, year: int, service: PerformanceService = Depends(get_service)):
     return service.get_assessments(employee_code, year)
 
@@ -28,7 +28,7 @@ def save_assessment(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/request", dependencies=[Depends(require_permission("deploy.assessments.manage"))])
+@router.post("/request", dependencies=[Depends(require_permission("deploy.performance.manage_assessments"))])
 def request_review(
     data: Dict[str, Any] = Body(...),
     user=Depends(get_current_user),

@@ -112,7 +112,7 @@ def get_current_user(request: Request) -> dict:
     Core FastAPI dependency. Resolves session_token cookie → authenticated user dict.
 
     Returns a dict containing:
-      id, username, name, role, roles, tenant_id, employee_code,
+      id, username, name, role, templates, tenant_id, employee_code,
       permissions (dict), modules_enabled (list)
 
     Raises 401 if no valid session is found.
@@ -153,10 +153,12 @@ def get_current_user(request: Request) -> dict:
             cur.execute(f'SET search_path TO "{tenant_id}"')
             cur.execute(
                 """
-                SELECT u.id, u.username, u.role, u.roles, u.employee_code, u.is_active,
-                       e.name AS employee_name
+                SELECT u.id, u.username, u.role, u.templates, u.roles, u.employee_code, u.is_active,
+                       e.name AS employee_name, e.first_name AS employee_first_name,
+                       c.full_name AS candidate_name, c.first_name AS candidate_first_name
                 FROM users u
                 LEFT JOIN employees e ON u.employee_code = e.employee_code
+                LEFT JOIN candidates c ON c.user_id = u.id
                 WHERE u.id = %s
                 """,
                 (user_id,)
@@ -169,7 +171,8 @@ def get_current_user(request: Request) -> dict:
             if not user_row.get("is_active", 1):
                 raise HTTPException(status_code=403, detail="Account is deactivated.")
 
-            raw_roles  = user_row.get("roles") or [user_row.get("role")]
+            raw_roles = list(user_row.get("templates") or []) + list(user_row.get("roles") or [])
+            raw_roles.append(user_row.get("role"))
             norm_roles = _normalize_roles(raw_roles)
 
             permissions    = _resolve_permissions(user_id, norm_roles, tenant_id, cur)
@@ -205,9 +208,10 @@ def get_current_user(request: Request) -> dict:
     return {
         "id":             user_row["id"],
         "username":       user_row["username"],
-        "name":           user_row.get("employee_name") or user_row["username"],
+        "name":           user_row.get("employee_name") or user_row.get("candidate_name") or user_row["username"],
+        "first_name":     user_row.get("employee_first_name") or user_row.get("candidate_first_name") or user_row["username"],
         "role":           _normalize_role(user_row.get("role", "")),
-        "roles":          norm_roles,
+        "templates":      user_row.get("templates") or [],
         "tenant_id":      tenant_id,
         "employee_code":  user_row.get("employee_code"),
         "permissions":    permissions,

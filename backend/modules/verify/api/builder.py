@@ -171,6 +171,7 @@ def get_assessment_stats(
 
 @router.get("/assessments")
 def list_assessments(
+    current_user: dict = Depends(require_permission("verify.assessments.view")),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     """List all active assessments for this tenant with question counts."""
@@ -184,6 +185,7 @@ def list_assessments(
 @router.get("/assessments/{asm_id}")
 def get_assessment(
     asm_id: int,
+    current_user: dict = Depends(require_permission("verify.assessments.view")),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     asm = service.get_assessment(asm_id)
@@ -199,6 +201,7 @@ def get_assessment(
 def update_assessment(
     asm_id: int,
     body: AssessmentUpdate,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     updates = {k: v for k, v in body.dict().items() if v is not None}
@@ -222,6 +225,7 @@ def update_assessment(
 @router.delete("/assessments/{asm_id}")
 def delete_assessment(
     asm_id: int,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     try:
@@ -242,6 +246,7 @@ def delete_assessment(
 def update_status(
     asm_id: int,
     body: StatusUpdate,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     allowed = {"draft", "active", "inactive", "closed"}
@@ -265,6 +270,7 @@ def update_status(
 @router.post("/assessments/{asm_id}/publish")
 def publish_assessment(
     asm_id: int,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     try:

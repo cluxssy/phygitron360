@@ -111,6 +111,21 @@ async def start_background_workers():
         except Exception as e:
             print(f"[Startup] Schema migration FAILED for {t_id}: {e}", flush=True)
 
+    # TEMPORARY MIGRATION: Rename `roles` to `templates`
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            for t_id in ['public'] + tenant_ids:
+                try:
+                    cur.execute(f'SET search_path TO "{t_id}"')
+                    cur.execute('ALTER TABLE users RENAME COLUMN roles TO templates')
+                    conn.commit()
+                    print(f"[Migration] Renamed roles to templates for {t_id}", flush=True)
+                except Exception as e:
+                    conn.rollback()
+    finally:
+        conn.close()
+
     for t_id in tenant_ids:
         svc = CandidateService(tenant_id=t_id)
         asyncio.create_task(svc.process_bulk_upload_queue())

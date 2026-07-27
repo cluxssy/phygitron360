@@ -13,6 +13,8 @@ import {
   isPhone,
   isValidUrl,
 } from '../../../core/utils/validators';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import { useAuth } from '../../../core/auth/AuthContext';
 
 const LEVEL_COLOR = {
   beginner:     'bg-white/5 border-white/10 text-white/50',
@@ -33,6 +35,8 @@ const STATUS_STYLE = {
 export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, onRefresh, onConvert }) {
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const { hasPermission } = useAuth();
+  useEscapeClose(onClose, !!candidate);
 
   // Edit Mode states
   const [isEditing, setIsEditing] = useState(false);
@@ -245,7 +249,9 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   // ── Edit Profile Helpers ─────────────────────────────────────────────────
   const startEditing = () => {
     setEditForm({
-      full_name: data.full_name || '',
+      first_name: data.first_name || '',
+      middle_name: data.middle_name || '',
+      last_name: data.last_name || '',
       email: data.email || '',
       phone: data.phone || '',
       location: data.location || '',
@@ -330,7 +336,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   };
 
   const validateProfileEdit = () => {
-    if (!editForm?.full_name?.trim()) return 'Full name is required.';
+    if (!editForm?.first_name?.trim() || !editForm?.last_name?.trim()) return 'First name and last name are required.';
     if (editForm.phone && !isPhone(editForm.phone)) return 'Phone must be 7-15 digits, optionally starting with +.';
     if (editForm.total_experience_years !== undefined && editForm.total_experience_years !== '' && !isNonNegativeNumber(editForm.total_experience_years)) {
       return 'Total experience must be 0 or greater.';
@@ -371,19 +377,17 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     <>
       {/* Backdrop - only covers the content area, not the sidebars */}
       <div
-        className="fixed inset-0 z-[100]"
-        style={{ left: 88 + 280 }}
+        className="fixed inset-0 z-[100] left-0 lg:left-[368px]"
         onClick={onClose}
       />
 
       {/* Drawer panel */}
       <div
-        className={`fixed top-0 right-0 h-full z-[110] bg-[#040812] border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-300 ${candidate ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{ width: 520 }}
+        className={`fixed top-0 right-0 h-full z-[110] bg-[#040812] border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-300 w-full sm:w-[520px] max-w-full ${candidate ? 'translate-x-0' : 'translate-x-full'}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-8 border-b border-white/5 shrink-0">
+        <div className="flex items-start justify-between p-5 sm:p-8 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-2xl font-display font-black text-primary shrink-0">
               {(data?.full_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -394,29 +398,31 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!isEditing ? (
-              <button
-                onClick={startEditing}
-                className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5"
-              >
-                <Edit size={12} /> Edit Profile
-              </button>
-            ) : (
-              <>
+            {hasPermission('source.candidates.manage') && (
+              !isEditing ? (
                 <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/50 hover:text-white transition-colors"
+                  onClick={startEditing}
+                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5"
                 >
-                  Cancel
+                  <Edit size={12} /> Edit Profile
                 </button>
-                <button
-                  onClick={saveProfile}
-                  disabled={savingProfile}
-                  className="px-4 py-2 bg-primary rounded-xl text-[10px] font-black uppercase tracking-widest text-black hover:bg-white transition-colors"
-                >
-                  Save
-                </button>
-              </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/50 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveProfile}
+                    disabled={savingProfile}
+                    className="px-4 py-2 bg-primary rounded-xl text-[10px] font-black uppercase tracking-widest text-black hover:bg-white transition-colors"
+                  >
+                    Save
+                  </button>
+                </>
+              )
             )}
             <button onClick={onClose} className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-colors">
               <X size={20} />
@@ -433,7 +439,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
             </div>
           )}
 
-          <div className="p-8 space-y-8">
+          <div className="p-5 sm:p-8 space-y-8">
             {isEditing ? (
               <form onSubmit={saveProfile} className="space-y-6">
                 <div className="space-y-4">
@@ -441,18 +447,40 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     <Shield size={14} /> Basic Information
                   </h3>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Full Name</label>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">First Name</label>
                       <input
                         type="text"
                         required
-                        value={editForm.full_name}
-                        onChange={e => setEditForm({ ...editForm, full_name: e.target.value })}
+                        value={editForm.first_name}
+                        onChange={e => setEditForm({ ...editForm, first_name: e.target.value })}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
-                    
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Middle Name</label>
+                      <input
+                        type="text"
+                        value={editForm.middle_name}
+                        onChange={e => setEditForm({ ...editForm, middle_name: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Last Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={editForm.last_name}
+                        onChange={e => setEditForm({ ...editForm, last_name: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+
                     <div>
                       <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Email</label>
                       <input
@@ -579,32 +607,36 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {data?.status?.toLowerCase() !== 'favourite' && (
-                      <button
-                        disabled={updatingStatus}
-                        onClick={() => handleStatusUpdate('Favourite')}
-                        className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black text-primary text-[10px] font-black uppercase tracking-widest transition-all"
-                      >
-                        Favourite
-                      </button>
-                    )}
-                    {data?.status?.toLowerCase() !== 'archived' && (
-                      <button
-                        disabled={updatingStatus}
-                        onClick={() => handleStatusUpdate('Archived')}
-                        className="px-3 py-1.5 rounded-lg bg-rose-400/10 border border-rose-400/20 hover:bg-rose-400 hover:text-white text-rose-400 text-[10px] font-black uppercase tracking-widest transition-all"
-                      >
-                        Archive
-                      </button>
-                    )}
-                    {(data?.status?.toLowerCase() === 'favourite' || data?.status?.toLowerCase() === 'archived' || data?.status?.toLowerCase() === 'rejected') && (
-                      <button
-                        disabled={updatingStatus}
-                        onClick={() => handleStatusUpdate('New')}
-                        className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white hover:text-black text-white/60 text-[10px] font-black uppercase tracking-widest transition-all"
-                      >
-                        Move to Active
-                      </button>
+                    {hasPermission('source.candidates.manage') && (
+                      <>
+                        {data?.status?.toLowerCase() !== 'favourite' && (
+                          <button
+                            disabled={updatingStatus}
+                            onClick={() => handleStatusUpdate('Favourite')}
+                            className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black text-primary text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            Favorite
+                          </button>
+                        )}
+                        {data?.status?.toLowerCase() !== 'archived' && (
+                          <button
+                            disabled={updatingStatus}
+                            onClick={() => handleStatusUpdate('Archived')}
+                            className="px-3 py-1.5 rounded-lg bg-rose-400/10 border border-rose-400/20 hover:bg-rose-400 hover:text-white text-rose-400 text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            Archive
+                          </button>
+                        )}
+                        {(data?.status?.toLowerCase() === 'favourite' || data?.status?.toLowerCase() === 'archived' || data?.status?.toLowerCase() === 'rejected') && (
+                          <button
+                            disabled={updatingStatus}
+                            onClick={() => handleStatusUpdate('New')}
+                            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white hover:text-black text-white/60 text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            Restore
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -858,19 +890,23 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
         {/* Footer action bar */}
         <div className="p-6 border-t border-white/5 shrink-0 flex gap-3">
-          <button
-            onClick={() => { setShowScoreForm(s => !s); setShowInviteForm(false); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors duration-150 ${showScoreForm ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
-          >
-            <Star size={14} /> Score
-          </button>
-          <button
-            onClick={() => { setShowInviteForm(s => !s); setShowScoreForm(false); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors duration-150 ${showInviteForm ? 'bg-indigo/10 border-indigo/30 text-indigo' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
-          >
-            <Send size={14} /> Invite
-          </button>
-          {data?.status?.toLowerCase() !== 'hired' && (
+          {hasPermission('source.evaluations.manage') && (
+            <button
+              onClick={() => { setShowScoreForm(s => !s); setShowInviteForm(false); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors duration-150 ${showScoreForm ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
+            >
+              <Star size={14} /> Score
+            </button>
+          )}
+          {hasPermission('source.interviews.manage') && (
+            <button
+              onClick={() => { setShowInviteForm(s => !s); setShowScoreForm(false); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors duration-150 ${showInviteForm ? 'bg-indigo/10 border-indigo/30 text-indigo' : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
+            >
+              <Send size={14} /> Invite
+            </button>
+          )}
+          {hasPermission('source.offers.manage') && data?.status?.toLowerCase() !== 'hired' && (
             <button
               onClick={() => { setShowOfferForm(true); setOfferPreview(null); }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-xs font-black uppercase tracking-widest hover:bg-emerald-400/20 transition-colors duration-150"
@@ -884,7 +920,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       {/* ── OFFER MODAL - WHITE/PURPLE THEME ── */}
       {showOfferForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowOfferForm(false)}>
-          <div className="bg-white w-full max-w-2xl rounded-3xl p-10 relative max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-2xl rounded-3xl p-5 sm:p-10 relative max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             
             {/* Close Button */}
             <button 

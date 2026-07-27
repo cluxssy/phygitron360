@@ -69,7 +69,8 @@ class AuthService:
         user_info = {
             "id": user['id'],
             "username": user['username'],
-            "name": user.get('employee_name') or user['username'],
+            "name": user.get('employee_name') or user.get('candidate_name') or user['username'],
+            "first_name": user.get('employee_first_name') or user.get('candidate_first_name') or user['username'],
             "role": resolved_role,
             "roles": resolved_roles,
             "tenant_id": tenant_id,
@@ -133,13 +134,15 @@ class AuthService:
         modules_enabled = self._get_tenant_modules(tenant_id)
         
         resolved_role = _resolve_role(session['role'])
-        resolved_roles = _resolve_roles(session.get('roles') or [session['role']])
+        resolved_roles = _resolve_roles(session.get('templates') or [])
+        resolved_roles.append(resolved_role)
         
         return {
             "id": session['user_id'],
             "tenant_id": tenant_id,
             "username": session['username'],
-            "name": session.get('employee_name') or session['username'],
+            "name": session.get('employee_name') or session.get('candidate_name') or session['username'],
+            "first_name": session.get('employee_first_name') or session.get('candidate_first_name') or session['username'],
             "role": resolved_role,
             "roles": resolved_roles,
             "employee_code": session['employee_code'],

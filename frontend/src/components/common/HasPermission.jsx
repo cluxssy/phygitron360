@@ -11,7 +11,11 @@ import { usePermissions } from '../../core/auth/usePermissions';
 const HasPermission = ({ permission, children, fallback = null }) => {
     const { hasPermission } = usePermissions();
 
-    if (hasPermission(permission)) {
+    const isGranted = Array.isArray(permission)
+        ? permission.some(p => hasPermission(p))
+        : hasPermission(permission);
+
+    if (isGranted) {
         return <>{children}</>;
     }
 

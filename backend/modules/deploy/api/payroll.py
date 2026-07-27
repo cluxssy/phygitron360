@@ -12,7 +12,7 @@ def get_service(tenant_id: str = 'public') -> PayrollService:
     return PayrollService(tenant_id=tenant_id)
 
 
-@router.get("/payroll/admin/template", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+@router.get("/payroll/admin/template", dependencies=[Depends(require_permission("deploy.payroll.upload_bulk"))])
 def download_payroll_template():
     """Admin: download the payroll excel template."""
     import os
@@ -25,7 +25,7 @@ def download_payroll_template():
 
 
 
-@router.post("/payroll/upload", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+@router.post("/payroll/upload", dependencies=[Depends(require_permission("deploy.payroll.upload_bulk"))])
 async def upload_payroll_excel(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
@@ -43,7 +43,7 @@ async def upload_payroll_excel(
         raise HTTPException(status_code=400, detail=f"Failed to parse Excel: {str(e)}")
 
 
-@router.post("/payroll/push", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+@router.post("/payroll/push", dependencies=[Depends(require_permission("deploy.payroll.run_payroll"))])
 async def push_pay_cycle(
     data: PayrollPushRequest,
     current_user: dict = Depends(get_current_user)
@@ -59,7 +59,7 @@ async def push_pay_cycle(
     return {"success": True, **result}
 
 
-@router.get("/payroll/cycles", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+@router.get("/payroll/cycles", dependencies=[Depends(require_permission("deploy.payroll.view_all"))])
 def get_pay_cycles(current_user: dict = Depends(get_current_user)):
     """Get all distinct pay cycles."""
     tenant_id = current_user.get('tenant_id', 'public')
@@ -67,7 +67,7 @@ def get_pay_cycles(current_user: dict = Depends(get_current_user)):
     return service.get_distinct_cycles()
 
 
-@router.get("/payroll/cycle/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+@router.get("/payroll/cycle/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.view_all"))])
 def get_cycle_detail(year: int, month: int, current_user: dict = Depends(get_current_user)):
     """Get all employee payslips for a specific pay cycle."""
     tenant_id = current_user.get('tenant_id', 'public')
@@ -75,7 +75,7 @@ def get_cycle_detail(year: int, month: int, current_user: dict = Depends(get_cur
     return service.get_cycle_summary(month, year)
 
 
-@router.get("/payroll/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+@router.get("/payroll/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.payroll.view_all"))])
 def get_employee_payslips_admin(employee_code: str, current_user: dict = Depends(get_current_user)):
     """Admin: get all payslips for a specific employee."""
     tenant_id = current_user.get('tenant_id', 'public')
@@ -83,7 +83,7 @@ def get_employee_payslips_admin(employee_code: str, current_user: dict = Depends
     return service.get_employee_payslips(employee_code)
 
 
-@router.get("/payroll/my", dependencies=[Depends(require_permission("deploy.payroll.view"))])
+@router.get("/payroll/my", dependencies=[Depends(require_permission("deploy.payroll.view_personal"))])
 def get_my_payslips(current_user: dict = Depends(get_current_user)):
     """Employee: get own payslip list."""
     employee_code = current_user.get('employee_code')
@@ -94,7 +94,7 @@ def get_my_payslips(current_user: dict = Depends(get_current_user)):
     return service.get_employee_payslips(employee_code)
 
 
-@router.get("/payroll/my/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.view"))])
+@router.get("/payroll/my/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.view_personal"))])
 def get_my_payslip_detail(year: int, month: int, current_user: dict = Depends(get_current_user)):
     """Employee: get a single payslip breakdown."""
     employee_code = current_user.get('employee_code')
@@ -108,7 +108,7 @@ def get_my_payslip_detail(year: int, month: int, current_user: dict = Depends(ge
     return record
 
 
-@router.get("/payroll/download/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.view"))])
+@router.get("/payroll/download/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.view_personal"))])
 def download_payslip_pdf(year: int, month: int, current_user: dict = Depends(get_current_user)):
     """Employee: download own payslip as PDF."""
     employee_code = current_user.get('employee_code')
@@ -127,7 +127,7 @@ def download_payslip_pdf(year: int, month: int, current_user: dict = Depends(get
     )
 
 
-@router.get("/payroll/admin/download/{employee_code}/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+@router.get("/payroll/admin/download/{employee_code}/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.export_reports"))])
 def admin_download_payslip_pdf(
     employee_code: str, year: int, month: int,
     current_user: dict = Depends(get_current_user)
@@ -146,7 +146,7 @@ def admin_download_payslip_pdf(
     )
 
 
-@router.post("/payroll/preview-pdf", dependencies=[Depends(require_permission("deploy.payroll.manage"))])
+@router.post("/payroll/preview-pdf", dependencies=[Depends(require_permission("deploy.payroll.run_payroll"))])
 async def preview_pdf(
     record: dict = Body(...),
     current_user: dict = Depends(get_current_user)

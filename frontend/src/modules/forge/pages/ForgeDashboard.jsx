@@ -13,9 +13,11 @@ import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 export default function ForgeDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const handleTabKeyNav = useTabListKeyNav();
   const { hasRole, hasPermission, user, logout } = useAuth();
   const isAdmin = hasRole(['org_admin', 'manager', 'trainer']);
   
@@ -26,7 +28,7 @@ export default function ForgeDashboard() {
   // Get role display
   const getRoleDisplay = () => {
     if (hasRole?.('super_admin')) return 'Super Admin';
-    if (hasRole?.('org_admin')) return 'Organisation Admin';
+    if (hasRole?.('org_admin')) return 'Organization Admin';
     if (hasRole?.('manager')) return 'Manager';
     if (hasRole?.('recruiter')) return 'Recruiter';
     if (hasRole?.('trainer')) return 'Trainer';
@@ -117,7 +119,7 @@ export default function ForgeDashboard() {
         `}</style>
 
         {/* New Sidebar - Without Icons and Tooltips */}
-        <div className="sidebar forge-sidebar" data-no-tooltip>
+        <div className="sidebar forge-sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>
             Dashboard
           </button>
@@ -138,10 +140,10 @@ export default function ForgeDashboard() {
             {/* Header */}
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7c3aed] mb-3">LEARNING CENTRAL</p>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-                    Learning Forge
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+                    Learning Portal
                   </h1>
                   <p className="text-sm text-gray-500 mt-1">
                     Create and manage learning paths, track employee progress, and build workforce capabilities.
@@ -199,7 +201,7 @@ export default function ForgeDashboard() {
               <>
                 {/* Admin View - Active Assignments Table */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                       <Briefcase size={16} className="text-purple-600" />
                       Active Assignments

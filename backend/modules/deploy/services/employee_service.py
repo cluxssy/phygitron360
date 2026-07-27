@@ -9,6 +9,7 @@ from backend.modules.deploy.repositories.attendance_repo import AttendanceReposi
 from backend.modules.deploy.schemas.employee import UpdateEmployeeRequest, OffboardRequest
 from backend.modules.deploy.repositories.user_repo import UserRepository
 from backend.common.services.email_service import EmailService
+from backend.common.utils.name_utils import join_name_parts, split_full_name
 from passlib.hash import pbkdf2_sha256
 
 class EmployeeService:
@@ -23,11 +24,32 @@ class EmployeeService:
     def get_all_employees(self):
         return self.repo.get_all_employees_basic(self.tenant_id)
 
+    DOCUMENT_COLUMNS = {"photo": "photo_path", "cv": "cv_path", "id_proof": "id_proofs"}
+
+    def get_document_path(self, employee_code: str, doc_type: str) -> Optional[str]:
+        """Returns the stored path/URL for an employee's photo/cv/id_proof, or None."""
+        column = self.DOCUMENT_COLUMNS.get(doc_type)
+        if not column:
+            return None
+        employee = self.repo.get_employee_by_code(employee_code, self.tenant_id)
+        if not employee:
+            return None
+        return employee.get(column)
+
     def get_employee_full_details(self, employee_code: str):
         employee = self.repo.get_employee_by_code(employee_code, self.tenant_id)
         if not employee:
             return None
-            
+
+        # Legacy/seeded rows may only have the combined `name` column populated,
+        # with first/middle/last never split out. Recover them for display so
+        # fields like the Request Edits modal don't show a blank current value.
+        if not (employee.get('first_name') and employee.get('last_name')):
+            parsed_first, parsed_middle, parsed_last = split_full_name(employee.get('name'))
+            employee['first_name'] = employee.get('first_name') or parsed_first
+            employee['middle_name'] = employee.get('middle_name') or parsed_middle
+            employee['last_name'] = employee.get('last_name') or parsed_last
+
         # Securely generate temporary access URLs for private documents
         from backend.common.services.storage_service import generate_presigned_url
         if employee.get('cv_path'):
@@ -56,10 +78,11 @@ class EmployeeService:
         return employee
 
     def create_employee(self, data: Dict[str, Any]):
-    # Only name is mandatory
-        if not data.get('name'):
-            raise ValueError("Employee name is required.")
-        
+        # First name and last name are mandatory, middle name is optional
+        if not data.get('first_name') or not data.get('last_name'):
+            raise ValueError("Employee first name and last name are required.")
+        data['name'] = join_name_parts(data.get('first_name'), data.get('middle_name'), data.get('last_name'))
+
         # Generate employee code if not provided
         if not data.get('code'):
             import uuid
@@ -152,7 +175,7 @@ class EmployeeService:
                         if emp_status == 'Active' and self.email_service.is_configured():
                             email_result = self.email_service.send_new_employee_credentials(
                                 recipient_email=username,
-                                recipient_name=data['name'],
+                                recipient_name=data.get('first_name') or data['name'],
                                 employee_code=data['code'],
                                 temporary_password=temp_password
                             )
@@ -191,19 +214,39 @@ class EmployeeService:
         print("DEBUG DATA RECEIVED:", data)
         allowed_fields = [
             'exit_date', 'exit_reason', 'clearance_status', 'employment_status',
-            'name', 'designation', 'team', 'employment_type', 'reporting_manager', 'location',
-            'contact_number', 'emergency_contact', 'current_address', 
+            'name', 'first_name', 'middle_name', 'last_name', 'guardian_name', 'designation', 'team', 'employment_type', 'reporting_manager', 'location',
+            'contact_number', 'emergency_contact', 'current_address',
             'permanent_address', 'dob', 'email_id', 'notes', 'doj',
             'photo_path', 'cv_path', 'id_proofs', 'pf_included', 'mediclaim_included',
             'education_details', 'employee_code', 'bank_name', 'bank_account_no', 'pan_no'
         ]
-        
+
         fields = []
         values = []
-        
-        # Capture old email to update user username if changed
+
+        # Capture old email to update user username if changed; also used to
+        # fill in any name parts the caller didn't send so `name` stays in sync
         old_employee = self.repo.get_employee_by_code(employee_code, self.tenant_id)
         old_email = old_employee.get('email_id') if old_employee else None
+
+        if any(k in data for k in ('first_name', 'middle_name', 'last_name')):
+            old_first = (old_employee or {}).get('first_name')
+            old_middle = (old_employee or {}).get('middle_name')
+            old_last = (old_employee or {}).get('last_name')
+            # Legacy/seeded rows may only have the combined `name` column populated,
+            # with first/middle/last never split out. Falling back straight to those
+            # (empty) columns would let editing just one name part wipe the other two
+            # out of `name` entirely, so recover the missing parts from `name` first.
+            if not (old_first and old_last):
+                parsed_first, parsed_middle, parsed_last = split_full_name((old_employee or {}).get('name'))
+                old_first = old_first or parsed_first
+                old_middle = old_middle or parsed_middle
+                old_last = old_last or parsed_last
+
+            first_name = data.get('first_name', old_first)
+            middle_name = data.get('middle_name', old_middle)
+            last_name = data.get('last_name', old_last)
+            data['name'] = join_name_parts(first_name, middle_name, last_name)
 
         import json
         for key, value in data.items():

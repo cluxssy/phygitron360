@@ -15,6 +15,7 @@ import PayrollPanel from '../components/PayrollPanel';
 import MyPayrollPanel from '../components/MyPayrollPanel';
 import InternalOpportunitiesPanel from '../components/InternalOpportunitiesPanel';
 import "../styles/deploy.css";
+import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 
 import logo from "../../../assets/phy360.png";
 import ewandzLogo from "../../../assets/EWANDZ.png";
@@ -58,24 +59,25 @@ export default function DeployDashboard() {
      PERMISSIONS
   ========================================= */
 
-  const canViewDashboard =
-    hasPermission?.('deploy.dashboard.view_admin') ||
-    hasPermission?.('module.deploy.access');
+  const canViewDashboard = hasPermission?.('deploy.dashboard.view_admin');
 
-  const canViewProfile =
-    hasPermission?.('deploy.employees.view') ||
-    hasPermission?.('module.deploy.access');
+  const canViewProfile = hasPermission?.('deploy.employees.view_list');
 
-  const canViewAttendance =
-    hasPermission?.('deploy.attendance.view_team') ||
-    hasPermission?.('module.deploy.access');
+  const canViewAttendance = hasPermission?.('deploy.attendance.view_team') || hasPermission?.('deploy.attendance.view_all');
 
-  const canManagePayroll =
-    hasPermission?.('deploy.payroll.manage');
+  const canManagePayroll = hasPermission?.('deploy.payroll.approve') || hasPermission?.('deploy.payroll.run_payroll');
 
-  const canViewPayroll =
-    hasPermission?.('deploy.payroll.view') ||
-    hasPermission?.('module.deploy.access');
+  const canViewPayroll = hasPermission?.('deploy.payroll.view_personal') || hasPermission?.('deploy.payroll.view_all');
+
+  const canViewPerformance = hasPermission?.('deploy.performance.view_team') || hasPermission?.('deploy.performance.view_all');
+
+  const canViewPersonalAttendance = hasPermission?.('deploy.attendance.view_personal');
+  const canViewPersonalPerformance = hasPermission?.('deploy.performance.view_personal');
+
+  const canViewAssets = hasPermission?.('deploy.assets.view_all') || hasPermission?.('deploy.assets.manage_onboarding');
+
+  const canViewOnboarding = hasPermission?.('deploy.onboarding.view');
+
 
   /* =========================================
      NAVIGATION
@@ -87,6 +89,8 @@ export default function DeployDashboard() {
   const setTab = (tab) =>
     navigate(`/deploy?tab=${tab}`);
 
+  const handleTabKeyNav = useTabListKeyNav();
+
   const displayName =
     user?.name ||
     user?.email?.split('@')[0] ||
@@ -94,27 +98,27 @@ export default function DeployDashboard() {
 
   // Dynamic role display based on current view
   const getRoleDisplay = () => {
-    // In employee/personal view, always show Employee Workspace
+    // In employee/personal view, always show Employee Portal
     if (deployView === 'employee') {
-      return 'Employee Workspace';
+      return 'Employee Portal';
     }
-    
+
     // In management view, show actual management role
     if (deployView === 'management') {
       if (hasRole?.('super_admin')) return 'Super Admin';
-      if (hasRole?.('org_admin')) return 'Organisation Admin';
+      if (hasRole?.('org_admin')) return 'Organization Admin';
       if (hasRole?.('manager')) return 'Manager';
-      return 'Employee Workspace';
+      return 'Employee Portal';
     }
-    
+
     // Fallback
     return hasRole?.('super_admin')
       ? 'Super Admin'
       : hasRole?.('org_admin')
-      ? 'Organisation Admin'
+      ? 'Organization Admin'
       : hasRole?.('manager')
-      ? 'Manager Workspace'
-      : 'Employee Workspace';
+      ? 'Manager Portal'
+      : 'Employee Portal';
   };
 
   useEffect(() => {
@@ -221,7 +225,7 @@ export default function DeployDashboard() {
             SIDEBAR
         ========================================= */}
 
-        <div className="sidebar" data-no-tooltip>
+        <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
 
           {/* VIEW TOGGLE */}
 
@@ -255,9 +259,10 @@ export default function DeployDashboard() {
                       : 'text-black/60 hover:bg-white'
                   }
                 `}
-                onClick={() =>
-                  setDeployView('management')
-                }
+                onClick={() => {
+                  setDeployView('management');
+                  setTab('dashboard');
+                }}
               >
                 Management
               </button>
@@ -276,9 +281,10 @@ export default function DeployDashboard() {
                       : 'text-black/60 hover:bg-white'
                   }
                 `}
-                onClick={() =>
-                  setDeployView('employee')
-                }
+                onClick={() => {
+                  setDeployView('employee');
+                  setTab('dashboard');
+                }}
               >
                 Personal
               </button>
@@ -300,40 +306,50 @@ export default function DeployDashboard() {
                 Analytics
               </button>
 
-              <button
-                className={currentTab === 'personnel' ? 'active' : ''}
-                onClick={() => setTab('personnel')}
-              >
-                Personnel
-              </button>
+              {canViewProfile && (
+                <button
+                  className={currentTab === 'personnel' ? 'active' : ''}
+                  onClick={() => setTab('personnel')}
+                >
+                  Directory
+                </button>
+              )}
 
-              <button
-                className={currentTab === 'attendance' ? 'active' : ''}
-                onClick={() => setTab('attendance')}
-              >
-                Attendance
-              </button>
+              {canViewAttendance && (
+                <button
+                  className={currentTab === 'attendance' ? 'active' : ''}
+                  onClick={() => setTab('attendance')}
+                >
+                  Attendance
+                </button>
+              )}
 
-              <button
-                className={currentTab === 'performance' ? 'active' : ''}
-                onClick={() => setTab('performance')}
-              >
-                Performance
-              </button>
+              {canViewPerformance && (
+                <button
+                  className={currentTab === 'performance' ? 'active' : ''}
+                  onClick={() => setTab('performance')}
+                >
+                  Performance
+                </button>
+              )}
 
-              <button
-                className={currentTab === 'assets' ? 'active' : ''}
-                onClick={() => setTab('assets')}
-              >
-                Assets
-              </button>
+              {canViewAssets && (
+                <button
+                  className={currentTab === 'assets' ? 'active' : ''}
+                  onClick={() => setTab('assets')}
+                >
+                  Assets
+                </button>
+              )}
 
-              <button
-                className={currentTab === 'onboard' ? 'active' : ''}
-                onClick={() => setTab('onboard')}
-              >
-                Onboarding
-              </button>
+              {canViewOnboarding && (
+                <button
+                  className={currentTab === 'onboard' ? 'active' : ''}
+                  onClick={() => setTab('onboard')}
+                >
+                  Onboarding
+                </button>
+              )}
 
               {canManagePayroll && (
                 <button
@@ -364,19 +380,23 @@ export default function DeployDashboard() {
                 My Profile
               </button>
 
-              <button
-                className={currentTab === 'attendance' ? 'active' : ''}
-                onClick={() => setTab('attendance')}
-              >
-                My Attendance
-              </button>
+              {canViewPersonalAttendance && (
+                <button
+                  className={currentTab === 'attendance' ? 'active' : ''}
+                  onClick={() => setTab('attendance')}
+                >
+                  My Attendance
+                </button>
+              )}
 
-              <button
-                className={currentTab === 'performance' ? 'active' : ''}
-                onClick={() => setTab('performance')}
-              >
-                My Performance
-              </button>
+              {canViewPersonalPerformance && (
+                <button
+                  className={currentTab === 'performance' ? 'active' : ''}
+                  onClick={() => setTab('performance')}
+                >
+                  My Performance
+                </button>
+              )}
               
               <button
                 className={currentTab === 'opportunities' ? 'active' : ''}
@@ -427,8 +447,7 @@ export default function DeployDashboard() {
           )}
 
           {deployView === 'employee' &&
-            currentTab === 'dashboard' &&
-            canViewDashboard && (
+            currentTab === 'dashboard' && (
 
             <EmployeeDashboard
               key="employee-dashboard"
@@ -488,7 +507,8 @@ export default function DeployDashboard() {
           ========================================= */}
 
           {currentTab === 'attendance' &&
-            canViewAttendance && (
+            ((deployView === 'management' && canViewAttendance) ||
+             (deployView === 'employee' && canViewPersonalAttendance)) && (
 
             <AttendancePanel
               key={`${deployView}-attendance`}
@@ -506,7 +526,9 @@ export default function DeployDashboard() {
             PERFORMANCE
           ========================================= */}
 
-          {currentTab === 'performance' && (
+          {currentTab === 'performance' &&
+            ((deployView === 'management' && canViewPerformance) ||
+             (deployView === 'employee' && canViewPersonalPerformance)) && (
 
             <PerformancePanel
               key={`${deployView}-performance`}
@@ -523,7 +545,7 @@ export default function DeployDashboard() {
 
           {/* ASSETS */}
 
-          {currentTab === 'assets' && deployView === 'management' && (
+          {currentTab === 'assets' && deployView === 'management' && canViewAssets && (
 
             <AssetsPanel
               mode={panelMode}
@@ -534,7 +556,7 @@ export default function DeployDashboard() {
 
           {/* ONBOARDING */}
 
-          {currentTab === 'onboard' && deployView === 'management' && (
+          {currentTab === 'onboard' && deployView === 'management' && canViewOnboarding && (
 
             <OnboardingPanel
               mode={panelMode}

@@ -103,9 +103,17 @@ def get_result_details(
         raise HTTPException(status_code=404, detail="Result not found")
         
     user_id = current_user["id"]
-    user_permissions = current_user.get("permissions", [])
+    user_permissions = current_user.get("permissions", {})
+    user_roles = current_user.get("roles", []) or [current_user.get("role", "")]
+    is_super = "super_admin" in user_roles or "superadmin" in user_roles
     is_owner = result["user_id"] == user_id
-    has_manage = "verify.assessments.manage" in user_permissions
+    
+    if is_super:
+        has_manage = True
+    elif isinstance(user_permissions, dict):
+        has_manage = bool(user_permissions.get("verify.assessments.manage")) or bool(user_permissions.get("verify.results.view"))
+    else:
+        has_manage = "verify.assessments.manage" in user_permissions or "verify.results.view" in user_permissions
 
     if not is_owner and not has_manage:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -151,9 +159,27 @@ def release_result(
     service: SubmissionService = Depends(get_submission_service),
 ):
     """Release a result to the candidate (sets _is_released flag in feedback JSON)."""
+    # Fetch result before releasing so we can notify the owner
+    result = service.get_result_by_id(result_id)
+
     success = service.release_result(result_id)
     if not success:
         raise HTTPException(status_code=404, detail="Result not found or release failed")
+
+    # Notify the candidate in-app that their result is now visible
+    try:
+        if result and result.get('user_id'):
+            from backend.modules.deploy.services.notification_service import add_notification
+            add_notification(
+                title="Assessment Result Available",
+                message="Your assessment result has been released. You can now view your score and feedback.",
+                user_id=result['user_id'],
+                n_type="Success",
+                tenant_id=current_user.get('tenant_id', 'public')
+            )
+    except Exception:
+        pass  # Non-blocking
+
     return {"success": True, "message": "Result released"}
 
 # ---------------------------------------------------------------------------

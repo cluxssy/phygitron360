@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { X, Send, User, MapPin, Mail, Loader2, MessageSquare, CheckCircle, Bell, UserX } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  useEscapeClose(onClose, !!trainee);
 
   if (!trainee) return null;
 
@@ -45,7 +47,7 @@ export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
     if (!window.confirm(`Are you sure you want to cancel the invite for ${trainee.full_name}? This will unlink their user account if they are a trainee and convert them back to an active candidate.`)) return;
     
     setCancelling(true);
-    const tid = toast.loading('Cancelling invite...');
+    const tid = toast.loading('Canceling invite...');
     try {
       const res = await fetch('/api/source/cancel-invite', {
         method: 'POST',
@@ -54,14 +56,14 @@ export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message || 'Invite cancelled successfully.', { id: tid });
+        toast.success(data.message || 'Invite canceled successfully.', { id: tid });
         onClose();
         if (onRefresh) onRefresh();
       } else {
         toast.error(data.detail || 'Failed to cancel invite.', { id: tid });
       }
     } catch (err) {
-      toast.error('Network error while cancelling invite.', { id: tid });
+      toast.error('Network error while canceling invite.', { id: tid });
     } finally {
       setCancelling(false);
     }
@@ -161,7 +163,7 @@ export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
                 <Bell className="text-primary" size={24} /> Notification Center
               </h3>
               <p className="text-xs text-slate-500 mt-2 max-w-md leading-relaxed">
-                Send a custom update, interview link, or assessment instruction directly to {trainee.full_name?.split(' ')[0] || 'the trainee'}'s dashboard and email inbox.
+                Send a custom update, interview link, or assessment instruction directly to {trainee.first_name || 'the trainee'}'s dashboard and email inbox.
               </p>
             </div>
             <button onClick={onClose} className="hidden md:flex p-2 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">
@@ -190,7 +192,7 @@ export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
                 <textarea 
                   required
                   rows={8}
-                  placeholder={`Hi ${trainee.full_name?.split(' ')[0] || 'there'},\n\nPlease join us for a quick sync at: https://meet.google.com/xxx-xxxx-xxx`}
+                  placeholder={`Hi ${trainee.first_name || 'there'},\n\nPlease join us for a quick sync at: https://meet.google.com/xxx-xxxx-xxx`}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-primary/50 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-slate-400 resize-none font-mono"

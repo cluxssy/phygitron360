@@ -7,13 +7,13 @@ import InsightsSection from "../components/InsightsSection";
 import Footer from "../components/Footer";
 export default function LandingPage() {
   return (
-    <>
+    <div className="landing-scope">
       <Navbar />
       <HeroSection />
       <PlatformSection />
       <FeatureGrid />
       <InsightsSection />
       <Footer />
-    </>
+    </div>
   );
 }
