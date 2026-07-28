@@ -61,7 +61,7 @@ export default function DeployDashboard() {
 
   const canViewDashboard = hasAdminClearance;
 
-  const canViewProfile = hasPermission?.('deploy.employees.view_list');
+  const canViewProfile = hasPermission?.('deploy.employees.view_list') || hasPermission?.('deploy.employees.view_team');
 
   const canViewAttendance = hasPermission?.('deploy.attendance.view_team') || hasPermission?.('deploy.attendance.view_all');
 

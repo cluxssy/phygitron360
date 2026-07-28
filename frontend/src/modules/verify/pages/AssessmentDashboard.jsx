@@ -9,13 +9,15 @@ import {
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { P } from '../../../core/permissions';
 
 export default function AssessmentDashboard() {
   const navigate = useNavigate();
   const { user, hasPermission, hasRole } = useAuth();
-  const canViewAssessments = hasPermission('verify.assessments.view');
-  const canManageAssessments = hasPermission('verify.assessments.manage');
-  const isAdmin = canViewAssessments || hasRole(['org_admin', 'super_admin', 'manager']);
+  const canViewAssessments = hasPermission(P.VERIFY_ASSESS_VIEW);
+  const canManageAssessments = hasPermission(P.VERIFY_ASSESS_MANAGE);
+  // isAdmin: true when user has any view/manage permission (org_admin/manager have these seeded)
+  const isAdmin = canViewAssessments || canManageAssessments;
 
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({

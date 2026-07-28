@@ -51,6 +51,8 @@ export default function EmployeeDirectory() {
   const { hasPermission } = usePermissions();
   const canViewProfile = hasPermission(P.DEPLOY_EMP_VIEW_PROFILE);
   const canReviewEditRequests = hasPermission(P.DEPLOY_EMP_APPROVE_BASIC);
+  const canViewList = hasPermission(P.DEPLOY_EMP_VIEW_LIST);
+  const isTeamView = !canViewList && hasPermission(P.DEPLOY_EMP_VIEW_TEAM);
 
   const navigate = useNavigate();
 
@@ -210,7 +212,7 @@ setEmployees(employeeList);
         </p>
 
         <h1 className="text-5xl font-black text-black tracking-tight leading-none">
-          Employee Directory
+          {isTeamView ? 'Team Directory' : 'Employee Directory'}
         </h1>
 
       </div>
@@ -226,7 +228,7 @@ setEmployees(employeeList);
               : 'text-[#6b7280] hover:text-black'
           }`}
         >
-          All Employees
+          {isTeamView ? 'My Team' : 'All Employees'}
         </button>
         {canReviewEditRequests && (
           <button

@@ -18,6 +18,7 @@ import ewandzLogo from '../assets/EWANDZ.png';
 import useEscapeClose from '../core/hooks/useEscapeClose';
 
 import { DEPLOY_MANAGEMENT_PERMS } from '../core/permissions/classification';
+import { P } from '../core/permissions';
 
 // ── Notification Dropdown Component ──
 function NotificationDropdown() {
@@ -144,7 +145,7 @@ function LayoutContent({ children }) {
       name: 'Dashboard',
       path: '/admin',
       icon: LayoutDashboard,
-      perm: 'admin.users.manage',
+      perm: P.ADMIN_USERS_MANAGE,
       options: [
         { label: 'Overview', icon: Home, search: '', default: true },
         { label: 'Users', icon: Shield, search: '?tab=users' },
@@ -210,7 +211,7 @@ function LayoutContent({ children }) {
   ];
 
   const modules = [
-    ...(hasPermission('admin.users.manage') ? [{
+    ...(hasPermission(P.ADMIN_USERS_MANAGE) ? [{
       id: 'dashboard',
       name: 'Dashboard',
       path: '/admin',
@@ -317,7 +318,7 @@ function LayoutContent({ children }) {
       )}
 
       {/* ================= MODAL ================= */}
-      {user?.role === 'org_admin' && !user?.employee_code && (
+      {hasPermission(P.ADMIN_USERS_MANAGE) && !user?.employee_code && (
         <OrgAdminSetupModal user={user} onComplete={() => refreshUser()} />
       )}
     </div>

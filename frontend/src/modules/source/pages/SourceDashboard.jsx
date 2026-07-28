@@ -35,6 +35,7 @@ import {
 import { useNotifications } from '../../../core/context/NotificationContext';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
+import { P } from '../../../core/permissions';
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
@@ -93,7 +94,7 @@ export default function SourceDashboard() {
 
   const isCandidate = hasRole('candidate');
 
-  if (!hasPermission('module.source.access') && !isCandidate) {
+  if (!hasPermission(P.MODULE_SOURCE_ACCESS) && !isCandidate) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-center bg-gray-50">
         <Shield size={48} className="text-gray-300" />
@@ -826,11 +827,11 @@ export default function SourceDashboard() {
       <div className="dashboard-body">
         <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>Home</button>
-          {hasPermission('source.candidates.view') && <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>}
-          {hasPermission('source.jobs.view') && <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>}
-          {hasPermission('source.candidates.manage') && <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>}
-          {hasPermission('source.offers.view') && <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>}
-          {hasPermission('source.candidates.view') && <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Candidates</button>}
+          {hasPermission(P.SOURCE_CANDIDATES_VIEW) && <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>}
+          {hasPermission(P.SOURCE_JOBS_VIEW) && <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>}
+          {hasPermission(P.SOURCE_CANDIDATES_MANAGE) && <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>}
+          {hasPermission(P.SOURCE_OFFERS_VIEW) && <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>}
+          {hasPermission(P.SOURCE_CANDIDATES_VIEW) && <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Candidates</button>}
           <div className="sidebar-brand">
             <img src={ewandzLogo} alt="Ewandz" />
           </div>
@@ -946,7 +947,7 @@ export default function SourceDashboard() {
             </>
           )}
 
-          {currentTab === 'jobs' && hasPermission('source.jobs.manage') && (
+          {currentTab === 'jobs' && hasPermission(P.SOURCE_JOBS_MANAGE) && (
             <button
               onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'expert' }); setShowNewRole(true); }}
               className="

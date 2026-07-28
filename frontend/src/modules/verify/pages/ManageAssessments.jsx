@@ -9,6 +9,7 @@ import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import { P } from '../../../core/permissions';
 
 const TYPE_STYLE = {
   MCQ:     'bg-purple-50 text-purple-700 border-purple-200',
@@ -222,10 +223,10 @@ export default function ManageAssessments() {
   const location = useLocation();
   const { hasPermission } = useAuth();
 
-  const canManage = hasPermission('verify.assessments.manage');
-  const canAssign = hasPermission('verify.assessments.assign');
-  const canViewResults = hasPermission('verify.results.view');
-  const canViewLive = hasPermission('verify.monitoring.view');
+  const canManage = hasPermission(P.VERIFY_ASSESS_MANAGE);
+  const canAssign = hasPermission(P.VERIFY_ASSESS_ASSIGN);
+  const canViewResults = hasPermission(P.VERIFY_RESULTS_VIEW);
+  const canViewLive = hasPermission(P.VERIFY_MONITORING_VIEW);
 
   const [assessments, setAssessments] = useState([]);
   const [loading, setLoading] = useState(true);

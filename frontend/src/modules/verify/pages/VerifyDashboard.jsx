@@ -20,6 +20,7 @@ import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
 import { useNotifications } from '../../../core/context/NotificationContext';
+import { P } from '../../../core/permissions';
 
 export default function VerifyDashboard() {
   const { user, hasPermission, hasRole, logout } = useAuth();
@@ -29,13 +30,14 @@ export default function VerifyDashboard() {
   const params = new URLSearchParams(location.search);
   
   // PBAC capability checks
-  const canViewAssessments   = hasPermission('verify.assessments.view');
-  const canManageAssessments = hasPermission('verify.assessments.manage');
-  const canViewQuestions     = hasPermission('verify.questions.view');
-  const canViewResults       = hasPermission('verify.results.view');
-  const canViewMonitoring    = hasPermission('verify.monitoring.view');
+  const canViewAssessments   = hasPermission(P.VERIFY_ASSESS_VIEW);
+  const canManageAssessments = hasPermission(P.VERIFY_ASSESS_MANAGE);
+  const canViewQuestions     = hasPermission(P.VERIFY_QUESTIONS_VIEW);
+  const canViewResults       = hasPermission(P.VERIFY_RESULTS_VIEW);
+  const canViewMonitoring    = hasPermission(P.VERIFY_MONITORING_VIEW);
 
-  const isManagementAvailable = canViewAssessments || canManageAssessments || canViewQuestions || canViewResults || canViewMonitoring || hasRole(['org_admin', 'super_admin', 'manager']);
+  // Management view is available to any user with at least one verify permission
+  const isManagementAvailable = canViewAssessments || canManageAssessments || canViewQuestions || canViewResults || canViewMonitoring;
 
   // Default to candidate if management view is not available
   const tab = params.get('tab') || (isManagementAvailable ? 'dashboard' : 'candidate');
@@ -47,12 +49,13 @@ export default function VerifyDashboard() {
 
   const appModules = getHubTabs({ hasPermission, hasRole });
 
-  // Dynamic role display based on actual user roles and view
+  // Role label for display only — uses user.role string, not PBAC (intentional)
   const getRoleDisplay = () => {
     if (verifyView === 'personal') return 'My Assessments';
-    if (hasRole?.('super_admin')) return 'Super Admin';
-    if (hasRole?.('org_admin')) return 'Organization Admin';
-    if (hasRole?.('manager')) return 'Manager';
+    const r = user?.role?.toLowerCase();
+    if (r === 'super_admin' || r === 'superadmin') return 'Super Admin';
+    if (r === 'org_admin') return 'Organization Admin';
+    if (r === 'manager') return 'Manager';
     return 'Employee';
   };
 

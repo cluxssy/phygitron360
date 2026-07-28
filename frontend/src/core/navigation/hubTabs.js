@@ -1,7 +1,8 @@
 import { MODULE_CONFIG } from "../config/modules";
+import { P } from "../permissions";
 
-export const canViewDashboardTab = (hasRole) =>
-  hasRole?.(["org_admin", "super_admin"]) === true;
+export const canViewDashboardTab = (hasPermission) =>
+  hasPermission?.(P.ADMIN_USERS_MANAGE) === true;
 
 export const getHubTabs = ({ hasPermission, hasRole }) => {
   const moduleTabs = Object.entries(MODULE_CONFIG)
@@ -14,7 +15,7 @@ export const getHubTabs = ({ hasPermission, hasRole }) => {
       path: config.route,
     }));
 
-  if (!canViewDashboardTab(hasRole)) {
+  if (!canViewDashboardTab(hasPermission)) {
     return moduleTabs;
   }
 

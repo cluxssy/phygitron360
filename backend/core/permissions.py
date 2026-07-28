@@ -11,7 +11,7 @@ Single source of truth for:
 """
 
 from __future__ import annotations
-from typing import List, Dict, Callable
+from typing import List, Dict, Callable, Union
 from fastapi import Depends, HTTPException
 from backend.core.auth import get_current_user
 
@@ -37,9 +37,11 @@ class P:
     MANAGE_OPS            = "manage_ops"
     ADMIN_USERS_MANAGE    = "admin.users.manage"
     ADMIN_ROLES_MANAGE    = "admin.roles.manage"  # Manage role-level permission overrides
+    ADMIN_TENANTS_PROVISION = "admin.tenants.provision"  # Provision / delete tenants (super_admin only in practice)
 
     # ── Deploy: Employees ────────────────────────────────────────────────────
     DEPLOY_EMP_VIEW_LIST            = "deploy.employees.view_list"
+    DEPLOY_EMP_VIEW_TEAM            = "deploy.employees.view_team"
     DEPLOY_EMP_VIEW_PROFILE         = "deploy.employees.view_profile"
     DEPLOY_EMP_VIEW_PROFILE_SENSITIVE = "deploy.employees.view_profile_sensitive"
     DEPLOY_EMP_VIEW_PROFILE_FINANCIAL = "deploy.employees.view_profile_financial"
@@ -82,6 +84,7 @@ class P:
     DEPLOY_ONBOARD_SEND_INVITE      = "deploy.onboarding.send_invite"
     DEPLOY_ONBOARD_CANCEL_INVITE    = "deploy.onboarding.cancel_invite"
     DEPLOY_ONBOARD_REVIEW_SUBMISSIONS = "deploy.onboarding.review_submissions"
+    DEPLOY_ONBOARD_MANAGE           = "deploy.onboarding.manage"  # Approve / reject onboarding submissions
 
     # ── Deploy: Payroll ──────────────────────────────────────────────────────
     DEPLOY_PAYROLL_VIEW_PERSONAL    = "deploy.payroll.view_personal"
@@ -162,7 +165,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Admin
         P.VIEW_REPORTS, P.MANAGE_OPS, P.ADMIN_USERS_MANAGE, P.ADMIN_ROLES_MANAGE,
         # Deploy: Employees
-        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE, P.DEPLOY_EMP_VIEW_PROFILE_SENSITIVE, P.DEPLOY_EMP_VIEW_PROFILE_FINANCIAL,
+        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_TEAM, P.DEPLOY_EMP_VIEW_PROFILE, P.DEPLOY_EMP_VIEW_PROFILE_SENSITIVE, P.DEPLOY_EMP_VIEW_PROFILE_FINANCIAL,
         P.DEPLOY_EMP_CREATE, P.DEPLOY_EMP_EDIT_BASIC, P.DEPLOY_EMP_EDIT_JOB, P.DEPLOY_EMP_EDIT_FINANCIAL,
         P.DEPLOY_EMP_APPROVE_BASIC, P.DEPLOY_EMP_APPROVE_SENSITIVE, P.DEPLOY_EMP_APPROVE_FINANCIAL,
         P.DEPLOY_EMP_DELETE, P.DEPLOY_EMP_OFFBOARD, P.DEPLOY_EMP_EXPORT, P.DEPLOY_EMP_MANAGE_DOCS,
@@ -173,7 +176,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.DEPLOY_LEAVES_VIEW_PERSONAL, P.DEPLOY_LEAVES_VIEW_TEAM, P.DEPLOY_LEAVES_VIEW_ALL, P.DEPLOY_LEAVES_REQUEST, P.DEPLOY_LEAVES_APPROVE, P.DEPLOY_LEAVES_MANAGE_BALANCES,
         P.DEPLOY_ATT_MANAGE_POLICIES,
         # Deploy: Onboarding
-        P.DEPLOY_ONBOARD_VIEW, P.DEPLOY_ONBOARD_SEND_INVITE, P.DEPLOY_ONBOARD_CANCEL_INVITE, P.DEPLOY_ONBOARD_REVIEW_SUBMISSIONS,
+        P.DEPLOY_ONBOARD_VIEW, P.DEPLOY_ONBOARD_SEND_INVITE, P.DEPLOY_ONBOARD_CANCEL_INVITE, P.DEPLOY_ONBOARD_REVIEW_SUBMISSIONS, P.DEPLOY_ONBOARD_MANAGE,
         # Deploy: Payroll
         P.DEPLOY_PAYROLL_VIEW_PERSONAL, P.DEPLOY_PAYROLL_VIEW_ALL, P.DEPLOY_PAYROLL_RUN_PAYROLL, P.DEPLOY_PAYROLL_EDIT_RECORDS, P.DEPLOY_PAYROLL_UPLOAD_BULK, P.DEPLOY_PAYROLL_APPROVE, P.DEPLOY_PAYROLL_EXPORT_REPORTS,
         # Deploy: Performance
@@ -201,14 +204,14 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.MODULE_VERIFY_ACCESS, P.MODULE_DEPLOY_ACCESS,
         P.VIEW_REPORTS,
         # Deploy: Employees
-        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE, P.DEPLOY_EMP_APPROVE_BASIC, P.DEPLOY_EMP_APPROVE_SENSITIVE,
+        P.DEPLOY_EMP_VIEW_TEAM, P.DEPLOY_EMP_VIEW_PROFILE, P.DEPLOY_EMP_APPROVE_BASIC, P.DEPLOY_EMP_APPROVE_SENSITIVE,
         # Deploy: Assets
         P.DEPLOY_ASSETS_VIEW_PERSONAL,
         # Deploy: Attendance
         P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_VIEW_TEAM, P.DEPLOY_ATT_CLOCK_IN_OUT, P.DEPLOY_ATT_REQ_CORRECTION, P.DEPLOY_ATT_APP_CORRECTION,
         P.DEPLOY_LEAVES_VIEW_PERSONAL, P.DEPLOY_LEAVES_VIEW_TEAM, P.DEPLOY_LEAVES_REQUEST, P.DEPLOY_LEAVES_APPROVE,
         # Deploy: Onboarding
-        P.DEPLOY_ONBOARD_VIEW,
+        P.DEPLOY_ONBOARD_VIEW, P.DEPLOY_ONBOARD_MANAGE,
         # Deploy: Payroll
         P.DEPLOY_PAYROLL_VIEW_PERSONAL,
         # Deploy: Performance
@@ -233,7 +236,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
     "employee": [
         P.MODULE_FORGE_ACCESS, P.MODULE_DEPLOY_ACCESS,
         # Deploy: Employees
-        P.DEPLOY_EMP_VIEW_LIST, P.DEPLOY_EMP_VIEW_PROFILE,
+        P.DEPLOY_EMP_VIEW_TEAM, P.DEPLOY_EMP_VIEW_PROFILE,
         # Deploy: Assets
         P.DEPLOY_ASSETS_VIEW_PERSONAL,
         # Deploy: Attendance
@@ -277,13 +280,13 @@ def _is_platform_admin(user_roles: List[str]) -> bool:
     return "super_admin" in user_roles or "superadmin" in user_roles
 
 
-def require_permission(permission_key: str) -> Callable:
+def require_permission(permission_key: Union[str, List[str]]) -> Callable:
     """
     FastAPI dependency factory — PBAC gate.
 
     Grants access if:
       1. User is super_admin (hardcoded platform bypass), OR
-      2. The permission_key exists and is True in user['permissions']
+      2. The permission_key (or at least one key if a list is provided) exists and is True in user['permissions']
 
     NOTE: org_admin access is NOT hardcoded here — it is seeded in
     DEFAULT_PERMISSIONS above, so it flows through normal permission lookup.
@@ -298,18 +301,20 @@ def require_permission(permission_key: str) -> Callable:
 
         # Check granular permission
         perms = current_user.get("permissions", {})
+        keys_to_check = [permission_key] if isinstance(permission_key, str) else permission_key
+        has_access = False
+
         if isinstance(perms, list):
             # Legacy list format — treat as set of allowed keys
-            has_access = permission_key in perms
+            has_access = any(key in perms for key in keys_to_check)
         elif isinstance(perms, dict):
-            has_access = bool(perms.get(permission_key, False))
-        else:
-            has_access = False
+            has_access = any(bool(perms.get(key, False)) for key in keys_to_check)
 
         if not has_access:
+            keys_str = "', '".join(keys_to_check) if isinstance(keys_to_check, list) else permission_key
             raise HTTPException(
                 status_code=403,
-                detail=f"Access denied: missing clearance '{permission_key}'."
+                detail=f"Access denied: missing clearance '{keys_str}'."
             )
         return current_user
     return permission_checker

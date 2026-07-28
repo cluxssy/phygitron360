@@ -24,6 +24,9 @@ class EmployeeService:
     def get_all_employees(self):
         return self.repo.get_all_employees_basic(self.tenant_id)
 
+    def get_team_employees(self, manager_code: str):
+        return self.repo.get_team_employees(self.tenant_id, manager_code)
+
     DOCUMENT_COLUMNS = {"photo": "photo_path", "cv": "cv_path", "id_proof": "id_proofs"}
 
     def get_document_path(self, employee_code: str, doc_type: str) -> Optional[str]:
