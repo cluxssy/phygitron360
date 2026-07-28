@@ -288,7 +288,9 @@ async def upload_documents(
         return {"message": "No files received"}
 
     try:
-        return service.update_employee(employee_code, updates)
+        service.update_employee(employee_code, updates)
+        updated_emp = service.get_employee_by_code(employee_code)
+        return updated_emp or updates
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
