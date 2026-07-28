@@ -109,6 +109,9 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
     setFiles(prev => ({ ...prev, [name]: file }));
   };
 
+  // Validates 7-15 digit phone numbers (digits only, after stripping country code)
+  const phoneDigitsRegex = /^\d{7,15}$/;
+
   const validateStep = () => {
     if (step === 1) {
       // Required fields - must be filled
