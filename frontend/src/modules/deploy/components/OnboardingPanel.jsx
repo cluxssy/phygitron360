@@ -437,18 +437,28 @@ export default function OnboardingPanel() {
       }
       const updated = await res.json();
       toast.success(`${docType === 'cv' ? 'Resume / CV' : docType === 'photo' ? 'Photo' : 'ID Proof'} uploaded successfully`);
+      const newPhoto = updated.photo_path || editApprovalForm.photo_path;
+      const newCv = updated.cv_path || editApprovalForm.cv_path;
+      const newId = updated.id_proofs || editApprovalForm.id_proofs;
+
       setEditApprovalForm(prev => ({
         ...prev,
-        photo_path: updated.photo_path || prev.photo_path,
-        cv_path: updated.cv_path || prev.cv_path,
-        id_proofs: updated.id_proofs || prev.id_proofs
+        photo_path: newPhoto,
+        cv_path: newCv,
+        id_proofs: newId
       }));
-      setSelectedApproval(prev => ({
+      setSelectedApproval(prev => (prev ? {
         ...prev,
-        photo_path: updated.photo_path || prev.photo_path,
-        cv_path: updated.cv_path || prev.cv_path,
-        id_proofs: updated.id_proofs || prev.id_proofs
-      }));
+        photo_path: newPhoto,
+        cv_path: newCv,
+        id_proofs: newId
+      } : null));
+      setApprovals(prev => prev.map(app => 
+        app.employee_code === editApprovalForm.employee_code
+          ? { ...app, photo_path: newPhoto, cv_path: newCv, id_proofs: newId }
+          : app
+      ));
+      fetchApprovals();
     } catch (err) {
       toast.error(err.message || 'Upload failed');
     }

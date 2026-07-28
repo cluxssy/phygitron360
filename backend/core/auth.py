@@ -16,12 +16,9 @@ from datetime import datetime
 
 
 _ROLE_ALIASES = {
-    "admin": "org_admin",
+    "org_admin": "org_admin",
+    "superadmin": "super_admin",
     "administrator": "org_admin",
-    "hr": "manager",
-    "hr_manager": "manager",
-    "management": "manager",
-    "team_lead": "manager",
 }
 
 

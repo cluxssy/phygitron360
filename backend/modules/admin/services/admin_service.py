@@ -201,15 +201,26 @@ class AdminService:
         return {"success": True}
 
     def update_role(self, user_id: int, role: str, actor: str, actor_role: str, templates: List[str] = None):
-        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee']
-        if role not in valid_roles:
-            raise ValueError(f"Invalid role. Must be one of {valid_roles}")
-            
         from backend.modules.deploy.repositories.user_repo import UserRepository
         user_repo = UserRepository()
         user = user_repo.get_user_by_id(user_id, tenant_id=self.tenant_id)
         if not user:
             raise ValueError("User not found")
+            
+        # Validate role
+        from backend.core.database import get_db_connection
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(f'SET search_path TO "{self.tenant_id}"')
+            cur.execute("SELECT role FROM role_permissions WHERE is_template = true")
+            custom_roles = [r[0] for r in cur.fetchall()]
+            
+            valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee'] + custom_roles
+            if role not in valid_roles:
+                raise ValueError(f"Invalid role. Must be one of {valid_roles}")
+        finally:
+            conn.close()
             
         if actor_role == 'manager' and role not in ['employee', 'trainee']:
              raise ValueError("Manager can only assign employee or trainee roles.")

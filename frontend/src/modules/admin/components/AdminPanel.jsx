@@ -13,13 +13,11 @@ export default function AdminPanel() {
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [rolesPerms, setRolesPerms] = useState({});
-  const [templatesList, setCustomRolesList] = useState([]);
   const [tenantOps, setTenantOps] = useState({ modules_enabled: [] });
   const [userOverrides, setUserOverrides] = useState({});
   const [selectedUserForOverride, setSelectedUserForOverride] = useState(null);
   
-  const [selectedUserForCustomRoles, setSelectedUserForCustomRoles] = useState(null);
-  const [showCustomRolesModal, setShowCustomRolesModal] = useState(false);
+  const [customRolesList, setCustomRolesList] = useState([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -460,16 +458,14 @@ export default function AdminPanel() {
 
                         </td>
 
-                        {/* ROLE */}
-
                         <td className="px-10 py-8">
                           <div className="flex flex-col gap-2">
                             <select
                               value={u.role}
-                              onChange={e => updateRole(u.id, e.target.value, u.templates || [])}
+                              onChange={e => updateRole(u.id, e.target.value, [])}
                               className="bg-[#ece8f8] border border-primary/15 text-black text-[10px] font-normal uppercase tracking-[0.15em] px-5 py-3 rounded-2xl focus:outline-none hover:border-primary/40 hover:shadow-[0_0_20px_rgba(180,140,255,0.12)] transition-all cursor-pointer"
                             >
-                              {['org_admin', 'manager', 'employee', 'trainee'].map(r => (
+                              {['org_admin', 'manager', 'employee', 'trainee', ...customRolesList.map(r => r.name)].map(r => (
                                 <option
                                   key={r}
                                   value={r}
@@ -479,16 +475,6 @@ export default function AdminPanel() {
                                 </option>
                               ))}
                             </select>
-
-                            <button
-                              onClick={() => {
-                                setSelectedUserForCustomRoles(u);
-                                setShowCustomRolesModal(true);
-                              }}
-                              className="bg-transparent border border-primary/20 text-primary text-[9px] font-semibold uppercase tracking-[0.15em] px-3 py-2 rounded-xl hover:bg-primary/5 transition-all text-left truncate"
-                            >
-                              {(u.templates && u.templates.length > 0) ? u.templates.join(', ') : '+ Add Templates'}
-                            </button>
                           </div>
                         </td>
 
@@ -754,66 +740,6 @@ export default function AdminPanel() {
           onUpdate={(userId, perm, value) => updateOverride(userId, perm, value)}
           onClose={() => setSelectedUserForOverride(null)}
         />
-      )}
-
-      {showCustomRolesModal && selectedUserForCustomRoles && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-[2rem] p-8 w-[400px] shadow-[0_20px_80px_rgba(0,0,0,0.2)] border border-primary/10">
-            <h3 className="text-xl font-bold text-black uppercase tracking-tight mb-6 flex items-center gap-3">
-              <Shield size={20} className="text-primary" />
-              Edit Templates
-            </h3>
-
-            <div className="space-y-4">
-              <p className="text-xs text-gray-500 mb-4">
-                Assign extra custom roles to <strong className="text-black">{selectedUserForCustomRoles.username}</strong>
-              </p>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Select Roles</label>
-                <select
-                  multiple
-                  defaultValue={selectedUserForCustomRoles.templates || []}
-                  onChange={e => {
-                    const selected = Array.from(e.target.selectedOptions, option => option.value);
-                    selectedUserForCustomRoles._temp_templates = selected;
-                  }}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all min-h-[150px]"
-                >
-                  {templatesList.map(cr => (
-                    <option key={cr.name} value={cr.name}>{cr.name}</option>
-                  ))}
-                </select>
-                <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Hold CMD/CTRL to select multiple</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-8">
-              <button
-                onClick={() => {
-                  setSelectedUserForCustomRoles(null);
-                  setShowCustomRolesModal(false);
-                }}
-                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  updateRole(
-                    selectedUserForCustomRoles.id, 
-                    selectedUserForCustomRoles.role, 
-                    selectedUserForCustomRoles._temp_templates || selectedUserForCustomRoles.templates || []
-                  );
-                  setSelectedUserForCustomRoles(null);
-                  setShowCustomRolesModal(false);
-                }}
-                className="flex-1 py-3 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-violet-700 transition-all"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {showAddForm && (
