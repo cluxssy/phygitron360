@@ -6,7 +6,7 @@ import {
   UserPlus, Mail, CheckCircle, Clock, Trash2, Plus,
   FileText, Briefcase, GraduationCap, MapPin, Phone,
   ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink,
-  Copy, Link, Ban, Save, User, CreditCard, Lock, X, Download
+  Copy, Link, Ban, Save, User, CreditCard, Lock, X, Download, Upload
 } from 'lucide-react';
 import ComboBox from '../../../core/components/ComboBox';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
