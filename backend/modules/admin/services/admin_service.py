@@ -219,13 +219,14 @@ class AdminService:
             conn.close()
             
         from backend.core.database import get_db_connection
+        import json
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             cur.execute(f'SET search_path TO "{self.tenant_id}"')
             if not templates:
                 templates = []
-            cur.execute("UPDATE users SET role = %s, templates = %s WHERE id = %s", (role, templates, user_id))
+            cur.execute("UPDATE users SET role = %s, templates = %s WHERE id = %s", (role, json.dumps(templates), user_id))
             conn.commit()
         finally:
             conn.close()
