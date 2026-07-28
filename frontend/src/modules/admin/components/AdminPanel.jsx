@@ -557,7 +557,7 @@ export default function AdminPanel() {
 
             <ClearanceMatrix
               rolesPerms={rolesPerms}
-              customRolesList={templatesList}
+              customRolesList={customRolesList}
               onRefreshRoles={loadData}
               onUpdate={(role, newList) =>
                 setRolesPerms(prev => ({
@@ -774,35 +774,16 @@ export default function AdminPanel() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Base Role</label>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Role</label>
                 <select
                   value={form.role}
                   onChange={e => setForm({...form, role: e.target.value})}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
                 >
-                  <option value="employee">Employee</option>
-                  <option value="manager">Manager</option>
-                  <option value="org_admin">Org Admin</option>
-                  <option value="trainee">Trainee</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Templates</label>
-                <select
-                  multiple
-                  value={form.templates}
-                  onChange={e => {
-                    const selected = Array.from(e.target.selectedOptions, option => option.value);
-                    setForm({...form, templates: selected});
-                  }}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all min-h-[100px]"
-                >
-                  {templatesList.map(cr => (
-                    <option key={cr.name} value={cr.name}>{cr.name}</option>
+                  {['org_admin', 'manager', 'employee', 'trainee', ...customRolesList.map(r => r.name)].map(r => (
+                    <option key={r} value={r}>{r.replace('_', ' ')}</option>
                   ))}
                 </select>
-                <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Hold CMD/CTRL to select multiple</p>
               </div>
 
               <div>

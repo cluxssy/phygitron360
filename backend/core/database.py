@@ -230,9 +230,7 @@ def create_tables(schema_name='public'):
                 id SERIAL PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT CHECK(role IN (
-                    'super_admin', 'org_admin', 'manager', 'employee', 'candidate', 'trainee'
-                )) NOT NULL,
+                role TEXT NOT NULL,
                 templates TEXT[],
                 employee_code TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE,
                 is_active INTEGER DEFAULT 1,
