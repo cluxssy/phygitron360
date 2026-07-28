@@ -23,6 +23,7 @@ import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 
 import { getHubTabs } from "../../../core/navigation/hubTabs";
+import { DEPLOY_MANAGEMENT_PERMS } from "../../../core/permissions/classification";
 
 export default function DeployDashboard() {
 
@@ -37,11 +38,10 @@ export default function DeployDashboard() {
      ROLE / VIEW CONTROL
   ========================================= */
 
-  const isOrgAdmin =
-    hasPermission?.('deploy.dashboard.view_admin');
+  const hasAdminClearance = user?.permissions && DEPLOY_MANAGEMENT_PERMS.some(p => user.permissions[p]);
 
   const [deployView, setDeployView] = useState(
-    isOrgAdmin ? 'management' : 'employee'
+    hasAdminClearance ? 'management' : 'employee'
   );
 
   const panelMode =
@@ -59,7 +59,7 @@ export default function DeployDashboard() {
      PERMISSIONS
   ========================================= */
 
-  const canViewDashboard = hasPermission?.('deploy.dashboard.view_admin');
+  const canViewDashboard = hasAdminClearance;
 
   const canViewProfile = hasPermission?.('deploy.employees.view_list');
 
@@ -229,7 +229,7 @@ export default function DeployDashboard() {
 
           {/* VIEW TOGGLE */}
 
-          {isOrgAdmin && (
+          {hasAdminClearance && (
 
             <div
               className="
