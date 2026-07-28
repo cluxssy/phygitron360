@@ -95,8 +95,14 @@ class PayrollService:
                 data['net_in_hand'] = monthly_earnings - data.get('total_deductions', 0)
                 
             # Fetch employee info to append for preview
-            emp = self.repo.get_employee_info(employee_code, self.tenant_id)
-            if emp:
+            emp_map = getattr(self, '_emp_map_cache', None)
+            if emp_map is None:
+                emp_map = self.repo.get_employees_map(self.tenant_id)
+                self._emp_map_cache = emp_map
+
+            emp = emp_map.get(employee_code)
+            if emp and str(emp.get('employment_status', 'Active')).lower() in ['active', 'notice period']:
+                data['is_valid_employee'] = True
                 data['employee_name'] = emp.get('name')
                 data['bank_name'] = emp.get('bank_name')
                 data['bank_account_no'] = emp.get('bank_account_no')
@@ -104,9 +110,80 @@ class PayrollService:
                 data['designation'] = emp.get('designation')
                 data['team'] = emp.get('team')
                 data['location'] = emp.get('location')
+            else:
+                data['is_valid_employee'] = False
+                data['employee_name'] = "NOT FOUND"
                 
             records.append(data)
+        
+        # clear cache after parsing
+        if hasattr(self, '_emp_map_cache'):
+            delattr(self, '_emp_map_cache')
+
         return records
+
+    def get_carryover_records(self, target_month: int, target_year: int) -> List[Dict[str, Any]]:
+        """Fetch the latest available pay cycle and map it to the target month/year as a draft preview."""
+        # 1. Ensure target doesn't already have data (optional check, but frontend does it)
+        latest = self.repo.get_latest_pay_cycle(self.tenant_id)
+        if not latest:
+            return []
+            
+        latest_month = latest['pay_month']
+        latest_year = latest['pay_year']
+        
+        # 2. Get records from latest cycle
+        records = self.repo.get_cycle_payslips(latest_month, latest_year, self.tenant_id)
+        
+        # 3. Get active employees to validate them
+        emp_map = self.repo.get_employees_map(self.tenant_id)
+        
+        preview_records = []
+        for r in records:
+            emp_code = r.get('employee_code')
+            emp = emp_map.get(emp_code)
+            
+            # Map fields for preview UI
+            data = {
+                'employee_code': emp_code,
+                'basic_salary': r.get('basic_salary', 0),
+                'hra': r.get('hra', 0),
+                'special_allowance': r.get('special_allowance', 0),
+                'medical_insurance': r.get('medical_insurance', 0),
+                'pf_employer_contribution': r.get('pf_employer_contribution', 0),
+                'travelling_reimbursement': r.get('travelling_reimbursement', 0),
+                'gross_ctc': r.get('gross_ctc', 0),
+                'income_tax': r.get('income_tax', 0),
+                'medical_deduction': r.get('medical_deduction', 0),
+                'employer_pf': r.get('employer_pf', 0),
+                'employee_pf': r.get('employee_pf', 0),
+                'total_deductions': r.get('total_deductions', 0),
+                'net_in_hand': r.get('net_in_hand', 0),
+            }
+            
+            # Recalculate monthly ctc just for frontend consistency
+            earnings_keys = [
+                'basic_salary', 'hra', 'special_allowance', 'medical_insurance',
+                'pf_employer_contribution', 'travelling_reimbursement'
+            ]
+            data['monthly_ctc'] = sum(float(data.get(k) or 0) for k in earnings_keys)
+            
+            if emp and str(emp.get('employment_status', 'Active')).lower() in ['active', 'notice period']:
+                data['is_valid_employee'] = True
+                data['employee_name'] = emp.get('name')
+                data['bank_name'] = emp.get('bank_name')
+                data['bank_account_no'] = emp.get('bank_account_no')
+                data['pan_no'] = emp.get('pan_no')
+                data['designation'] = emp.get('designation')
+                data['team'] = emp.get('team')
+                data['location'] = emp.get('location')
+            else:
+                data['is_valid_employee'] = False
+                data['employee_name'] = "NOT FOUND"
+                
+            preview_records.append(data)
+            
+        return preview_records
 
     def push_pay_cycle(self, records: List[Dict], pay_month: int, pay_year: int,
                        pay_date: Optional[str], uploaded_by: str) -> Dict:

@@ -54,6 +54,76 @@ class EmployeeRepository:
         finally:
             conn.close()
 
+    def get_team_employees(self, tenant_id: str, manager_code: str) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute("""
+                WITH RECURSIVE team_hierarchy AS (
+                    -- Anchor: the manager
+                    SELECT employee_code, name, designation, team, reporting_manager, email_id,
+                           photo_path, employment_status, exit_date, doj, location, employment_type,
+                           hr_approved, finance_approved, dob, contact_number, emergency_contact,
+                           current_address, permanent_address, pan_no, pf_included, mediclaim_included,
+                           cv_path, id_proofs, education_details,
+                           ARRAY[employee_code] AS path
+                    FROM employees
+                    WHERE employee_code = %s
+                    
+                    UNION ALL
+                    
+                    -- Recursive: reports (with cycle prevention)
+                    SELECT e.employee_code, e.name, e.designation, e.team, e.reporting_manager, e.email_id,
+                           e.photo_path, e.employment_status, e.exit_date, e.doj, e.location, e.employment_type,
+                           e.hr_approved, e.finance_approved, e.dob, e.contact_number, e.emergency_contact,
+                           e.current_address, e.permanent_address, e.pan_no, e.pf_included, e.mediclaim_included,
+                           e.cv_path, e.id_proofs, e.education_details,
+                           th.path || e.employee_code
+                    FROM employees e
+                    INNER JOIN team_hierarchy th ON e.reporting_manager = th.employee_code
+                    WHERE NOT (e.employee_code = ANY(th.path))
+                )
+                SELECT e.employee_code, e.name, e.designation, e.team, e.reporting_manager, e.email_id,
+                       e.photo_path, e.employment_status, e.exit_date, e.doj, e.location, e.employment_type,
+                       e.hr_approved, e.finance_approved,
+                       MAX(u.role) as role,
+                       (
+                           COALESCE(e.dob, '') <> '' AND
+                           COALESCE(e.contact_number, '') <> '' AND
+                           COALESCE(e.emergency_contact, '') <> '' AND
+                           COALESCE(e.current_address, '') <> '' AND
+                           COALESCE(e.permanent_address, '') <> '' AND
+                           COALESCE(e.designation, '') <> '' AND
+                           COALESCE(e.team, '') <> '' AND
+                           COALESCE(e.location, '') <> '' AND
+                           COALESCE(e.reporting_manager, '') <> '' AND
+                           COALESCE(e.doj, '') <> '' AND
+                           COALESCE(e.pan_no, '') <> '' AND
+                           COALESCE(e.pf_included, '') <> '' AND
+                           COALESCE(e.mediclaim_included, '') <> '' AND
+                           COALESCE(e.photo_path, '') <> '' AND
+                           COALESCE(e.cv_path, '') <> '' AND
+                           COALESCE(e.id_proofs, '') <> '' AND
+                           e.education_details IS NOT NULL AND
+                           e.education_details::text NOT IN ('[]', 'null') AND
+                           COALESCE(MAX(s.primary_skillset), '') <> ''
+                       ) AS profile_complete
+                FROM team_hierarchy e
+                LEFT JOIN users u ON e.employee_code = u.employee_code
+                LEFT JOIN skill_matrix s ON e.employee_code = s.employee_code
+                GROUP BY e.employee_code, e.name, e.designation, e.team, e.reporting_manager, e.email_id,
+                         e.photo_path, e.employment_status, e.exit_date, e.doj, e.location, e.employment_type,
+                         e.hr_approved, e.finance_approved, e.dob, e.contact_number, e.emergency_contact,
+                         e.current_address, e.permanent_address, e.pan_no, e.pf_included, e.mediclaim_included,
+                         e.cv_path, e.id_proofs, e.education_details
+            """, (manager_code,))
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+
     def get_employee_by_code(self, employee_code: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:

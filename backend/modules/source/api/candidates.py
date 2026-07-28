@@ -130,7 +130,7 @@ async def upload_and_parse_resume(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(exc)}")
 
 
-@router.post("/bulk-upload")
+@router.post("/bulk-upload", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def bulk_upload_resumes(
     files: List[UploadFile] = File(...),
     user: dict = Depends(get_current_user),
@@ -161,7 +161,7 @@ async def bulk_upload_resumes(
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise e
 
-@router.get("/bulk-upload/active")
+@router.get("/bulk-upload/active", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def get_active_bulk_upload(
     service: CandidateService = Depends(get_candidate_service)
 ):
@@ -176,7 +176,7 @@ async def get_active_bulk_upload(
         "data": progress
     }
 
-@router.get("/bulk-upload/{job_id}")
+@router.get("/bulk-upload/{job_id}", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def get_bulk_upload_status(
     job_id: int,
     service: CandidateService = Depends(get_candidate_service)
@@ -191,7 +191,7 @@ async def get_bulk_upload_status(
         "data": progress
     }
 
-@router.post("/bulk-upload/{job_id}/cancel")
+@router.post("/bulk-upload/{job_id}/cancel", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def cancel_bulk_upload(
     job_id: int,
     service: CandidateService = Depends(get_candidate_service)
@@ -204,7 +204,7 @@ async def cancel_bulk_upload(
     }
 
 
-@router.post("/bulk-upload/{job_id}/pause")
+@router.post("/bulk-upload/{job_id}/pause", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def pause_bulk_upload(
     job_id: int,
     service: CandidateService = Depends(get_candidate_service)
@@ -217,7 +217,7 @@ async def pause_bulk_upload(
     }
 
 
-@router.post("/bulk-upload/{job_id}/resume")
+@router.post("/bulk-upload/{job_id}/resume", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def resume_bulk_upload(
     job_id: int, 
     user: dict = Depends(get_current_user)
@@ -228,7 +228,7 @@ async def resume_bulk_upload(
         raise HTTPException(status_code=400, detail="Failed to resume bulk upload")
     return {"message": "Job resumed successfully"}
 
-@router.post("/bulk-upload/{job_id}/retry-failed")
+@router.post("/bulk-upload/{job_id}/retry-failed", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def retry_failed_bulk_upload(
     job_id: int, 
     user: dict = Depends(get_current_user)

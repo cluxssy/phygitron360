@@ -24,9 +24,11 @@ export const P = {
   MANAGE_OPS:            'manage_ops',
   ADMIN_USERS_MANAGE:    'admin.users.manage',
   ADMIN_ROLES_MANAGE:    'admin.roles.manage',
+  ADMIN_TENANTS_PROVISION: 'admin.tenants.provision',  // Provision / delete tenants (super_admin only in practice)
 
   // ── Deploy: Employees ────────────────────────────────────────────────────
   DEPLOY_EMP_VIEW_LIST:            'deploy.employees.view_list',
+  DEPLOY_EMP_VIEW_TEAM:            'deploy.employees.view_team',
   DEPLOY_EMP_VIEW_PROFILE:         'deploy.employees.view_profile',
   DEPLOY_EMP_VIEW_PROFILE_SENSITIVE: 'deploy.employees.view_profile_sensitive',
   DEPLOY_EMP_VIEW_PROFILE_FINANCIAL: 'deploy.employees.view_profile_financial',
@@ -69,6 +71,7 @@ export const P = {
   DEPLOY_ONBOARD_SEND_INVITE:      'deploy.onboarding.send_invite',
   DEPLOY_ONBOARD_CANCEL_INVITE:    'deploy.onboarding.cancel_invite',
   DEPLOY_ONBOARD_REVIEW_SUBMISSIONS: 'deploy.onboarding.review_submissions',
+  DEPLOY_ONBOARD_MANAGE:           'deploy.onboarding.manage',  // Approve / reject onboarding submissions
 
   // ── Deploy: Payroll ──────────────────────────────────────────────────────
   DEPLOY_PAYROLL_VIEW_PERSONAL:    'deploy.payroll.view_personal',

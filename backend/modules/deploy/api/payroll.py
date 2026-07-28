@@ -52,11 +52,38 @@ async def push_pay_cycle(
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     records = [r.dict() for r in data.records]
+    
+    # Final Validation
+    emp_map = service.repo.get_employees_map(tenant_id)
+    invalid_codes = []
+    for r in records:
+        emp_code = r.get('employee_code')
+        emp = emp_map.get(emp_code)
+        if not emp or str(emp.get('employment_status', 'Active')).lower() not in ['active', 'notice period']:
+            invalid_codes.append(emp_code)
+            
+    if invalid_codes:
+        raise HTTPException(status_code=400, detail=f"Cannot push payroll. Invalid or inactive employee codes found: {', '.join(invalid_codes)}")
+        
     result = service.push_pay_cycle(
         records, data.pay_month, data.pay_year,
         data.pay_date, current_user.get('username', 'admin')
     )
     return {"success": True, **result}
+
+@router.get("/payroll/carryover/{year}/{month}", dependencies=[Depends(require_permission("deploy.payroll.upload_bulk"))])
+def get_carryover_data(year: int, month: int, current_user: dict = Depends(get_current_user)):
+    """Fetch previous month's payroll data mapped for the target month as a draft."""
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
+    
+    # Check if records already exist for the target month
+    existing = service.get_cycle_summary(month, year)
+    if existing:
+        raise HTTPException(status_code=400, detail="Payroll records already exist for this cycle.")
+        
+    records = service.get_carryover_records(month, year)
+    return {"success": True, "preview": records, "count": len(records)}
 
 
 @router.get("/payroll/cycles", dependencies=[Depends(require_permission("deploy.payroll.view_all"))])

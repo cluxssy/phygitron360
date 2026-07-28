@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.core.dependencies import get_current_user, require_permission
+from backend.core.dependencies import get_current_user, require_permission, require_module
 from backend.modules.verify.services.submission_service import SubmissionService
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def list_user_results(
 # 3. GET /results/{result_id} — full result details
 # ---------------------------------------------------------------------------
 
-@router.get("/results/{result_id}")
+@router.get("/results/{result_id}", dependencies=[Depends(require_module("verify"))])
 def get_result_details(
     result_id: int,
     current_user: dict = Depends(get_current_user),
@@ -104,13 +104,9 @@ def get_result_details(
         
     user_id = current_user["id"]
     user_permissions = current_user.get("permissions", {})
-    user_roles = current_user.get("roles", []) or [current_user.get("role", "")]
-    is_super = "super_admin" in user_roles or "superadmin" in user_roles
     is_owner = result["user_id"] == user_id
     
-    if is_super:
-        has_manage = True
-    elif isinstance(user_permissions, dict):
+    if isinstance(user_permissions, dict):
         has_manage = bool(user_permissions.get("verify.assessments.manage")) or bool(user_permissions.get("verify.results.view"))
     else:
         has_manage = "verify.assessments.manage" in user_permissions or "verify.results.view" in user_permissions

@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './core/auth/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import TooltipProvider from './core/components/TooltipProvider';
 import HorizontalLoader from './core/components/HorizontalLoader';
+import { P } from './core/permissions';
 
 import Layout from './components/Layout';
 import LandingPage from "./modules/landing/pages/LandingPage";
@@ -62,13 +63,15 @@ function ProtectedRoute({ children, requiredPermission, requiredModule }) {
 
 function AdminGate() {
   const { hasRole, hasPermission } = useAuth();
-  
-  if (hasPermission('admin.users.manage') || hasRole(['org_admin'])) {
-    return <OrgDashboard />;
-  }
-  
+
+  // super_admin is a platform role — no seeded permission equivalent exists
   if (hasRole(['super_admin'])) {
     return <MasterConsole />;
+  }
+
+  // org_admin has admin.users.manage seeded — prefer PBAC over raw role check
+  if (hasPermission(P.ADMIN_USERS_MANAGE)) {
+    return <OrgDashboard />;
   }
 
   // Fallback for managers or others who shouldn't be in the admin workspace
@@ -94,7 +97,7 @@ export default function App() {
           <Route 
             path="/superadmin" 
             element={
-              <ProtectedRoute requiredPermission="manage_system">
+              <ProtectedRoute requiredPermission={P.MANAGE_SYSTEM}>
                 <Layout><SuperadminDashboard /></Layout>
               </ProtectedRoute>
             } 

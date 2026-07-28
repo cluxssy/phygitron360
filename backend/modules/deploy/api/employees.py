@@ -14,11 +14,29 @@ router = APIRouter(prefix="/api", tags=["employees"])
 def get_service(tenant_id: str = 'public'):
     return EmployeeService(tenant_id=tenant_id)
 
-@router.get("/employees", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+@router.get("/employees")
 def get_employees(current_user: dict = Depends(get_current_user)):
+    perms = current_user.get('permissions', [])
+    if isinstance(perms, dict):
+        can_view_all = bool(perms.get("deploy.employees.view_list"))
+        can_view_team = bool(perms.get("deploy.employees.view_team"))
+    else:
+        can_view_all = "deploy.employees.view_list" in perms
+        can_view_team = "deploy.employees.view_team" in perms
+
+    if not can_view_all and not can_view_team:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
-    return service.get_all_employees()
+    
+    if can_view_all:
+        return service.get_all_employees()
+    else:
+        employee_code = current_user.get('employee_code')
+        if not employee_code:
+            return []
+        return service.get_team_employees(employee_code)
 
 @router.get("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.view_profile"))])
 def get_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
@@ -263,9 +281,8 @@ async def upload_documents(
     role = current_user.get('role')
     perms = current_user.get('permissions', {})
     can_manage_docs = (
-        role in ('super_admin', 'org_admin') or
         bool(perms.get('deploy.employees.manage_documents')) or
-        bool(perms.get('deploy.onboarding.approve')) or
+        bool(perms.get('deploy.onboarding.review_submissions')) or
         bool(perms.get('deploy.employees.edit_basic'))
     ) if isinstance(perms, dict) else role in ('super_admin', 'org_admin')
     is_self = current_user.get('employee_code') == employee_code
@@ -294,7 +311,7 @@ async def upload_documents(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/employee-edit-requests/pending", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+@router.get("/employee-edit-requests/pending", dependencies=[Depends(require_permission(["deploy.employees.view_list", "deploy.employees.view_team"]))])
 def list_pending_edit_requests(current_user: dict = Depends(get_current_user)):
     """HR-facing list of all employees' pending self-service edit requests."""
     from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
@@ -320,14 +337,14 @@ def _serve_stored_document(path: Optional[str]):
     from fastapi.responses import FileResponse
     return FileResponse(path, filename=os.path.basename(path), content_disposition_type="inline")
 
-@router.get("/employee-edit-requests/{request_id}/preview/field/{field_key}", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+@router.get("/employee-edit-requests/{request_id}/preview/field/{field_key}", dependencies=[Depends(require_permission(["deploy.employees.view_list", "deploy.employees.view_team"]))])
 def preview_edit_request_field(request_id: int, field_key: str, current_user: dict = Depends(get_current_user)):
     from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
     tenant_id = current_user.get('tenant_id', 'public')
     path = ProfileEditRequestService(tenant_id=tenant_id).resolve_document_path(request_id, 'field', field_key)
     return _serve_stored_document(path)
 
-@router.get("/employee-edit-requests/{request_id}/preview/support/{index}", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+@router.get("/employee-edit-requests/{request_id}/preview/support/{index}", dependencies=[Depends(require_permission(["deploy.employees.view_list", "deploy.employees.view_team"]))])
 def preview_edit_request_support(request_id: int, index: int, current_user: dict = Depends(get_current_user)):
     from backend.modules.deploy.services.profile_edit_request_service import ProfileEditRequestService
     tenant_id = current_user.get('tenant_id', 'public')
@@ -446,7 +463,7 @@ def delete_employee(employee_code: str, current_user: dict = Depends(get_current
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/options", dependencies=[Depends(require_permission("deploy.employees.view_list"))])
+@router.get("/options", dependencies=[Depends(require_permission(["deploy.employees.view_list", "deploy.employees.view_team"]))])
 def get_dropdown_options(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)

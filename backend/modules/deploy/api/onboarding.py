@@ -250,18 +250,20 @@ def approve_onboarding(
 def approve_onboarding_section(
     employee_code: str,
     section: str = Body(..., embed=True),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("deploy.onboarding.review_submissions")),
     service: OnboardingService = Depends(get_service)
 ):
-    perms = current_user.get("permissions", {})
-    roles = [r.lower() for r in (current_user.get("roles") or [current_user.get("role")]) if r]
-    is_admin = "super_admin" in roles or "superadmin" in roles or "org_admin" in roles
+    """Partial-approval of an onboarding submission by section (hr / finance).
+
+    Both sections require deploy.onboarding.review_submissions as a baseline.
+    Finance approval additionally requires deploy.employees.approve_financial.
+    """
+    perms = current_user.get("permissions", {}) or {}
 
     if section == "hr":
-        if not is_admin and not perms.get("deploy.employees.approve_basic") and not perms.get("deploy.employees.approve_sensitive") and not perms.get("deploy.onboarding.review_submissions"):
-            raise HTTPException(status_code=403, detail="Missing HR approval clearance")
+        pass  # baseline require_permission guard already covers HR
     elif section == "finance":
-        if not is_admin and not perms.get("deploy.employees.approve_financial"):
+        if not bool(perms.get("deploy.employees.approve_financial")):
             raise HTTPException(status_code=403, detail="Missing Finance approval clearance")
     else:
         raise HTTPException(status_code=400, detail="Invalid section. Must be 'hr' or 'finance'.")
