@@ -428,7 +428,7 @@ class EmployeeRepository:
                 SELECT e.name, u.employee_code, u.role
                 FROM employees e
                 JOIN users u ON e.employee_code = u.employee_code
-                WHERE u.role IN ('org_admin', 'manager', 'super_admin')
+                WHERE u.role NOT IN ('employee', 'trainee', 'candidate')
                 ORDER BY e.name
             """)
             managers = [{"name": r[0], "code": r[1], "role": r[2]} for r in cur.fetchall()]

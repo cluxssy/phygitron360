@@ -76,9 +76,7 @@ class AdminService:
         if role not in valid_roles:
              raise ValueError(f"Invalid role. Must be one of {valid_roles}")
              
-        if actor_role == 'manager' and role not in ['employee', 'trainee']:
-             raise ValueError("Manager can only assign employee or trainee roles.")
-             
+        
         # Use auth service to create user (handles password hashing)
         try:
              # Ensure tenant_id is preserved
@@ -119,9 +117,7 @@ class AdminService:
         user = UserRepository().get_user_by_id(user_id, tenant_id=self.tenant_id)
         if not user:
             raise ValueError("User not found")
-        if actor_role == 'manager' and user['role'] not in ['employee', 'candidate', 'Employee', 'Candidate']:
-            raise ValueError("Manager can only toggle employee or candidate.")
-            
+        
         conn = get_db_connection()
         try:
              cur = conn.cursor()
@@ -213,7 +209,7 @@ class AdminService:
         try:
             cur = conn.cursor()
             cur.execute(f'SET search_path TO "{self.tenant_id}"')
-            cur.execute("SELECT role FROM role_permissions WHERE is_template = true")
+            cur.execute("SELECT name FROM permission_templates")
             custom_roles = [r[0] for r in cur.fetchall()]
             
             valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee'] + custom_roles
@@ -221,11 +217,6 @@ class AdminService:
                 raise ValueError(f"Invalid role. Must be one of {valid_roles}")
         finally:
             conn.close()
-            
-        if actor_role == 'manager' and role not in ['employee', 'trainee']:
-             raise ValueError("Manager can only assign employee or trainee roles.")
-        if actor_role == 'manager' and user['role'] not in ['employee', 'trainee', 'Employee', 'Trainee']:
-             raise ValueError("Manager can only modify employee or trainee accounts.")
             
         from backend.core.database import get_db_connection
         conn = get_db_connection()
