@@ -85,16 +85,14 @@ def get_my_leaves(user=Depends(get_current_user), service: AttendanceService = D
 
 @router.get("/leave/all-requests")
 def get_all_leave_requests(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
-    role = user.get('role', 'employee')
-    if role == 'employee' and user.get("permissions", {}).get("deploy.attendance.view_team", False):
-        role = 'manager'
+    perms = user.get('permissions', {})
+    role = 'admin' if perms.get('deploy.attendance.view_all') else ('manager' if perms.get('deploy.attendance.view_team') else 'employee')
     return service.get_all_pending_leaves(role, user.get('employee_code'))
 
 @router.get("/admin/today")
 def get_daily_attendance_log(date: Optional[str] = None, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
-    role = user.get('role', 'employee')
-    if role == 'employee' and user.get("permissions", {}).get("deploy.attendance.view_team", False):
-        role = 'manager'
+    perms = user.get('permissions', {})
+    role = 'admin' if perms.get('deploy.attendance.view_all') else ('manager' if perms.get('deploy.attendance.view_team') else 'employee')
     return service.get_daily_log(date, role, user.get('employee_code'))
 
 @router.post("/leave/action/{leave_id}")
@@ -249,7 +247,8 @@ def get_bimonthly_report(
     user=Depends(require_permission("deploy.attendance.view_team")),
     service: AttendanceService = Depends(get_service)
 ):
-    manager_code = user.get('employee_code') if user['role'] == 'manager' else None
+    perms = user.get('permissions', {})
+    manager_code = None if perms.get('deploy.attendance.view_all') else user.get('employee_code')
     try:
         return service.get_bimonthly_report(year, month, cycle, manager_code)
     except ValueError as e:
