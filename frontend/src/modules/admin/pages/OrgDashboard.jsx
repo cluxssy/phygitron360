@@ -428,7 +428,7 @@ export default function OrgDashboard() {
                   <h3 style={{ marginBottom: "24px" }}>Candidate Pipeline</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: "40px", flex: 1 }}>
                     <div style={{ width: "180px", height: "180px", flexShrink: 0 }}>
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={10} minHeight={10}>
                         <PieChart>
                           <Pie
                             data={pieChartData}

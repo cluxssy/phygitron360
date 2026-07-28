@@ -14,6 +14,7 @@ export default function AssessmentDashboard() {
   const navigate = useNavigate();
   const { user, hasPermission, hasRole } = useAuth();
   const canViewAssessments = hasPermission('verify.assessments.view');
+  const canManageAssessments = hasPermission('verify.assessments.manage');
   const isAdmin = canViewAssessments || hasRole(['org_admin', 'super_admin', 'manager']);
 
   const [loading, setLoading] = useState(true);
@@ -83,14 +84,16 @@ export default function AssessmentDashboard() {
         });
 
         // Try to get recent activity from assignments
-        try {
-          const assignmentsRes = await fetch('/api/verify/assignments/recent', { credentials: 'include' });
-          if (assignmentsRes.ok) {
-            const assignmentsData = await assignmentsRes.json();
-            recentActivity = (assignmentsData.data || []).slice(0, 5);
+        if (canManageAssessments) {
+          try {
+            const assignmentsRes = await fetch('/api/verify/assignments/recent', { credentials: 'include' });
+            if (assignmentsRes.ok) {
+              const assignmentsData = await assignmentsRes.json();
+              recentActivity = (assignmentsData.data || []).slice(0, 5);
+            }
+          } catch {
+            // Fallback - use empty array
           }
-        } catch {
-          // Fallback - use empty array
         }
 
         const active = assessments.filter(a => a.status?.toLowerCase() === 'active');

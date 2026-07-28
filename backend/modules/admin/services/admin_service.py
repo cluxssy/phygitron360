@@ -72,10 +72,6 @@ class AdminService:
         return {"success": True}
 
     def create_user(self, username: str, password: str, role: str, actor: str, actor_role: str, employee_code: str = None, templates: List[str] = None):
-        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee']
-        if role not in valid_roles:
-             raise ValueError(f"Invalid role. Must be one of {valid_roles}")
-             
         
         # Use auth service to create user (handles password hashing)
         try:
@@ -203,20 +199,24 @@ class AdminService:
         if not user:
             raise ValueError("User not found")
             
-        # Validate role
+        # Validate role - fetch custom roles if the table exists
+        custom_roles = []
         from backend.core.database import get_db_connection
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             cur.execute(f'SET search_path TO "{self.tenant_id}"')
-            cur.execute("SELECT name FROM permission_templates")
-            custom_roles = [r[0] for r in cur.fetchall()]
-            
-            valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee'] + custom_roles
-            if role not in valid_roles:
-                raise ValueError(f"Invalid role. Must be one of {valid_roles}")
+            try:
+                cur.execute("SELECT name FROM permission_templates")
+                custom_roles = [r[0] for r in cur.fetchall()]
+            except Exception:
+                conn.rollback()  # reset failed transaction
         finally:
             conn.close()
+            
+        valid_roles = ['super_admin', 'org_admin', 'manager', 'employee', 'trainee'] + custom_roles
+        if role not in valid_roles:
+            raise ValueError(f"Invalid role: '{role}'. Must be one of: {', '.join(valid_roles)}")
             
         from backend.core.database import get_db_connection
         import json

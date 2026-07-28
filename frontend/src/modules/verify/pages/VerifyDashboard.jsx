@@ -88,12 +88,20 @@ export default function VerifyDashboard() {
     if (isManagementAvailable && verifyView === 'management' && showHeader) {
       const fetchHeaderStats = async () => {
         try {
-          const [assessmentsRes, submissionsRes] = await Promise.all([
-            fetch('/api/verify/builder/assessments', { credentials: 'include' }),
-            fetch('/api/verify/submissions/recent', { credentials: 'include' })
-          ]);
-          const assessments = await assessmentsRes.json();
-          const submissions = await submissionsRes.json();
+          const promises = [];
+          if (canViewAssessments || canManageAssessments) {
+              promises.push(fetch('/api/verify/builder/assessments', { credentials: 'include' }).then(r => r.json()));
+          } else {
+              promises.push(Promise.resolve({ data: [] }));
+          }
+          
+          if (canManageAssessments) {
+              promises.push(fetch('/api/verify/submissions/recent', { credentials: 'include' }).then(r => r.json()));
+          } else {
+              promises.push(Promise.resolve({ data: [] }));
+          }
+
+          const [assessments, submissions] = await Promise.all(promises);
           setHeaderStats({
             total: (assessments.data || []).length,
             active: (assessments.data || []).filter(a => a.status?.toLowerCase() === 'active').length,
