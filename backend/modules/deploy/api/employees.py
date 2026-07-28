@@ -261,6 +261,7 @@ async def upload_documents(
 ):
     """Upload documents for an employee."""
     role = current_user.get('role')
+    perms = current_user.get('permissions', {})
     can_manage_docs = (
         role in ('super_admin', 'org_admin') or
         bool(perms.get('deploy.employees.manage_documents')) or
