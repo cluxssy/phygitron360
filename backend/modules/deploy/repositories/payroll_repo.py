@@ -109,16 +109,45 @@ class PayrollRepository:
         finally:
             conn.close()
 
+    def get_latest_pay_cycle(self, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute('''
+                SELECT DISTINCT pay_month, pay_year
+                FROM payroll_records
+                ORDER BY pay_year DESC, pay_month DESC
+                LIMIT 1
+            ''')
+            row = cur.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
     def get_employee_info(self, employee_code: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             self._set_path(cur, tenant_id)
             cur.execute(
-                'SELECT name, designation, team, location, email_id, bank_name, bank_account_no, pan_no FROM employees WHERE employee_code=%s',
+                'SELECT name, designation, team, location, email_id, bank_name, bank_account_no, pan_no, employment_status FROM employees WHERE employee_code=%s',
                 (employee_code,)
             )
             row = cur.fetchone()
             return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def get_employees_map(self, tenant_id: str = 'public') -> Dict[str, Dict[str, Any]]:
+        """Returns a dict mapping employee_code to their info for fast validation."""
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute(
+                'SELECT employee_code, name, designation, team, location, bank_name, bank_account_no, pan_no, employment_status FROM employees'
+            )
+            return {r['employee_code']: dict(r) for r in cur.fetchall() if r.get('employee_code')}
         finally:
             conn.close()

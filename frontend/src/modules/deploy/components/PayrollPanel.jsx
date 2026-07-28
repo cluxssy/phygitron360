@@ -43,6 +43,7 @@ export default function PayrollPanel() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState([]);
   const [isParsing, setIsParsing] = useState(false);
+  const [isLoadingCarryover, setIsLoadingCarryover] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [payMonth, setPayMonth] = useState(new Date().getMonth() + 1);
   const [payYear, setPayYear] = useState(new Date().getFullYear());
@@ -110,15 +111,93 @@ export default function PayrollPanel() {
       const res = await fetch('/api/payroll/upload', { method: 'POST', credentials: 'include', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Parse failed');
-      setPreview(data.preview || []);
+      
+      const records = (data.preview || []).map(r => ({ ...r, selected: true }));
+      setPreview(records);
       toast.success(`${data.count} employee records parsed successfully`);
     } catch (e) { toast.error(e.message); }
     finally { setIsParsing(false); }
   };
 
+  const loadCarryover = async () => {
+    if (payMonth < 1 || payMonth > 12) { toast.error('Pay month must be between 1 and 12'); return; }
+    if (payYear < 2000 || payYear > 2100) { toast.error('Pay year must be between 2000 and 2100'); return; }
+    setIsLoadingCarryover(true);
+    try {
+      const res = await fetch(`/api/payroll/carryover/${payYear}/${payMonth}`, { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to load carryover data');
+      if (data.count === 0) {
+        toast.error('No previous pay cycle data found to carry over');
+        return;
+      }
+      
+      const records = (data.preview || []).map(r => ({ ...r, selected: true }));
+      setPreview(records);
+      toast.success(`Loaded ${data.count} records from previous cycle`);
+    } catch (e) { toast.error(e.message); }
+    finally { setIsLoadingCarryover(false); }
+  };
+
+  const handleCellEdit = (index, field, value) => {
+    const updated = [...preview];
+    const rec = { ...updated[index] };
+    
+    if (field === 'employee_code') {
+      rec[field] = value.toUpperCase();
+      // Assume valid temporarily; backend validation happens on push
+      rec.is_valid_employee = true; 
+    } else {
+      rec[field] = parseFloat(value) || 0;
+      
+      // Auto-recalculate
+      const earnings = ['basic_salary', 'hra', 'special_allowance', 'medical_insurance', 'pf_employer_contribution', 'travelling_reimbursement'];
+      const deds = ['income_tax', 'medical_deduction', 'employer_pf', 'employee_pf'];
+      
+      rec.monthly_ctc = earnings.reduce((acc, k) => acc + (rec[k] || 0), 0);
+      rec.gross_ctc = rec.monthly_ctc * 12;
+      rec.total_deductions = deds.reduce((acc, k) => acc + (rec[k] || 0), 0);
+      rec.net_in_hand = rec.monthly_ctc - rec.total_deductions;
+    }
+    
+    updated[index] = rec;
+    setPreview(updated);
+  };
+  
+  const removeRow = (index) => {
+    setPreview(preview.filter((_, i) => i !== index));
+  };
+  
+  const addRow = () => {
+    setPreview([{
+      employee_code: '',
+      is_valid_employee: true,
+      selected: true,
+      basic_salary: 0, hra: 0, special_allowance: 0, medical_insurance: 0, pf_employer_contribution: 0, travelling_reimbursement: 0,
+      monthly_ctc: 0, gross_ctc: 0,
+      income_tax: 0, employee_pf: 0, employer_pf: 0, medical_deduction: 0, total_deductions: 0,
+      net_in_hand: 0
+    }, ...preview]);
+  };
+
+  const handleSelectRow = (index, checked) => {
+    const updated = [...preview];
+    updated[index] = { ...updated[index], selected: checked };
+    setPreview(updated);
+  };
+
+  const handleSelectAll = (checked) => {
+    setPreview(preview.map(r => ({ ...r, selected: checked })));
+  };
+
   const pushPayCycle = async () => {
-    if (!preview.length) { toast.error('No records to push — parse a file first'); return; }
-    const validationError = validatePayrollPreview(preview);
+    const selectedRecords = preview.filter(r => r.selected);
+    if (!selectedRecords.length) { toast.error('No records selected to push'); return; }
+    
+    const hasInvalid = selectedRecords.some(r => r.is_valid_employee === false);
+    if (hasInvalid) { toast.error('Cannot push. Please fix or unselect red-highlighted invalid employee codes.', { duration: 5000 }); return; }
+    
+    const validationError = validatePayrollPreview(selectedRecords);
     if (validationError) { toast.error(validationError, { duration: 7000 }); return; }
     setIsPushing(true);
     try {
@@ -126,7 +205,7 @@ export default function PayrollPanel() {
         pay_month: payMonth,
         pay_year: payYear,
         pay_date: payDate || null,
-        records: preview.map(r => ({
+        records: selectedRecords.map(r => ({
           employee_code: r.employee_code,
           pay_month: payMonth,
           pay_year: payYear,
@@ -234,7 +313,7 @@ export default function PayrollPanel() {
 
   const tabs = [
     { id: 'directory', label: 'Employee Directory', icon: Users },
-    { id: 'upload', label: 'Bulk Data Upload', icon: Upload },
+    ...(canUploadBulk || canRunPayroll ? [{ id: 'upload', label: 'Bulk Data Upload', icon: Upload }] : []),
     { id: 'manage', label: 'Manage Cycles', icon: BarChart3 },
   ];
 
@@ -297,6 +376,18 @@ export default function PayrollPanel() {
                   onChange={e => setPayDate(e.target.value)}
                   className="bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs font-bold px-4 py-3 rounded-xl focus:outline-none focus:border-[#c084fc] transition-all"
                 />
+              </div>
+              <div className="ml-auto">
+                {canUploadBulk && (
+                  <button
+                    onClick={loadCarryover}
+                    disabled={isLoadingCarryover}
+                    className="flex items-center gap-2 px-5 py-3 bg-[#f5efff] text-[#8b5cf6] text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#8b5cf6] hover:text-white hover:shadow-lg transition-all"
+                  >
+                    {isLoadingCarryover ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    Load Previous Month Data
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -364,30 +455,52 @@ export default function PayrollPanel() {
           {/* Preview Table */}
           {preview.length > 0 && (
             <div className={`${panelBase} overflow-hidden`}>
-              <div className="px-8 py-5 border-b border-[#ebe4ff] flex items-center justify-between">
+              <div className="px-8 py-5 border-b border-[#ebe4ff] flex items-center justify-between flex-wrap gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8b5cf6]">Parsed Preview — {preview.length} Employees</p>
                   <p className="text-[9px] text-[#6b7280] font-black uppercase tracking-widest mt-1">
                     Pay Period: {MONTH_NAMES[payMonth]} {payYear}
                   </p>
+                  {preview.some(r => r.is_valid_employee === false) && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mt-2 flex items-center gap-1">
+                      <AlertCircle size={12} /> Some employee codes were not found in the system. Please fix or remove them.
+                    </p>
+                  )}
                 </div>
-                {canRunPayroll && (
+                <div className="flex items-center gap-3">
                   <button
-                    onClick={pushPayCycle}
-                    disabled={isPushing}
-                    className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-[#10b981] to-[#059669] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:opacity-90 transition-all shadow-lg disabled:opacity-50"
+                    onClick={addRow}
+                    className="flex items-center gap-2 px-6 py-3 bg-white border border-[#ebe4ff] text-[#8b5cf6] text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#f5efff] transition-all"
                   >
-                    {isPushing ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                    {isPushing ? 'Pushing...' : 'New Pay Cycle — Send Payslips'}
+                    + Add Row
                   </button>
-                )}
+                  {canRunPayroll && (
+                    <button
+                      onClick={pushPayCycle}
+                      disabled={isPushing || preview.some(r => r.is_valid_employee === false)}
+                      className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-[#10b981] to-[#059669] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isPushing ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                      {isPushing ? 'Pushing...' : 'New Pay Cycle — Send Payslips'}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
+              <div className="overflow-x-auto pb-4">
+                <table className="w-full text-left min-w-[1200px]">
                   <thead className="bg-[#f5efff] border-b border-[#ebe4ff]">
                     <tr>
+                      <th className="px-3 py-3 w-8">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-[#ebe4ff] text-[#8b5cf6] focus:ring-[#8b5cf6]"
+                          checked={preview.length > 0 && preview.every(r => r.selected)}
+                          onChange={e => handleSelectAll(e.target.checked)}
+                        />
+                      </th>
+                      <th className="px-3 py-3 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3]"></th>
                       {['Employee Code', 'Basic', 'HRA', 'Spec. Allow.', 'Med. Ins.', 'PF Employer', 'Travel', 'Monthly CTC', 'Annual CTC', 'Tax', 'PF Emp.', 'Total Ded.', 'Net In Hand', 'Preview'].map(h => (
-                        <th key={h} className={`px-4 py-3 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
+                        <th key={h} className={`px-2 py-3 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
                           h === 'Annual CTC' ? 'text-[#8b5cf6]' :
                           h === 'Net In Hand' ? 'text-[#10b981]' :
                           h === 'Total Ded.' ? 'text-[#ef4444]' :
@@ -398,22 +511,72 @@ export default function PayrollPanel() {
                   </thead>
                   <tbody className="divide-y divide-[#f0e8ff]">
                     {preview.map((r, i) => (
-                      <tr key={i} className="hover:bg-[#faf7ff] transition-colors">
-                        <td className="px-4 py-3 font-black text-xs text-black italic uppercase">{r.employee_code}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono text-[#6b7280]">{fmt(r.basic_salary)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono text-[#6b7280]">{fmt(r.hra)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono text-[#6b7280]">{fmt(r.special_allowance)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono text-[#6b7280]">{fmt(r.medical_insurance)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono text-[#6b7280]">{fmt(r.pf_employer_contribution)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono text-[#6b7280]">{fmt(r.travelling_reimbursement)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono font-bold text-[#4b5563] bg-[#f8fafc] border-l border-[#e2e8f0]">{fmt(r.monthly_ctc)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono font-black text-[#8b5cf6] bg-[#f5efff] border-r border-[#e2e8f0]">{fmt(r.gross_ctc)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono text-[#ef4444]">{fmt(r.income_tax)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono text-[#ef4444]">{fmt(r.employee_pf)}</td>
-                        <td className="px-4 py-3 text-[10px] font-mono font-bold text-[#ef4444] bg-[#fef2f2] border-r border-[#fecaca]">{fmt(r.total_deductions)}</td>
-                        <td className="px-4 py-3 text-[11px] font-mono font-black text-[#10b981] bg-[#ecfdf5] border-r border-[#a7f3d0]">{fmt(r.net_in_hand)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button onClick={() => previewPDF(r)} className="text-[#8b5cf6] hover:text-[#7c3aed] flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest mx-auto">
+                      <tr key={i} className={`transition-colors ${!r.selected ? 'opacity-50' : ''} ${r.is_valid_employee === false ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-[#faf7ff]'}`}>
+                        <td className="px-3 py-2 text-center">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded border-[#ebe4ff] text-[#8b5cf6] focus:ring-[#8b5cf6]"
+                            checked={!!r.selected}
+                            onChange={e => handleSelectRow(i, e.target.checked)}
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <button onClick={() => removeRow(i)} className="text-red-400 hover:text-red-600 p-1">
+                            <X size={14} />
+                          </button>
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="relative">
+                            <input 
+                              type="text" 
+                              value={r.employee_code} 
+                              onChange={(e) => handleCellEdit(i, 'employee_code', e.target.value)}
+                              className={`w-24 text-[11px] font-black uppercase px-2 py-1.5 rounded border focus:outline-none focus:border-[#8b5cf6] ${r.is_valid_employee === false ? 'border-red-300 text-red-700 bg-white' : 'border-transparent hover:border-[#ebe4ff] text-black bg-transparent'}`}
+                            />
+                            {r.is_valid_employee === false && (
+                              <span className="absolute -bottom-4 left-0 text-[8px] font-black text-red-500 uppercase tracking-wider whitespace-nowrap">Not Found</span>
+                            )}
+                          </div>
+                        </td>
+                        {[
+                          { key: 'basic_salary', color: 'text-[#6b7280]' },
+                          { key: 'hra', color: 'text-[#6b7280]' },
+                          { key: 'special_allowance', color: 'text-[#6b7280]' },
+                          { key: 'medical_insurance', color: 'text-[#6b7280]' },
+                          { key: 'pf_employer_contribution', color: 'text-[#6b7280]' },
+                          { key: 'travelling_reimbursement', color: 'text-[#6b7280]' }
+                        ].map(col => (
+                          <td key={col.key} className="px-2 py-2">
+                            <input 
+                              type="number" 
+                              value={r[col.key]} 
+                              onChange={(e) => handleCellEdit(i, col.key, e.target.value)}
+                              className={`w-20 text-[10px] font-mono ${col.color} px-2 py-1.5 rounded border border-transparent hover:border-[#ebe4ff] focus:border-[#8b5cf6] focus:outline-none bg-transparent`}
+                            />
+                          </td>
+                        ))}
+                        
+                        <td className="px-3 py-2 text-[10px] font-mono font-bold text-[#4b5563] bg-[#f8fafc] border-l border-[#e2e8f0]">{fmt(r.monthly_ctc)}</td>
+                        <td className="px-3 py-2 text-[10px] font-mono font-black text-[#8b5cf6] bg-[#f5efff] border-r border-[#e2e8f0]">{fmt(r.gross_ctc)}</td>
+                        
+                        {[
+                          { key: 'income_tax', color: 'text-[#ef4444]' },
+                          { key: 'employee_pf', color: 'text-[#ef4444]' }
+                        ].map(col => (
+                          <td key={col.key} className="px-2 py-2">
+                            <input 
+                              type="number" 
+                              value={r[col.key]} 
+                              onChange={(e) => handleCellEdit(i, col.key, e.target.value)}
+                              className={`w-20 text-[10px] font-mono ${col.color} px-2 py-1.5 rounded border border-transparent hover:border-[#ebe4ff] focus:border-[#8b5cf6] focus:outline-none bg-transparent`}
+                            />
+                          </td>
+                        ))}
+                        
+                        <td className="px-3 py-2 text-[10px] font-mono font-bold text-[#ef4444] bg-[#fef2f2] border-r border-[#fecaca]">{fmt(r.total_deductions)}</td>
+                        <td className="px-3 py-2 text-[11px] font-mono font-black text-[#10b981] bg-[#ecfdf5] border-r border-[#a7f3d0]">{fmt(r.net_in_hand)}</td>
+                        <td className="px-3 py-2 text-center">
+                          <button onClick={() => previewPDF(r)} disabled={r.is_valid_employee === false} className="text-[#8b5cf6] hover:text-[#7c3aed] flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest mx-auto disabled:opacity-50">
                             <Eye size={12} /> View
                           </button>
                         </td>
