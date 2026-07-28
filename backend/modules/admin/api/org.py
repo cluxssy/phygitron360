@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/org", tags=["Org Admin"])
 def get_service(current_user: dict = Depends(get_current_user)):
     return OrgService(tenant_id=current_user.get("tenant_id", "public"))
 
-@router.get("/dashboard-stats", dependencies=[Depends(require_permission("deploy.dashboard.view_admin"))])
+@router.get("/dashboard-stats", dependencies=[Depends(require_permission("module.deploy.access"))])
 def get_stats(service: OrgService = Depends(get_service)):
     return service.get_dashboard_stats()
 

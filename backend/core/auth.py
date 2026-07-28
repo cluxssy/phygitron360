@@ -26,7 +26,7 @@ _ROLE_ALIASES = {
 def _normalize_role(role: str) -> str:
     if not role:
         return role
-    return _ROLE_ALIASES.get(role.lower(), role.lower())
+    return _ROLE_ALIASES.get(role.lower(), role)
 
 
 def _normalize_roles(roles: list) -> list:

@@ -17,6 +17,8 @@ import { NotificationProvider, useNotifications } from '../core/context/Notifica
 import ewandzLogo from '../assets/EWANDZ.png';
 import useEscapeClose from '../core/hooks/useEscapeClose';
 
+import { DEPLOY_MANAGEMENT_PERMS } from '../core/permissions/classification';
+
 // ── Notification Dropdown Component ──
 function NotificationDropdown() {
   const { notifications, showNotifications, setShowNotifications, markRead, markAllRead } = useNotifications();
@@ -126,8 +128,9 @@ function LayoutContent({ children }) {
   // ✅ Check if we're on the Forge page - hide sidebar for Learning Central
   const isForgePage = location.pathname.startsWith('/forge');
 
-  const hasAdminClearance = hasPermission('deploy.dashboard.view_admin');
-
+  // Dynamically determine if user should see the admin/management view for Deploy
+  // based on whether they have ANY management-level permissions from the classification registry.
+  const hasAdminClearance = user?.permissions && DEPLOY_MANAGEMENT_PERMS.some(p => user.permissions[p]);
   useEffect(() => {
     if (user) {
       setDeployView(hasAdminClearance ? 'admin' : 'employee');
