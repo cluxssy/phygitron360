@@ -260,8 +260,13 @@ async def upload_documents(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload documents for an employee."""
-    perms = current_user.get('permissions', {})
-    can_manage_docs = bool(perms.get('deploy.employees.manage_documents')) if isinstance(perms, dict) else False
+    role = current_user.get('role')
+    can_manage_docs = (
+        role in ('super_admin', 'org_admin') or
+        bool(perms.get('deploy.employees.manage_documents')) or
+        bool(perms.get('deploy.onboarding.approve')) or
+        bool(perms.get('deploy.employees.edit_basic'))
+    ) if isinstance(perms, dict) else role in ('super_admin', 'org_admin')
     is_self = current_user.get('employee_code') == employee_code
     
     if not (can_manage_docs or is_self):

@@ -418,6 +418,42 @@ export default function OnboardingPanel() {
     }
   };
 
+  const handleUploadApprovalDoc = async (docType, file) => {
+    if (!file || !editApprovalForm?.employee_code) return;
+    const formData = new FormData();
+    if (docType === 'photo') formData.append('photo_file', file);
+    if (docType === 'cv') formData.append('cv_file', file);
+    if (docType === 'id_proof') formData.append('id_proof_file', file);
+
+    try {
+      const res = await fetch(`/api/employee/${editApprovalForm.employee_code}/documents`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to upload document');
+      }
+      const updated = await res.json();
+      toast.success(`${docType === 'cv' ? 'Resume / CV' : docType === 'photo' ? 'Photo' : 'ID Proof'} uploaded successfully`);
+      setEditApprovalForm(prev => ({
+        ...prev,
+        photo_path: updated.photo_path || prev.photo_path,
+        cv_path: updated.cv_path || prev.cv_path,
+        id_proofs: updated.id_proofs || prev.id_proofs
+      }));
+      setSelectedApproval(prev => ({
+        ...prev,
+        photo_path: updated.photo_path || prev.photo_path,
+        cv_path: updated.cv_path || prev.cv_path,
+        id_proofs: updated.id_proofs || prev.id_proofs
+      }));
+    } catch (err) {
+      toast.error(err.message || 'Upload failed');
+    }
+  };
+
   const handleSaveApprovalEdit = async () => {
     // Validate fields
     if (!editApprovalForm.first_name?.trim() || !editApprovalForm.last_name?.trim()) {
@@ -1443,11 +1479,23 @@ export default function OnboardingPanel() {
                         : 'bg-white/5 border-white/5'
                     }`}>
                       {[
-                        { label: 'Photo', docType: 'photo', path: editApprovalForm?.photo_path },
-                        { label: 'CV / Resume', docType: 'cv', path: editApprovalForm?.cv_path },
-                        { label: 'ID Proof', docType: 'id_proof', path: editApprovalForm?.id_proofs },
+                        { label: 'Photo', docType: 'photo', path: editApprovalForm?.photo_path, accept: 'image/*' },
+                        { label: 'CV / Resume', docType: 'cv', path: editApprovalForm?.cv_path, accept: '.pdf' },
+                        { label: 'ID Proof', docType: 'id_proof', path: editApprovalForm?.id_proofs, accept: 'image/*,.pdf' },
                       ].map(doc => (
                         <Field key={doc.label} label={doc.label} isLightMode={isLightMode}>
+                          <input
+                            type="file"
+                            id={`approval-upload-${doc.docType}`}
+                            className="hidden"
+                            accept={doc.accept}
+                            onChange={e => {
+                              if (e.target.files?.[0]) {
+                                handleUploadApprovalDoc(doc.docType, e.target.files[0]);
+                                e.target.value = '';
+                              }
+                            }}
+                          />
                           {doc.path ? (
                             <div className="flex items-center gap-2">
                               <button
@@ -1469,9 +1517,25 @@ export default function OnboardingPanel() {
                               >
                                 <Download size={12} />
                               </button>
+                              <label
+                                htmlFor={`approval-upload-${doc.docType}`}
+                                title="Replace file"
+                                className={`flex items-center justify-center h-9 w-9 rounded-xl transition-all cursor-pointer ${
+                                  isLightMode ? 'bg-white border border-[#ebe4ff] text-[#8b5cf6] hover:border-[#c084fc]' : 'glass-panel border border-white/5 text-primary hover:border-primary/40'
+                                }`}
+                              >
+                                <Upload size={12} />
+                              </label>
                             </div>
                           ) : (
-                            <p className={`text-xs px-4 py-2 ${isLightMode ? 'text-[#b0a8c5]' : 'text-white/20'}`}>Not uploaded</p>
+                            <label
+                              htmlFor={`approval-upload-${doc.docType}`}
+                              className={`w-full flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl cursor-pointer transition-all ${
+                                isLightMode ? 'bg-white border border-dashed border-[#ebe4ff] text-[#8b5cf6] hover:border-[#c084fc]' : 'glass-panel border border-dashed border-white/10 text-primary hover:border-primary/40'
+                              }`}
+                            >
+                              <Upload size={12} /> Upload {doc.label}
+                            </label>
                           )}
                         </Field>
                       ))}
