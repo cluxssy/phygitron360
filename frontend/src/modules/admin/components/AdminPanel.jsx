@@ -70,7 +70,7 @@ export default function AdminPanel() {
         const merged = { ...(baseData || {}) };
         if (Array.isArray(customData)) {
           customData.forEach(cr => {
-            merged[cr.name] = cr.permissions || [];
+            merged[cr.name] = merged[cr.name] || [];
           });
         }
         setRolesPerms(merged);

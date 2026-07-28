@@ -167,14 +167,13 @@ class AdminRepository:
         try:
             cur = conn.cursor()
             cur.execute(f'SET search_path TO "{self.tenant_id}"')
-            # First set all to 0
-            cur.execute("UPDATE role_permissions SET is_allowed = 0 WHERE role = %s", (role,))
-            # Then insert/update to 1
+            # First delete all existing permissions for this role
+            cur.execute("DELETE FROM role_permissions WHERE role = %s", (role,))
+            # Then insert the new ones
             for p in permissions:
                 cur.execute('''
                     INSERT INTO role_permissions (role, permission, is_allowed) 
                     VALUES (%s, %s, 1)
-                    ON CONFLICT(role, permission) DO UPDATE SET is_allowed = 1
                 ''', (role, p))
             conn.commit()
         finally:
