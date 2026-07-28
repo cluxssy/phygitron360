@@ -251,8 +251,6 @@ class OnboardingService:
         'dob': 'Date of Birth',
         'contact_number': 'Contact Number',
         'current_address': 'Current Address',
-        'cv_path': 'Resume / CV',
-        'id_proofs': 'ID Proof',
     }
 
     def approve_onboarding(self, employee_code: str, approval_data: dict, tenant_id: str = 'public'):
