@@ -23,6 +23,14 @@ import VerifyDashboard from './modules/verify/pages/VerifyDashboard';
 import ForgeDashboard from './modules/forge/pages/ForgeDashboard';
 import TraineeDashboard from './modules/trainee/pages/TraineeDashboard';
 
+function getFirstAllowedRoute(hasPermission) {
+  if (hasPermission?.('module.deploy.access')) return '/deploy';
+  if (hasPermission?.('module.source.access')) return '/source';
+  if (hasPermission?.('module.forge.access')) return '/forge';
+  if (hasPermission?.('module.verify.access')) return '/verify';
+  return '/';
+}
+
 function ProtectedRoute({ children, requiredPermission, requiredModule }) {
   const { user, loading, hasPermission } = useAuth();
   
@@ -40,11 +48,13 @@ function ProtectedRoute({ children, requiredPermission, requiredModule }) {
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
-    return <Navigate to="/" replace />;
+    const fallback = getFirstAllowedRoute(hasPermission);
+    return <Navigate to={fallback} replace />;
   }
 
   if (requiredModule && !hasPermission(`module.${requiredModule}.access`)) {
-    return <Navigate to="/admin" replace />;
+    const fallback = getFirstAllowedRoute(hasPermission);
+    return <Navigate to={fallback} replace />;
   }
   
   return children;
@@ -62,27 +72,8 @@ function AdminGate() {
   }
 
   // Fallback for managers or others who shouldn't be in the admin workspace
-  return <Navigate to="/deploy" replace />;
-}
-
-function VerifyAccessRoute({ children }) {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return <HorizontalLoader fullScreen label="Loading workspace..." />;
-  }
-  
-  if (!user) {
-    return <Navigate to="/" replace />;
-  }
-
-  // Force password change check
-  if (user.password_must_change) {
-    return <Navigate to="/force-change-password" replace />;
-  }
-
-  // Everyone is allowed in. Admins will see 'management' view, Employees will see 'personal' view natively.
-  return children;
+  const fallback = getFirstAllowedRoute(hasPermission);
+  return <Navigate to={fallback} replace />;
 }
 
 export default function App() {
@@ -133,9 +124,9 @@ export default function App() {
           <Route 
             path="/verify" 
             element={
-              <VerifyAccessRoute>
+              <ProtectedRoute requiredModule="verify">
                 <Layout><VerifyDashboard /></Layout>
-              </VerifyAccessRoute>
+              </ProtectedRoute>
             } 
           />
 
