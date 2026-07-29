@@ -449,7 +449,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">First Name</label>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">First Name <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         required
@@ -468,7 +468,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Last Name</label>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Last Name <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         required
@@ -482,7 +482,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   <div className="grid grid-cols-2 gap-4">
 
                     <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Email</label>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Email <span className="text-red-500">*</span></label>
                       <input
                         type="email"
                         required

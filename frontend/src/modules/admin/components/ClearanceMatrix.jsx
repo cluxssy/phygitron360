@@ -444,7 +444,7 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
 
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Role Name</label>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Role Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={newRoleName}

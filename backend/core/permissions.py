@@ -11,9 +11,12 @@ Single source of truth for:
 """
 
 from __future__ import annotations
+import logging
 from typing import List, Dict, Callable, Union
 from fastapi import Depends, HTTPException
 from backend.core.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -312,9 +315,14 @@ def require_permission(permission_key: Union[str, List[str]]) -> Callable:
 
         if not has_access:
             keys_str = "', '".join(keys_to_check) if isinstance(keys_to_check, list) else permission_key
+            logger.warning(
+                "Permission denied for user %s: missing %s",
+                current_user.get("employee_code") or current_user.get("email") or "unknown",
+                keys_str,
+            )
             raise HTTPException(
                 status_code=403,
-                detail=f"Access denied: missing clearance '{keys_str}'."
+                detail="You don't have permission to do this. Contact your admin if you think this is a mistake."
             )
         return current_user
     return permission_checker
@@ -384,9 +392,15 @@ def require_role(allowed_roles: List[str]) -> Callable:
             return current_user
 
         if not any(r in allowed_lower for r in user_roles):
+            logger.warning(
+                "Role check denied for user %s: required one of %s, has %s",
+                current_user.get("employee_code") or current_user.get("email") or "unknown",
+                allowed_roles,
+                user_roles,
+            )
             raise HTTPException(
                 status_code=403,
-                detail=f"Access denied. Required roles: {', '.join(allowed_roles)}"
+                detail="You don't have permission to do this. Contact your admin if you think this is a mistake."
             )
         return current_user
     return role_checker

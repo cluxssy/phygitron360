@@ -483,7 +483,11 @@ export default function OfferApprovals() {
                         ) : canApproveThis ? (
                           <div className="flex flex-col gap-4">
                             <div>
+                              <label htmlFor={`action-feedback-${offer.id}`} className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1 block">
+                                Feedback <span className="text-red-500">*</span>
+                              </label>
                               <textarea
+                                id={`action-feedback-${offer.id}`}
                                 className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-700 outline-none focus:border-violet-300 resize-none placeholder-slate-400"
                                 rows={2}
                                 placeholder="Feedback (if requesting changes or rejecting)..."

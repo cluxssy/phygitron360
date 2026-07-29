@@ -152,8 +152,8 @@ async def create_assessment(
         asm_id = service.create_assessment(data)
         return {"success": True, "data": {"id": asm_id}, "message": "Assessment created successfully"}
     except Exception as e:
-        logger.error(f"create_assessment error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to create assessment: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while creating the assessment. Please try again.")
 
 @router.get("/assessments/{asm_id}/stats")
 def get_assessment_stats(
@@ -216,7 +216,8 @@ def update_assessment(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to update assessment %s: %s", asm_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating the assessment. Please try again.")
 
 # ---------------------------------------------------------------------------
 # 5. DELETE /assessments/{asm_id} — soft delete
@@ -236,7 +237,8 @@ def delete_assessment(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to delete assessment %s: %s", asm_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while deleting the assessment. Please try again.")
 
 # ---------------------------------------------------------------------------
 # 6. PATCH /assessments/{asm_id}/status — update status
@@ -261,7 +263,8 @@ def update_status(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to update status for assessment %s: %s", asm_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating the assessment status. Please try again.")
 
 # ---------------------------------------------------------------------------
 # 7. POST /assessments/{asm_id}/publish — set status=active
@@ -281,7 +284,8 @@ def publish_assessment(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to publish assessment %s: %s", asm_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while publishing the assessment. Please try again.")
 
 # ---------------------------------------------------------------------------
 # 8. POST /import-questions — upload PDF/DOCX/TXT, AI-parse questions

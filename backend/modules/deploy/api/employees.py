@@ -8,6 +8,9 @@ from backend.common.services.storage_service import save_uploaded_file
 from backend.modules.deploy.services.notification_service import add_notification
 import os
 import shutil
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["employees"])
 
@@ -68,7 +71,7 @@ def get_employee(employee_code: str, current_user: dict = Depends(get_current_us
                 employee[f] = "***REDACTED***" if isinstance(employee[f], str) else None
 
     if not (is_self or is_super or can_view_financial):
-        financial_fields = ['bank_name', 'bank_account_no', 'pan_no', 'pf_included', 'mediclaim_included']
+        financial_fields = ['bank_name', 'bank_account_no', 'pan_no', 'ifsc_code', 'passbook_path', 'pf_included', 'mediclaim_included']
         for f in financial_fields:
             if f in employee and employee[f] is not None:
                 employee[f] = "***REDACTED***" if isinstance(employee[f], str) else None
@@ -94,9 +97,16 @@ def get_employee_document(employee_code: str, doc_type: str, download: bool = Fa
     is_super = 'super_admin' in roles or 'superadmin' in roles
     perms = current_user.get('permissions', {})
     can_view_sensitive = bool(perms.get('deploy.employees.view_profile_sensitive')) if isinstance(perms, dict) else False
+    can_view_financial = bool(perms.get('deploy.employees.view_profile_financial')) if isinstance(perms, dict) else False
 
-    # Profile photos are non-sensitive — any authenticated user can load them
-    if doc_type != 'pfp' and not (is_self or is_super or can_view_sensitive):
+    # Profile photos are non-sensitive — any authenticated user can load them.
+    # The passbook is a financial document, so it's gated by the financial
+    # permission rather than the general sensitive-docs one (mirrors how bank
+    # fields are gated separately from address/DOB elsewhere in this API).
+    if doc_type == 'passbook':
+        if not (is_self or is_super or can_view_financial):
+            raise HTTPException(status_code=403, detail="You do not have permission to access this document.")
+    elif doc_type != 'pfp' and not (is_self or is_super or can_view_sensitive):
         raise HTTPException(status_code=403, detail="You do not have permission to access this document.")
 
     tenant_id = current_user.get('tenant_id', 'public')
@@ -147,27 +157,33 @@ async def create_employee(
     primary_skillset: Optional[str] = Form(None),
     secondary_skillset: Optional[str] = Form(None),
     experience_years: Optional[float] = Form(None),
+    ifsc_code: Optional[str] = Form(None),
     photo_file: Optional[UploadFile] = File(None),
     cv_file: Optional[UploadFile] = File(None),
     id_proof_file: Optional[UploadFile] = File(None),
+    passbook_file: Optional[UploadFile] = File(None),
     education_details: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
-    
+
     # Save files only if they exist
     photo_path = None
     if photo_file and photo_file.filename:
         photo_path = save_uploaded_file(photo_file, tenant_id, 'deploy', 'pfp', code or 'unknown', 'pfp')
-    
+
     cv_path = None
     if cv_file and cv_file.filename:
         cv_path = save_uploaded_file(cv_file, tenant_id, 'deploy', 'resume', code or 'unknown', 'cv')
-    
+
     id_proofs_path = None
     if id_proof_file and id_proof_file.filename:
         id_proofs_path = save_uploaded_file(id_proof_file, tenant_id, 'deploy', 'identification_docs', code or 'unknown', 'id_proof')
+
+    passbook_path = None
+    if passbook_file and passbook_file.filename:
+        passbook_path = save_uploaded_file(passbook_file, tenant_id, 'deploy', 'passbook', code or 'unknown', 'passbook')
 
     data = {
         "first_name": first_name,
@@ -194,9 +210,11 @@ async def create_employee(
         "primary_skillset": primary_skillset,
         "secondary_skillset": secondary_skillset,
         "experience_years": experience_years,
+        "ifsc_code": ifsc_code,
         "photo_path": photo_path,
         "cv_path": cv_path,
-        "id_proofs": id_proofs_path
+        "id_proofs": id_proofs_path,
+        "passbook_path": passbook_path
     }
 
     try:
@@ -204,11 +222,12 @@ async def create_employee(
     except ValueError as e:
          raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-         raise HTTPException(status_code=500, detail=str(e))
+         logger.exception("Failed to create employee: %s", e)
+         raise HTTPException(status_code=500, detail="Something went wrong while creating this employee. Please try again.")
 
 # Field groups protected by specific permissions
 _FINANCIAL_FIELDS = frozenset({
-    'bank_name', 'bank_account_no', 'pan_no', 'pf_included', 'mediclaim_included'
+    'bank_name', 'bank_account_no', 'pan_no', 'ifsc_code', 'pf_included', 'mediclaim_included'
 })
 _JOB_FIELDS = frozenset({
     'designation', 'team', 'reporting_manager', 'location',
@@ -267,7 +286,8 @@ def update_employee(employee_code: str, data: dict = Body(...), current_user: di
             )
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to update employee %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while saving these changes. Please try again.")
 
 @router.post("/employee/{employee_code}/documents")
 async def upload_documents(
@@ -306,10 +326,11 @@ async def upload_documents(
 
     try:
         service.update_employee(employee_code, updates)
-        updated_emp = service.get_employee_by_code(employee_code)
+        updated_emp = service.repo.get_employee_by_code(employee_code, tenant_id)
         return updated_emp or updates
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to upload documents for employee %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while uploading these documents. Please try again.")
 
 @router.get("/employee-edit-requests/pending", dependencies=[Depends(require_permission(["deploy.employees.view_list", "deploy.employees.view_team"]))])
 def list_pending_edit_requests(current_user: dict = Depends(get_current_user)):
@@ -369,7 +390,8 @@ def review_edit_request(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to review edit request %s: %s", request_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while reviewing this request. Please try again.")
 
 @router.get("/employee/{employee_code}/edit-requests/pending")
 def get_pending_edit_request(employee_code: str, current_user: dict = Depends(get_current_user)):
@@ -450,7 +472,8 @@ async def submit_edit_request(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to submit edit request for employee %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while submitting your request. Please try again.")
 
 @router.delete("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.delete"))])
 def delete_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
@@ -461,7 +484,8 @@ def delete_employee(employee_code: str, current_user: dict = Depends(get_current
     except ValueError as e:
          raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-         raise HTTPException(status_code=500, detail=str(e))
+         logger.exception("Failed to delete employee %s: %s", employee_code, e)
+         raise HTTPException(status_code=500, detail="Something went wrong while deleting this employee. Please try again.")
 
 @router.get("/options", dependencies=[Depends(require_permission(["deploy.employees.view_list", "deploy.employees.view_team"]))])
 def get_dropdown_options(current_user: dict = Depends(get_current_user)):
@@ -484,7 +508,8 @@ def offboard_employee(employee_code: str, data: OffboardRequest, current_user: d
         )
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to offboard employee %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while offboarding this employee. Please try again.")
 
 import io
 import json

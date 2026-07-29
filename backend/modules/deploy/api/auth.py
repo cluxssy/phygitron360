@@ -13,6 +13,9 @@ from backend.core.dependencies import (  # noqa: F401
     require_module,
     require_role,
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -43,7 +46,8 @@ def register_company(data: RegisterCompanyRequest, service: AuthService = Depend
             "workspace_url": f"http://{result['subdomain']}.localhost:5173/login"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to register company workspace: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while setting up your workspace. Please try again.")
 
 @router.post("/login")
 def login(credentials: LoginRequest, response: Response, service: AuthService = Depends(get_service)):
@@ -89,7 +93,8 @@ def login(credentials: LoginRequest, response: Response, service: AuthService = 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to log in user: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while logging you in. Please try again.")
 
 @router.post("/logout")
 def logout(request: Request, response: Response, service: AuthService = Depends(get_service)):
@@ -137,7 +142,8 @@ def request_demo(data: DemoRequestModel):
     except Exception as e:
         if "unique_violation" in str(e).lower() or "duplicate key" in str(e).lower():
             raise HTTPException(status_code=400, detail="A demo request has already been submitted for this email address.")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to save demo request: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while submitting your request. Please try again.")
     finally:
         conn.close()
 

@@ -198,9 +198,11 @@ class OnboardingService:
             "photo_path": file_metadata.get('photo', ''),
             "cv_path": file_metadata.get('cv', ''),
             "id_proof_path": file_metadata.get('id_proof', ''),
+            "passbook_path": file_metadata.get('passbook', ''),
             "bank_name": employee_data.get('bank_name'),
             "bank_account_no": employee_data.get('bank_account_no'),
-            "pan_no": employee_data.get('pan_no')
+            "pan_no": employee_data.get('pan_no'),
+            "ifsc_code": employee_data.get('ifsc_code')
         }
         
         skill_record = {

@@ -177,14 +177,14 @@ class OnboardingRepository:
                         INSERT INTO employees (
                             employee_code, name, first_name, middle_name, last_name, guardian_name, dob, contact_number, emergency_contact, email_id,
                             team, designation, employment_status, current_address, permanent_address,
-                            education_details, photo_path, cv_path, id_proofs, doj, employment_type, reporting_manager,
+                            education_details, photo_path, cv_path, id_proofs, passbook_path, doj, employment_type, reporting_manager,
                             location, pf_included, mediclaim_included, notes, exit_date, exit_reason, clearance_status,
-                            bank_name, bank_account_no, pan_no
+                            bank_name, bank_account_no, pan_no, ifsc_code
                         ) SELECT %s, name, first_name, middle_name, last_name, guardian_name, dob, contact_number, emergency_contact, %s,
                             team, designation, employment_status, current_address, permanent_address,
-                            education_details, photo_path, cv_path, id_proofs, doj, employment_type, reporting_manager,
+                            education_details, photo_path, cv_path, id_proofs, passbook_path, doj, employment_type, reporting_manager,
                             location, pf_included, mediclaim_included, notes, exit_date, exit_reason, clearance_status,
-                            bank_name, bank_account_no, pan_no
+                            bank_name, bank_account_no, pan_no, ifsc_code
                         FROM employees WHERE employee_code = %s
                     ''', (final_code, real_email, employee_code))
                     
@@ -302,15 +302,15 @@ class OnboardingRepository:
                             name = %s, first_name = %s, middle_name = %s, last_name = %s, guardian_name = %s, contact_number = %s, emergency_contact = %s, dob = %s,
                             current_address = %s, permanent_address = %s, education_details = %s,
                             team = %s, designation = %s, employment_status = 'Pending Approval', doj = %s, location = %s,
-                            photo_path = %s, cv_path = %s, id_proofs = %s, bank_name = %s, bank_account_no = %s, pan_no = %s
+                            photo_path = %s, cv_path = %s, id_proofs = %s, passbook_path = %s, bank_name = %s, bank_account_no = %s, pan_no = %s, ifsc_code = %s
                         WHERE employee_code = %s
                     ''', (
                         employee_data['name'], employee_data.get('first_name'), employee_data.get('middle_name'), employee_data.get('last_name'), employee_data.get('guardian_name'),
                         employee_data['phone'], employee_data['emergency'], employee_data['dob'],
                         employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
                         employee_data['team'], employee_data['designation'], employee_data['doj'], employee_data.get('location', ''),
-                        employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'],
-                        employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no'),
+                        employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'], employee_data.get('passbook_path'),
+                        employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no'), employee_data.get('ifsc_code'),
                         employee_data['code']
                     ))
 
@@ -341,16 +341,16 @@ class OnboardingRepository:
                             employee_code, name, first_name, middle_name, last_name, guardian_name, email_id, contact_number, emergency_contact, dob,
                             current_address, permanent_address, education_details,
                             team, designation, employment_status, doj, location,
-                            photo_path, cv_path, id_proofs, bank_name, bank_account_no, pan_no
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            photo_path, cv_path, id_proofs, passbook_path, bank_name, bank_account_no, pan_no, ifsc_code
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ''', (
                         employee_data['code'], employee_data['name'], employee_data.get('first_name'), employee_data.get('middle_name'), employee_data.get('last_name'), employee_data.get('guardian_name'), employee_data['email'],
                         employee_data['phone'], employee_data['emergency'], employee_data['dob'],
                         employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
                         employee_data['team'], employee_data['designation'], 'Pending Approval',
                         employee_data['doj'], employee_data.get('location', ''),
-                        employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'],
-                        employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no')
+                        employee_data['photo_path'], employee_data['cv_path'], employee_data['id_proof_path'], employee_data.get('passbook_path'),
+                        employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no'), employee_data.get('ifsc_code')
                     ))
 
                     # 2. User INSERT or UPDATE

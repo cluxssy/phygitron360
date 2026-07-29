@@ -8,6 +8,7 @@ import {
   isValidPhone,
   isValidPAN,
   isValidBankAccount,
+  isValidIFSC,
   validateFile,
   MAX_FILE_SIZE,
 } from '../../../core/utils/validators';
@@ -27,6 +28,7 @@ const TEXT_FIELDS = [
   { key: 'bank_name', label: 'Bank Name', type: 'text', group: 'Financial' },
   { key: 'bank_account_no', label: 'Bank Account No.', type: 'text', group: 'Financial' },
   { key: 'pan_no', label: 'PAN No.', type: 'text', group: 'Financial' },
+  { key: 'ifsc_code', label: 'IFSC Code', type: 'text', group: 'Financial' },
   { key: 'primary_skillset', label: 'Primary Skillset', type: 'textarea', group: 'Skills' },
   { key: 'secondary_skillset', label: 'Secondary Skillset', type: 'textarea', group: 'Skills' },
 ];
@@ -35,6 +37,7 @@ const DOC_FIELDS = [
   { key: 'photo_path', label: 'Photo', accept: 'image/jpeg,image/png,image/webp', formKey: 'photo_file', group: 'Documents' },
   { key: 'cv_path', label: 'Resume / CV', accept: '.pdf,.doc,.docx', formKey: 'cv_file', group: 'Documents' },
   { key: 'id_proofs', label: 'ID Proof', accept: 'image/jpeg,image/png,image/webp,.pdf', formKey: 'id_proof_file', group: 'Documents' },
+  { key: 'passbook_path', label: 'Bank Passbook', accept: 'image/jpeg,image/png,image/webp,.pdf', formKey: 'passbook_file', group: 'Documents' },
 ];
 
 const ALL_FIELDS = [...TEXT_FIELDS, ...DOC_FIELDS];
@@ -115,6 +118,10 @@ export default function RequestEditsModal({ details, onClose, onSubmitted }) {
       }
       if (field.key === 'bank_account_no' && !isValidBankAccount(value)) {
         toast.error('Bank account must be 9-18 digits only');
+        return false;
+      }
+      if (field.key === 'ifsc_code' && !isValidIFSC(value)) {
+        toast.error('IFSC must follow ABCD0123456 format');
         return false;
       }
     }
@@ -249,7 +256,7 @@ export default function RequestEditsModal({ details, onClose, onSubmitted }) {
             {selectedFieldDefs.map(field => (
               <div key={field.key} className="bg-[#faf7ff] border border-[#f1ebff] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed]">{field.label}</label>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed]">{field.label} <span className="text-red-500">*</span></label>
                   <button type="button" onClick={() => toggleField(field.key)} className="text-[9px] font-black uppercase text-black/30 hover:text-red-500">Remove</button>
                 </div>
 
@@ -293,7 +300,7 @@ export default function RequestEditsModal({ details, onClose, onSubmitted }) {
 
         {/* Supporting documents */}
         <div>
-          <label className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-1.5 block">Supporting Documents *</label>
+          <label className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed] mb-1.5 block">Supporting Documents <span className="text-red-500">*</span></label>
           <button
             type="button"
             onClick={() => supportInputRef.current?.click()}

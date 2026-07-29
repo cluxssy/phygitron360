@@ -174,7 +174,7 @@ export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
           <form onSubmit={handleSendNotification} className="flex-1 flex flex-col justify-between">
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-widest font-black text-slate-500">Subject</label>
+                <label className="text-[10px] uppercase tracking-widest font-black text-slate-500">Subject <span className="text-red-500">*</span></label>
                 <input 
                   type="text"
                   required
@@ -187,7 +187,7 @@ export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
 
               <div className="space-y-2 flex-1">
                 <label className="text-[10px] uppercase tracking-widest font-black text-slate-500 flex items-center gap-2">
-                  Message Body <span className="text-primary normal-case font-normal">(URLs will be clickable)</span>
+                  Message Body <span className="text-red-500">*</span> <span className="text-primary normal-case font-normal">(URLs will be clickable)</span>
                 </label>
                 <textarea 
                   required

@@ -12,6 +12,7 @@ import {
   isAtLeastAge,
   isBankAccount,
   isPan,
+  isIfsc,
   validateFile,
   validatePassword,
   isValidEmail,
@@ -57,7 +58,7 @@ export default function OnboardPage() {
     current_address: '', permanent_address: '',
     location: '',
     primary_skills: '', secondary_skills: '',
-    bank_name: '', bank_account_no: '', pan_no: ''
+    bank_name: '', bank_account_no: '', pan_no: '', ifsc_code: ''
   });
 
   // Country Code and Emergency States
@@ -72,7 +73,7 @@ export default function OnboardPage() {
     { degree: '', university: '', year: '', percentage: '' }
   ]);
   
-  const [files, setFiles] = useState({ photo_file: null, cv_file: null, id_proof_file: null });
+  const [files, setFiles] = useState({ photo_file: null, cv_file: null, id_proof_file: null, passbook_file: null });
   const [sameAsCurrent, setSameAsCurrent] = useState(false);
 
   const queryParams = new URLSearchParams(location.search);
@@ -168,6 +169,9 @@ export default function OnboardPage() {
           if (form.pan_no && !isPan(form.pan_no)) {
               errors.pan_no = "Use ABCDE1234F format";
           }
+          if (form.ifsc_code && !isIfsc(form.ifsc_code)) {
+              errors.ifsc_code = "Use ABCD0123456 format";
+          }
       }
 
       if (currentStep === 3) {
@@ -239,6 +243,7 @@ export default function OnboardPage() {
           photo_file: { exts: ['.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.image, label: 'Profile photo' },
           cv_file: { exts: ['.pdf'], size: MAX_FILE_SIZE.resume, label: 'Resume/CV' },
           id_proof_file: { exts: ['.pdf', '.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.document, label: 'ID proof' },
+          passbook_file: { exts: ['.pdf', '.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.document, label: 'Bank passbook' },
       };
       const rule = rules[name];
       const fileError = rule ? validateFile(file, rule.exts, rule.size, rule.label) : '';
@@ -594,6 +599,12 @@ export default function OnboardPage() {
                                {!validationErrors.pan_no && <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest mt-1 ml-1">Leave blank if not applicable</p>}
                                {renderError('pan_no')}
                             </div>
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">IFSC Code</label>
+                               <input type="text" name="ifsc_code" value={form.ifsc_code} onChange={handleChange} className={`w-full glass-panel-input ${validationErrors.ifsc_code ? 'border-error/50' : 'border-white/5'}`} placeholder="e.g. HDFC0001234" style={{textTransform: 'uppercase'}} />
+                               {!validationErrors.ifsc_code && <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest mt-1 ml-1">Leave blank if not applicable</p>}
+                               {renderError('ifsc_code')}
+                            </div>
                          </div>
                       </div>
                    )}
@@ -651,6 +662,7 @@ export default function OnboardPage() {
                                      <li><strong>Resume/CV:</strong> PDF only (max 5MB)</li>
                                      <li><strong>Profile Photo:</strong> JPG, JPEG, or PNG (max 2MB, clear facial shot)</li>
                                      <li><strong>ID Proof:</strong> PDF, JPG, JPEG, or PNG (max 5MB, government issued)</li>
+                                     <li><strong>Bank Passbook:</strong> PDF, JPG, JPEG, or PNG (max 5MB, first page)</li>
                                  </ul>
                              </div>
                          </div>
@@ -659,7 +671,8 @@ export default function OnboardPage() {
                             {[
                                 { k: 'cv_file', label: 'Resume / CV', desc: 'Upload your latest resume (PDF)', icon: ShieldCheck, accept: '.pdf' },
                                 { k: 'photo_file', label: 'Photo', desc: 'Passport size photo (JPG/PNG)', icon: UserPlus, accept: '.jpg,.jpeg,.png' },
-                                { k: 'id_proof_file', label: 'ID proof', desc: 'Government issued identity proof (PDF/JPG/PNG)', icon: ShieldCheck, accept: '.pdf,.jpg,.jpeg,.png' }
+                                { k: 'id_proof_file', label: 'ID proof', desc: 'Government issued identity proof (PDF/JPG/PNG)', icon: ShieldCheck, accept: '.pdf,.jpg,.jpeg,.png' },
+                                { k: 'passbook_file', label: 'Bank Passbook', desc: 'First page of your bank passbook (PDF/JPG/PNG)', icon: ShieldCheck, accept: '.pdf,.jpg,.jpeg,.png' }
                             ].map((f, i) => (
                                <div key={i} className={`onboard-upload-row flex items-center gap-6 p-6 rounded-[22px] border transition-all ${files[f.k] ? 'is-complete' : 'is-empty'}`}>
                                   <div className={`onboard-upload-icon w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${files[f.k] ? 'is-complete' : 'is-empty'}`}>

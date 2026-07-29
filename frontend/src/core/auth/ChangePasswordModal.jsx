@@ -80,7 +80,7 @@ export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3 ml-1">Current Password</label>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3 ml-1">Current Password <span className="text-red-500">*</span></label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
@@ -95,7 +95,7 @@ export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3 ml-1">New Password</label>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3 ml-1">New Password <span className="text-red-500">*</span></label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
@@ -110,7 +110,7 @@ export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3 ml-1">Confirm New Password</label>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3 ml-1">Confirm New Password <span className="text-red-500">*</span></label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input

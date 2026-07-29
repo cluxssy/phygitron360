@@ -249,10 +249,10 @@ class EmployeeRepository:
                     team, designation, employment_type, reporting_manager, location,
                     current_address, permanent_address, education_details,
                     pf_included, mediclaim_included,
-                    photo_path, cv_path, id_proofs, notes,
-                    bank_name, bank_account_no, pan_no,
+                    photo_path, cv_path, id_proofs, passbook_path, notes,
+                    bank_name, bank_account_no, pan_no, ifsc_code,
                     employment_status
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 employee_code,
                 data.get('name', 'Unknown'),
@@ -278,10 +278,12 @@ class EmployeeRepository:
                 data.get('photo_path', None),
                 data.get('cv_path', None),
                 data.get('id_proofs', None),
+                data.get('passbook_path', None),
                 data.get('notes', None),
                 data.get('bank_name', None),
                 data.get('bank_account_no', None),
                 data.get('pan_no', None),
+                data.get('ifsc_code', None),
                 data.get('employment_status', 'Active')
             ))
             

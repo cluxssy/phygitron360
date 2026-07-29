@@ -27,7 +27,7 @@ class EmployeeService:
     def get_team_employees(self, manager_code: str):
         return self.repo.get_team_employees(self.tenant_id, manager_code)
 
-    DOCUMENT_COLUMNS = {"photo": "photo_path", "cv": "cv_path", "id_proof": "id_proofs"}
+    DOCUMENT_COLUMNS = {"photo": "photo_path", "cv": "cv_path", "id_proof": "id_proofs", "passbook": "passbook_path"}
 
     def get_document_path(self, employee_code: str, doc_type: str) -> Optional[str]:
         """Returns the stored path/URL for an employee's photo/cv/id_proof, or None."""
@@ -59,7 +59,9 @@ class EmployeeService:
             employee['cv_path'] = generate_presigned_url(employee['cv_path'])
         if employee.get('id_proofs'):
             employee['id_proofs'] = generate_presigned_url(employee['id_proofs'])
-            
+        if employee.get('passbook_path'):
+            employee['passbook_path'] = generate_presigned_url(employee['passbook_path'])
+
         # Enrich with other data
         employee['skill_matrix'] = self.repo.get_skill_matrix(employee_code, self.tenant_id)
         employee['assets'] = self.asset_repo.get_assets_for_employee(employee_code, self.tenant_id) if hasattr(self.asset_repo, 'get_assets_for_employee') else self.repo.get_assets(employee_code, self.tenant_id)
@@ -240,8 +242,8 @@ class EmployeeService:
             'name', 'first_name', 'middle_name', 'last_name', 'guardian_name', 'designation', 'team', 'employment_type', 'reporting_manager', 'location',
             'contact_number', 'emergency_contact', 'current_address',
             'permanent_address', 'dob', 'email_id', 'notes', 'doj',
-            'photo_path', 'cv_path', 'id_proofs', 'pf_included', 'mediclaim_included',
-            'education_details', 'employee_code', 'bank_name', 'bank_account_no', 'pan_no'
+            'photo_path', 'cv_path', 'id_proofs', 'passbook_path', 'pf_included', 'mediclaim_included',
+            'education_details', 'employee_code', 'bank_name', 'bank_account_no', 'pan_no', 'ifsc_code'
         ]
 
         fields = []

@@ -11,6 +11,7 @@ import {
   isPhone,
   isBankAccount,
   isPan,
+  isIfsc,
   validateFile,
 } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
@@ -61,14 +62,15 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     location: '', designation: '', current_address: '', permanent_address: '',
     pf: 'No', mediclaim: 'No', notes: '', primary_skillset: '',
     secondary_skillset: '', experience_years: '',
-    bank_name: '', bank_account_no: '', pan_no: '',
+    bank_name: '', bank_account_no: '', pan_no: '', ifsc_code: '',
   });
 
   // File uploads state
   const [files, setFiles] = useState({
     photo_file: null,
     cv_file: null,
-    id_proof_file: null
+    id_proof_file: null,
+    passbook_file: null
   });
 
   // Bulk Upload State
@@ -85,6 +87,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       photo_file: { exts: ['.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.image, label: 'Profile photo' },
       cv_file: { exts: ['.pdf'], size: MAX_FILE_SIZE.resume, label: 'Resume/CV' },
       id_proof_file: { exts: ['.pdf', '.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.document, label: 'ID proof' },
+      passbook_file: { exts: ['.pdf', '.jpg', '.jpeg', '.png'], size: MAX_FILE_SIZE.document, label: 'Bank passbook' },
     };
     
     const rule = fileRules[type];
@@ -152,7 +155,12 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     if (form.pan_no && !isPan(form.pan_no)) {
       return 'PAN must follow ABCDE1234F format.';
     }
-    
+
+    // IFSC - only validate if filled
+    if (form.ifsc_code && !isIfsc(form.ifsc_code)) {
+      return 'IFSC must follow ABCD0123456 format.';
+    }
+
     return '';
   };
 
@@ -422,6 +430,19 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                     />
                     <p className="text-[8px] text-[#8b5cf6] font-bold uppercase tracking-widest mt-1">Format: ABCDE1234F</p>
                   </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">
+                      IFSC Code
+                    </label>
+                    <input
+                      type="text"
+                      value={form.ifsc_code}
+                      onChange={e => set('ifsc_code', e.target.value.toUpperCase())}
+                      className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all placeholder:text-[#b0a8c5] uppercase"
+                      placeholder="ABCD0123456"
+                    />
+                    <p className="text-[8px] text-[#8b5cf6] font-bold uppercase tracking-widest mt-1">Format: ABCD0123456</p>
+                  </div>
                   <Field label="PF Enabled" k="pf" options={['No', 'Yes']} form={form} set={set} />
                   <Field label="Mediclaim Enabled" k="mediclaim" options={['No', 'Yes']} form={form} set={set} />
                   <div className="col-span-2">
@@ -488,6 +509,23 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                       <label className="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-700 border border-slate-200 rounded-xl transition-all">
                         {files.id_proof_file ? 'Replace' : 'Upload'}
                         <input type="file" name="id_proof_file" onChange={e => handleFileChange(e, 'id_proof_file')} className="hidden" accept=".pdf,.jpg,.jpeg,.png" />
+                      </label>
+                    </div>
+
+                    {/* Bank Passbook - Optional */}
+                    <div className={`flex items-center gap-5 p-5 rounded-2xl border transition-all ${files.passbook_file ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200 hover:bg-slate-100/50'}`}>
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-all ${files.passbook_file ? 'bg-emerald-100 border-emerald-200 text-emerald-600' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
+                        {files.passbook_file ? <CheckCircle size={20} className="text-emerald-600" /> : <CreditCard size={20} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[11px] font-black uppercase tracking-widest text-slate-700">Bank Passbook</p>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider truncate">{files.passbook_file ? files.passbook_file.name : 'First page - PDF, JPG, JPEG, PNG (max 5MB)'}</p>
+                      </div>
+                      <label className="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-700 border border-slate-200 rounded-xl transition-all">
+                        {files.passbook_file ? 'Replace' : 'Upload'}
+                        <input type="file" name="passbook_file" onChange={e => handleFileChange(e, 'passbook_file')} className="hidden" accept=".pdf,.jpg,.jpeg,.png" />
                       </label>
                     </div>
                   </div>

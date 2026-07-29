@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.deploy.services.asset_service import AssetService
 from backend.modules.deploy.schemas.asset import AssetChecklist
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
 
@@ -26,16 +29,25 @@ def check_asset_access(employee_code: str, current_user: dict, required_manage: 
         
     if required_manage:
         if not has_manage:
-            raise HTTPException(status_code=403, detail="Access denied: missing clearance to manage assets.")
+            logger.warning(
+                "Asset access denied for user %s: missing manage clearance",
+                current_user.get("employee_code") or current_user.get("email") or "unknown",
+            )
+            raise HTTPException(status_code=403, detail="You don't have permission to do this. Contact your admin if you think this is a mistake.")
         return
 
     if has_view_all:
         return
-        
+
     if has_view_personal and current_user.get("employee_code") == employee_code:
         return
-        
-    raise HTTPException(status_code=403, detail="Access denied: missing clearance 'deploy.assets.view_all' or not your profile.")
+
+    logger.warning(
+        "Asset access denied for user %s: missing view clearance for %s",
+        current_user.get("employee_code") or current_user.get("email") or "unknown",
+        employee_code,
+    )
+    raise HTTPException(status_code=403, detail="You don't have permission to view this employee's assets.")
 
 @router.get("/{employee_code}")
 def get_asset_checklist(employee_code: str, service: AssetService = Depends(get_service), current_user: dict = Depends(get_current_user)):
@@ -43,7 +55,8 @@ def get_asset_checklist(employee_code: str, service: AssetService = Depends(get_
     try:
         return service.get_checklist(employee_code)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to fetch asset checklist for %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while fetching the asset checklist. Please try again.")
 
 @router.put("/{employee_code}")
 def upsert_asset_checklist(employee_code: str, data: dict = Body(...), service: AssetService = Depends(get_service), current_user: dict = Depends(get_current_user)):
@@ -52,4 +65,5 @@ def upsert_asset_checklist(employee_code: str, data: dict = Body(...), service: 
     try:
         return service.upsert_checklist(employee_code, data)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to save asset checklist for %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while saving the asset checklist. Please try again.")

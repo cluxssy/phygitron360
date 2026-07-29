@@ -96,7 +96,8 @@ async def update_offer(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Failed to update offer %s: %s", offer_id, exc)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating the offer. Please try again.")
 
 
 @router.post("/{offer_id}/approve")
@@ -118,7 +119,8 @@ async def approve_offer(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Failed to approve offer %s: %s", offer_id, exc)
+        raise HTTPException(status_code=500, detail="Something went wrong while approving the offer. Please try again.")
 
 
 @router.post("/{offer_id}/request-changes")
@@ -141,7 +143,8 @@ async def request_changes(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Failed to request changes on offer %s: %s", offer_id, exc)
+        raise HTTPException(status_code=500, detail="Something went wrong while requesting changes. Please try again.")
 
 
 @router.post("/{offer_id}/reject")
@@ -164,7 +167,8 @@ async def reject_offer(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Failed to reject offer %s: %s", offer_id, exc)
+        raise HTTPException(status_code=500, detail="Something went wrong while rejecting the offer. Please try again.")
 
 
 @router.post("/{offer_id}/send")
@@ -187,8 +191,8 @@ async def send_offer(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as exc:
-        logger.error(f"send_offer({offer_id}) failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"send_offer({offer_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while sending the offer. Please try again.")
 
 @router.get("/{offer_id}/preview")
 async def preview_offer(
@@ -210,6 +214,6 @@ async def preview_offer(
             headers={"Content-Disposition": f"inline; filename=offer_{offer_id}.pdf"}
         )
     except Exception as exc:
-        logger.error(f"preview_offer({offer_id}) failed: {exc}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {exc}")
+        logger.exception(f"preview_offer({offer_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while generating the offer preview. Please try again.")
 

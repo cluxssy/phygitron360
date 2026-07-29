@@ -752,7 +752,7 @@ export default function AdminPanel() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Username</label>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Username <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={form.username}
@@ -763,7 +763,7 @@ export default function AdminPanel() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Password</label>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Password <span className="text-red-500">*</span></label>
                 <input
                   type="password"
                   value={form.password}
@@ -774,7 +774,7 @@ export default function AdminPanel() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Role</label>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">Role <span className="text-red-500">*</span></label>
                 <select
                   value={form.role}
                   onChange={e => setForm({...form, role: e.target.value})}

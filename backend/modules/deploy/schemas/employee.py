@@ -40,12 +40,14 @@ class EmployeeFullProfile(BaseModel):
     photo_path: Optional[str] = None
     cv_path: Optional[str] = None
     id_proofs: Optional[str] = None
+    passbook_path: Optional[str] = None
     pf_included: Optional[str] = None
     mediclaim_included: Optional[str] = None
     notes: Optional[str] = None
     bank_name: Optional[str] = None
     bank_account_no: Optional[str] = None
     pan_no: Optional[str] = None
+    ifsc_code: Optional[str] = None
     exit_date: Optional[str] = None
     exit_reason: Optional[str] = None
     clearance_status: Optional[str] = None
@@ -81,6 +83,7 @@ class UpdateEmployeeRequest(BaseModel):
     bank_name: Optional[str] = None
     bank_account_no: Optional[str] = None
     pan_no: Optional[str] = None
+    ifsc_code: Optional[str] = None
     employee_code: Optional[str] = None
     doj: Optional[str] = None
     skill_matrix: Optional[dict] = None
