@@ -322,7 +322,7 @@ def require_permission(permission_key: Union[str, List[str]]) -> Callable:
             )
             raise HTTPException(
                 status_code=403,
-                detail="You don't have permission to do this. Contact your admin if you think this is a mistake."
+                detail=f"You don't have permission to do this (Missing: {keys_str}). Contact your admin if you think this is a mistake."
             )
         return current_user
     return permission_checker
@@ -400,7 +400,7 @@ def require_role(allowed_roles: List[str]) -> Callable:
             )
             raise HTTPException(
                 status_code=403,
-                detail="You don't have permission to do this. Contact your admin if you think this is a mistake."
+                detail=f"You don't have permission to do this (Required Role: {allowed_roles}). Contact your admin if you think this is a mistake."
             )
         return current_user
     return role_checker
