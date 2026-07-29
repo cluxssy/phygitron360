@@ -13,7 +13,7 @@ export const defaultRouteForUser = (user) => {
   const roles = rolesFor(user);
   if (roles.includes('super_admin')) return '/superadmin';
   if (roles.includes('org_admin') || roles.includes('admin')) return '/admin';
-  if (roles.includes('manager')) return '/deploy?tab=team';
+  if (roles.includes('manager')) return '/deploy?tab=personnel';
   if (roles.includes('candidate')) return '/source?tab=my-application';
   if (roles.includes('trainee')) return '/trainee';
   return '/deploy';

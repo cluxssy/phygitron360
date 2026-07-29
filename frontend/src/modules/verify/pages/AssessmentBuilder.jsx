@@ -333,7 +333,7 @@ export default function AssessmentBuilder() {
       {step === 1 && (
         <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">Title</label>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Title <span className="text-red-500">*</span></label>
             <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" placeholder="e.g. Senior Frontend Developer Assessment" />
           </div>
           <div>
@@ -422,6 +422,7 @@ export default function AssessmentBuilder() {
                         </div>
                       </div>
 
+                      <label className="block text-xs font-medium text-gray-600">Question Text <span className="text-red-500">*</span></label>
                       <textarea
                         value={q.question_text}
                         onChange={e => updateQuestion(i, 'question_text', e.target.value)}

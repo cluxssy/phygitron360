@@ -1,6 +1,9 @@
 import os
+import logging
 from fastapi import APIRouter, Request, HTTPException
 from backend.core.database import get_db_connection
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/billing", tags=["Billing"])
 
@@ -36,7 +39,8 @@ async def stripe_webhook(request: Request):
                 conn.commit()
                 return {"status": "success", "message": "Tenant modules enabled"}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.exception("Failed to process billing webhook for tenant %s: %s", tenant_id, e)
+            raise HTTPException(status_code=500, detail="Something went wrong while processing the billing update. Please try again.")
         finally:
             conn.close()
             

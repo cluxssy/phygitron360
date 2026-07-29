@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
@@ -8,6 +9,8 @@ from backend.modules.admin.schemas.admin import (
     UserOverrideUpdate, RoleUpdate, PermissionTemplateCreate, PermissionTemplateRename
 )
 from backend.modules.deploy.services.notification_service import add_notification
+
+logger = logging.getLogger(__name__)
 
 class ProvisionTenantRequest(BaseModel):
     company_name: str
@@ -32,14 +35,16 @@ def provision_tenant(data: ProvisionTenantRequest, current_user: dict = Depends(
     try:
         return service.provision_tenant(data.company_name, data.admin_email, data.admin_password, current_user['username'])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to provision tenant %s: %s", data.company_name, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while provisioning the tenant. Please try again.")
 
 @router.delete("/tenants/{tenant_id}", dependencies=[Depends(require_permission("admin.tenants.provision"))])
 def delete_tenant(tenant_id: str, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
     try:
         return service.delete_tenant(tenant_id, current_user['username'])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to delete tenant %s: %s", tenant_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while deleting the tenant. Please try again.")
 
 @router.post("/users")
 def add_new_user(user: UserCreate, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
@@ -48,7 +53,8 @@ def add_new_user(user: UserCreate, current_user: dict = Depends(get_current_user
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to create user %s: %s", user.username, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while creating the user. Please try again.")
 
 @router.delete("/users/{user_id}")
 def delete_existing_user(user_id: int, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
@@ -59,7 +65,8 @@ def delete_existing_user(user_id: int, current_user: dict = Depends(get_current_
              raise HTTPException(status_code=404, detail=str(e))
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to delete user %s: %s", user_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while deleting the user. Please try again.")
 
 @router.get("/logs", response_model=List[LogResponse])
 def view_logs(service: AdminService = Depends(get_service)):
@@ -74,7 +81,8 @@ def update_role_permissions(update: RolePermissionsUpdate, current_user: dict = 
     try:
         return service.update_role_permissions(update.role, update.permissions, current_user['username'])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to update role permissions for role %s: %s", update.role, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating role permissions. Please try again.")
 
 @router.get("/permissions/templates")
 def get_templates(service: AdminService = Depends(get_service)):
@@ -85,14 +93,16 @@ def create_template(data: PermissionTemplateCreate, current_user: dict = Depends
     try:
         return service.create_template(data.name, data.description, current_user['username'])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to create permission template %s: %s", data.name, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while creating the permission template. Please try again.")
 
 @router.delete("/permissions/templates/{name}")
 def delete_template(name: str, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
     try:
         return service.delete_template(name, current_user['username'])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to delete permission template %s: %s", name, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while deleting the permission template. Please try again.")
 
 @router.put("/permissions/templates/{name}")
 def rename_template(name: str, data: PermissionTemplateRename, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
@@ -101,7 +111,8 @@ def rename_template(name: str, data: PermissionTemplateRename, current_user: dic
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to rename permission template %s: %s", name, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while renaming the permission template. Please try again.")
 
 @router.get("/permissions/users/{user_id}")
 def get_user_overrides(user_id: int, service: AdminService = Depends(get_service)):
@@ -112,7 +123,8 @@ def update_user_overrides(user_id: int, update: UserOverrideUpdate, current_user
     try:
         return service.update_user_overrides(user_id, update.overrides, current_user['username'])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to update permission overrides for user %s: %s", user_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating user permissions. Please try again.")
 
 class EmployeeCodeUpdate(BaseModel):
     employee_code: Optional[str] = None
@@ -129,7 +141,8 @@ def update_user_employee_code(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to update employee code for user %s: %s", user_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating the employee code. Please try again.")
 
 @router.patch("/users/{user_id}/role")
 def update_user_role(
@@ -152,7 +165,8 @@ def update_user_role(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to update role for user %s: %s", user_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating the user's role. Please try again.")
 
 class ToggleActiveUpdate(BaseModel):
     is_active: bool
@@ -179,7 +193,8 @@ def toggle_user_active(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to toggle active status for user %s: %s", user_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating the account status. Please try again.")
 
 class TenantOpsUpdate(BaseModel):
     company_name: Optional[str] = None

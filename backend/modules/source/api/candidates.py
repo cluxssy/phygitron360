@@ -126,8 +126,8 @@ async def upload_and_parse_resume(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        logger.error(f"Resume upload failed: {exc}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(exc)}")
+        logger.exception(f"Resume upload failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while uploading the resume. Please try again.")
 
 
 @router.post("/bulk-upload", dependencies=[Depends(require_permission("source.candidates.manage"))])
@@ -252,8 +252,8 @@ def create_manual_candidate(
         candidate_id = service.create_manual_candidate(body.dict(), actor_name)
         return {"success": True, "message": "Candidate created successfully", "data": {"candidate_id": candidate_id}}
     except Exception as exc:
-        logger.error(f"Manual candidate creation failed: {exc}")
-        raise HTTPException(status_code=500, detail=f"Failed to create candidate: {str(exc)}")
+        logger.exception(f"Manual candidate creation failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while creating the candidate. Please try again.")
 
 
 @router.get("/search")
@@ -277,8 +277,8 @@ def search_candidates(
         )
         return {"success": True, "data": results, "count": len(results), "total_count": total_count}
     except Exception as exc:
-        logger.error(f"search_candidates failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"search_candidates failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while searching candidates. Please try again.")
 
 
 @router.get("/active")
@@ -291,8 +291,8 @@ def list_active_candidates(
         rows = service.get_active_candidates()
         return {"success": True, "data": rows, "count": len(rows)}
     except Exception as exc:
-        logger.error(f"Active candidates list failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"Active candidates list failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while loading candidates. Please try again.")
 
 
 @router.get("/activity")
@@ -306,8 +306,8 @@ def get_global_activity(
         rows = service.get_global_activity(limit=limit)
         return {"success": True, "data": rows}
     except Exception as e:
-        logger.error(f"Failed to get global activity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception(f"Failed to get global activity: {e}")
+        raise HTTPException(status_code=500, detail="Something went wrong while loading recent activity. Please try again.")
 
 @router.get("/my-applications")
 def get_my_applications(
@@ -351,12 +351,8 @@ def get_my_applications(
         finally:
             conn.close()
     except Exception as exc:
-        import traceback
-        err_msg = f"get_my_applications failed: {exc}\n{traceback.format_exc()}"
-        logger.error(err_msg)
-        with open("/tmp/my_apps_error.log", "w") as f:
-            f.write(err_msg)
-        raise HTTPException(status_code=500, detail=err_msg)
+        logger.exception(f"get_my_applications failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while loading your applications. Please try again.")
 
 
 @router.get("/{candidate_id}")
@@ -375,8 +371,8 @@ def get_candidate(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"get_candidate failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"get_candidate failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while loading this candidate. Please try again.")
 
 
 @router.put("/{candidate_id}")
@@ -396,8 +392,8 @@ def update_candidate(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"Failed to update candidate {candidate_id}: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"Failed to update candidate {candidate_id}: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while updating this candidate. Please try again.")
 
 
 @router.get("/{candidate_id}/resume")
@@ -561,8 +557,8 @@ async def convert_to_offer(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
-        logger.error(f"convert_to_offer failed for candidate {candidate_id}: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"convert_to_offer failed for candidate {candidate_id}: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while creating the offer letter. Please try again.")
 
 
 @router.delete("/{candidate_id}")
@@ -580,8 +576,8 @@ def delete_candidate(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"delete_candidate({candidate_id}) failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"delete_candidate({candidate_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while deleting this candidate. Please try again.")
 
 class BulkDeleteRequest(BaseModel):
     candidate_ids: List[int]
@@ -597,8 +593,8 @@ def bulk_delete_candidates(
         deleted_count = service.bulk_delete_candidates(req.candidate_ids)
         return {"success": True, "message": f"{deleted_count} candidates deleted", "deleted_count": deleted_count}
     except Exception as exc:
-        logger.error(f"bulk_delete_candidates failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"bulk_delete_candidates failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while deleting these candidates. Please try again.")
 
 @router.post("/{candidate_id}/notify")
 def notify_candidate(
@@ -649,8 +645,8 @@ def notify_candidate(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"notify_candidate({candidate_id}) failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"notify_candidate({candidate_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while sending this notification. Please try again.")
 
 
 
@@ -676,4 +672,5 @@ def revert_employee_to_candidate(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"revert_employee_to_candidate({employee_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while reverting this employee. Please try again.")

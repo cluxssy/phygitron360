@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends, Request, Body
 from typing import List, Optional, Dict, Any
 from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.deploy.services.performance_service import PerformanceService
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/assessments", tags=["Performance"])
 
@@ -26,7 +29,8 @@ def save_assessment(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to save performance assessment: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while saving this assessment. Please try again.")
 
 @router.post("/request", dependencies=[Depends(require_permission("deploy.performance.manage_assessments"))])
 def request_review(

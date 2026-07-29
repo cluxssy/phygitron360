@@ -897,7 +897,7 @@ export default function AttendancePanel({ mode }) {
                     <div className="space-y-1">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Commencement</label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Commencement <span className="text-red-500">*</span></label>
                                 <input 
                                     type="date"
                                     required
@@ -908,7 +908,7 @@ export default function AttendancePanel({ mode }) {
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Termination</label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Termination <span className="text-red-500">*</span></label>
                                 <input 
                                     type="date"
                                     required
@@ -1027,7 +1027,7 @@ export default function AttendancePanel({ mode }) {
                     )}
 
                     <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Reason</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Reason <span className="text-red-500">*</span></label>
                         <textarea 
                             required
                             placeholder="State mission-critical reasons for absence..."
@@ -1071,7 +1071,7 @@ export default function AttendancePanel({ mode }) {
 
                  <div className="space-y-6 text-left">
                     <div>
-                        <label className="text-[9px] font-black uppercase tracking-widest text-red-400/60 mb-3 block ml-1">Work Summary</label>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-red-400/60 mb-3 block ml-1">Work Summary <span className="text-red-500">*</span></label>
                         <textarea 
                             required
                             placeholder="State your accomplishments for the session..."
@@ -1121,7 +1121,7 @@ export default function AttendancePanel({ mode }) {
                   <div className="p-8 space-y-6">
                       <div className="grid grid-cols-2 gap-6">
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Employee</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Employee <span className="text-red-500">*</span></label>
                             {editingRecord.isNew ? (
                                 <select
                                     value={editForm.employee_code}
@@ -1140,7 +1140,7 @@ export default function AttendancePanel({ mode }) {
                             )}
                           </div>
                           <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time Vector (Date)</label>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time Vector (Date) <span className="text-red-500">*</span></label>
                             <input 
                                 type="date"
                                 disabled={!editingRecord.isNew}

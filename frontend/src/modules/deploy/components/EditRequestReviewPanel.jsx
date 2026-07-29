@@ -12,6 +12,7 @@ const CURRENT_DOC_TYPE = {
   photo_path: 'photo',
   cv_path: 'cv',
   id_proofs: 'id_proof',
+  passbook_path: 'passbook',
 };
 
 export default function EditRequestReviewPanel({ request, onClose, onReviewed }) {

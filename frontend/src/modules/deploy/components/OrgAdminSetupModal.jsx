@@ -264,7 +264,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">First Name</label>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">First Name <span className="text-red-500">*</span></label>
                   <input name="first_name" value={form.first_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="First name" />
                 </div>
 
@@ -274,14 +274,14 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Last Name</label>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Last Name <span className="text-red-500">*</span></label>
                   <input name="last_name" value={form.last_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="Last name" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Date of Birth</label>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Date of Birth <span className="text-red-500">*</span></label>
                   <input type="date" name="dob" value={form.dob} onChange={handleChange} className="w-full glass-panel-input" />
                 </div>
               </div>
@@ -289,7 +289,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
               {/* PRIMARY CONTACT */}
               <div className="space-y-2">
                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center gap-1">
-                  <Phone size={10} /> Primary Contact
+                  <Phone size={10} /> Primary Contact <span className="text-red-500">*</span>
                 </label>
                 <div className="flex gap-2 w-full">
                   <select 
@@ -320,7 +320,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">First Name</label>
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">First Name <span className="text-red-500">*</span></label>
                     <input
                       value={emergencyFirstName}
                       onChange={e => setEmergencyFirstName(e.target.value)}
@@ -338,7 +338,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Last Name</label>
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Last Name <span className="text-red-500">*</span></label>
                     <input
                       value={emergencyLastName}
                       onChange={e => setEmergencyLastName(e.target.value)}
@@ -350,7 +350,7 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
 
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center gap-1">
-                    <Phone size={10} /> Contact Number
+                    <Phone size={10} /> Contact Number <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-2 w-full">
                     <select 
@@ -377,16 +377,16 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-4 border-t border-slate-100">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Name</label>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Name <span className="text-red-500">*</span></label>
                   <input name="bank_name" value={form.bank_name} onChange={handleChange} className="w-full glass-panel-input" placeholder="e.g. HDFC Bank" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Account No.</label>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">Bank Account No. <span className="text-red-500">*</span></label>
                   <input name="bank_account_no" value={form.bank_account_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="9-18 digits only" inputMode="numeric" />
                   <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest ml-1">Digits only, usually 9-18 digits</p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">PAN No.</label>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1">PAN No. <span className="text-red-500">*</span></label>
                   <input name="pan_no" value={form.pan_no} onChange={handleChange} className="w-full glass-panel-input" placeholder="ABCDE1234F" style={{textTransform: 'uppercase'}} />
                   <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest ml-1">Format: ABCDE1234F</p>
                 </div>

@@ -4,10 +4,13 @@ from backend.core.database import get_db_connection
 from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.deploy.services.attendance_service import AttendanceService
 from backend.modules.deploy.schemas.attendance import (
-    ClockInRequest, ClockOutRequest, LeaveRequest, AttendanceStatus, 
+    ClockInRequest, ClockOutRequest, LeaveRequest, AttendanceStatus,
     LeaveBalance, LeaveRecord, AttendanceRecord, EditAttendanceRequest,
     SelfServiceCorrectionRequest, CorrectionRequestSchema, CorrectionActionRequest, CorrectionWindowDay
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
 
@@ -42,7 +45,8 @@ def clock_in(request: Request, user=Depends(get_current_user), service: Attendan
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to clock in employee %s: %s", emp_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while clocking you in. Please try again.")
 
 @router.post("/clock-out")
 def clock_out(data: ClockOutRequest, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
@@ -52,7 +56,8 @@ def clock_out(data: ClockOutRequest, user=Depends(get_current_user), service: At
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to clock out employee %s: %s", emp_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while clocking you out. Please try again.")
 
 @router.get("/history")
 def get_attendance_history(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
@@ -74,7 +79,8 @@ def apply_leave(req: LeaveRequest, user=Depends(get_current_user), service: Atte
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to apply leave for employee %s: %s", emp_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while submitting your leave request. Please try again.")
 
 @router.get("/leave/my-requests")
 def get_my_leaves(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
@@ -118,21 +124,24 @@ def approve_reject_leave(
         else:
              raise HTTPException(status_code=400, detail=msg)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to approve/reject leave %s: %s", leave_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while processing this leave request. Please try again.")
 
 @router.get("/admin/summary")
 def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_permission("deploy.attendance.view_all")), service: AttendanceService = Depends(get_service)):
     try:
         return service.get_monthly_summary(year, month)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to fetch monthly attendance summary: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while fetching the attendance summary. Please try again.")
 
 @router.post("/admin/edit")
 def edit_attendance(req: EditAttendanceRequest, user=Depends(require_permission("deploy.attendance.approve_correction")), service: AttendanceService = Depends(get_service)):
     try:
         return service.edit_attendance(req)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to edit attendance record: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while saving this attendance record. Please try again.")
 
 @router.get("/admin/employees")
 def get_active_employees(user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
@@ -170,7 +179,8 @@ def trigger_missed_clockout_reminders(
     try:
         return service.check_and_trigger_missed_clockout_reminders()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to trigger missed clock-out reminders: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while triggering reminders. Please try again.")
 
 # --- Two-Track Correction Endpoints ---
 
@@ -189,7 +199,8 @@ def apply_self_service_correction(req: SelfServiceCorrectionRequest, user=Depend
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to apply self-service correction for employee %s: %s", emp_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while saving your correction. Please try again.")
 
 @router.post("/correction/request")
 def apply_correction_request(req: CorrectionRequestSchema, user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
@@ -200,7 +211,8 @@ def apply_correction_request(req: CorrectionRequestSchema, user=Depends(get_curr
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to submit correction request for employee %s: %s", emp_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while submitting your correction request. Please try again.")
 
 @router.get("/correction/my-history")
 def get_my_corrections(user=Depends(get_current_user), service: AttendanceService = Depends(get_service)):
@@ -237,7 +249,8 @@ def approve_reject_correction_request(
         else:
             raise HTTPException(status_code=400, detail=msg)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to approve/reject correction request %s: %s", correction_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while processing this correction request. Please try again.")
 
 @router.get("/report/bimonthly")
 def get_bimonthly_report(
@@ -254,5 +267,6 @@ def get_bimonthly_report(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to fetch bimonthly attendance report: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while generating this report. Please try again.")
 

@@ -4,6 +4,7 @@ const PHONE_RE = /^\+?[0-9]{7,15}$/;
 const PINCODE_RE = /^[1-9][0-9]{5}$/;
 const EMPLOYEE_CODE_RE = /^[A-Z0-9_-]{3,20}$/i;
 const BANK_ACCOUNT_RE = /^[0-9]{9,18}$/;
+const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 export const MAX_FILE_SIZE = {
   image: 2 * 1024 * 1024,
@@ -26,6 +27,8 @@ export const isPincode = (value = '') => PINCODE_RE.test(String(value).trim());
 export const isEmployeeCode = (value = '') => EMPLOYEE_CODE_RE.test(String(value).trim());
 
 export const isBankAccount = (value = '') => BANK_ACCOUNT_RE.test(String(value).trim());
+
+export const isIfsc = (value = '') => IFSC_RE.test(String(value).trim().toUpperCase());
 
 // ── Base validation functions (defined before aliases) ──
 export const isNonEmpty = (value) => String(value ?? '').trim().length > 0;
@@ -136,6 +139,9 @@ export const isValidPhone = isPhone;
 
 // Alias for isPan
 export const isValidPAN = isPan;
+
+// Alias for isIfsc
+export const isValidIFSC = isIfsc;
 
 // Alias for isPincode
 export const isValidPincode = isPincode;

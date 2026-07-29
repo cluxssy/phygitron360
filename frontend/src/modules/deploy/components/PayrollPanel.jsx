@@ -348,7 +348,7 @@ export default function PayrollPanel() {
             <p className="text-[15px] text-black text-sm font-black  mb-5">Pay Cycle Configuration</p>
             <div className="flex flex-wrap gap-4 items-end">
               <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Month</label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Month <span className="text-red-500">*</span></label>
                 <select
                   value={payMonth}
                   onChange={e => setPayMonth(Number(e.target.value))}
@@ -360,7 +360,7 @@ export default function PayrollPanel() {
                 </select>
               </div>
               <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Year</label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-[#6b7280] mb-2 block">Year <span className="text-red-500">*</span></label>
                 <input
                   type="number"
                   value={payYear}
@@ -505,7 +505,7 @@ export default function PayrollPanel() {
                           h === 'Net In Hand' ? 'text-[#10b981]' :
                           h === 'Total Ded.' ? 'text-[#ef4444]' :
                           'text-[#8b8ba3]'
-                        }`}>{h}</th>
+                        }`}>{h}{h === 'Employee Code' && <span className="text-red-500"> *</span>}</th>
                       ))}
                     </tr>
                   </thead>

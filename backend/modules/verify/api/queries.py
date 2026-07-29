@@ -47,8 +47,8 @@ async def list_queries(
         rows = service.get_queries(status)
         return {"success": True, "data": rows}
     except Exception as exc:
-        logger.error(f"list_queries failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Failed to list queries: %s", exc)
+        raise HTTPException(status_code=500, detail="Something went wrong while fetching queries. Please try again.")
 
 @router.post("")
 async def create_query(
@@ -65,7 +65,8 @@ async def create_query(
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Failed to create query: %s", exc)
+        raise HTTPException(status_code=500, detail="Something went wrong while submitting your query. Please try again.")
 
 @router.patch("/{query_id}")
 async def respond_to_query(
@@ -84,7 +85,8 @@ async def respond_to_query(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Failed to update query %s: %s", query_id, exc)
+        raise HTTPException(status_code=500, detail="Something went wrong while updating the query. Please try again.")
 
 @router.get("/my")
 async def my_queries(
@@ -96,4 +98,5 @@ async def my_queries(
         rows = service.get_my_queries(current_user["id"])
         return {"success": True, "data": rows}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Failed to fetch queries for user %s: %s", current_user["id"], exc)
+        raise HTTPException(status_code=500, detail="Something went wrong while fetching your queries. Please try again.")

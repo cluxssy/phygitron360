@@ -25,6 +25,9 @@ import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
 import { DEPLOY_MANAGEMENT_PERMS } from "../../../core/permissions/classification";
 
+const MANAGEMENT_TABS = ['dashboard', 'personnel', 'profile', 'attendance', 'performance', 'assets', 'onboard', 'payroll'];
+const EMPLOYEE_TABS = ['dashboard', 'profile', 'attendance', 'performance', 'opportunities', 'payroll'];
+
 export default function DeployDashboard() {
 
   const { user, hasPermission, hasRole, logout } = useAuth();
@@ -122,11 +125,20 @@ export default function DeployDashboard() {
   };
 
   useEffect(() => {
+    const validTabs = deployView === 'management' ? MANAGEMENT_TABS : EMPLOYEE_TABS;
+
+    // Unknown/unsupported tab value (bad deep link, stale bookmark, etc.) —
+    // fall back to the default tab instead of leaving the content area blank.
+    if (!validTabs.includes(currentTab)) {
+      navigate('/deploy?tab=dashboard', { replace: true });
+      return;
+    }
+
     if (
       deployView === 'employee' &&
       (currentTab === 'assets' || currentTab === 'onboard')
     ) {
-      navigate('/deploy?tab=dashboard');
+      navigate('/deploy?tab=dashboard', { replace: true });
     }
   }, [deployView, currentTab, navigate]);
 

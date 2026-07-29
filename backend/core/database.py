@@ -1124,6 +1124,8 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_name TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_account_no TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS pan_no TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS ifsc_code TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS passbook_path TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS exit_date TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS exit_reason TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS clearance_status TEXT")
