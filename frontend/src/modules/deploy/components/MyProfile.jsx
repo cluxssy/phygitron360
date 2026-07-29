@@ -150,7 +150,7 @@ export default function MyProfile() {
         <div className="w-24 h-24 rounded-[1.6rem] bg-gradient-to-br from-[#b784f7] to-[#8b5cf6] flex items-center justify-center text-white font-display font-black text-4xl shrink-0 shadow-[0_0_30px_rgba(204,151,255,0.2)] overflow-hidden">
             {details.photo_path ? (
                 <img
-                  src={details.photo_path.startsWith('http') ? details.photo_path : `/${details.photo_path.replace(/^\//, '')}`}
+                  src={`/api/employee/${details.employee_code}/document/pfp`}
                   className="w-full h-full object-cover"
                   alt=""
                 />

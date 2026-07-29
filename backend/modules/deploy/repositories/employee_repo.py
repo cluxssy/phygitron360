@@ -33,7 +33,6 @@ class EmployeeRepository:
                            COALESCE(e.pan_no, '') <> '' AND
                            COALESCE(e.pf_included, '') <> '' AND
                            COALESCE(e.mediclaim_included, '') <> '' AND
-                           COALESCE(e.photo_path, '') <> '' AND
                            COALESCE(e.cv_path, '') <> '' AND
                            COALESCE(e.id_proofs, '') <> '' AND
                            e.education_details IS NOT NULL AND
@@ -102,7 +101,6 @@ class EmployeeRepository:
                            COALESCE(e.pan_no, '') <> '' AND
                            COALESCE(e.pf_included, '') <> '' AND
                            COALESCE(e.mediclaim_included, '') <> '' AND
-                           COALESCE(e.photo_path, '') <> '' AND
                            COALESCE(e.cv_path, '') <> '' AND
                            COALESCE(e.id_proofs, '') <> '' AND
                            e.education_details IS NOT NULL AND

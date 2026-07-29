@@ -409,7 +409,7 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
         {/*  Attendance - amber */}
         <StatCard
           label="Attendance"
-          value={`${counts.active ?? 0}%`}
+          value={`${counts.attendance_rate ?? 0}%`}
           color="#F59E0B"
           borderColor="border-t-amber-500"
           icon={Activity}

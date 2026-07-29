@@ -401,15 +401,16 @@ export default function OnboardPage() {
                          
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Password</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Password <span className="text-red-500">*</span></label>
                                <div className="relative">
-                                 <input 
-                                   type={showPassword ? 'text' : 'password'} 
-                                   name="password" 
-                                   value={form.password} 
-                                   onChange={handleChange} 
-                                   className={`w-full glass-panel-input pr-10 ${validationErrors.password ? 'border-error/50' : 'border-white/5'}`} 
-                                   placeholder="Min 8 characters" 
+                                 <input
+                                   type={showPassword ? 'text' : 'password'}
+                                   name="password"
+                                   value={form.password}
+                                   onChange={handleChange}
+                                   autoComplete="new-password"
+                                   className={`w-full glass-panel-input pr-10 ${validationErrors.password ? 'border-error/50' : 'border-white/5'}`}
+                                   placeholder="Min 8 characters"
                                  />
                                  <button
                                    type="button"
@@ -422,13 +423,14 @@ export default function OnboardPage() {
                                {renderError('password')}
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Confirm password</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Confirm password <span className="text-red-500">*</span></label>
                                <div className="relative">
                                  <input
                                    type={showConfirmPassword ? 'text' : 'password'}
                                    name="confirmPassword"
                                    value={confirmPassword}
                                    onChange={e => setConfirmPassword(e.target.value)}
+                                   autoComplete="new-password"
                                    className={`w-full glass-panel-input pr-10 ${validationErrors.confirmPassword ? 'border-error/50' : 'border-white/5'}`}
                                    placeholder="Re-enter password"
                                  />
@@ -475,10 +477,15 @@ export default function OnboardPage() {
                             </div>
                          </div>
 
+                         <div className="flex items-center gap-2 mb-2 pt-2">
+                             <UserPlus size={16} className="text-primary" />
+                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Emergency contact</h3>
+                         </div>
+
                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {/* Emergency Contact Name */}
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency First Name</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">First Name</label>
                                <input
                                  value={emergencyFirstName}
                                  onChange={e => setEmergencyFirstName(e.target.value)}
@@ -489,7 +496,7 @@ export default function OnboardPage() {
                             </div>
 
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Middle Name</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Middle Name</label>
                                <input
                                  value={emergencyMiddleName}
                                  onChange={e => setEmergencyMiddleName(e.target.value)}
@@ -499,7 +506,7 @@ export default function OnboardPage() {
                             </div>
 
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Emergency Last Name</label>
+                               <label className="text-[9px] font-black uppercase tracking-widest text-white/40 ml-1">Last Name</label>
                                <input
                                  value={emergencyLastName}
                                  onChange={e => setEmergencyLastName(e.target.value)}
@@ -635,7 +642,7 @@ export default function OnboardPage() {
                                          <input placeholder="Institution / Board" value={edu.university} onChange={e => updateEducation(idx, 'university', e.target.value)} className="w-full glass-panel-input text-[11px] py-3 bg-black/40" />
                                      </div>
                                      <div className="grid grid-cols-2 gap-4">
-                                         <input placeholder="Year" value={edu.year} onChange={e => updateEducation(idx, 'year', e.target.value)} className="w-full glass-panel-input text-[11px] py-3 bg-black/40" />
+                                         <input placeholder="Passout Year" value={edu.year} onChange={e => updateEducation(idx, 'year', e.target.value)} className="w-full glass-panel-input text-[11px] py-3 bg-black/40" />
                                          <input placeholder="CGPA / %" value={edu.percentage} onChange={e => updateEducation(idx, 'percentage', e.target.value)} className="w-full glass-panel-input text-[11px] py-3 bg-black/40" />
                                      </div>
                                  </div>

@@ -23,10 +23,11 @@ class DashboardRepository:
             return {
                 "employees": self._read_sql_as_df("SELECT * FROM employees", conn),
                 "assets": self._read_sql_as_df("SELECT * FROM assets", conn),
-                "skills": self._read_sql_as_df("SELECT * FROM skill_matrix", conn), 
+                "skills": self._read_sql_as_df("SELECT * FROM skill_matrix", conn),
                 "candidates": self._read_sql_as_df("SELECT * FROM candidates", conn),
                 "job_roles": self._read_sql_as_df("SELECT * FROM job_roles", conn),
                 "notifications": self._read_sql_as_df("SELECT * FROM notifications WHERE employee_code IS NULL OR type = 'AdminAlert' ORDER BY created_at DESC LIMIT 5", conn),
+                "attendance_today": self._read_sql_as_df("SELECT employee_code, clock_in FROM attendance WHERE date = CAST(CURRENT_DATE AS TEXT)", conn),
             }
         finally:
             conn.close()
