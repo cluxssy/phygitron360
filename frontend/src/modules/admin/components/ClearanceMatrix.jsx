@@ -69,6 +69,7 @@ export const PERMISSIONS_CATEGORIES = [
       { key: 'deploy.onboarding.send_invite', label: 'Send Invite' },
       { key: 'deploy.onboarding.cancel_invite', label: 'Cancel Invite' },
       { key: 'deploy.onboarding.review_submissions', label: 'Review Submissions' },
+      { key: 'deploy.onboarding.manage', label: 'Manage Onboarding' },
     ]
   },
   {
