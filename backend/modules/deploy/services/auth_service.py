@@ -132,11 +132,17 @@ class AuthService:
             
         tenant_id = session.get('tenant_id', 'public')
         modules_enabled = self._get_tenant_modules(tenant_id)
-        
+
+        # Combine ALL role sources — same logic as login() to ensure consistent permissions:
+        # templates (custom role groups) + roles (extra DB roles) + base role
+        raw_roles = (
+            list(session.get('templates') or []) +
+            list(session.get('roles') or []) +
+            [session.get('role')]
+        )
+        resolved_roles = _resolve_roles(raw_roles)
         resolved_role = _resolve_role(session['role'])
-        resolved_roles = _resolve_roles(session.get('templates') or [])
-        resolved_roles.append(resolved_role)
-        
+
         return {
             "id": session['user_id'],
             "tenant_id": tenant_id,
@@ -145,8 +151,9 @@ class AuthService:
             "first_name": session.get('employee_first_name') or session.get('candidate_first_name') or session['username'],
             "role": resolved_role,
             "roles": resolved_roles,
+            "templates": session.get('templates') or [],
             "employee_code": session['employee_code'],
-            "permissions": self.repo.get_user_permissions(session['user_id'], session.get('roles') or [session['role']], tenant_id=tenant_id),
+            "permissions": self.repo.get_user_permissions(session['user_id'], resolved_roles, tenant_id=tenant_id),
             "modules_enabled": modules_enabled
         }
 

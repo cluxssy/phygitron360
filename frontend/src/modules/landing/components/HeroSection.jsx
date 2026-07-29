@@ -44,7 +44,7 @@ const slides = [
 
 export default function HeroSection() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, refreshUser } = useAuth();
   const [slidePosition, setSlidePosition] = useState(slides.length);
   const [skipTransition, setSkipTransition] = useState(false);
   const [email, setEmail] = useState('');
@@ -181,6 +181,9 @@ export default function HeroSection() {
 
       if (res.ok) {
         login(data.user);
+        // Refresh from /api/auth/check to pick up template-role permissions
+        // that the login response may not fully include
+        await refreshUser();
         toast.success('Login successful! Welcome back.');
         navigate(defaultRouteForUser(data.user));
       } else {
