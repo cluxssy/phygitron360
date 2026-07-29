@@ -45,7 +45,8 @@ class P:
     # ── Deploy: Employees ────────────────────────────────────────────────────
     DEPLOY_EMP_VIEW_LIST            = "deploy.employees.view_list"
     DEPLOY_EMP_VIEW_TEAM            = "deploy.employees.view_team"
-    DEPLOY_EMP_VIEW_PROFILE         = "deploy.employees.view_profile"
+    DEPLOY_EMP_VIEW_PROFILE         = "deploy.employees.view_profile"  # View other basic profiles
+    DEPLOY_EMP_VIEW_PERSONAL        = "deploy.employees.view_personal" # View own profile
     DEPLOY_EMP_VIEW_PROFILE_SENSITIVE = "deploy.employees.view_profile_sensitive"
     DEPLOY_EMP_VIEW_PROFILE_FINANCIAL = "deploy.employees.view_profile_financial"
     DEPLOY_EMP_CREATE               = "deploy.employees.create"
@@ -239,7 +240,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
     "employee": [
         P.MODULE_FORGE_ACCESS, P.MODULE_DEPLOY_ACCESS,
         # Deploy: Employees
-        P.DEPLOY_EMP_VIEW_TEAM, P.DEPLOY_EMP_VIEW_PROFILE,
+        P.DEPLOY_EMP_VIEW_TEAM, P.DEPLOY_EMP_VIEW_PERSONAL,
         # Deploy: Assets
         P.DEPLOY_ASSETS_VIEW_PERSONAL,
         # Deploy: Attendance
@@ -261,7 +262,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.MODULE_VERIFY_ACCESS,
         P.MODULE_FORGE_ACCESS,
         # Access to view personal profile and take assessments/courses
-        P.DEPLOY_EMP_VIEW_PROFILE,
+        P.DEPLOY_EMP_VIEW_PERSONAL,
         P.VERIFY_ASSESS_VIEW,
         P.FORGE_COURSES_VIEW, P.FORGE_ENROLL,
     ],

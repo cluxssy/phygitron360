@@ -41,7 +41,7 @@ def get_employees(current_user: dict = Depends(get_current_user)):
             return []
         return service.get_team_employees(employee_code)
 
-@router.get("/employee/{employee_code}", dependencies=[Depends(require_permission("deploy.employees.view_profile"))])
+@router.get("/employee/{employee_code}", dependencies=[Depends(require_permission(["deploy.employees.view_profile", "deploy.employees.view_personal"]))])
 def get_employee(employee_code: str, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
@@ -55,14 +55,20 @@ def get_employee(employee_code: str, current_user: dict = Depends(get_current_us
     
     perms = current_user.get('permissions', {})
     if isinstance(perms, list):
+        can_view_any = "deploy.employees.view_profile" in perms
         can_view_sensitive = "deploy.employees.view_profile_sensitive" in perms
         can_view_financial = "deploy.employees.view_profile_financial" in perms
     elif isinstance(perms, dict):
+        can_view_any = bool(perms.get("deploy.employees.view_profile"))
         can_view_sensitive = bool(perms.get("deploy.employees.view_profile_sensitive"))
         can_view_financial = bool(perms.get("deploy.employees.view_profile_financial"))
     else:
+        can_view_any = False
         can_view_sensitive = False
         can_view_financial = False
+
+    if not can_view_any and not is_self and not is_super:
+        raise HTTPException(status_code=403, detail="You can only view your own profile")
 
     if not (is_self or is_super or can_view_sensitive):
         sensitive_fields = ['dob', 'contact_number', 'emergency_contact', 'current_address', 'permanent_address', 'cv_path', 'id_proofs']

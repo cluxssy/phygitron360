@@ -19,6 +19,7 @@ export const PERMISSIONS_CATEGORIES = [
       { key: 'deploy.employees.view_list', label: 'View Employee List' },
       { key: 'deploy.employees.view_team', label: 'View Team List' },
       { key: 'deploy.employees.view_profile', label: 'View Basic Profile' },
+      { key: 'deploy.employees.view_personal', label: 'View Own Profile' },
       { key: 'deploy.employees.view_profile_sensitive', label: 'View Sensitive Details' },
       { key: 'deploy.employees.view_profile_financial', label: 'View Financial Details' },
       { key: 'deploy.employees.create', label: 'Add Employee' },

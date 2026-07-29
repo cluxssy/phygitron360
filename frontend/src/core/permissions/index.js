@@ -30,6 +30,7 @@ export const P = {
   DEPLOY_EMP_VIEW_LIST:            'deploy.employees.view_list',
   DEPLOY_EMP_VIEW_TEAM:            'deploy.employees.view_team',
   DEPLOY_EMP_VIEW_PROFILE:         'deploy.employees.view_profile',
+  DEPLOY_EMP_VIEW_PERSONAL:        'deploy.employees.view_personal',
   DEPLOY_EMP_VIEW_PROFILE_SENSITIVE: 'deploy.employees.view_profile_sensitive',
   DEPLOY_EMP_VIEW_PROFILE_FINANCIAL: 'deploy.employees.view_profile_financial',
   DEPLOY_EMP_CREATE:               'deploy.employees.create',
