@@ -95,8 +95,8 @@ async def assign_assessment(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"assign_assessment error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to assign assessment %s: %s", asm_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while assigning the assessment. Please try again.")
 
     return {
         "success": True,

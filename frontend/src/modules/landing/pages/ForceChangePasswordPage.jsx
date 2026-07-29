@@ -67,7 +67,7 @@ export default function ForceChangePasswordPage() {
         const uRoles = (user.roles || [user.role]).map(r => r ? r.toLowerCase() : '');
         if (uRoles.includes('super_admin')) navigate('/superadmin');
         else if (uRoles.includes('org_admin')) navigate('/admin');
-        else if (uRoles.includes('manager')) navigate('/deploy?tab=team');
+        else if (uRoles.includes('manager')) navigate('/deploy?tab=personnel');
         else if (uRoles.includes('candidate')) navigate('/source?tab=my-application');
         else navigate('/deploy');
       } else {
@@ -117,7 +117,7 @@ export default function ForceChangePasswordPage() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 ml-1">Current/Temporary Password</label>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 ml-1">Current/Temporary Password <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant opacity-40" size={18} />
                   <input
@@ -147,7 +147,7 @@ export default function ForceChangePasswordPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 ml-1">New Password</label>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 ml-1">New Password <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant opacity-40" size={18} />
                   <input
@@ -177,7 +177,7 @@ export default function ForceChangePasswordPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 ml-1">Confirm New Password</label>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 ml-1">Confirm New Password <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant opacity-40" size={18} />
                   <input

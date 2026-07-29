@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from backend.modules.deploy.services.password_service import PasswordService
 from backend.core.dependencies import get_current_user, require_permission
 from pydantic import BaseModel, EmailStr
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/auth", tags=["password-reset"])
@@ -72,7 +75,8 @@ def forgot_password(
         result = service.request_password_reset(request.email, tenant_context)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to process forgot-password request: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while processing your request. Please try again.")
 
 
 @router.post("/verify-reset-token")
@@ -89,7 +93,8 @@ def verify_reset_token(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to verify password reset token: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while verifying this link. Please try again.")
 
 
 @router.post("/reset-password")
@@ -106,7 +111,8 @@ def reset_password(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to reset password: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while resetting your password. Please try again.")
 
 
 @router.post("/admin-reset-password", dependencies=[Depends(require_permission("deploy.employees.edit"))])
@@ -136,7 +142,8 @@ def admin_reset_password(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to admin-reset password for %s: %s", request.employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while resetting this employee's password. Please try again.")
 
 
 @router.post("/change-password")
@@ -166,7 +173,8 @@ def change_password(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to change password: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while changing your password. Please try again.")
 
 
 @router.get("/check-must-change-password")
@@ -181,4 +189,5 @@ def check_must_change_password(
         must_change = service.check_must_change_password(email, tenant_id=tenant_id)
         return {"must_change": must_change}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to check must-change-password status: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while checking your account status. Please try again.")

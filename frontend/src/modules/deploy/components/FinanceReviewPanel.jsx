@@ -7,12 +7,12 @@ import {
 import { toast } from 'react-hot-toast';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { P } from '../../../core/permissions';
-import { isValidBankAccount } from '../../../core/utils/validators';
+import { isValidBankAccount, isPan, isValidIFSC } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 // Finance-facing review of an active employee's onboarding profile, with bank
-// name / account number left open for correction. There's no separate save
-// step — approving commits whatever's currently in those fields in one shot.
+// name / account number / PAN / IFSC left open for correction. There's no
+// separate save step — approving commits whatever's currently in those fields in one shot.
 export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
   const { hasPermission } = usePermissions();
   const canEditFinancial = hasPermission(P.DEPLOY_EMP_EDIT_FINANCIAL);
@@ -20,7 +20,7 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
 
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [bankForm, setBankForm] = useState({ bank_name: '', bank_account_no: '' });
+  const [bankForm, setBankForm] = useState({ bank_name: '', bank_account_no: '', pan_no: '', ifsc_code: '' });
   const [errors, setErrors] = useState({});
   const [approving, setApproving] = useState(false);
 
@@ -42,6 +42,8 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
       setBankForm({
         bank_name: data.bank_name && data.bank_name !== '***REDACTED***' ? data.bank_name : '',
         bank_account_no: data.bank_account_no && data.bank_account_no !== '***REDACTED***' ? data.bank_account_no : '',
+        pan_no: data.pan_no && data.pan_no !== '***REDACTED***' ? data.pan_no : '',
+        ifsc_code: data.ifsc_code && data.ifsc_code !== '***REDACTED***' ? data.ifsc_code : '',
       });
     } catch {
       toast.error('Failed to load employee profile');
@@ -51,8 +53,18 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
   };
 
   const handleApproveDetails = async () => {
+    const newErrors = {};
     if (bankForm.bank_account_no && !isValidBankAccount(bankForm.bank_account_no)) {
-      setErrors({ bank_account_no: 'Enter a valid bank account number (9-18 digits)' });
+      newErrors.bank_account_no = 'Enter a valid bank account number (9-18 digits)';
+    }
+    if (bankForm.pan_no && !isPan(bankForm.pan_no)) {
+      newErrors.pan_no = 'PAN must follow ABCDE1234F format';
+    }
+    if (bankForm.ifsc_code && !isValidIFSC(bankForm.ifsc_code)) {
+      newErrors.ifsc_code = 'IFSC must follow ABCD0123456 format';
+    }
+    if (Object.keys(newErrors).length) {
+      setErrors(newErrors);
       return;
     }
     setErrors({});
@@ -66,6 +78,8 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
           body: JSON.stringify({
             bank_name: bankForm.bank_name,
             bank_account_no: bankForm.bank_account_no,
+            pan_no: bankForm.pan_no ? bankForm.pan_no.trim().toUpperCase() : bankForm.pan_no,
+            ifsc_code: bankForm.ifsc_code ? bankForm.ifsc_code.trim().toUpperCase() : bankForm.ifsc_code,
           }),
         });
         const saveData = await saveRes.json().catch(() => ({}));
@@ -81,7 +95,7 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.success === false) throw new Error(data.detail || 'Failed to approve details');
       toast.success('Finance sign-off recorded');
-      setDetails(prev => ({ ...prev, finance_approved: 1, bank_name: bankForm.bank_name, bank_account_no: bankForm.bank_account_no }));
+      setDetails(prev => ({ ...prev, finance_approved: 1, bank_name: bankForm.bank_name, bank_account_no: bankForm.bank_account_no, pan_no: bankForm.pan_no, ifsc_code: bankForm.ifsc_code }));
       onSaved?.();
     } catch (e) {
       toast.error(e.message || 'Failed to approve details');
@@ -171,9 +185,25 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
                       disabled={!canEditFinancial || financeApproved}
                       error={errors.bank_account_no}
                     />
-                    <ReadField label="PAN Number" value={details.pan_no} />
+                    <EditableField
+                      label="PAN Number"
+                      value={bankForm.pan_no}
+                      onChange={v => setBankForm(f => ({ ...f, pan_no: v.toUpperCase() }))}
+                      disabled={!canEditFinancial || financeApproved}
+                      error={errors.pan_no}
+                    />
+                    <EditableField
+                      label="IFSC Code"
+                      value={bankForm.ifsc_code}
+                      onChange={v => setBankForm(f => ({ ...f, ifsc_code: v.toUpperCase() }))}
+                      disabled={!canEditFinancial || financeApproved}
+                      error={errors.ifsc_code}
+                    />
                     <ReadField label="PF Included" value={['Yes', 'yes', 'true', '1', true].includes(details.pf_included) ? 'Yes' : 'No'} />
                     <ReadField label="Mediclaim Included" value={['Yes', 'yes', 'true', '1', true].includes(details.mediclaim_included) ? 'Yes' : 'No'} />
+                    <div className="md:col-span-2">
+                      <DocLink label="Bank Passbook" path={details.passbook_path} employeeCode={details.employee_code} docType="passbook" />
+                    </div>
                   </>
                 ) : (
                   <div className="col-span-2 flex items-center gap-2 text-xs font-bold text-black/40 italic p-4 bg-[#faf7ff] rounded-xl border border-[#f1ebff]">

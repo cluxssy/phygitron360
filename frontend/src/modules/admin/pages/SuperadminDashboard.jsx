@@ -601,25 +601,25 @@ export default function SuperadminDashboard() {
 
             <form onSubmit={handleProvision} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={S.label}>Enterprise Name</label>
+                <label style={S.label}>Enterprise Name <span className="text-red-500">*</span></label>
                 <input required placeholder="e.g. Acme Corp" style={S.input}
                   value={provisionForm.company_name}
                   onChange={e => setProvisionForm({ ...provisionForm, company_name: e.target.value })} />
               </div>
               <div>
-                <label style={S.label}>Admin Email</label>
+                <label style={S.label}>Admin Email <span className="text-red-500">*</span></label>
                 <input type="email" placeholder="admin@enterprise.com" style={S.input}
                   value={provisionForm.admin_email}
                   onChange={e => setProvisionForm({ ...provisionForm, admin_email: e.target.value })} />
               </div>
               <div>
-                <label style={S.label}>Root Password</label>
+                <label style={S.label}>Root Password <span className="text-red-500">*</span></label>
                 <input type="password" placeholder="••••••••" style={S.input}
                   value={provisionForm.admin_password}
                   onChange={e => setProvisionForm({ ...provisionForm, admin_password: e.target.value })} />
               </div>
               <div>
-                <label style={S.label}>Confirm Root Password</label>
+                <label style={S.label}>Confirm Root Password <span className="text-red-500">*</span></label>
                 <input type="password" placeholder="••••••••" style={S.input}
                   value={confirmAdminPassword}
                   onChange={e => setConfirmAdminPassword(e.target.value)} />
@@ -681,7 +681,7 @@ export default function SuperadminDashboard() {
               {/* Name + Plan */}
               <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
                 <div>
-                  <label style={S.label}>Company Alias</label>
+                  <label style={S.label}>Company Alias <span className="text-red-500">*</span></label>
                   <input style={S.input} value={tenantOps.company_name}
                     onChange={e => setTenantOps({ ...tenantOps, company_name: e.target.value })} />
                 </div>

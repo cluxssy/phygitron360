@@ -48,8 +48,8 @@ async def submit_assessment(
         result_id = service.submit_assessment(data)
         return {"success": True, "data": {"result_id": result_id}, "message": "Submission received"}
     except Exception as e:
-        logger.error(f"submit_assessment error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to submit assessment: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while submitting your assessment. Please try again.")
 
 @router.get("/recent")
 def list_recent_submissions(

@@ -1860,7 +1860,7 @@ export default function SourceDashboard() {
       {showNewRole && (
         <Modal onClose={() => setShowNewRole(false)} title={newRole.id ? "Edit Job Role" : "Create Job Role"}>
           <form onSubmit={handleSaveRole} className="flex flex-col gap-5">
-            <Field label="Role Title *">
+            <Field label="Role Title" required>
               <input required className="form-input" placeholder="e.g. Senior Backend Engineer" value={newRole.title} onChange={e => setNewRole(r => ({ ...r, title: e.target.value }))} />
             </Field>
             <Field label="Description">
@@ -1934,7 +1934,7 @@ export default function SourceDashboard() {
         <Modal onClose={() => setShowScore(false)} title={`Score ${selectedIds.size} candidate${selectedIds.size > 1 ? 's' : ''}`}>
           <form onSubmit={handleScore} className="flex flex-col gap-5">
             <p className="text-sm text-gray-500">Run AI fit analysis for selected candidates against a job role.</p>
-            <Field label="Job Role *">
+            <Field label="Job Role" required>
               <select required className="form-input" value={scoreRoleId} onChange={e => setScoreRoleId(e.target.value)}>
                 <option value="">Select role...</option>
                 {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
@@ -1954,7 +1954,7 @@ export default function SourceDashboard() {
       {showInvite && (
         <Modal onClose={() => setShowInvite(false)} title={`Invite ${selectedIds.size} candidate${selectedIds.size > 1 ? 's' : ''}`}>
           <form onSubmit={handleInvite} className="flex flex-col gap-5">
-            <Field label="Job Role *">
+            <Field label="Job Role" required>
               <select required className="form-input" value={inviteForm.role_id} onChange={e => setInviteForm(f => ({ ...f, role_id: e.target.value }))}>
                 <option value="">Select role...</option>
                 {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
@@ -2094,10 +2094,10 @@ function Modal({ children, title, onClose }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, required = false }) {
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-xs font-medium text-gray-500">{label}</label>
+      <label className="text-xs font-medium text-gray-500">{label} {required && <span className="text-red-500">*</span>}</label>
       {children}
     </div>
   );

@@ -46,8 +46,8 @@ def create_question(
         q_id = service.create_question(data)
         return {"success": True, "data": {"id": q_id}, "message": "Question added to bank"}
     except Exception as e:
-        logger.error(f"Error creating question: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to create question: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while saving the question. Please try again.")
 
 @router.get("")
 def list_questions(
@@ -110,8 +110,8 @@ async def import_url(
         count = await service.import_from_url(body.url, current_user["id"], body.topic, body.tags)
         return {"success": True, "data": {"added": count}, "message": f"Imported {count} questions successfully from URL"}
     except Exception as e:
-        logger.error(f"URL Import Error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.exception("Failed to import questions from URL: %s", e)
+        raise HTTPException(status_code=400, detail="Could not import questions from that URL. Please check the link and try again.")
 
 @router.post("/import-file")
 async def import_questions_from_file(

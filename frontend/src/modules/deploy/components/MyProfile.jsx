@@ -222,6 +222,7 @@ export default function MyProfile() {
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FileCard label="CV / Resume" path={details.cv_path} employeeCode={details.employee_code} docType="cv" />
                     <FileCard label="ID Compliance" path={details.id_proofs} employeeCode={details.employee_code} docType="id_proof" />
+                    <FileCard label="Bank Passbook" path={details.passbook_path} employeeCode={details.employee_code} docType="passbook" />
                 </div>
               </div>
 
@@ -326,6 +327,10 @@ export default function MyProfile() {
                     <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">PAN No.</p>
                         <p className="text-xs text-black uppercase">{details.pan_no || 'Not recorded'}</p>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">IFSC Code</p>
+                        <p className="text-xs text-black uppercase">{details.ifsc_code || 'Not recorded'}</p>
                     </div>
                 </div>
               </div>

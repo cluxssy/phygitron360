@@ -338,8 +338,8 @@ export default function CorrectionSystem({ isManager }) {
                             </div>
                             
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Reason</label>
-                                <textarea 
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Reason <span className="text-red-500">*</span></label>
+                                <textarea
                                     required
                                     rows="4"
                                     placeholder="Explain why this correction is needed..."

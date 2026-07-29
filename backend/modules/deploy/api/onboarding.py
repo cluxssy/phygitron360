@@ -7,6 +7,9 @@ from backend.common.services.storage_service import save_uploaded_file
 import os
 import shutil
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 
@@ -21,7 +24,8 @@ def send_invite(invite: InviteRequest, current_user: dict = Depends(require_perm
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to send onboarding invite: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while sending the invite. Please try again.")
 
 @router.get("/invites", dependencies=[Depends(require_module("deploy"))])
 def get_invites(current_user: dict = Depends(require_permission("deploy.onboarding.view")), service: OnboardingService = Depends(get_service)):
@@ -64,18 +68,21 @@ def complete_onboarding(
     bank_name: str = Form(...),
     bank_account_no: str = Form(...),
     pan_no: str = Form(...),
+    ifsc_code: str = Form(...),
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
+    passbook_file: UploadFile = File(None),
     service: OnboardingService = Depends(get_service)
 ):
     temp_id = token
-    
+
     # For unauthenticated completion, files go to a public temp directory until approved
     p_path = save_uploaded_file(photo_file, 'public', 'deploy', 'temp_onboarding', temp_id, 'pfp') if photo_file else ''
     c_path = save_uploaded_file(cv_file, 'public', 'deploy', 'temp_onboarding', temp_id, 'cv') if cv_file else ''
     i_path = save_uploaded_file(id_proof_file, 'public', 'deploy', 'temp_onboarding', temp_id, 'id') if id_proof_file else ''
-    
+    pb_path = save_uploaded_file(passbook_file, 'public', 'deploy', 'temp_onboarding', temp_id, 'passbook') if passbook_file else ''
+
     emp_data = {
         "contact_number": contact_number,
         "emergency_contact": emergency_contact,
@@ -89,13 +96,15 @@ def complete_onboarding(
         "secondary_skills": secondary_skills,
         "bank_name": bank_name,
         "bank_account_no": bank_account_no,
-        "pan_no": pan_no
+        "pan_no": pan_no,
+        "ifsc_code": ifsc_code
     }
-    
+
     file_metadata = {
         "photo": p_path,
         "cv": c_path,
-        "id_proof": i_path
+        "id_proof": i_path,
+        "passbook": pb_path
     }
     
     try:
@@ -103,7 +112,8 @@ def complete_onboarding(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to complete onboarding: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while completing your onboarding. Please try again.")
 
 from backend.core.dependencies import get_current_user
 
@@ -169,7 +179,8 @@ def onboard_admin(
     try:
         return service.unify_admin_identity(user_id, username, emp_data, file_metadata, tenant_id=tenant_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to unify admin identity during onboarding: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while saving your details. Please try again.")
 
 @router.get("/approvals", dependencies=[Depends(require_module("deploy"))])
 def get_pending_approvals(current_user: dict = Depends(require_permission("deploy.onboarding.view")), service: OnboardingService = Depends(get_service)):
@@ -184,17 +195,19 @@ def update_pending_approval(
 ):
     """Edit a pending-approval employee's details before final approval.
 
-    Bank name/account number are intentionally excluded here regardless of
-    what the client sends — HR cannot edit those fields from this panel.
+    Bank name/account number/IFSC are intentionally excluded here regardless
+    of what the client sends — HR cannot edit those fields from this panel.
     """
     from backend.modules.deploy.services.employee_service import EmployeeService
     tenant_id = current_user.get("tenant_id", "public")
     data.pop("bank_name", None)
     data.pop("bank_account_no", None)
+    data.pop("ifsc_code", None)
     try:
         return EmployeeService(tenant_id=tenant_id).update_employee(employee_code, data)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to update pending-approval employee %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while saving these changes. Please try again.")
 
 @router.post("/reject/{employee_code}", dependencies=[Depends(require_module("deploy"))])
 def reject_pending_approval(
@@ -210,7 +223,8 @@ def reject_pending_approval(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to reject pending approval for %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while rejecting this submission. Please try again.")
 
 @router.post("/approve/{employee_code}", dependencies=[Depends(require_module("deploy"))])
 def approve_onboarding(
@@ -242,9 +256,8 @@ def approve_onboarding(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to approve onboarding for %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while approving this employee. Please try again.")
 
 @router.post("/approve-section/{employee_code}", dependencies=[Depends(require_module("deploy"))])
 def approve_onboarding_section(

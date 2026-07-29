@@ -164,7 +164,7 @@ function ImportUrlModal({ onClose, onImport, uniqueTopics }) {
         </p>
         
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Page URL *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Page URL <span className="text-red-500">*</span></label>
           <input 
             type="url" 
             value={url} 
@@ -290,7 +290,7 @@ function ManualEntryModal({ onClose, onSaved, uniqueTopics, initialData = null }
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Question Text *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Question Text <span className="text-red-500">*</span></label>
           <textarea className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" rows={4} value={form.question_text} onChange={e=>set('question_text',e.target.value)} placeholder="Enter question..." />
         </div>
 

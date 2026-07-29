@@ -193,8 +193,8 @@ async def auto_rank_candidates(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as exc:
-        logger.error(f"auto_rank({role_id}) failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"auto_rank({role_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while starting scoring for this role. Please try again.")
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +217,8 @@ def score_candidates(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"score_candidates(role={body.role_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while scoring these candidates. Please try again.")
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +254,8 @@ def send_invites(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"send_invites failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while sending invites. Please try again.")
 
 
 @router.post("/cancel-invite", dependencies=[Depends(require_permission("source.jobs.manage"))])
@@ -272,8 +274,8 @@ def cancel_invites(
             "data": result,
         }
     except Exception as exc:
-        logger.error(f"cancel_invites failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"cancel_invites failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while cancelling invites. Please try again.")
 
 
 @router.get("/invite-status/{job_role_id}", dependencies=[Depends(require_permission("source.jobs.manage"))])
@@ -286,5 +288,5 @@ def get_invite_status(
         invites = service.get_invite_status(job_role_id)
         return {"success": True, "data": invites}
     except Exception as exc:
-        logger.error(f"get_invite_status({job_role_id}) failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(f"get_invite_status({job_role_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while loading invite status. Please try again.")

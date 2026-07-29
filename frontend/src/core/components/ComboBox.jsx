@@ -8,7 +8,8 @@ export default function ComboBox({
     placeholder = 'Select...', 
     label = '',
     allowCustom = true,
-    className = ""
+    className = "",
+    required = false
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -54,7 +55,7 @@ export default function ComboBox({
             {label && (
                 <label className={`text-[9px] font-black uppercase tracking-widest ml-2 ${
                     isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'
-                }`}>{label}</label>
+                }`}>{label} {required && <span className="text-red-500">*</span>}</label>
             )}
             
             <div 

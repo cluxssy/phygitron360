@@ -19,6 +19,7 @@ TEXT_FIELDS = {
     'bank_name': 'Bank Name',
     'bank_account_no': 'Bank Account No.',
     'pan_no': 'PAN No.',
+    'ifsc_code': 'IFSC Code',
     'primary_skillset': 'Primary Skillset',
     'secondary_skillset': 'Secondary Skillset',
 }
@@ -29,6 +30,7 @@ DOCUMENT_FIELDS = {
     'photo_path': ('Photo', 'photo_path', 'pfp'),
     'cv_path': ('Resume / CV', 'cv_path', 'resume'),
     'id_proofs': ('ID Proof', 'id_proofs', 'identification_docs'),
+    'passbook_path': ('Bank Passbook', 'passbook_path', 'passbook'),
 }
 
 
