@@ -36,22 +36,22 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
   const MODULES = [
     {
       id: 'source',
-      label: 'Source',
+      label: 'Talent Central',
       desc: 'Hiring & candidate management'
     },
     {
       id: 'forge',
-      label: 'Forge',
+      label: 'Learning Central',
       desc: 'Training & skill development'
     },
     {
       id: 'verify',
-      label: 'Verify',
+      label: 'Assessment Central',
       desc: 'Assessments & validation tools'
     },
     {
       id: 'deploy',
-      label: 'Deploy',
+      label: 'Employee Central',
       desc: 'Employees & organisation management'
     },
   ];

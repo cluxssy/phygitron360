@@ -18,6 +18,7 @@ import AdminPanel from "../components/AdminPanel";
 // ── Import the notification hook ──
 import { useNotifications } from "../../../core/context/NotificationContext";
 import useTabListKeyNav from "../../../core/hooks/useTabListKeyNav";
+import { getInitials } from "../../../core/utils/nameHelpers";
 
 axios.defaults.withCredentials = true;
 
@@ -268,7 +269,11 @@ export default function OrgDashboard() {
           />
           <div className="profile-wrap">
             <div className="avatar">
-              {displayName?.charAt(0)?.toUpperCase()}
+              {user?.photo_path ? (
+                <img src={`/api/employee/${user.employee_code}/document/pfp`} alt="" />
+              ) : (
+                getInitials(displayName)
+              )}
             </div>
             <div className="profile-text">
               <h4>{displayName}</h4>
@@ -521,12 +526,12 @@ export default function OrgDashboard() {
                   <thead>
                     <tr style={{ borderBottom: "1px solid #eaeaea" }}>
                       <th style={{ paddingBottom: "12px" }}>User</th>
-                      <th style={{ paddingBottom: "12px" }}>Role</th>
-                      <th style={{ paddingBottom: "12px" }}>Last Active</th>
+                      <th style={{ paddingBottom: "12px", paddingRight: "48px", width: "1%", whiteSpace: "nowrap", textAlign: "center" }}>Role</th>
+                      <th style={{ paddingBottom: "12px", paddingRight: "24px", width: "1%", whiteSpace: "nowrap", textAlign: "center" }}>Last Active</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {team.map((u, i) => {
+                    {[...team].sort((a, b) => (a.username || a.name || a.email || '').localeCompare(b.username || b.name || b.email || '')).map((u, i) => {
                       const cellStyle = {
                         padding: "14px 0",
                         verticalAlign: "middle",
@@ -553,14 +558,14 @@ export default function OrgDashboard() {
                                 color: "#000",
                               }}
                             >
-                              {(u.username || u.email)?.charAt(0)?.toUpperCase()}
+                              {getInitials(u.username || u.name || u.email)}
                             </div>
                             <div style={{ fontWeight: 600 }}>
                               {u.username || u.name || u.email}
                             </div>
                           </div>
                         </td>
-                        <td style={cellStyle}>
+                        <td style={{ ...cellStyle, paddingRight: "48px", width: "1%", whiteSpace: "nowrap", textAlign: "center" }}>
                           <span
                             style={{
                               display: "inline-block",
@@ -576,7 +581,7 @@ export default function OrgDashboard() {
                             {u.role}
                           </span>
                         </td>
-                        <td style={{ ...cellStyle, color: "#666", fontSize: "14px" }}>
+                        <td style={{ ...cellStyle, color: "#666", fontSize: "14px", paddingRight: "24px", width: "1%", whiteSpace: "nowrap", textAlign: "center" }}>
                           {u.last_active ? new Date(u.last_active).toLocaleDateString() : "-"}
                         </td>
                       </tr>

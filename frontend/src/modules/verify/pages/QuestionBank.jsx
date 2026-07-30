@@ -3,6 +3,7 @@ import { Plus, Loader2, RefreshCw, Filter, Trash2, Edit3, Search, UploadCloud, L
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useOverlayClose from '../../../core/hooks/useOverlayClose';
 import { useAuth } from '../../../core/auth/AuthContext';
 
 const QTYPES = [
@@ -15,8 +16,9 @@ const QTYPES = [
 
 function Modal({ onClose, title, children, maxWidth = "max-w-lg" }) {
   useEscapeClose(onClose);
+  const overlayHandlers = useOverlayClose(onClose);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...overlayHandlers}>
       <div className={`bg-white rounded-2xl w-full ${maxWidth} p-8 relative shadow-2xl border border-gray-200 my-8`} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">{title}</h2>

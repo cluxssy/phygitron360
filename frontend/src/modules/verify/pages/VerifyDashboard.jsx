@@ -21,6 +21,7 @@ import logoutIcon from "../../../assets/exit.png";
 import { getHubTabs } from "../../../core/navigation/hubTabs";
 import { useNotifications } from '../../../core/context/NotificationContext';
 import { P } from '../../../core/permissions';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 export default function VerifyDashboard() {
   const { user, hasPermission, hasRole, logout } = useAuth();
@@ -151,7 +152,13 @@ export default function VerifyDashboard() {
             onClick={() => { logout(); navigate('/'); }}
           />
           <div className="profile-wrap">
-            <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>
+            <div className="avatar">
+              {user?.photo_path ? (
+                <img src={`/api/employee/${user.employee_code}/document/pfp`} alt="" />
+              ) : (
+                getInitials(displayName)
+              )}
+            </div>
             <div className="profile-text">
               <h4>{displayName}</h4>
               <p>{getRoleDisplay()}</p>

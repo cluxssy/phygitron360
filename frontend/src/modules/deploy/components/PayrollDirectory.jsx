@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { P } from '../../../core/permissions';
 import FinanceReviewPanel from './FinanceReviewPanel';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 // Same status normalization as EmployeeDirectory.jsx, kept local since it
 // isn't exported from there.
@@ -62,6 +63,10 @@ export default function PayrollDirectory() {
       employeeEmail.toLowerCase().includes(s);
     const matchTeam = filterTeam === 'All' || (e.team || 'Unassigned') === filterTeam;
     return matchSearch && matchTeam;
+  }).sort((a, b) => {
+    const nameA = a.name || a.full_name || a.username || '';
+    const nameB = b.name || b.full_name || b.username || '';
+    return nameA.localeCompare(nameB);
   });
 
   const teams = ['All', ...new Set(activeEmployees.map(e => e.team).filter(Boolean))];
@@ -146,7 +151,7 @@ export default function PayrollDirectory() {
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              employeeName?.[0]?.toUpperCase()
+                              getInitials(employeeName)
                             )}
                           </div>
                           {!['1', 1, true].includes(emp.finance_approved) && (

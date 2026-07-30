@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import ChangePasswordModal from '../../../core/auth/ChangePasswordModal';
@@ -6,8 +6,10 @@ import RequestEditsModal from './RequestEditsModal';
 import {
   MapPin, Phone, Mail, Calendar, Key, AlertCircle,
   CheckCircle, Edit3, TrendingUp,
-  Landmark, FileText, ExternalLink, Package, Download, Clock
+  Landmark, FileText, ExternalLink, Package, Download, Clock, Home,
+  Upload, Trash2
 } from 'lucide-react';
+import { MAX_FILE_SIZE, validateFile } from '../../../core/utils/validators';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 
 export default function MyProfile() {
@@ -19,6 +21,8 @@ export default function MyProfile() {
   const [assets, setAssets] = useState(null);
   const [pendingRequest, setPendingRequest] = useState(null);
   const [rejectedRequest, setRejectedRequest] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoInputRef = useRef();
 
   useEffect(() => {
       if (user?.employee_code) {
@@ -73,6 +77,47 @@ export default function MyProfile() {
       });
     } catch { /* non-critical */ } finally {
       setRejectedRequest(null);
+    }
+  };
+
+  const handlePhotoSelected = async (file) => {
+    if (!file) return;
+    const error = validateFile(file, ['.jpg', '.jpeg', '.png', '.webp'], MAX_FILE_SIZE.image, 'Profile photo');
+    if (error) { toast.error(error); return; }
+
+    setPhotoBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('photo_file', file);
+      const res = await fetch(`/api/employee/${user.employee_code}/documents`, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Profile photo updated');
+      fetchDetails(user.employee_code);
+    } catch {
+      toast.error('Failed to upload photo');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setPhotoBusy(true);
+    try {
+      const res = await fetch(`/api/employee/${user.employee_code}/photo`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Profile photo removed');
+      fetchDetails(user.employee_code);
+    } catch {
+      toast.error('Failed to remove photo');
+    } finally {
+      setPhotoBusy(false);
     }
   };
 
@@ -147,7 +192,7 @@ export default function MyProfile() {
       {/* Profile Hero */}
       <div className="bg-white border border-[#ece4ff] rounded-[2rem] p-7 shadow-[0_10px_40px_rgba(180,140,255,0.08)] flex flex-col md:flex-row items-start gap-8 relative overflow-hidden">
 
-        <div className="w-24 h-24 rounded-[1.6rem] bg-gradient-to-br from-[#b784f7] to-[#8b5cf6] flex items-center justify-center text-white font-display font-black text-4xl shrink-0 shadow-[0_0_30px_rgba(204,151,255,0.2)] overflow-hidden">
+        <div className="group relative w-24 h-24 rounded-[1.6rem] bg-gradient-to-br from-[#b784f7] to-[#8b5cf6] flex items-center justify-center text-white font-display font-black text-4xl shrink-0 shadow-[0_0_30px_rgba(204,151,255,0.2)] overflow-hidden">
             {details.photo_path ? (
                 <img
                   src={`/api/employee/${details.employee_code}/document/pfp`}
@@ -157,6 +202,37 @@ export default function MyProfile() {
             ) : (
                 details.name?.[0] || 'U'
             )}
+
+            {/* Hover overlay — upload/remove photo directly, no approval needed */}
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoBusy}
+                    title="Upload photo"
+                    className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-colors disabled:opacity-50"
+                >
+                    <Upload size={16} />
+                </button>
+                {details.photo_path && (
+                    <button
+                        type="button"
+                        onClick={handleRemovePhoto}
+                        disabled={photoBusy}
+                        title="Remove photo"
+                        className="p-2 rounded-lg bg-white/15 text-white hover:bg-red-500/70 transition-colors disabled:opacity-50"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                )}
+            </div>
+            <input
+                ref={photoInputRef}
+                type="file"
+                hidden
+                accept="image/jpeg,image/png,image/webp"
+                onChange={e => { handlePhotoSelected(e.target.files[0]); e.target.value = ''; }}
+            />
         </div>
 
         <div className="flex-1 space-y-4">
@@ -176,7 +252,7 @@ export default function MyProfile() {
             <ProfileField icon={Mail} label="Email" value={details.email_id} />
             <ProfileField icon={Phone} label="Contact" value={details.contact_number} />
             <ProfileField icon={MapPin} label="Work Location" value={details.location} />
-            <ProfileField icon={Calendar} label="DOJ" value={(details.doj || '').split('T')[0]} />
+            <ProfileField icon={Calendar} label="Date of Birth" value={(details.dob || '').split('T')[0]} />
           </div>
         </div>
       </div>
@@ -297,17 +373,44 @@ export default function MyProfile() {
           </div>
 
           <div className="space-y-6">
+              {/* DOJ */}
+              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                    <Calendar size={12} className="text-[#7c3aed]" />
+                    <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">DOJ</p>
+                </div>
+                <p className="text-xs font-normal text-black">{(details.doj || '').split('T')[0] || '—'}</p>
+              </div>
+
               {/* Address Details */}
               <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8 shadow-sm">
-                <SectionHeader icon={Landmark} title="Geography" />
+                <SectionHeader icon={Home} title="Location Details" />
                 <div className="mt-6 space-y-4">
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Current Base</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Current Address</p>
                         <p className="text-xs text-black">{details.current_address || 'Unregistered'}</p>
                     </div>
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Permanent Anchor</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Permanent Address</p>
                         <p className="text-xs text-black">{details.permanent_address || 'Unregistered'}</p>
+                    </div>
+                </div>
+              </div>
+
+              {/* Emergency Contact */}
+              <div className="bg-white border border-[#ece4ff] rounded-[1.8rem] p-8 shadow-sm">
+                <SectionHeader icon={Phone} title="Emergency Contact" />
+                <div className="mt-6 space-y-4">
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Contact Name</p>
+                        <p className="text-xs text-black">
+                            {[details.emergency_contact_first_name, details.emergency_contact_middle_name, details.emergency_contact_last_name]
+                                .filter(Boolean).join(' ') || 'Not registered'}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-1">Contact Number</p>
+                        <p className="text-xs text-black">{details.emergency_contact || 'Not registered'}</p>
                     </div>
                 </div>
               </div>

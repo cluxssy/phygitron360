@@ -9,6 +9,7 @@ from backend.modules.deploy.services.notification_service import add_notificatio
 import os
 import shutil
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ def get_employee(employee_code: str, current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=403, detail="You can only view your own profile")
 
     if not (is_self or is_super or can_view_sensitive):
-        sensitive_fields = ['dob', 'contact_number', 'emergency_contact', 'current_address', 'permanent_address', 'cv_path', 'id_proofs']
+        sensitive_fields = ['dob', 'contact_number', 'emergency_contact', 'emergency_contact_first_name', 'emergency_contact_middle_name', 'emergency_contact_last_name', 'current_address', 'permanent_address', 'cv_path', 'id_proofs']
         for f in sensitive_fields:
             if f in employee and employee[f] is not None:
                 employee[f] = "***REDACTED***" if isinstance(employee[f], str) else None
@@ -191,6 +192,15 @@ async def create_employee(
     if passbook_file and passbook_file.filename:
         passbook_path = save_uploaded_file(passbook_file, tenant_id, 'deploy', 'passbook', code or 'unknown', 'passbook')
 
+    parsed_education_details = []
+    if education_details:
+        try:
+            parsed = json.loads(education_details)
+            if isinstance(parsed, list):
+                parsed_education_details = parsed
+        except json.JSONDecodeError:
+            pass
+
     data = {
         "first_name": first_name,
         "middle_name": middle_name,
@@ -212,7 +222,7 @@ async def create_employee(
         "pf": pf,
         "mediclaim": mediclaim,
         "notes": notes,
-        "education_details": education_details,
+        "education_details": parsed_education_details,
         "primary_skillset": primary_skillset,
         "secondary_skillset": secondary_skillset,
         "experience_years": experience_years,
@@ -224,7 +234,7 @@ async def create_employee(
     }
 
     try:
-        return service.create_employee(data)
+        return service.create_employee(data, actor=current_user.get('username', 'system'))
     except ValueError as e:
          raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -337,6 +347,33 @@ async def upload_documents(
     except Exception as e:
         logger.exception("Failed to upload documents for employee %s: %s", employee_code, e)
         raise HTTPException(status_code=500, detail="Something went wrong while uploading these documents. Please try again.")
+
+@router.delete("/employee/{employee_code}/photo")
+async def remove_employee_photo(
+    employee_code: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Clears an employee's profile photo. Self-service, no approval needed."""
+    role = current_user.get('role')
+    perms = current_user.get('permissions', {})
+    can_manage_docs = (
+        bool(perms.get('deploy.employees.manage_documents')) or
+        bool(perms.get('deploy.onboarding.review_submissions')) or
+        bool(perms.get('deploy.employees.edit_basic'))
+    ) if isinstance(perms, dict) else role in ('super_admin', 'org_admin')
+    is_self = current_user.get('employee_code') == employee_code
+
+    if not (can_manage_docs or is_self):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to manage documents")
+
+    tenant_id = current_user.get('tenant_id', 'public')
+    service = get_service(tenant_id)
+    try:
+        service.repo.update_employee_fields(employee_code, ['photo_path'], [None], tenant_id)
+        return {"message": "Photo removed"}
+    except Exception as e:
+        logger.exception("Failed to remove photo for employee %s: %s", employee_code, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while removing the photo. Please try again.")
 
 @router.get("/employee-edit-requests/pending", dependencies=[Depends(require_permission(["deploy.employees.view_list", "deploy.employees.view_team"]))])
 def list_pending_edit_requests(current_user: dict = Depends(get_current_user)):
@@ -486,7 +523,7 @@ def delete_employee(employee_code: str, current_user: dict = Depends(get_current
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     try:
-        return service.delete_employee(employee_code)
+        return service.delete_employee(employee_code, actor=current_user.get('username', 'system'))
     except ValueError as e:
          raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -504,7 +541,7 @@ def offboard_employee(employee_code: str, data: OffboardRequest, current_user: d
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     try:
-        result = service.offboard_employee(employee_code, data)
+        result = service.offboard_employee(employee_code, data, actor=current_user.get('username', 'system'))
         add_notification(
             title="Offboarding Initiated",
             message="Your offboarding process has been initiated. Please complete any pending exit formalities and return company assets.",

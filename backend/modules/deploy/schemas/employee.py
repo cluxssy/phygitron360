@@ -26,6 +26,9 @@ class EmployeeFullProfile(BaseModel):
     dob: Optional[str] = None
     contact_number: Optional[str] = None
     emergency_contact: Optional[str] = None
+    emergency_contact_first_name: Optional[str] = None
+    emergency_contact_middle_name: Optional[str] = None
+    emergency_contact_last_name: Optional[str] = None
     email_id: Optional[str] = None
     doj: Optional[str] = None 
     team: Optional[str] = None
@@ -68,6 +71,9 @@ class UpdateEmployeeRequest(BaseModel):
     team: Optional[str] = None
     contact_number: Optional[str] = None
     emergency_contact: Optional[str] = None
+    emergency_contact_first_name: Optional[str] = None
+    emergency_contact_middle_name: Optional[str] = None
+    emergency_contact_last_name: Optional[str] = None
     current_address: Optional[str] = None
     permanent_address: Optional[str] = None
     dob: Optional[str] = None

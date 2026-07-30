@@ -14,6 +14,8 @@ import {
   isValidUrl,
 } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useOverlayClose from '../../../core/hooks/useOverlayClose';
+import useUnsavedChangesWarning from '../../../core/hooks/useUnsavedChangesWarning';
 import { useAuth } from '../../../core/auth/AuthContext';
 
 const LEVEL_COLOR = {
@@ -61,6 +63,9 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
   // Offer state
   const [showOfferForm, setShowOfferForm] = useState(false);
+  const offerOverlayHandlers = useOverlayClose(() => setShowOfferForm(false));
+  useUnsavedChangesWarning(showOfferForm);
+  const drawerOverlayHandlers = useOverlayClose(onClose);
   const [offerDetails, setOfferDetails] = useState({ 
     role_title: '', 
     salary: '', 
@@ -378,7 +383,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       {/* Backdrop - only covers the content area, not the sidebars */}
       <div
         className="fixed inset-0 z-[100] left-0 lg:left-[368px]"
-        onClick={onClose}
+        {...drawerOverlayHandlers}
       />
 
       {/* Drawer panel */}
@@ -919,7 +924,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
       {/* ── OFFER MODAL - WHITE/PURPLE THEME ── */}
       {showOfferForm && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowOfferForm(false)}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" {...offerOverlayHandlers}>
           <div className="bg-white w-full max-w-2xl rounded-3xl p-5 sm:p-10 relative max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             
             {/* Close Button */}

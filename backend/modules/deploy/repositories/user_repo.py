@@ -10,7 +10,7 @@ class UserRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
                 cur.execute("""
-                    SELECT u.*, e.name as employee_name, e.first_name as employee_first_name,
+                    SELECT u.*, e.name as employee_name, e.first_name as employee_first_name, e.photo_path as employee_photo_path,
                            c.full_name as candidate_name, c.first_name as candidate_first_name
                     FROM users u
                     LEFT JOIN employees e ON u.employee_code = e.employee_code
@@ -165,7 +165,7 @@ class UserRepository:
                  cur.execute(f'SET search_path TO "{tenant_id}"')
                  cur.execute("""
                     SELECT u.id as user_id, u.username, u.role, u.roles, u.templates, u.employee_code, u.is_active,
-                           e.name as employee_name, e.first_name as employee_first_name,
+                           e.name as employee_name, e.first_name as employee_first_name, e.photo_path as employee_photo_path,
                            c.full_name as candidate_name, c.first_name as candidate_first_name
                     FROM users u
                     LEFT JOIN employees e ON u.employee_code = e.employee_code

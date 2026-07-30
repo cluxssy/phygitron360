@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Send, User, MapPin, Mail, Loader2, MessageSquare, CheckCircle, Bell, UserX } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
   const [subject, setSubject] = useState('');
@@ -85,7 +86,7 @@ export default function ActiveTraineeModal({ trainee, onClose, onRefresh }) {
           </button>
           
           <div className="w-24 h-24 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary font-display font-black text-3xl mb-4 mt-8 md:mt-0 shadow-lg shadow-primary/20">
-            {(trainee.full_name || 'T').charAt(0).toUpperCase()}
+            {getInitials(trainee.full_name) || 'T'}
           </div>
           
           <h2 className="text-xl font-bold text-slate-900 mb-1">{trainee.full_name || 'Unknown Trainee'}</h2>

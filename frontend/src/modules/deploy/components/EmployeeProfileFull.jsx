@@ -4,10 +4,11 @@ import {
   ShieldCheck, FileText, User, ChevronRight,
   TrendingUp, Award, Clock, ArrowLeft, Download,
   ExternalLink, Building, Landmark, GraduationCap,
-  Save, Edit3, Image, Upload, Trash2, Package, CheckCircle, Key, AlertTriangle, Plus
+  Save, Edit3, Image, Upload, Trash2, Package, CheckCircle, Key, AlertTriangle, Plus, Home
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import ComboBox from '../../../core/components/ComboBox';
+import useUnsavedChangesWarning from '../../../core/hooks/useUnsavedChangesWarning';
 import HasPermission from '../../../components/common/HasPermission';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { useAuth } from '../../../core/auth/AuthContext';
@@ -21,7 +22,7 @@ import {
   isValidDate,
   isDateAfter,
   isValidURL,
-  isPositiveNumber
+  isNonNegativeNumber
 } from '../../../core/utils/validators';
 
 // Splits a combined display name into first/middle/last, for records where
@@ -40,7 +41,7 @@ const splitFullName = (fullName) => {
 const hasEducationDetails = (edu) => {
     try {
         const parsed = typeof edu === 'string' ? JSON.parse(edu) : edu;
-        return Array.isArray(parsed) && parsed.length > 0;
+        return Array.isArray(parsed) && parsed.some(e => e && (e.degree || e.university || e.year || e.percentage));
     } catch {
         return false;
     }
@@ -85,6 +86,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const [details, setDetails] = useState(null);
     const [loading, setLoading] = useState(true);
     const [editMode, setEditMode] = useState(false);
+    useUnsavedChangesWarning(editMode);
     const [formData, setFormData] = useState({});
     const [assets, setAssets] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -122,6 +124,31 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
       return !EXITED_STATUSES.includes(currentStatus);
     };
 
+    // Shapes a raw /api/employee record into the edit form's shape — used both
+    // after a fetch and to revert formData back to last-saved state on Abort.
+    const buildFormData = (data) => {
+        // Legacy/seeded rows may only have the combined `name` column
+        // populated, with first/middle/last never split out — fall back to
+        // splitting `name` so the edit form isn't blank for those employees.
+        const needsNameSplit = !(data.first_name && data.last_name);
+        const nameParts = needsNameSplit ? splitFullName(data.name) : {};
+        return {
+            ...data,
+            ...(needsNameSplit ? {
+                first_name: data.first_name || nameParts.first_name,
+                middle_name: data.middle_name || nameParts.middle_name,
+                last_name: data.last_name || nameParts.last_name,
+            } : {}),
+            primary_skillset: data.skill_matrix?.primary_skillset || '',
+            secondary_skillset: data.skill_matrix?.secondary_skillset || '',
+            experience_years: data.skill_matrix?.experience_years || '0',
+            doj: (data.doj || '').split('T')[0],
+            dob: (data.dob || '').split('T')[0],
+            pf_included: ['Yes', 'yes', 'true', '1', true].includes(data.pf_included),
+            mediclaim_included: ['Yes', 'yes', 'true', '1', true].includes(data.mediclaim_included),
+        };
+    };
+
     const fetchDetails = async (code) => {
         try {
             setLoading(true);
@@ -129,26 +156,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             if (!res.ok) throw new Error();
             const data = await res.json();
             setDetails(data);
-            // Legacy/seeded rows may only have the combined `name` column
-            // populated, with first/middle/last never split out — fall back to
-            // splitting `name` so the edit form isn't blank for those employees.
-            const needsNameSplit = !(data.first_name && data.last_name);
-            const nameParts = needsNameSplit ? splitFullName(data.name) : {};
-            setFormData({
-                ...data,
-                ...(needsNameSplit ? {
-                    first_name: data.first_name || nameParts.first_name,
-                    middle_name: data.middle_name || nameParts.middle_name,
-                    last_name: data.last_name || nameParts.last_name,
-                } : {}),
-                primary_skillset: data.skill_matrix?.primary_skillset || '',
-                secondary_skillset: data.skill_matrix?.secondary_skillset || '',
-                experience_years: data.skill_matrix?.experience_years || '0',
-                doj: (data.doj || '').split('T')[0],
-                dob: (data.dob || '').split('T')[0],
-                pf_included: ['Yes', 'yes', 'true', '1', true].includes(data.pf_included),
-                mediclaim_included: ['Yes', 'yes', 'true', '1', true].includes(data.mediclaim_included),
-            });
+            setFormData(buildFormData(data));
         } catch {
             toast.error('Failed to load employee profile');
         } finally {
@@ -211,7 +219,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         }
 
         // Experience validation - only if filled
-        if (formData.experience_years && !isPositiveNumber(formData.experience_years)) {
+        if (formData.experience_years && !isNonNegativeNumber(formData.experience_years)) {
             newErrors.experience_years = 'Experience years must be a positive number';
         }
 
@@ -235,6 +243,20 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
+    };
+
+    // The dropdown from /api/options only lists roles eligible to be picked as a
+    // *new* manager. An employee's *current* manager may not have such a role
+    // (e.g. was demoted, or never had one) — without this, the <select> can't
+    // match formData.reporting_manager to any <option> and silently falls back
+    // to the "Select Manager" placeholder even though a manager is assigned.
+    const getManagerOptions = () => {
+        const options = managers.map(m => ({ label: m.name, value: m.code }));
+        const currentCode = formData.reporting_manager;
+        if (currentCode && !options.some(o => o.value === currentCode)) {
+            options.push({ label: currentCode, value: currentCode });
+        }
+        return options;
     };
 
     // ── Education list helpers (structured degree/university/year/percentage) ──
@@ -277,19 +299,15 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     if (!details) return null;
 
     const handleSave = async () => {
-    // ── REMOVED: This was blocking save ──
-    // if (!validateForm()) {
-    //     const firstError = Object.keys(errors)[0];
-    //     if (firstError) {
-    //         const el = document.getElementById(`field-${firstError}`);
-    //         if (el) el.focus();
-    //     }
-    //     toast.error('Please fix the errors before saving');
-    //     return;
-    // }
-
-    // ── NEW: Just validate silently, but don't block ──
-    validateForm(); // This just sets errors state, doesn't block
+    if (!validateForm()) {
+        const firstError = Object.keys(errors)[0];
+        if (firstError) {
+            const el = document.getElementById(`field-${firstError}`);
+            if (el) el.focus();
+        }
+        toast.error('Please fix the errors before saving');
+        return;
+    }
 
     setIsSaving(true);
     try {
@@ -301,6 +319,9 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             email_id:         formData.email_id,
             contact_number:   formData.contact_number,
             emergency_contact: formData.emergency_contact,
+            emergency_contact_first_name:  formData.emergency_contact_first_name,
+            emergency_contact_middle_name: formData.emergency_contact_middle_name,
+            emergency_contact_last_name:   formData.emergency_contact_last_name,
             current_address:  formData.current_address,
             permanent_address: formData.permanent_address,
             dob:              formData.dob,
@@ -490,8 +511,12 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 <div className="flex gap-3">
                     {editMode ? (
                         <>
-                            <button 
-                                onClick={() => setEditMode(false)}
+                            <button
+                                onClick={() => {
+                                    setFormData(buildFormData(details));
+                                    setErrors({});
+                                    setEditMode(false);
+                                }}
                                 className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-black/90 hover:bg-[#faf7ff] transition-all"
                             >
                                 Abort
@@ -663,7 +688,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <Mail size={12} className="text-[#7c3aed]" />
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Email</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF] flex items-center gap-1.5">Email {!details.email_id && <MissingMark />}</p>
     </div>
     {editBasic ? (
         <div>
@@ -745,10 +770,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Employee Statistics */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editJob} onChange={v => setFormData({...formData, doj: v})} error={errors.doj} missing={!details.doj} />
-                        <EditStatCard label="Contract" value={formData.employment_type} sub="Engagement Mode" editMode={editJob} onChange={v => setFormData({...formData, employment_type: v})} />
-                        <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editJob} onChange={v => setFormData({...formData, experience_years: v})} error={errors.experience_years} />
-                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Manager" editMode={editJob} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} missing={!details.reporting_manager} />
+                        <EditStatCard label="Date of Joining (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editJob} onChange={v => setFormData({...formData, doj: v})} error={errors.doj} missing={!details.doj} />
+                        <EditStatCard label="Engagement Mode" sentenceCase value={formData.employment_type} sub="" editMode={editJob} onChange={v => setFormData({...formData, employment_type: v})} missing={!details.employment_type} />
+                        <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editJob} onChange={v => setFormData({...formData, experience_years: v})} error={errors.experience_years} missing={!details.skill_matrix?.experience_years} />
+                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Manager" editMode={editJob} type="select" options={getManagerOptions()} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} missing={!details.reporting_manager} />
                     </div>
 
                     {/* Skill Synergy */}
@@ -778,7 +803,9 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-[#7B1FFF] mb-4 italic">secondary SKILL</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#7B1FFF] mb-4 italic flex items-center gap-1.5">
+                                    secondary SKILL {!details.skill_matrix?.secondary_skillset && <MissingMark />}
+                                </p>
                                 {editBasic ? (
                                     <textarea 
                                         value={formData.secondary_skillset}
@@ -866,7 +893,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 (() => {
                                     let edu = details.education_details;
                                     try { if (typeof edu === 'string') edu = JSON.parse(edu); } catch { return null; }
-                                    
+                                    if (Array.isArray(edu)) {
+                                        edu = edu.filter(e => e && (e.degree || e.university || e.year || e.percentage));
+                                    }
+
                                     if (Array.isArray(edu) && edu.length > 0) {
                                         return edu.map((e, i) => (
                                             <div key={i} className="flex gap-6 items-start p-6 bg-gradient-to-r from-[#f7f3ff] to-[#faf7ff] rounded-2xl border border-[#e9ddff] hover:border-primary/30 hover:bg-primary/5 transition-all group shadow-sm hover:shadow-md hover:shadow-primary/10">
@@ -1033,28 +1063,6 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     </div>
                     )}
 
-                    {/* Notes */}
-                    {details?._meta?.can_view_sensitive !== false && (
-                    <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={FileText} title="Operator Notes" />
-                        <div className="mt-6">
-                            {editBasic ? (
-                                <textarea
-                                    value={formData.notes || ''}
-                                    onChange={e => setFormData({...formData, notes: e.target.value})}
-                                    className="w-full bg-gradient-to-br from-[#f7f3ff] to-[#faf7ff] border border-[#e9ddff] rounded-xl p-4 text-xs text-black focus:outline-none focus:border-primary"
-                                    rows={5}
-                                    placeholder="Internal notes..."
-                                />
-                            ) : (
-                                <p className="text-xs text-black/80 leading-relaxed bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
-                                    {details.notes || 'No operator notes recorded.'}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                    )}
-
                 </div>
                 {/* ── END LEFT COLUMN ── */}
 
@@ -1064,11 +1072,11 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     {/* Geographic Anchors */}
                     {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={Landmark} title="Location details" />
+                        <SectionHeader icon={Home} title="Location details" />
                         <div className="mt-6 space-y-6">
                             <div>
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
-                                    Work Location {!details.current_address && <MissingMark />}
+                                    Current Address {!details.current_address && <MissingMark />}
                                 </p>
                                 {editBasic ? (
                                     <div>
@@ -1088,7 +1096,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                             </div>
                             <div>
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
-                                    Permanent Identity Anchor {!details.permanent_address && <MissingMark />}
+                                    Permanent Address {!details.permanent_address && <MissingMark />}
                                 </p>
                                 {editBasic ? (
                                     <div>
@@ -1116,8 +1124,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={Landmark} title="Financial Info" />
                         <div className="mt-6 space-y-6">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
-                                    Bank Name
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
+                                    Bank Name {!details.bank_name && <MissingMark />}
                                 </p>
                                 {editFinancial ? (
                                     <input
@@ -1134,8 +1142,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
-                                    Bank Account No.
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
+                                    Bank Account No. {!details.bank_account_no && <MissingMark />}
                                 </p>
                                 {editFinancial ? (
                                     <div>
@@ -1184,28 +1192,68 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     {/* Emergency Contact */}
                     {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <div className="flex items-center gap-1.5">
-                            <SectionHeader icon={Phone} title="Emergency Contact" />
-                            {!details.emergency_contact && <MissingMark />}
-                        </div>
-                        <div className="mt-6">
-                            {editBasic ? (
-                                <div>
-                                    <input
-                                        type="tel"
-                                        value={formData.emergency_contact || ''}
-                                        onChange={e => setFormData({...formData, emergency_contact: e.target.value})}
-                                        className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
-                                        placeholder="Enter 10-digit emergency contact number"
-                                        id="field-emergency_contact"
-                                    />
-                                    {renderError('emergency_contact')}
-                                </div>
-                            ) : (
-                                <p className="text-xs text-black font-normal bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
-                                    {details.emergency_contact || 'Not registered'}
+                        <SectionHeader icon={Phone} title="Emergency Contact" />
+                        <div className="mt-6 space-y-5">
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-black/50 mb-2 flex items-center gap-1.5">
+                                    Contact Name {!(details.emergency_contact_first_name || details.emergency_contact_last_name) && <MissingMark />}
                                 </p>
-                            )}
+                                {editBasic ? (
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <input
+                                            type="text"
+                                            value={formData.emergency_contact_first_name || ''}
+                                            onChange={e => setFormData({...formData, emergency_contact_first_name: e.target.value})}
+                                            className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                            placeholder="First Name"
+                                            id="field-emergency_contact_first_name"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={formData.emergency_contact_middle_name || ''}
+                                            onChange={e => setFormData({...formData, emergency_contact_middle_name: e.target.value})}
+                                            className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                            placeholder="Middle Name"
+                                            id="field-emergency_contact_middle_name"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={formData.emergency_contact_last_name || ''}
+                                            onChange={e => setFormData({...formData, emergency_contact_last_name: e.target.value})}
+                                            className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                            placeholder="Last Name"
+                                            id="field-emergency_contact_last_name"
+                                        />
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-black font-normal bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                        {[details.emergency_contact_first_name, details.emergency_contact_middle_name, details.emergency_contact_last_name]
+                                            .filter(Boolean).join(' ') || 'Not registered'}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-black/50 mb-2 flex items-center gap-1.5">
+                                    Contact Number {!details.emergency_contact && <MissingMark />}
+                                </p>
+                                {editBasic ? (
+                                    <div>
+                                        <input
+                                            type="tel"
+                                            value={formData.emergency_contact || ''}
+                                            onChange={e => setFormData({...formData, emergency_contact: e.target.value})}
+                                            className="w-full bg-[#f4ecff] border border-[#ddd6fe] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-[#7c3aed]"
+                                            placeholder="Enter 10-digit emergency contact number"
+                                            id="field-emergency_contact"
+                                        />
+                                        {renderError('emergency_contact')}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-black font-normal bg-[#f4ecff] p-4 rounded-xl border border-[#e9ddff]">
+                                        {details.emergency_contact || 'Not registered'}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     </div>
                     )}
@@ -1319,10 +1367,10 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
     );
 }
 
-function EditStatCard({ label, value, sub, editMode, onChange, type = "text", options = [], displayValue, error, missing }) {
+function EditStatCard({ label, value, sub, editMode, onChange, type = "text", options = [], displayValue, error, missing, sentenceCase = false }) {
     return (
         <div className={`bg-white border border-[#e9ddff] rounded-2xl shadow-sm hover:shadow-md hover:shadow-[#7c3aed]/10 p-6 transition-all ${editMode ? 'ring-2 ring-[#c4b5fd]' : ''}`}>
-            <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
+            <p className={`text-[9px] font-black tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5 ${sentenceCase ? '' : 'uppercase'}`}>
                 {label} {missing && <MissingMark />}
             </p>
             {editMode ? (

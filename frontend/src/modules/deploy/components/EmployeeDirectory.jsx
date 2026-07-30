@@ -17,6 +17,7 @@ import EditRequestReviewPanel from './EditRequestReviewPanel';
 import HasPermission from '../../../components/common/HasPermission';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { P } from '../../../core/permissions';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 // ── UPDATED STATUS COLORS ──
 const STATUS_COLORS = {
@@ -188,6 +189,10 @@ setEmployees(employeeList);
       matchStatus &&
       matchTeam
     );
+  }).sort((a, b) => {
+    const nameA = a.name || a.full_name || a.username || '';
+    const nameB = b.name || b.full_name || b.username || '';
+    return nameA.localeCompare(nameB);
   });
 
   const teams = [
@@ -272,7 +277,7 @@ setEmployees(employeeList);
                 </tr>
               </thead>
               <tbody>
-                {pendingRequests.map((req) => (
+                {[...pendingRequests].sort((a, b) => (a.employee_name || '').localeCompare(b.employee_name || '')).map((req) => (
                   <tr
                     key={req.id}
                     onClick={() => setSelectedRequest(req)}
@@ -288,7 +293,7 @@ setEmployees(employeeList);
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            (req.employee_name || '?')?.[0]?.toUpperCase()
+                            getInitials(req.employee_name)
                           )}
                         </div>
                         <div>
@@ -647,7 +652,7 @@ setEmployees(employeeList);
 
                             ) : (
 
-                              employeeName?.[0]?.toUpperCase()
+                              getInitials(employeeName)
 
                             )}
 

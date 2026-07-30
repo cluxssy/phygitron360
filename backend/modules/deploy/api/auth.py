@@ -78,7 +78,7 @@ def login(credentials: LoginRequest, response: Response, service: AuthService = 
             key="session_token",
             value=result['token'],
             httponly=True,
-            max_age=86400,  # 24 hours
+            max_age=28800,  # 8 hours
             samesite="lax",
             path="/"
         )

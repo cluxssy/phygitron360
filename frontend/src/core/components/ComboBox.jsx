@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Plus, Check, ChevronDown } from 'lucide-react';
 
-export default function ComboBox({ 
-    options = [], 
-    value = '', 
-    onChange, 
-    placeholder = 'Select...', 
+export default function ComboBox({
+    options = [],
+    value = '',
+    onChange,
+    placeholder = 'Select...',
     label = '',
     allowCustom = true,
     className = "",
@@ -13,28 +14,65 @@ export default function ComboBox({
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
+    const [dropdownStyle, setDropdownStyle] = useState(null);
     const containerRef = useRef(null);
+    const dropdownRef = useRef(null);
     const searchInputRef = useRef(null);
 
     const isLightMode = window.location.pathname.startsWith('/deploy');
 
     // Filter options based on search
-    const filteredOptions = options.filter(opt => 
+    const filteredOptions = options.filter(opt =>
         (typeof opt === 'string' ? opt : opt.name)
             .toLowerCase()
             .includes(search.toLowerCase())
     );
 
-    // Close on click outside
+    // Positions the dropdown against the viewport (not the nearest scroll
+    // container) so it can never be clipped by a modal/table's overflow, and
+    // flips it above the trigger when there isn't enough room below.
+    const PANEL_CAP = 260; // don't let the panel stretch further than this, even if there's room
+    const updatePosition = useCallback(() => {
+        const trigger = containerRef.current;
+        if (!trigger) return;
+        const rect = trigger.getBoundingClientRect();
+        const estimatedHeight = Math.min(PANEL_CAP, window.innerHeight * 0.6);
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const openUpward = spaceBelow < estimatedHeight && rect.top > spaceBelow;
+
+        setDropdownStyle({
+            left: rect.left,
+            width: Math.max(rect.width, 320),
+            ...(openUpward
+                ? { bottom: window.innerHeight - rect.top + 8, maxHeight: Math.min(PANEL_CAP, rect.top - 16) }
+                : { top: rect.bottom + 8, maxHeight: Math.min(PANEL_CAP, window.innerHeight - rect.bottom - 16) }),
+        });
+    }, []);
+
+    // Close on click outside (either the trigger or the portaled dropdown)
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (containerRef.current && !containerRef.current.contains(event.target)) {
+            if (
+                containerRef.current && !containerRef.current.contains(event.target) &&
+                dropdownRef.current && !dropdownRef.current.contains(event.target)
+            ) {
                 setIsOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useLayoutEffect(() => {
+        if (!isOpen) return;
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isOpen, updatePosition]);
 
     useEffect(() => {
         if (isOpen) {
@@ -57,19 +95,19 @@ export default function ComboBox({
                     isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'
                 }`}>{label} {required && <span className="text-red-500">*</span>}</label>
             )}
-            
-            <div 
+
+            <div
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setIsOpen((prev) => !prev)}
                 className={`w-full px-5 py-4 rounded-xl flex justify-between items-center cursor-pointer transition-all border group ${
-                    isLightMode 
-                        ? 'bg-white border-[#ebe4ff] hover:border-[#c084fc]' 
+                    isLightMode
+                        ? 'bg-white border-[#ebe4ff] hover:border-[#c084fc]'
                         : 'glass-panel border-white/5 bg-black/20 hover:border-white/10'
                 }`}
             >
                 <span className={`text-xs ${
-                    value 
-                        ? (isLightMode ? 'text-black' : 'text-white') 
+                    value
+                        ? (isLightMode ? 'text-black' : 'text-white')
                         : (isLightMode ? 'text-black/30' : 'text-white/20')
                 }`}>
                     {value || placeholder}
@@ -79,24 +117,28 @@ export default function ComboBox({
                 } ${isOpen ? 'rotate-180' : ''}`} />
             </div>
 
-            {isOpen && (
-                <div className={`absolute z-[60] left-0 right-0 mt-2 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${
-                    isLightMode 
-                        ? 'bg-white border border-[#ebe4ff] shadow-[0_20px_50px_rgba(139,92,246,0.1)]' 
-                        : 'glass-panel border-white/10 bg-[#0A1225] shadow-[0_20px_50px_rgba(0,0,0,0.5)]'
-                }`}>
-                    <div className={`p-3 relative ${
+            {isOpen && dropdownStyle && createPortal(
+                <div
+                    ref={dropdownRef}
+                    style={{ position: 'fixed', zIndex: 9999, ...dropdownStyle }}
+                    className={`flex flex-col rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${
+                        isLightMode
+                            ? 'bg-white border border-[#ebe4ff] shadow-[0_20px_50px_rgba(139,92,246,0.15)]'
+                            : 'glass-panel border-white/10 bg-[#0A1225] shadow-[0_20px_50px_rgba(0,0,0,0.5)]'
+                    }`}
+                >
+                    <div className={`p-3 relative shrink-0 ${
                         isLightMode ? 'border-b border-[#f1ebff]' : 'border-b border-white/5'
                     }`}>
-                        <Search size={12} className={`absolute left-6 top-1/2 -translate-y-1/2 ${
+                        <Search size={14} className={`absolute left-6 top-1/2 -translate-y-1/2 ${
                             isLightMode ? 'text-black/30' : 'text-white/20'
                         }`} />
-                        <input 
+                        <input
                             ref={searchInputRef}
                             placeholder="Search or type custom..."
-                            className={`w-full rounded-lg pl-10 pr-4 py-2.5 text-xs outline-none border transition-all ${
-                                isLightMode 
-                                    ? 'bg-[#faf7ff] border-[#ebe4ff] text-black focus:border-[#c084fc]' 
+                            className={`w-full rounded-lg pl-11 pr-4 py-2.5 text-sm outline-none border transition-all ${
+                                isLightMode
+                                    ? 'bg-[#faf7ff] border-[#ebe4ff] text-black focus:border-[#c084fc]'
                                     : 'bg-white/5 border-white/5 text-white focus:border-primary/40'
                             }`}
                             value={search}
@@ -105,26 +147,26 @@ export default function ComboBox({
                         />
                     </div>
 
-                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                    <div className="overflow-y-auto custom-scrollbar">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((opt, idx) => {
                                 const val = typeof opt === 'string' ? opt : opt.name;
                                 return (
-                                    <div 
+                                    <div
                                         key={idx}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             handleSelect(val);
                                         }}
-                                        className={`px-4 py-3 text-xs cursor-pointer flex items-center justify-between group transition-colors ${
-                                            isLightMode 
-                                                ? 'text-black hover:bg-[#faf7ff] hover:text-[#8b5cf6]' 
+                                        className={`px-5 py-3 text-sm cursor-pointer flex items-center justify-between group transition-colors ${
+                                            isLightMode
+                                                ? 'text-black hover:bg-[#faf7ff] hover:text-[#8b5cf6]'
                                                 : 'text-white/70 hover:text-white hover:bg-white/5'
                                         }`}
                                     >
                                         <span>{val}</span>
                                         {value === val && (
-                                            <Check size={12} className={isLightMode ? 'text-[#8b5cf6]' : 'text-primary'} />
+                                            <Check size={14} className={isLightMode ? 'text-[#8b5cf6]' : 'text-primary'} />
                                         )}
                                     </div>
                                 );
@@ -138,25 +180,25 @@ export default function ComboBox({
                         )}
 
                         {allowCustom && search && !filteredOptions.includes(search) && (
-                            <div 
+                            <div
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleSelect(search);
                                 }}
-                                className={`px-4 py-3 text-xs cursor-pointer flex items-center gap-2 transition-colors border-t ${
-                                    isLightMode 
-                                        ? 'bg-[#f5efff] text-[#8b5cf6] hover:bg-[#ece2ff] border-[#f1ebff]' 
+                                className={`px-5 py-3 text-sm cursor-pointer flex items-center gap-2 transition-colors border-t ${
+                                    isLightMode
+                                        ? 'bg-[#f5efff] text-[#8b5cf6] hover:bg-[#ece2ff] border-[#f1ebff]'
                                         : 'bg-primary/5 text-primary hover:bg-primary/10 border-white/5'
                                 }`}
                             >
-                                <Plus size={12} />
+                                <Plus size={14} />
                                 <span>Add "<span className="font-bold">{search}</span>" as Custom</span>
                             </div>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
 }
-

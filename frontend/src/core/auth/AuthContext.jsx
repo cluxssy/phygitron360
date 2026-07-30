@@ -1,5 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import ChangePasswordModal from './ChangePasswordModal';
+import useIdleTimeout from '../hooks/useIdleTimeout';
+import toast from 'react-hot-toast';
+
+// Session idle timeout: 30 minutes of inactivity
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 const AuthContext = createContext();
 
@@ -84,6 +89,19 @@ export function AuthProvider({ children }) {
     };
     checkAuth();
   }, []);
+
+  // ── Idle Timeout ────────────────────────────────────────────────────────────
+  // Log the user out automatically after IDLE_TIMEOUT_MS of inactivity.
+  const handleIdle = useCallback(async () => {
+    if (!user) return; // already logged out
+    toast.error('Your session has expired due to inactivity. Please log in again.', {
+      duration: 6000,
+      id: 'session-expired',
+    });
+    await logout();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useIdleTimeout(handleIdle, IDLE_TIMEOUT_MS, !!user);
 
   const hasRole = (roles) => {
     if (!user) return false;

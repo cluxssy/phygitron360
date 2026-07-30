@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Shield, Check, X, Zap, Pencil, Trash2 } from 'lucide-react';
+import { Shield, Check, X, Zap, Pencil, Trash2, Plus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export const PERMISSIONS_CATEGORIES = [
@@ -274,7 +274,7 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
   return (
     <div className="bg-white/70 backdrop-blur-2xl border border-primary/10 shadow-[0_10px_60px_rgba(180,140,255,0.08)] overflow-hidden animate-fade-in-up rounded-[2.5rem]">
       {/* HEADER */}
-      <div className="p-8 border-b border-primary/10 flex justify-between items-center bg-gradient-to-r from-primary/[0.08] to-transparent">
+      <div className="p-8 border-b border-primary/10 flex justify-between items-center bg-white">
   <div>
     <h3 className="text-2xl font-bold text-black uppercase tracking-tight flex items-center gap-3">
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 text-primary shadow-[0_0_30px_rgba(180,140,255,0.15)]">
@@ -283,7 +283,7 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
       Permission Management
     </h3>
     <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-[0.25em] font-medium">
-      Standard Role Permissions
+      Role-wise Permissions
     </p>
   </div>
 
@@ -291,7 +291,7 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
     onClick={() => setShowCreateModal(true)}
     className="px-4 py-2 bg-black text-white rounded-2xl text-[10px] font-semibold uppercase tracking-[0.12em] shadow-[0_0_20px_rgba(0,0,0,0.08)] hover:bg-violet-700 transition-all flex items-center gap-1 active:scale-95"
   >
-    <Check size={12} />
+    <Plus size={12} />
     New Template
   </button>
 </div>

@@ -12,6 +12,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell,
   AreaChart, Area, RadialBarChart, RadialBar, Legend, LineChart, Line
 } from 'recharts';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 const PALETTE = [
   '#7C3AED', '#10B981', '#F59E0B', '#EF4444',
@@ -438,7 +439,7 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
                 />
               ) : null}
               <div className={`w-20 h-20 rounded-[1.8rem] bg-gradient-to-br from-[#7C3AED] to-[#A78BFA] text-white text-3xl font-black items-center justify-center shadow-lg shadow-[#7c3aed]/20 ${emp.photo_path ? 'hidden' : 'flex'}`}>
-                {emp.name ? emp.name.charAt(0).toUpperCase() : user?.name?.charAt(0).toUpperCase() || 'E'}
+                {getInitials(emp.name || user?.name) || 'E'}
               </div>
               {/* ✅ FIXED: Online status indicator - circle with rounded-full */}
               <span className="absolute bottom-1 right-1 w-4 h-4 shrink-0 aspect-square bg-emerald-500 rounded-full border-2 border-white animate-pulse" />

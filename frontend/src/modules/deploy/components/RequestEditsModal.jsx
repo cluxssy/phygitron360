@@ -21,7 +21,10 @@ const TEXT_FIELDS = [
   { key: 'last_name', label: 'Last Name', type: 'text', group: 'Personal' },
   { key: 'dob', label: 'Date of Birth', type: 'date', group: 'Personal' },
   { key: 'contact_number', label: 'Contact Number', type: 'tel', group: 'Personal' },
-  { key: 'emergency_contact', label: 'Emergency Contact', type: 'text', group: 'Personal' },
+  { key: 'emergency_contact_first_name', label: 'Emergency Contact First Name', type: 'text', group: 'Personal' },
+  { key: 'emergency_contact_middle_name', label: 'Emergency Contact Middle Name', type: 'text', group: 'Personal' },
+  { key: 'emergency_contact_last_name', label: 'Emergency Contact Last Name', type: 'text', group: 'Personal' },
+  { key: 'emergency_contact', label: 'Emergency Contact Number', type: 'text', group: 'Personal' },
   { key: 'email_id', label: 'Email', type: 'email', group: 'Personal' },
   { key: 'current_address', label: 'Current Address', type: 'textarea', group: 'Personal' },
   { key: 'permanent_address', label: 'Permanent Address', type: 'textarea', group: 'Personal' },
@@ -34,7 +37,6 @@ const TEXT_FIELDS = [
 ];
 
 const DOC_FIELDS = [
-  { key: 'photo_path', label: 'Photo', accept: 'image/jpeg,image/png,image/webp', formKey: 'photo_file', group: 'Documents' },
   { key: 'cv_path', label: 'Resume / CV', accept: '.pdf,.doc,.docx', formKey: 'cv_file', group: 'Documents' },
   { key: 'id_proofs', label: 'ID Proof', accept: 'image/jpeg,image/png,image/webp,.pdf', formKey: 'id_proof_file', group: 'Documents' },
   { key: 'passbook_path', label: 'Bank Passbook', accept: 'image/jpeg,image/png,image/webp,.pdf', formKey: 'passbook_file', group: 'Documents' },
