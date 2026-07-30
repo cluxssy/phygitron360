@@ -12,6 +12,7 @@ import ComboBox from '../../../core/components/ComboBox';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
+import useUnsavedChangesWarning from '../../../core/hooks/useUnsavedChangesWarning';
 import {
   isEmail,
   isEmployeeCode,
@@ -82,6 +83,7 @@ export default function OnboardingPanel() {
   const [form, setForm] = useState({ employee_code: '', first_name: '', middle_name: '', last_name: '', guardian_name: '', email: '', role: 'employee', department: '', designation: '', doj: '' });
   const [submitting, setSubmitting] = useState(false);
   const [editApprovalForm, setEditApprovalForm] = useState(null);
+  useUnsavedChangesWarning(!!editApprovalForm);
 
   const isLightMode = window.location.pathname.startsWith('/deploy');
 

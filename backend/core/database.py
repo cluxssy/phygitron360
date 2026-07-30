@@ -179,6 +179,9 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS guardian_name TEXT")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS hr_approved INT DEFAULT 0")
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS finance_approved INT DEFAULT 0")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS emergency_contact_first_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS emergency_contact_middle_name TEXT")
+        cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS emergency_contact_last_name TEXT")
         # 1.1) Skill Matrix Table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS skill_matrix (

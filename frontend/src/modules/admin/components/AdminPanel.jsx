@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { Shield, Users, Activity, Plus, Trash2, Link, Lock, Unlock, Key } from 'lucide-react';
+import { Shield, Users, Activity, Plus, Trash2, Link, Lock, Unlock, Key, Search } from 'lucide-react';
 import ClearanceMatrix from './ClearanceMatrix';
 import UserClearanceOverrides from './UserClearanceOverrides';
 import ModuleControl from './ModuleControl';
 import "../styles/adminPanel.css";
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
+import { getInitials } from '../../../core/utils/nameHelpers';
+import useUnsavedChangesWarning from '../../../core/hooks/useUnsavedChangesWarning';
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('users');
@@ -22,6 +24,9 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
 
   const [showAddForm, setShowAddForm] = useState(false);
+  useUnsavedChangesWarning(showAddForm);
+
+  const [userSearch, setUserSearch] = useState('');
 
   const [form, setForm] = useState({
     username: '',
@@ -378,6 +383,18 @@ export default function AdminPanel() {
 
                 </div>
 
+                <div className="relative w-full max-w-xs">
+                  <Search
+                    size={16}
+                    className="absolute left-5 top-1/2 -translate-y-1/2 text-black/30"
+                  />
+                  <input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search users..."
+                    className="w-full pl-12 pr-5 py-3.5 rounded-2xl border border-primary/10 bg-white text-black text-sm font-semibold outline-none focus:border-primary/40"
+                  />
+                </div>
 
               </div>
 
@@ -414,7 +431,18 @@ export default function AdminPanel() {
 
                   <tbody className="divide-y divide-primary/[0.06]">
 
-                    {users.map(u => (
+                    {users
+                      .filter(u => {
+                        const term = userSearch.trim().toLowerCase();
+                        if (!term) return true;
+                        return (
+                          (u.username || '').toLowerCase().includes(term) ||
+                          (u.role || '').toLowerCase().includes(term) ||
+                          (u.employee_code || '').toLowerCase().includes(term)
+                        );
+                      })
+                      .sort((a, b) => (a.username || '').localeCompare(b.username || ''))
+                      .map(u => (
 
                       <tr
                         key={u.id}
@@ -432,7 +460,7 @@ export default function AdminPanel() {
                                 ? 'bg-gradient-to-br from-primary/20 to-primary/5 text-primary border border-primary/20 shadow-[0_0_20px_rgba(180,140,255,0.12)]'
                                 : 'bg-red-500/10 text-red-500 border border-red-500/10'
                             }`}>
-                              {u.username.substring(0, 2)}
+                              {getInitials(u.username)}
                             </div>
 
                             <div>

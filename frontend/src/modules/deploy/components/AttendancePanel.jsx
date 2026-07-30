@@ -8,6 +8,7 @@ import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 import CorrectionSystem from './CorrectionSystem';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 export default function AttendancePanel({ mode }) {
   const { user } = useAuth();
@@ -720,6 +721,7 @@ export default function AttendancePanel({ mode }) {
                             (e.employee_code || '').toLowerCase().includes(query.toLowerCase());
                             return matchesSearch;
                         })
+                        .sort((a, b) => (a.name || a.full_name || '').localeCompare(b.name || b.full_name || ''))
                         .map(e => (
                             <div
                             key={e.employee_code || e.id}
@@ -757,7 +759,7 @@ export default function AttendancePanel({ mode }) {
                     <div className="grid grid-cols-1 gap-6 mt-8">
                     <div className="flex items-center gap-4 bg-[#f5efff] p-4 rounded-2xl border border-[#ece2ff]">
                         <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-primary font-black text-xl">
-                        {selectedEmployee.name.charAt(0)}
+                        {getInitials(selectedEmployee.name)}
                         </div>
                         <div>
                         <h3 className="font-bold text-black uppercase italic">{selectedEmployee.name}</h3>

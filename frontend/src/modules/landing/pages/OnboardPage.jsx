@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import logo from "../../../assets/phy360.png";
+import ComboBox from '../../../core/components/ComboBox';
+import useUnsavedChangesWarning from '../../../core/hooks/useUnsavedChangesWarning';
 import {
   MAX_FILE_SIZE,
   isAtLeastAge,
@@ -34,6 +36,12 @@ const COUNTRY_CODES = [
   { code: '+65', country: 'SG (+65)' }
 ];
 
+const DEGREE_OPTIONS = [
+  '10th / SSC', '12th / HSC', 'Diploma',
+  'B.Tech', 'B.E.', 'B.Sc', 'B.Com', 'B.A.', 'BBA', 'BCA',
+  'M.Tech', 'M.E.', 'M.Sc', 'M.Com', 'M.A.', 'MBA', 'MCA', 'PhD'
+];
+
 export default function OnboardPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,6 +49,7 @@ export default function OnboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  useUnsavedChangesWarning(!success);
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
@@ -300,7 +309,8 @@ export default function OnboardPage() {
         }
     });
     fd.append('emergency_contact', finalEmergencyContact || '');
-    fd.append('education_details', JSON.stringify(educationList));
+    const filledEducation = educationList.filter(e => e.degree || e.university || e.year || e.percentage);
+    fd.append('education_details', JSON.stringify(filledEducation));
     Object.keys(files).forEach(k => files[k] && fd.append(k, files[k]));
 
     try {
@@ -638,7 +648,7 @@ export default function OnboardPage() {
                                          </button>
                                      )}
                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                         <input placeholder="Degree / Qualification" value={edu.degree} onChange={e => updateEducation(idx, 'degree', e.target.value)} className="w-full glass-panel-input text-[11px] py-3 bg-black/40" />
+                                         <ComboBox options={DEGREE_OPTIONS} value={edu.degree} onChange={val => updateEducation(idx, 'degree', val)} placeholder="Select or type course..." />
                                          <input placeholder="Institution / Board" value={edu.university} onChange={e => updateEducation(idx, 'university', e.target.value)} className="w-full glass-panel-input text-[11px] py-3 bg-black/40" />
                                      </div>
                                      <div className="grid grid-cols-2 gap-4">
