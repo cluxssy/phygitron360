@@ -378,13 +378,6 @@ export default function AdminPanel() {
 
                 </div>
 
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  className="bg-black hover:bg-violet-700 text-white text-[11px] font-semibold uppercase tracking-[0.2em] px-6 py-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_10px_40px_rgba(139,92,246,0.3)] transition-all duration-300 flex items-center gap-3 active:scale-95"
-                >
-                  <Plus size={16} strokeWidth={2.5} />
-                  Provision Identity
-                </button>
 
               </div>
 
