@@ -224,7 +224,7 @@ async def create_employee(
     }
 
     try:
-        return service.create_employee(data)
+        return service.create_employee(data, actor=current_user.get('username', 'system'))
     except ValueError as e:
          raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -486,7 +486,7 @@ def delete_employee(employee_code: str, current_user: dict = Depends(get_current
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     try:
-        return service.delete_employee(employee_code)
+        return service.delete_employee(employee_code, actor=current_user.get('username', 'system'))
     except ValueError as e:
          raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -504,7 +504,7 @@ def offboard_employee(employee_code: str, data: OffboardRequest, current_user: d
     tenant_id = current_user.get('tenant_id', 'public')
     service = get_service(tenant_id)
     try:
-        result = service.offboard_employee(employee_code, data)
+        result = service.offboard_employee(employee_code, data, actor=current_user.get('username', 'system'))
         add_notification(
             title="Offboarding Initiated",
             message="Your offboarding process has been initiated. Please complete any pending exit formalities and return company assets.",

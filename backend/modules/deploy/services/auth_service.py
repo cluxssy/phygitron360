@@ -55,7 +55,7 @@ class AuthService:
         
         # Create Session
         token = self.create_session_token()
-        expires = datetime.now() + timedelta(days=1)
+        expires = datetime.now() + timedelta(hours=8)
         
         # Persistent Session in DB
         self.repo.create_session(token, user['id'], expires, tenant_id=tenant_id)

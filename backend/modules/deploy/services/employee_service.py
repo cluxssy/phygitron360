@@ -11,6 +11,7 @@ from backend.modules.deploy.repositories.user_repo import UserRepository
 from backend.common.services.email_service import EmailService
 from backend.common.utils.name_utils import join_name_parts, split_full_name
 from passlib.hash import pbkdf2_sha256
+from backend.core.audit import audit_log
 
 class EmployeeService:
     def __init__(self, tenant_id: str = 'public'):
@@ -123,7 +124,7 @@ class EmployeeService:
             raise ValueError(f"Role '{role}' does not exist in the system.")
         data['role'] = role
 
-    def create_employee(self, data: Dict[str, Any]):
+    def create_employee(self, data: Dict[str, Any], actor: str = 'system'):
         # Run validations
         self.validate_employee_data(data)
         
@@ -149,6 +150,9 @@ class EmployeeService:
         
         # Create the employee
         self.repo.create_employee(data, self.tenant_id)
+        audit_log(self.tenant_id, actor, 'CREATE_EMPLOYEE',
+                  f"Created employee {data['name']} ({data['code']}) — Dept: {data.get('department', 'N/A')}, Role: {data.get('designation', 'N/A')}",
+                  module='deploy')
     
         # --- ATOMIC INITIALIZATION ---
         # 1. Initialize Asset Checklist (Empty/Default)
@@ -351,17 +355,21 @@ class EmployeeService:
 
         return {"success": True, "message": "Employee updated successfully"}
     
-    def delete_employee(self, employee_code: str):
-        if not self.repo.get_employee_by_code(employee_code, self.tenant_id):
+    def delete_employee(self, employee_code: str, actor: str = 'system'):
+        emp = self.repo.get_employee_by_code(employee_code, self.tenant_id)
+        if not emp:
              raise ValueError("Employee not found")
         
         self.repo.delete_employee_cascade(employee_code, self.tenant_id)
+        audit_log(self.tenant_id, actor, 'DELETE_EMPLOYEE',
+                  f"Deleted employee record {employee_code} ({emp.get('name', '')})",
+                  module='deploy')
         return {"success": True, "message": f"Employee {employee_code} deleted successfully"}
 
     def get_options(self):
         return self.repo.get_dropdown_options(self.tenant_id)
 
-    def offboard_employee(self, employee_code: str, req: OffboardRequest):
+    def offboard_employee(self, employee_code: str, req: OffboardRequest, actor: str = 'system'):
          exit_date = req.exit_date or datetime.today().strftime('%Y-%m-%d')
          
          # Combine Reason and Remarks
@@ -378,4 +386,7 @@ class EmployeeService:
              deactivate = False
              
          self.repo.offboard_employee(employee_code, exit_date, full_reason, status=status, deactivate=deactivate, tenant_id=self.tenant_id)
+         audit_log(self.tenant_id, actor, 'OFFBOARD_EMPLOYEE',
+                   f"Employee {employee_code} offboarded — Status: {status}, Reason: {full_reason[:80]}",
+                   module='deploy')
          return {"success": True, "message": f"Employee {employee_code} marked as {status}."}

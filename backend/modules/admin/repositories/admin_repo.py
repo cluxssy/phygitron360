@@ -73,23 +73,23 @@ class AdminRepository:
         finally:
             conn.close()
 
-    def log_action(self, username: str, action: str, details: str, ip: str = None):
+    def log_action(self, username: str, action: str, details: str, ip: str = None, module: str = 'admin'):
         conn = get_db_connection()
         try:
              cur = conn.cursor()
              cur.execute(f'SET search_path TO "{self.tenant_id}"')
-             cur.execute("INSERT INTO audit_logs (username, action, details, ip_address) VALUES (%s, %s, %s, %s)", 
-                          (username, action, details, ip))
+             cur.execute("INSERT INTO audit_logs (username, action, details, module, ip_address) VALUES (%s, %s, %s, %s, %s)", 
+                          (username, action, details, module, ip))
              conn.commit()
         finally:
             conn.close()
 
-    def get_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_logs(self, limit: int = 500) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute(f'SET search_path TO "{self.tenant_id}"')
-            cur.execute("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT %s", (limit,))
+            cur.execute("SELECT id, username, action, details, module, ip_address, timestamp FROM audit_logs ORDER BY timestamp DESC LIMIT %s", (limit,))
             rows = cur.fetchall()
             return [dict(r) for r in rows]
         finally:

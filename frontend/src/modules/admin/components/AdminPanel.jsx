@@ -76,14 +76,14 @@ export default function AdminPanel() {
         setRolesPerms(merged);
 
       } else if (activeTab === 'modules') {
-        const res = await fetch('/api/org/billing-status', {
+        const res = await fetch('/api/admin/tenants/current/ops', {
           credentials: 'include'
         });
 
         const data = await res.json();
 
         setTenantOps({
-          modules_enabled: data.modules || []
+          modules_enabled: data.config?.modules_enabled || []
         });
 
       } else if (activeTab === 'logs') {
@@ -593,6 +593,7 @@ export default function AdminPanel() {
           {[
             'Timeline',
             'User',
+            'Module',
             'Action',
             'Details'
           ].map(h => (
@@ -665,12 +666,36 @@ export default function AdminPanel() {
                   border-[#ddd0ff]
                   text-[#8b5cf6]
                   text-[10px]
-                  font-normal
+                  font-medium
                   uppercase
-                  tracking-[0.15em]
+                  tracking-[0.1em]
                 "
               >
-                USER
+                {l.username || 'SYSTEM'}
+              </div>
+
+            </td>
+
+            {/* MODULE */}
+
+            <td className="px-10 py-8">
+
+              <div
+                className="
+                  inline-flex
+                  items-center
+                  px-3
+                  py-1
+                  rounded-lg
+                  bg-slate-100
+                  text-slate-600
+                  text-[10px]
+                  font-semibold
+                  uppercase
+                  tracking-wider
+                "
+              >
+                {l.module || 'admin'}
               </div>
 
             </td>
