@@ -4,6 +4,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import { Bell, LogOut, ChevronRight, MessageSquare, Briefcase } from 'lucide-react';
 import logo from '../../../assets/logo.png';
 import InternalOpportunitiesPanel from '../../deploy/components/InternalOpportunitiesPanel';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 // Simple URL to Link parser
 function Linkify({ text }) {
@@ -75,7 +76,7 @@ export default function TraineeDashboard() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-black text-xs">
-              {user?.name?.charAt(0) || user?.username?.charAt(0) || 'T'}
+              {getInitials(user?.name || user?.username) || 'T'}
             </div>
             <div className="hidden md:block text-right">
               <p className="text-xs font-bold text-white">{user?.name || user?.username || 'Trainee'}</p>

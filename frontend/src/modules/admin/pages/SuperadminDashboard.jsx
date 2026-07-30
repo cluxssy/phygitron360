@@ -9,6 +9,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { isEmail, validatePassword } from '../../../core/utils/validators';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 import logo from '../../../assets/phy360.png';
 import bellIcon from '../../../assets/bell.png';
@@ -310,7 +311,13 @@ export default function SuperadminDashboard() {
             onClick={() => { logout(); navigate('/'); }}
           />
           <div className="profile-wrap">
-            <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>
+            <div className="avatar">
+              {user?.photo_path ? (
+                <img src={`/api/employee/${user.employee_code}/document/pfp`} alt="" />
+              ) : (
+                getInitials(displayName)
+              )}
+            </div>
             <div className="profile-text">
               <h4>{displayName}</h4>
               <p>Super Admin</p>

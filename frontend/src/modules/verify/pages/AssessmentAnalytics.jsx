@@ -3,6 +3,7 @@ import { BarChart3, TrendingUp, Users, Award, ShieldAlert, Clock, Loader2, Chevr
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useOverlayClose from '../../../core/hooks/useOverlayClose';
 import { useAuth } from '../../../core/auth/AuthContext';
 
 export default function AssessmentAnalytics({ assessmentId: initialAssessmentId }) {
@@ -23,6 +24,7 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
   const [loadingDetailsId, setLoadingDetailsId] = useState(null);
   const [lightboxImage, setLightboxImage] = useState(null);
   useEscapeClose(() => setLightboxImage(null), !!lightboxImage);
+  const lightboxOverlayHandlers = useOverlayClose(() => setLightboxImage(null));
 
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
@@ -587,7 +589,7 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
 
       {/* Lightbox Modal */}
       {lightboxImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setLightboxImage(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" {...lightboxOverlayHandlers}>
           <div className="max-w-5xl w-full flex flex-col items-center" onClick={e => e.stopPropagation()}>
             <img src={lightboxImage.src} alt="Evidence" className="max-h-[85vh] object-contain rounded-lg shadow-2xl border border-gray-800" />
             <div className="mt-4 flex justify-between w-full max-w-lg text-white font-medium">

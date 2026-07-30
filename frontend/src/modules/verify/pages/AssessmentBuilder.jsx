@@ -13,6 +13,7 @@ import {
   isValidUrl,
 } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useOverlayClose from '../../../core/hooks/useOverlayClose';
 
 const QUESTION_TYPES = [
   { id: 'mcq', label: 'Multiple Choice (Single)' },
@@ -79,6 +80,8 @@ export default function AssessmentBuilder() {
   const [bankQuestions, setBankQuestions] = useState([]);
   useEscapeClose(() => setShowImportUrl(false), showImportUrl);
   useEscapeClose(() => setShowBankImport(false), showBankImport);
+  const importUrlOverlayHandlers = useOverlayClose(() => setShowImportUrl(false));
+  const bankImportOverlayHandlers = useOverlayClose(() => setShowBankImport(false));
   const [loadingBank, setLoadingBank] = useState(false);
 
   const fetchBankQuestions = async () => {
@@ -572,7 +575,7 @@ export default function AssessmentBuilder() {
 
       {/* Import Modal */}
       {showImportUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={() => setShowImportUrl(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...importUrlOverlayHandlers}>
           <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowImportUrl(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
               <X size={18} />
@@ -602,7 +605,7 @@ export default function AssessmentBuilder() {
 
       {/* Bank Import Modal */}
       {showBankImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowBankImport(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" {...bankImportOverlayHandlers}>
           <div className="bg-white rounded-2xl w-full max-w-2xl p-8 relative shadow-2xl border border-gray-200 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowBankImport(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
               <X size={18} />

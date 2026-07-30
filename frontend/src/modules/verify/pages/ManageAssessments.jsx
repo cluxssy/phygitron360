@@ -9,6 +9,7 @@ import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useOverlayClose from '../../../core/hooks/useOverlayClose';
 import { P } from '../../../core/permissions';
 
 const TYPE_STYLE = {
@@ -28,8 +29,9 @@ const STATUSES = ['draft', 'active', 'closed'];
 
 function Modal({ onClose, title, children }) {
   useEscapeClose(onClose);
+  const overlayHandlers = useOverlayClose(onClose);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...overlayHandlers}>
       <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
           <XCircle size={18} />

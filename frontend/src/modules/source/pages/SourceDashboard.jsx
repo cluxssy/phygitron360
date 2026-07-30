@@ -36,6 +36,7 @@ import { useNotifications } from '../../../core/context/NotificationContext';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 import { P } from '../../../core/permissions';
+import { getInitials } from '../../../core/utils/nameHelpers';
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
@@ -815,7 +816,13 @@ export default function SourceDashboard() {
             onClick={() => { logout(); navigate('/'); }}
           />
           <div className="profile-wrap">
-            <div className="avatar">{displayName?.charAt(0)?.toUpperCase()}</div>
+            <div className="avatar">
+              {user?.photo_path ? (
+                <img src={`/api/employee/${user.employee_code}/document/pfp`} alt="" />
+              ) : (
+                getInitials(displayName)
+              )}
+            </div>
             <div className="profile-text">
               <h4>{displayName}</h4>
               <p>{getRoleDisplay()}</p>

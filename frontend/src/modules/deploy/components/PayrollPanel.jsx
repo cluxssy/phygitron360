@@ -16,6 +16,8 @@ import {
   validateFile,
 } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
+import useOverlayClose from '../../../core/hooks/useOverlayClose';
+import useUnsavedChangesWarning from '../../../core/hooks/useUnsavedChangesWarning';
 import PayrollDirectory from './PayrollDirectory';
 
 const MONTH_NAMES = {
@@ -60,6 +62,8 @@ export default function PayrollPanel() {
   // Preview modal
   const [previewRecord, setPreviewRecord] = useState(null);
   useEscapeClose(() => setPreviewRecord(null), !!previewRecord);
+  const previewOverlayHandlers = useOverlayClose(() => setPreviewRecord(null));
+  useUnsavedChangesWarning(preview.length > 0);
 
   useEffect(() => {
     if (tab === 'manage') fetchCycles();
@@ -648,7 +652,7 @@ export default function PayrollPanel() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#f0e8ff]">
-                    {cycleDetail.map((r, i) => (
+                    {[...cycleDetail].sort((a, b) => (a.employee_name || a.employee_code || '').localeCompare(b.employee_name || b.employee_code || '')).map((r, i) => (
                       <tr key={i} className="hover:bg-[#faf7ff] transition-colors">
                         <td className="px-6 py-4">
                           <p className="font-black text-xs text-black italic uppercase">{r.employee_name || r.employee_code}</p>
@@ -680,7 +684,7 @@ export default function PayrollPanel() {
 
       {/* ── PREVIEW MODAL ── */}
       {previewRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setPreviewRecord(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" {...previewOverlayHandlers}>
           <div className="bg-white border border-[#ebe4ff] rounded-[2rem] p-5 sm:p-8 w-full max-w-md shadow-2xl my-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <div>

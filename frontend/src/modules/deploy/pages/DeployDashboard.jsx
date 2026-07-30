@@ -24,6 +24,7 @@ import logoutIcon from "../../../assets/exit.png";
 
 import { getHubTabs } from "../../../core/navigation/hubTabs";
 import { DEPLOY_MANAGEMENT_PERMS } from "../../../core/permissions/classification";
+import { getInitials } from "../../../core/utils/nameHelpers";
 
 const MANAGEMENT_TABS = ['dashboard', 'personnel', 'profile', 'attendance', 'performance', 'assets', 'onboard', 'payroll'];
 const EMPLOYEE_TABS = ['dashboard', 'profile', 'attendance', 'performance', 'opportunities', 'payroll'];
@@ -208,7 +209,11 @@ export default function DeployDashboard() {
           <div className="profile-wrap">
 
             <div className="avatar">
-              {displayName?.charAt(0)?.toUpperCase()}
+              {user?.photo_path ? (
+                <img src={`/api/employee/${user.employee_code}/document/pfp`} alt="" />
+              ) : (
+                getInitials(displayName)
+              )}
             </div>
 
             <div className="profile-text">
@@ -320,7 +325,11 @@ export default function DeployDashboard() {
 
               {canViewProfile && (
                 <button
-                  className={currentTab === 'personnel' ? 'active' : ''}
+                  className={
+                    currentTab === 'personnel' || currentTab === 'profile'
+                      ? 'active'
+                      : ''
+                  }
                   onClick={() => setTab('personnel')}
                 >
                   Directory

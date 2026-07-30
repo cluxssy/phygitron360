@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { X, Upload, Download, FileSpreadsheet, User, Briefcase, CreditCard, FileText, CheckCircle, ShieldCheck } from 'lucide-react';
+import { X, Upload, Download, FileSpreadsheet, User, Briefcase, CreditCard, FileText, CheckCircle, ShieldCheck, GraduationCap, Plus, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
   MAX_FILE_SIZE,
@@ -16,8 +16,17 @@ import {
 } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
+import useOverlayClose from '../../../core/hooks/useOverlayClose';
+import useUnsavedChangesWarning from '../../../core/hooks/useUnsavedChangesWarning';
+import ComboBox from '../../../core/components/ComboBox';
 
 const ROLES = ['org_admin', 'manager', 'employee', 'trainee'];
+
+const DEGREE_OPTIONS = [
+  '10th / SSC', '12th / HSC', 'Diploma',
+  'B.Tech', 'B.E.', 'B.Sc', 'B.Com', 'B.A.', 'BBA', 'BCA',
+  'M.Tech', 'M.E.', 'M.Sc', 'M.Com', 'M.A.', 'MBA', 'MCA', 'PhD'
+];
 
 const Field = ({ label, k, type = 'text', options, form, set, required = false }) => (
   <div>
@@ -39,6 +48,8 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
   const [managers, setManagers] = useState([]);
   const [dynamicRoles, setDynamicRoles] = useState(ROLES);
   useEscapeClose(onClose);
+  const overlayHandlers = useOverlayClose(onClose);
+  useUnsavedChangesWarning(true);
   const handleTabKeyNav = useTabListKeyNav();
 
   useEffect(() => {
@@ -72,6 +83,27 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     id_proof_file: null,
     passbook_file: null
   });
+
+  // Education list state
+  const [educationList, setEducationList] = useState([
+    { degree: '', university: '', year: '', percentage: '' }
+  ]);
+
+  const addEducation = () => {
+    setEducationList([...educationList, { degree: '', university: '', year: '', percentage: '' }]);
+  };
+
+  const removeEducation = (index) => {
+    if (educationList.length > 1) {
+      setEducationList(educationList.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateEducation = (index, field, value) => {
+    const newList = [...educationList];
+    newList[index] = { ...newList[index], [field]: value };
+    setEducationList(newList);
+  };
 
   // Bulk Upload State
   const [bulkData, setBulkData] = useState([]);
@@ -180,7 +212,12 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       Object.entries(form).forEach(([k, v]) => {
         if (v) fd.append(k, v);
       });
-      
+
+      const filledEducation = educationList.filter(e => e.degree || e.university || e.year || e.percentage);
+      if (filledEducation.length > 0) {
+        fd.append('education_details', JSON.stringify(filledEducation));
+      }
+
       // Append files
       Object.entries(files).forEach(([k, v]) => {
         if (v) fd.append(k, v);
@@ -325,11 +362,12 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     { step: 1, icon: User, label: 'Personal' },
     { step: 2, icon: Briefcase, label: 'Employment' },
     { step: 3, icon: CreditCard, label: 'Financial' },
-    { step: 4, icon: FileText, label: 'Documents' },
+    { step: 4, icon: GraduationCap, label: 'Education' },
+    { step: 5, icon: FileText, label: 'Documents' },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-2.5 sm:p-5" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-2.5 sm:p-5" {...overlayHandlers}>
       <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl sm:rounded-[2.8rem] border border-[#ece3ff] bg-[#fcfbff] shadow-[0_30px_100px_rgba(180,140,255,0.18)] p-5 sm:p-8 lg:p-12 custom-scrollbar animate-fade-in-up" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 sm:top-7 sm:right-7 w-11 h-11 rounded-2xl bg-[#f5f1ff] border border-[#e7ddff] flex items-center justify-center hover:bg-[#ede6ff] transition-all">
           <X size={18} className="text-black" />
@@ -400,7 +438,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                     <label className="text-[10px] font-black uppercase tracking-[0.22em] text-[#8b5cf6] block mb-3">Reporting Manager</label>
                     <select value={form.manager} onChange={e => set('manager', e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-[#f8f5ff] text-black text-[13px] font-semibold px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all">
                       <option value="">Select Manager</option>
-                      {managers.map(m => <option key={m.code} value={m.code}>{m.name} ({m.role})</option>)}
+                      {managers.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
                     </select>
                   </div>
                   <Field label="Work Location" k="location" form={form} set={set} />
@@ -452,8 +490,43 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
                 </div>
               )}
 
-              {/* STEP 4: Document Uploads */}
+              {/* STEP 4: Education */}
               {step === 4 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <GraduationCap size={16} className="text-[#8b5cf6]" />
+                      <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#8b5cf6]">Education (Optional)</h3>
+                    </div>
+                    <button type="button" onClick={addEducation} className="flex items-center gap-2 px-4 py-2 bg-[#f5f1ff] hover:bg-[#ece2ff] text-[#8b5cf6] rounded-xl transition-all border border-[#e8defc]">
+                      <Plus size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Add education</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-4 max-h-[360px] overflow-y-auto pr-2 custom-scrollbar">
+                    {educationList.map((edu, idx) => (
+                      <div key={idx} className="relative p-6 bg-[#f8f5ff] border border-[#e8defc] rounded-2xl space-y-4 group">
+                        {educationList.length > 1 && (
+                          <button type="button" onClick={() => removeEducation(idx)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <ComboBox options={DEGREE_OPTIONS} value={edu.degree} onChange={val => updateEducation(idx, 'degree', val)} placeholder="Select or type course..." />
+                          <input placeholder="Institution / University" value={edu.university} onChange={e => updateEducation(idx, 'university', e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all placeholder:text-[#b0a8c5]" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <input placeholder="Passout Year" value={edu.year} onChange={e => updateEducation(idx, 'year', e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all placeholder:text-[#b0a8c5]" />
+                          <input placeholder="CGPA / %" value={edu.percentage} onChange={e => updateEducation(idx, 'percentage', e.target.value)} className="w-full rounded-2xl border border-[#e8defc] bg-white text-black text-[13px] px-5 py-4 focus:outline-none focus:border-[#b78cff] transition-all placeholder:text-[#b0a8c5]" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 5: Document Uploads */}
+              {step === 5 && (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 mb-4">
                     <FileText size={16} className="text-[#8b5cf6]" />
@@ -537,7 +610,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
               {step > 1 && (
                 <button onClick={() => setStep(s => s - 1)} className="flex-1 py-4 rounded-2xl border border-[#e8defc] bg-white text-black text-[11px] font-black uppercase tracking-[0.25em] hover:bg-[#f5f1ff] transition-all">Back</button>
               )}
-              {step < 4 ? (
+              {step < 5 ? (
                 <button onClick={() => setStep(s => s + 1)} className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.25em] shadow-[0_12px_30px_rgba(180,140,255,0.28)] hover:scale-[1.01] transition-all">Continue</button>
               ) : (
                 <button onClick={submitSingle} disabled={submitting} className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[11px] font-black uppercase tracking-[0.25em] shadow-[0_12px_30px_rgba(180,140,255,0.28)] hover:scale-[1.01] transition-all disabled:opacity-50">

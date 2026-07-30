@@ -248,7 +248,9 @@ class EmployeeService:
         allowed_fields = [
             'exit_date', 'exit_reason', 'clearance_status', 'employment_status',
             'name', 'first_name', 'middle_name', 'last_name', 'guardian_name', 'designation', 'team', 'employment_type', 'reporting_manager', 'location',
-            'contact_number', 'emergency_contact', 'current_address',
+            'contact_number', 'emergency_contact',
+            'emergency_contact_first_name', 'emergency_contact_middle_name', 'emergency_contact_last_name',
+            'current_address',
             'permanent_address', 'dob', 'email_id', 'notes', 'doj',
             'photo_path', 'cv_path', 'id_proofs', 'passbook_path', 'pf_included', 'mediclaim_included',
             'education_details', 'employee_code', 'bank_name', 'bank_account_no', 'pan_no', 'ifsc_code'

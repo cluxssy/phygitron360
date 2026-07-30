@@ -45,14 +45,21 @@ class DashboardService:
                 status_counts.columns = ['name', 'value']
                 status_distribution = status_counts.to_dict('records')
 
-            # 4. Hiring Trend (Yearly)
-            hiring_trend = []
+            # 4. Hiring Trend (Quarterly, current year)
+            current_year = pd.Timestamp.now().year
+            quarter_labels = {1: "Jan-Mar", 2: "Apr-Jun", 3: "Jul-Sep", 4: "Oct-Dec"}
+            hiring_trend = [{"name": quarter_labels[q], "Hires": 0} for q in range(1, 5)]
             if not df_emp.empty and 'doj' in df_emp.columns:
                 df_emp.loc[:, 'doj_dt'] = pd.to_datetime(df_emp['doj'], errors='coerce')
                 df_emp.loc[:, 'Year'] = df_emp['doj_dt'].dt.year.fillna(0).astype(int)
-                hiring_trend_df = df_emp[df_emp['Year'] > 1900].groupby('Year').size().reset_index(name='Hires')
-                hiring_trend_df = hiring_trend_df.sort_values('Year')
-                hiring_trend = hiring_trend_df.to_dict('records')
+                df_emp.loc[:, 'Quarter'] = df_emp['doj_dt'].dt.quarter.fillna(0).astype(int)
+                df_valid = df_emp[df_emp['Year'] == current_year].copy()
+                if not df_valid.empty:
+                    quarter_counts = df_valid.groupby('Quarter').size().to_dict()
+                    hiring_trend = [
+                        {"name": quarter_labels[q], "Hires": quarter_counts.get(q, 0)}
+                        for q in range(1, 5)
+                    ]
 
             # 5. Asset Inventory
             asset_distribution = []

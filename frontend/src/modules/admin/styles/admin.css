@@ -16,19 +16,6 @@
     0 2px 10px rgba(0,0,0,0.04);
 }
 
-.admin-title {
-  font-size: 38px;
-  font-weight: 800;
-
-  margin-bottom: 6px;
-
-  background: #000000;
-
-  background-clip: text;
--webkit-background-clip: text;
-color: transparent;
--webkit-text-fill-color: transparent;
-}
 .card {
   background: white;
 
