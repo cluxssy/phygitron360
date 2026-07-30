@@ -128,7 +128,7 @@ export default function FinanceReviewPanel({ employeeCode, onClose, onSaved }) {
                   <div className="w-20 h-20 rounded-3xl bg-[#f3e8ff] text-[#8b5cf6] border border-[#ebe4ff] flex items-center justify-center font-black text-3xl overflow-hidden shrink-0">
                     {details.photo_path ? (
                       <img
-                        src={details.photo_path.startsWith('http') ? details.photo_path : `/${details.photo_path.replace(/^\//, '')}`}
+                        src={`/api/employee/${employeeCode}/document/pfp`}
                         className="w-full h-full object-cover"
                         alt=""
                       />

@@ -22,6 +22,15 @@ class DashboardService:
             total_candidates = len(data.get('candidates', pd.DataFrame()))
             total_jobs = len(data.get('job_roles', pd.DataFrame()))
 
+            # Present Today — distinct employees with a clock-in recorded for CURRENT_DATE,
+            # rated against active headcount (exited employees aren't expected to clock in).
+            df_att_today = data.get('attendance_today', pd.DataFrame())
+            present_today = (
+                df_att_today['employee_code'][df_att_today['clock_in'].notna()].nunique()
+                if not df_att_today.empty and 'clock_in' in df_att_today.columns else 0
+            )
+            attendance_rate = round((present_today / active_count) * 100) if active_count > 0 else 0
+
             # 2. Department Distribution
             department_distribution = []
             if not df_emp.empty and 'team' in df_emp.columns:
@@ -139,7 +148,8 @@ class DashboardService:
                 "counts": {
                     "total": total_employees, "active": active_count, "exited": exited_count,
                     "teams": total_teams, "designations": total_designations,
-                    "candidates": total_candidates, "jobs": total_jobs, "avg_tenure": avg_tenure
+                    "candidates": total_candidates, "jobs": total_jobs, "avg_tenure": avg_tenure,
+                    "present_today": present_today, "attendance_rate": attendance_rate
                 },
                 "charts": {
                     "department": department_distribution, "status": status_distribution,
