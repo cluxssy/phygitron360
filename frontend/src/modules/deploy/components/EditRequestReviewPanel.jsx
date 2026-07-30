@@ -82,7 +82,7 @@ export default function EditRequestReviewPanel({ request, onClose, onReviewed })
               <div className="w-16 h-16 rounded-2xl bg-[#f3e8ff] text-[#8b5cf6] border border-[#ebe4ff] flex items-center justify-center font-black text-2xl overflow-hidden shrink-0">
                 {request.photo_path ? (
                   <img
-                    src={request.photo_path.startsWith('http') ? request.photo_path : `/${request.photo_path.replace(/^\//, '')}`}
+                    src={`/api/employee/${request.employee_code}/document/pfp`}
                     className="w-full h-full object-cover"
                     alt=""
                   />

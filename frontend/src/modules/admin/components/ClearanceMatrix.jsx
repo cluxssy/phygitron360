@@ -160,7 +160,7 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
   const [editingRole, setEditingRole] = React.useState(null);
   const [editRoleValue, setEditRoleValue] = React.useState('');
 
-  const roles = Object.keys(rolesPerms);
+  const roles = Object.keys(rolesPerms).filter(r => r !== 'trainee');
 
   const KEY_COL_WIDTH = 260;
   const ROLE_COL_WIDTH = 150;
@@ -407,18 +407,27 @@ export default function ClearanceMatrix({ rolesPerms, customRolesList, onRefresh
                     {/* ROLES */}
                     {roles.map(r => {
                       const isAllowed = rolesPerms[r]?.includes(p.key);
+                      
+                      // Prevent org_admin from unchecking core admin permissions
+                      const isCoreAdminPerm = p.key === 'admin.users.manage' || p.key === 'admin.roles.manage' || p.key === 'manage_ops';
+                      const isLocked = r === 'org_admin' && isCoreAdminPerm;
+
                       return (
                         <td
                           key={`${r}-${p.key}`}
                           className="p-6 border-b border-primary/[0.04] text-center"
                         >
                           <button
-                            onClick={() => togglePermission(r, p.key)}
+                            onClick={() => !isLocked && togglePermission(r, p.key)}
+                            disabled={isLocked}
                             className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-300 border ${
                               isAllowed
-                                ? 'bg-gradient-to-br from-primary/20 to-primary/5 text-violet-700 border-primary/20 shadow-[0_0_25px_rgba(180,140,255,0.18)] hover:scale-105'
+                                ? isLocked 
+                                  ? 'bg-black/5 text-black/40 border-black/10 cursor-not-allowed'
+                                  : 'bg-gradient-to-br from-primary/20 to-primary/5 text-violet-700 border-primary/20 shadow-[0_0_25px_rgba(180,140,255,0.18)] hover:scale-105'
                                 : 'bg-white text-black/20 border-primary/10 hover:border-primary/30 hover:text-primary hover:bg-primary/[0.04]'
                             }`}
+                            title={isLocked ? "Core permission cannot be removed from org_admin" : ""}
                           >
                             {isAllowed
                               ? <Check size={18} strokeWidth={3} />

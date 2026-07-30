@@ -427,9 +427,9 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
           <div className="flex items-center gap-6">
             <div className="relative">
               {emp.photo_path ? (
-                <img 
-                  src={emp.photo_path.startsWith('http') ? emp.photo_path : `/${emp.photo_path.replace(/^\//, '')}`} 
-                  alt={emp.name} 
+                <img
+                  src={`/api/employee/${emp.employee_code}/document/pfp`}
+                  alt={emp.name}
                   className="w-20 h-20 rounded-[1.8rem] object-cover border-2 border-white shadow-lg shadow-[#7c3aed]/10" 
                   onError={(e) => {
                     e.target.style.display = 'none';

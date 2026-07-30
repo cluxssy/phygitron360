@@ -283,7 +283,7 @@ setEmployees(employeeList);
                         <div className="w-12 h-12 rounded-2xl overflow-hidden border border-[#e9ddff] bg-[#f5edff] flex items-center justify-center font-black text-[#7c3aed] text-base shrink-0">
                           {req.photo_path ? (
                             <img
-                              src={req.photo_path.startsWith('http') ? req.photo_path : `/${req.photo_path.replace(/^\//, '')}`}
+                              src={`/api/employee/${req.employee_code}/document/pfp`}
                               alt=""
                               className="w-full h-full object-cover"
                             />
@@ -640,7 +640,7 @@ setEmployees(employeeList);
                             {emp.photo_path ? (
 
                               <img
-                                src={emp.photo_path.startsWith('http') ? emp.photo_path : `/${emp.photo_path.replace(/^\//, '')}`}
+                                src={`/api/employee/${emp.employee_code}/document/pfp`}
                                 alt=""
                                 className="w-full h-full object-cover"
                               />

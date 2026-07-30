@@ -27,7 +27,11 @@ class EmployeeService:
     def get_team_employees(self, manager_code: str):
         return self.repo.get_team_employees(self.tenant_id, manager_code)
 
-    DOCUMENT_COLUMNS = {"photo": "photo_path", "cv": "cv_path", "id_proof": "id_proofs", "passbook": "passbook_path"}
+    # "pfp" and "photo" are both in use across the app as the doc_type for the
+    # profile picture (the /document/{doc_type} permission gate treats "pfp"
+    # specifically as the always-public type) — accept both as aliases so
+    # either caller resolves to the same column.
+    DOCUMENT_COLUMNS = {"photo": "photo_path", "pfp": "photo_path", "cv": "cv_path", "id_proof": "id_proofs", "passbook": "passbook_path"}
 
     def get_document_path(self, employee_code: str, doc_type: str) -> Optional[str]:
         """Returns the stored path/URL for an employee's photo/cv/id_proof, or None."""

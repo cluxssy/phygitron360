@@ -479,7 +479,7 @@ export default function AttendancePanel({ mode }) {
               <table className="w-full text-left min-w-[720px]">
                 <thead className="bg-white/5 border-b border-white/10">
                   <tr>
-                    {['Employee', 'Clock In', 'Clock Out', 'Status', 'Work Summary', 'Control'].map(h => (
+                    {['Employee', 'Clock In', 'Clock Out', 'Status', 'Work Summary'].map(h => (
                       <th key={h} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#8b8ba3]">{h}</th>
                     ))}
                   </tr>
@@ -501,23 +501,6 @@ export default function AttendancePanel({ mode }) {
                         }`}>{r.status}</span>
                       </td>
                       <td className="px-6 py-4 text-[10px] text-[#6b7280] italic truncate max-w-[200px]">{r.work_log || 'No notes found'}</td>
-                      <td className="px-6 py-4">
-                        <button 
-                            onClick={() => {
-                                setEditingRecord(r);
-                                setEditForm({ 
-                                    employee_code: r.employee_code, 
-                                    date: r.date, 
-                                    clock_in: r.clock_in || '', 
-                                    clock_out: r.clock_out || '', 
-                                    work_log: r.work_log || '' 
-                                });
-                            }}
-                            className="p-2 rounded-xl bg-[#faf7ff] text-[#6b7280] hover:bg-gradient-to-r hover:from-[#c084fc] hover:to-[#8b5cf6] hover:text-white transition-all"
-                        >
-                            <Edit size={14} />
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>

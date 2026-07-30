@@ -4,9 +4,10 @@ import {
   ShieldCheck, FileText, User, ChevronRight,
   TrendingUp, Award, Clock, ArrowLeft, Download,
   ExternalLink, Building, Landmark, GraduationCap,
-  Save, Edit3, Image, Upload, Trash2, Package, CheckCircle, Key
+  Save, Edit3, Image, Upload, Trash2, Package, CheckCircle, Key, AlertTriangle, Plus
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import ComboBox from '../../../core/components/ComboBox';
 import HasPermission from '../../../components/common/HasPermission';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { useAuth } from '../../../core/auth/AuthContext';
@@ -34,9 +35,41 @@ const splitFullName = (fullName) => {
     return { first_name: words[0], middle_name: words.slice(1, -1).join(' '), last_name: words[words.length - 1] };
 };
 
+// Mirrors the backend's profile-completeness check for education_details
+// (JSONB column — arrives as an array, or occasionally as a raw JSON string).
+const hasEducationDetails = (edu) => {
+    try {
+        const parsed = typeof edu === 'string' ? JSON.parse(edu) : edu;
+        return Array.isArray(parsed) && parsed.length > 0;
+    } catch {
+        return false;
+    }
+};
+
 // ── STATUS CONFIG ──
 const STATUS_OPTIONS = ['Active', 'Notice Period', 'On Leave', 'Inactive'];
 const EXITED_STATUSES = ['Exited', 'Terminated'];
+
+// Fallback lists — same as the onboarding invite form — used only until
+// /api/options resolves with the tenant's actual designations/departments.
+const DESIGNATIONS = [
+    'Software Engineer', 'Senior Engineer', 'Team Lead', 'Project Manager',
+    'Product Manager', 'Designer', 'QA Analyst', 'Sales Executive',
+    'HR Associate', 'Accountant', 'Marketing Specialist', 'Operations Manager'
+];
+
+const DEPARTMENTS = [
+    'Engineering', 'Product', 'Design', 'Marketing', 'Sales',
+    'Human Resources', 'Finance', 'Operations', 'Quality Assurance'
+];
+
+const DEGREE_OPTIONS = [
+    '10th / SSC', '12th / HSC', 'Diploma',
+    'B.Tech', 'B.E.', 'B.Sc', 'B.Com', 'B.A.', 'BBA', 'BCA',
+    'M.Tech', 'M.E.', 'M.Sc', 'M.Com', 'M.A.', 'MBA', 'MCA', 'PhD'
+];
+
+const EMPTY_EDUCATION_ENTRY = { degree: '', university: '', year: '', percentage: '' };
 
 const STATUS_COLORS = {
   Active: '#10B981',
@@ -56,6 +89,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const [assets, setAssets] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [managers, setManagers] = useState([]);
+    const [dynDesignations, setDynDesignations] = useState([]);
+    const [dynDepartments, setDynDepartments] = useState([]);
     const [errors, setErrors] = useState({});
     const fileInputPfp = useRef();
     const fileInputCv = useRef();
@@ -131,6 +166,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                 .then(r => r.json())
                 .then(data => {
                     if(data.managers) setManagers(data.managers);
+                    setDynDesignations(data.designations || []);
+                    setDynDepartments(data.departments || []);
                 }).catch(() => {});
         }
     }, [employeeCode]);
@@ -198,6 +235,34 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
+    };
+
+    // ── Education list helpers (structured degree/university/year/percentage) ──
+    const getEducationList = () => {
+        try {
+            const parsed = typeof formData.education_details === 'string'
+                ? JSON.parse(formData.education_details)
+                : formData.education_details;
+            return Array.isArray(parsed) && parsed.length > 0 ? parsed : [{ ...EMPTY_EDUCATION_ENTRY }];
+        } catch {
+            return [{ ...EMPTY_EDUCATION_ENTRY }];
+        }
+    };
+
+    const updateEducationEntry = (idx, field, value) => {
+        const list = getEducationList().map((entry, i) => i === idx ? { ...entry, [field]: value } : entry);
+        setFormData({ ...formData, education_details: list });
+    };
+
+    const addEducationEntry = () => {
+        setFormData({ ...formData, education_details: [...getEducationList(), { ...EMPTY_EDUCATION_ENTRY }] });
+    };
+
+    const removeEducationEntry = (idx) => {
+        const list = getEducationList();
+        if (list.length > 1) {
+            setFormData({ ...formData, education_details: list.filter((_, i) => i !== idx) });
+        }
     };
 
     if (loading && !details) {
@@ -342,6 +407,24 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
         }
     };
 
+    const handleRemovePfp = async () => {
+        if (!window.confirm('Remove this profile photo?')) return;
+        try {
+            toast.loading('Removing photo...', { id: 'remove-pfp' });
+            const res = await fetch(`/api/employee/${details.employee_code}`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ photo_path: '' })
+            });
+            if (!res.ok) throw new Error('Failed to remove photo');
+            toast.success('Profile photo removed', { id: 'remove-pfp' });
+            fetchDetails(details.employee_code);
+        } catch {
+            toast.error('Failed to remove photo', { id: 'remove-pfp' });
+        }
+    };
+
     const handleOffboard = async () => {
         if (!window.confirm('Are you sure you want to initiate offboarding? This action is irreversible.')) return;
         const exitDate = new Date().toISOString().split('T')[0];
@@ -443,18 +526,28 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     <div className="relative group">
                         <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-primary/15 to-primary/5 border-2 border-primary/30 flex items-center justify-center text-primary font-display font-black text-5xl shrink-0 shadow-2xl shadow-primary/20 overflow-hidden">
                             {details.photo_path ? (
-                                <img src={details.photo_path.startsWith('http') ? details.photo_path : `/${details.photo_path.replace(/^\//, '')}`} className="w-full h-full object-cover" alt="" />
+                                <img src={`/api/employee/${details.employee_code}/document/pfp`} className="w-full h-full object-cover" alt="" />
                             ) : (
                                 details.name?.[0]
                             )}
                         </div>
                         {editDocs && (
-                            <button 
-                                onClick={() => fileInputPfp.current.click()}
-                                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-1 rounded-3xl text-white text-[9px] font-black uppercase tracking-widest"
-                            >
-                                <Image size={18} /> Update PFP
-                            </button>
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-2 rounded-3xl text-white text-[9px] font-black uppercase tracking-widest">
+                                <button
+                                    onClick={() => fileInputPfp.current.click()}
+                                    className="flex items-center gap-1 hover:text-primary transition-colors"
+                                >
+                                    <Image size={16} /> Upload PFP
+                                </button>
+                                {details.photo_path && (canEditBasic || isSelf) && (
+                                    <button
+                                        onClick={handleRemovePfp}
+                                        className="flex items-center gap-1 hover:text-red-400 transition-colors"
+                                    >
+                                        <Trash2 size={16} /> Remove PFP
+                                    </button>
+                                )}
+                            </div>
                         )}
                         <input type="file" ref={fileInputPfp} hidden accept="image/jpeg,image/png" onChange={e => handleFileUpload('pfp', e.target.files[0])} />
                     </div>
@@ -536,25 +629,31 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <div className="flex flex-wrap items-center gap-3">
                             {editJob ? (
                                 <>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Designation"
-                                        value={formData.designation}
-                                        onChange={e => setFormData({...formData, designation: e.target.value})}
-                                        className="bg-[#faf7ff] border border-[#e9defd] rounded-lg px-4 py-1.5 text-xs text-primary font-bold uppercase tracking-widest focus:outline-none"
-                                    />
+                                    <div className="flex items-center gap-1.5">
+                                        <ComboBox
+                                            className="w-56"
+                                            options={dynDesignations.length > 0 ? dynDesignations : DESIGNATIONS}
+                                            value={formData.designation}
+                                            onChange={val => setFormData({...formData, designation: val})}
+                                            placeholder="Select Designation..."
+                                        />
+                                        {!details.designation && <MissingMark />}
+                                    </div>
                                     <span className="text-black/90">//</span>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Team"
-                                        value={formData.team}
-                                        onChange={e => setFormData({...formData, team: e.target.value})}
-                                        className="bg-[#faf7ff] border border-[#e9defd] rounded-lg px-4 py-1.5 text-xs text-black/75 font-bold uppercase tracking-widest focus:outline-none"
-                                    />
+                                    <div className="flex items-center gap-1.5">
+                                        <ComboBox
+                                            className="w-56"
+                                            options={dynDepartments.length > 0 ? dynDepartments : DEPARTMENTS}
+                                            value={formData.team}
+                                            onChange={val => setFormData({...formData, team: val})}
+                                            placeholder="Select Department..."
+                                        />
+                                        {!details.team && <MissingMark />}
+                                    </div>
                                 </>
                             ) : (
-                                <p className="text-primary font-black text-sm uppercase tracking-[0.3em] flex items-center gap-2">
-                                    {details.designation} <span className="text-black/90">//</span> {details.team}
+                                <p className="text-gray-700 font-black text-sm uppercase tracking-[0.3em] flex items-center gap-2">
+                                    {details.designation} {!details.designation && <MissingMark />} <span className="text-black/90">//</span> {details.team} {!details.team && <MissingMark />}
                                 </p>
                             )}
                         </div>
@@ -587,7 +686,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <Phone size={12} className="text-[#7c3aed]" />
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Contact</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF] flex items-center gap-1.5">Contact {!details.contact_number && <MissingMark />}</p>
     </div>
     {editBasic ? (
         <div>
@@ -610,7 +709,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 <div className="bg-[#f4ecff] border border-[#ddd6fe] rounded-2xl px-4 py-3 hover:border-[#7c3aed] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
     <div className="flex items-center gap-2 mb-2">
         <MapPin size={12} className="text-[#7c3aed]" />
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF]">Work Location</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#7B1FFF] flex items-center gap-1.5">Work Location {!details.location && <MissingMark />}</p>
     </div>
     {editJob ? (
         <input
@@ -646,10 +745,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Employee Statistics */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editJob} onChange={v => setFormData({...formData, doj: v})} error={errors.doj} />
+                        <EditStatCard label="Tenure (DOJ)" value={formData.doj} sub="Joined Date" type="date" editMode={editJob} onChange={v => setFormData({...formData, doj: v})} error={errors.doj} missing={!details.doj} />
                         <EditStatCard label="Contract" value={formData.employment_type} sub="Engagement Mode" editMode={editJob} onChange={v => setFormData({...formData, employment_type: v})} />
                         <EditStatCard label="Experience" value={formData.experience_years} sub="Years" type="number" editMode={editJob} onChange={v => setFormData({...formData, experience_years: v})} error={errors.experience_years} />
-                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Manager" editMode={editJob} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} />
+                        <EditStatCard label="Manager" value={formData.reporting_manager} sub="Reporting Manager" editMode={editJob} type="select" options={managers.map(m => ({ label: `${m.name} (${m.role})`, value: m.code }))} onChange={v => setFormData({...formData, reporting_manager: v})} displayValue={managers.find(m => m.code === formData.reporting_manager)?.name || formData.reporting_manager} missing={!details.reporting_manager} />
                     </div>
 
                     {/* Skill Synergy */}
@@ -657,7 +756,9 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={TrendingUp} title="Skills & Expertise" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-[#7B1FFF] mb-4 italic">Primary SKILL</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#7B1FFF] mb-4 italic flex items-center gap-1.5">
+                                    Primary SKILL {!details.skill_matrix?.primary_skillset && <MissingMark />}
+                                </p>
                                 {editBasic ? (
                                     <textarea 
                                         value={formData.primary_skillset}
@@ -701,18 +802,65 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Education Logs */}
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={GraduationCap} title="Academic Foundation Blocks" />
+                        <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                                <SectionHeader icon={GraduationCap} title="Academic Foundation Blocks" />
+                                {!hasEducationDetails(details.education_details) && <MissingMark />}
+                            </div>
+                            {editBasic && (
+                                <button
+                                    type="button"
+                                    onClick={addEducationEntry}
+                                    className="flex items-center gap-2 px-4 py-2 bg-[#f4ecff] hover:bg-[#ece2ff] text-[#7c3aed] rounded-xl transition-all border border-[#ddd6fe] shrink-0"
+                                >
+                                    <Plus size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Add education</span>
+                                </button>
+                            )}
+                        </div>
                         <div className="mt-6 space-y-4">
                             {editBasic ? (
                                 <div className="space-y-4">
-                                    <textarea 
-                                        value={typeof formData.education_details === 'string' ? formData.education_details : JSON.stringify(formData.education_details, null, 2)}
-                                        onChange={e => setFormData({...formData, education_details: e.target.value})}
-                                        className="w-full font-mono bg-gradient-to-br from-[#f7f3ff] to-[#faf7ff] border border-[#e9ddff] rounded-xl p-6 text-[10px] text-black focus:outline-none focus:border-primary/30"
-                                        rows={10}
-                                        placeholder="[ { 'degree': '...', 'university': '...', 'year': '...' } ]"
-                                    />
-                                    <p className="text-[8px] uppercase font-black text-black/80 tracking-tighter">Enter educational history in JSON sequence protocol</p>
+                                    {getEducationList().map((edu, idx) => (
+                                        <div key={idx} className="relative p-6 bg-gradient-to-r from-[#f7f3ff] to-[#faf7ff] rounded-2xl border border-[#e9ddff] space-y-4 group">
+                                            {getEducationList().length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeEducationEntry(idx)}
+                                                    className="absolute top-4 right-4 p-2 text-black/20 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            )}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <ComboBox
+                                                    options={DEGREE_OPTIONS}
+                                                    value={edu.degree}
+                                                    onChange={val => updateEducationEntry(idx, 'degree', val)}
+                                                    placeholder="Select or type degree..."
+                                                />
+                                                <input
+                                                    value={edu.university || ''}
+                                                    onChange={e => updateEducationEntry(idx, 'university', e.target.value)}
+                                                    placeholder="Institution / University"
+                                                    className="w-full bg-white border border-[#e9ddff] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-primary/30"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <input
+                                                    value={edu.year || ''}
+                                                    onChange={e => updateEducationEntry(idx, 'year', e.target.value)}
+                                                    placeholder="Passout Year"
+                                                    className="w-full bg-white border border-[#e9ddff] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-primary/30"
+                                                />
+                                                <input
+                                                    value={edu.percentage || ''}
+                                                    onChange={e => updateEducationEntry(idx, 'percentage', e.target.value)}
+                                                    placeholder="CGPA / %"
+                                                    className="w-full bg-white border border-[#e9ddff] rounded-xl px-4 py-3 text-xs text-black focus:outline-none focus:border-primary/30"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             ) : (
                                 (() => {
@@ -751,12 +899,14 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 active={formData.pf_included}
                                 editMode={editFinancial}
                                 onToggle={() => setFormData({...formData, pf_included: !formData.pf_included})}
+                                missing={!details.pf_included}
                             />
                             <ComplianceRow
                                 label="Mediclaim Included"
                                 active={formData.mediclaim_included}
                                 editMode={editFinancial}
                                 onToggle={() => setFormData({...formData, mediclaim_included: !formData.mediclaim_included})}
+                                missing={!details.mediclaim_included}
                             />
                         </div>
                     </div>
@@ -774,6 +924,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 docType="cv"
                                 editMode={editDocs}
                                 onUpload={() => fileInputCv.current.click()}
+                                missing={!details.cv_path}
                             />
                             <FileCard
                                 label="Identity Proof"
@@ -782,6 +933,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 docType="id_proof"
                                 editMode={editDocs}
                                 onUpload={() => fileInputId.current.click()}
+                                missing={!details.id_proofs}
                             />
                         </div>
                         <input type="file" ref={fileInputCv} hidden accept=".pdf" onChange={e => handleFileUpload('cv', e.target.files[0])} />
@@ -915,8 +1067,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                         <SectionHeader icon={Landmark} title="Location details" />
                         <div className="mt-6 space-y-6">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
-                                    Work Location
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
+                                    Work Location {!details.current_address && <MissingMark />}
                                 </p>
                                 {editBasic ? (
                                     <div>
@@ -935,8 +1087,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
-                                    Permanent Identity Anchor
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
+                                    Permanent Identity Anchor {!details.permanent_address && <MissingMark />}
                                 </p>
                                 {editBasic ? (
                                     <div>
@@ -1004,8 +1156,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                                 )}
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
-                                    PAN No.
+                                <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
+                                    PAN No. {!details.pan_no && <MissingMark />}
                                 </p>
                                 {editFinancial ? (
                                     <div>
@@ -1032,7 +1184,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     {/* Emergency Contact */}
                     {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={Phone} title="Emergency Contact" />
+                        <div className="flex items-center gap-1.5">
+                            <SectionHeader icon={Phone} title="Emergency Contact" />
+                            {!details.emergency_contact && <MissingMark />}
+                        </div>
                         <div className="mt-6">
                             {editBasic ? (
                                 <div>
@@ -1058,7 +1213,10 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     {/* Date of Birth */}
                     {details?._meta?.can_view_sensitive !== false && (
                     <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
-                        <SectionHeader icon={Calendar} title="DOB" />
+                        <div className="flex items-center gap-1.5">
+                            <SectionHeader icon={Calendar} title="DOB" />
+                            {!details.dob && <MissingMark />}
+                        </div>
                         <div className="mt-6">
                             {editBasic ? (
                                 <div>
@@ -1161,11 +1319,11 @@ function EditMetaItem({ editMode, icon: Icon, label, value, onChange }) {
     );
 }
 
-function EditStatCard({ label, value, sub, editMode, onChange, type = "text", options = [], displayValue, error }) {
+function EditStatCard({ label, value, sub, editMode, onChange, type = "text", options = [], displayValue, error, missing }) {
     return (
         <div className={`bg-white border border-[#e9ddff] rounded-2xl shadow-sm hover:shadow-md hover:shadow-[#7c3aed]/10 p-6 transition-all ${editMode ? 'ring-2 ring-[#c4b5fd]' : ''}`}>
-            <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2">
-                {label}
+            <p className="text-[9px] font-black uppercase tracking-widest text-[#7B1FFF] mb-2 flex items-center gap-1.5">
+                {label} {missing && <MissingMark />}
             </p>
             {editMode ? (
                 <>
@@ -1209,6 +1367,20 @@ function EditStatCard({ label, value, sub, editMode, onChange, type = "text", op
     );
 }
 
+// Small yellow "!" badge — flags a field that's part of the profile-completeness
+// checklist (same fields the "Incomplete profile" Directory badge is derived
+// from) and is currently empty, so it's obvious at a glance what to fill in.
+function MissingMark() {
+    return (
+        <span
+            title="Missing — required for a complete profile"
+            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-100 border border-amber-200 shrink-0"
+        >
+            <AlertTriangle size={9} className="text-amber-500" fill="#fef3c7" />
+        </span>
+    );
+}
+
 function SectionHeader({ icon: Icon, title }) {
     return (
         <div className="flex items-center gap-3 border-b border-[#ece4ff] pb-4">
@@ -1222,7 +1394,7 @@ function SectionHeader({ icon: Icon, title }) {
     );
 }
 
-function FileCard({ label, path, editMode, onUpload, employeeCode, docType }) {
+function FileCard({ label, path, editMode, onUpload, employeeCode, docType, missing }) {
     // Served through a backend endpoint (reads the file server-side, or redirects
     // to a presigned S3 URL) rather than a raw static path — locally-stored files
     // aren't reachable via any static file route. Inline by default (for viewing);
@@ -1254,8 +1426,8 @@ function FileCard({ label, path, editMode, onUpload, employeeCode, docType }) {
         <div className="flex items-center justify-between p-4 bg-[#f8f5ff] rounded-xl border border-[#e9ddff] group hover:border-[#c4b5fd] hover:shadow-md hover:shadow-[#7c3aed]/10 transition-all">
             <div className="flex items-center gap-3">
                 <FileText size={16} className="text-[#7c3aed] group-hover:text-[#6d28d9] transition-colors" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-black">
-                    {label}
+                <span className="text-[10px] font-black uppercase tracking-widest text-black flex items-center gap-1.5">
+                    {label} {missing && <MissingMark />}
                 </span>
             </div>
             <div className="flex gap-2">
@@ -1293,11 +1465,11 @@ function FileCard({ label, path, editMode, onUpload, employeeCode, docType }) {
     );
 }
 
-function ComplianceRow({ label, active, editMode, onToggle }) {
+function ComplianceRow({ label, active, editMode, onToggle, missing }) {
     return (
         <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-widest text-black">
-                {label}
+            <span className="text-[10px] font-black uppercase tracking-widest text-black flex items-center gap-1.5">
+                {label} {missing && <MissingMark />}
             </span>
             <button
                 disabled={!editMode}
