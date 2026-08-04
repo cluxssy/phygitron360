@@ -36,18 +36,11 @@ const iconLabel = (element) => {
   return className ? ICON_LABELS[className.replace('lucide-', '')] : '';
 };
 
-const textFor = (element) =>
-  element.getAttribute('aria-label') ||
-  element.getAttribute('title') ||
-  element.innerText?.replace(/\s+/g, ' ').trim() ||
-  element.querySelector('img')?.alt ||
-  iconLabel(element) ||
-  '';
-
 /**
- * Makes existing labels and titles use the shared in-product tooltip instead
- * of the browser's default title bubble. Text buttons are included so backend
- * actions get a concise hover explanation without bespoke wrappers.
+ * Makes existing titles use the shared in-product tooltip instead of the
+ * browser's default title bubble. Icon-only buttons without an explicit
+ * title still get a fallback label; buttons with visible text are left
+ * alone since a tooltip would just repeat what's already on screen.
  */
 export default function TooltipProvider({ children }) {
   const [tooltip, setTooltip] = useState(null);
@@ -67,8 +60,11 @@ export default function TooltipProvider({ children }) {
       }
 
       if (element.matches('button, [role="button"]') && !element.dataset.tooltip) {
-        const label = textFor(element);
-        if (label) element.dataset.tooltip = label;
+        const visibleText = element.innerText?.replace(/\s+/g, ' ').trim();
+        if (!visibleText) {
+          const label = element.getAttribute('aria-label') || element.querySelector('img')?.alt || iconLabel(element);
+          if (label) element.dataset.tooltip = label;
+        }
       }
 
       if (element.matches('img.icon, img.cursor-pointer') && !element.dataset.tooltip) {
