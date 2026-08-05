@@ -453,26 +453,6 @@ export default function AttendancePanel({ mode }) {
                 </button>
                 ))}
             </div>
-            
-            {adminTab === 'heatmap' && (
-                <div className="flex gap-2">
-                    <select 
-                        value={selectedMonth} 
-                        onChange={e => setSelectedMonth(Number(e.target.value))}
-                        className="bg-[#faf7ff] border border-[#ebe4ff] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
-                    >
-                        {Array.from({length: 12}, (_, i) => (
-                            <option key={i+1} value={i+1}>{new Date(2000, i).toLocaleString('default', { month: 'long' })}</option>
-                        ))}
-                    </select>
-                    <input 
-                        type="number" 
-                        value={selectedYear}
-                        onChange={e => setSelectedYear(Number(e.target.value))}
-                        className="w-24 bg-[#faf7ff] border border-[#ebe4ff] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
-                    />
-                </div>
-            )}
           </div>
 
           {adminTab === 'today' && (
@@ -586,6 +566,24 @@ export default function AttendancePanel({ mode }) {
                               </span>
                           </div>
                       ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                      <select
+                          value={selectedMonth}
+                          onChange={e => setSelectedMonth(Number(e.target.value))}
+                          className="bg-[#faf7ff] border border-[#ebe4ff] shadow-[0_4px_12px_rgba(0,0,0,0.12)] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
+                      >
+                          {Array.from({length: 12}, (_, i) => (
+                              <option key={i+1} value={i+1}>{new Date(2000, i).toLocaleString('default', { month: 'long' })}</option>
+                          ))}
+                      </select>
+                      <input
+                          type="number"
+                          value={selectedYear}
+                          onChange={e => setSelectedYear(Number(e.target.value))}
+                          className="w-24 bg-[#faf7ff] border border-[#ebe4ff] shadow-[0_4px_12px_rgba(0,0,0,0.12)] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
+                      />
                   </div>
 
                   <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-x-auto">

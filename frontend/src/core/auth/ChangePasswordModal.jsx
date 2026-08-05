@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Lock, Zap, ArrowRight, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { validatePassword } from '../utils/validators';
@@ -51,8 +52,8 @@ export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-100/80 backdrop-blur-md">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-24 pb-8 overflow-y-auto bg-gray-100/80 backdrop-blur-md">
       <div className="relative z-10 w-full max-w-md animate-fade-in-up bg-white border border-[#CC97FF]/30 rounded-3xl p-8 shadow-[0_20px_60px_rgba(204,151,255,0.15)]">
         {!forceUpdate && (
           <button 
@@ -127,13 +128,14 @@ export default function ChangePasswordModal({ onClose, forceUpdate = false }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-4 bg-[#CC97FF] text-black font-extrabold text-[11px] uppercase tracking-[0.2em] py-5 rounded-2xl shadow-[0_10px_30px_rgba(204,151,255,0.4)] hover:bg-[#d6a8ff] hover:shadow-[0_10px_35px_rgba(204,151,255,0.6)] transition-all active:scale-[0.98] flex items-center justify-center gap-2 group"
+            className="w-full mt-4 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white font-extrabold text-[11px] uppercase tracking-[0.2em] py-5 rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.4)] hover:opacity-90 hover:shadow-[0_10px_35px_rgba(139,92,246,0.6)] transition-all active:scale-[0.98] flex items-center justify-center gap-2 group"
           >
             {loading ? 'Processing...' : 'Update Password'}
             <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
-} 
+}
