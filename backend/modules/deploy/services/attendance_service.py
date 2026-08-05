@@ -586,9 +586,8 @@ class AttendanceService:
         """
         Returns True if `target_date` is within its self-service correction window.
 
-        Window rule: Each week (Mon–Sun) can be self-corrected until the NEXT Monday.
-        e.g. week of Jul 21–27 can be corrected up to and including Jul 28 (next Monday).
-        Once Jul 29 arrives, Jul 21–27 require manager approval.
+        Window rule: Both the current week (Mon-Sun) and the entire previous week can be self-corrected/logged.
+        Dates older than the previous Monday require manager approval.
         """
         from datetime import date as date_type
         if isinstance(target_date, str):
@@ -596,14 +595,13 @@ class AttendanceService:
         if isinstance(today, str):
             today = datetime.strptime(today, '%Y-%m-%d').date()
 
-        if target_date >= today:   # Can't correct today or future
+        if target_date > today:   # Can't record for future dates
             return False
 
-        # Monday of the target date's week (weekday: Mon=0)
-        target_monday = target_date - timedelta(days=target_date.weekday())
-        # Self-service window closes on the NEXT Monday after that week
-        window_close = target_monday + timedelta(days=7)
-        return today <= window_close
+        # The self-service window covers the entire current week and previous week (starting from previous week's Monday)
+        this_monday = today - timedelta(days=today.weekday())
+        previous_monday = this_monday - timedelta(days=7)
+        return target_date >= previous_monday
 
     def get_correction_window(self, employee_code: str, client_date: str = None) -> Dict[str, Any]:
         """
@@ -655,8 +653,6 @@ class AttendanceService:
 
             if doj and d < doj:
                 track = 'before_join'
-            elif d == today:
-                track = 'today'
             elif d > today:
                 track = 'future'
             elif self._is_self_service_date(d, today):
@@ -752,8 +748,8 @@ class AttendanceService:
         else:
             today = _today_utc()
 
-        if target_date >= today:
-            raise ValueError("Cannot correct today or a future date.")
+        if target_date > today:
+            raise ValueError("Cannot log attendance for a future date.")
 
         if not self._is_self_service_date(target_date, today):
             raise ValueError(
@@ -805,7 +801,7 @@ class AttendanceService:
 
     def apply_correction_request(self, employee_code: str, date_str: str,
                                  clock_in: Optional[str], clock_out: Optional[str],
-                                 reason: str):
+                                 reason: str, client_date: str = None):
         """
         Submit a correction request for a date outside the self-service window.
         Requires manager approval before being applied.
@@ -815,10 +811,16 @@ class AttendanceService:
         except ValueError:
             raise ValueError("Invalid date format. Must be YYYY-MM-DD.")
 
-        today = _today_ist()
+        if client_date:
+            try:
+                today = datetime.strptime(client_date, '%Y-%m-%d').date()
+            except ValueError:
+                today = _today_utc()
+        else:
+            today = _today_utc()
 
-        if target_date >= today:
-            raise ValueError("Cannot request correction for today or a future date.")
+        if target_date > today:
+            raise ValueError("Cannot request correction for a future date.")
 
         if self._is_self_service_date(target_date, today):
             raise ValueError(

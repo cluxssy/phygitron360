@@ -46,16 +46,16 @@ export default function CorrectionSystem({ isManager }) {
     useEffect(() => { loadData(); }, [isManager]);
 
     const openDrawer = (day) => {
-        if (day.track === 'future' || day.track === 'today') return;
+        if (day.track === 'future' || day.track === 'before_join') return;
         if (day.pending_correction) {
-            toast.error("You already have a pending correction for this date.");
+            toast.error("You already have a pending request for this date.");
             return;
         }
         setSelectedDay(day);
         setForm({
-            clock_in: day.clock_in && day.clock_in !== 'None' ? day.clock_in : '',
-            clock_out: day.clock_out && day.clock_out !== 'None' ? day.clock_out : '',
-            reason: ''
+            clock_in: day.clock_in && day.clock_in !== 'None' ? day.clock_in.substring(0, 5) : '',
+            clock_out: day.clock_out && day.clock_out !== 'None' ? day.clock_out.substring(0, 5) : '',
+            reason: day.work_log || ''
         });
         setDrawerOpen(true);
     };
@@ -66,6 +66,8 @@ export default function CorrectionSystem({ isManager }) {
             ? '/api/attendance/correction/self-service'
             : '/api/attendance/correction/request';
             
+        const formatTime = (t) => t ? (t.length === 5 ? `${t}:00` : t) : null;
+            
         try {
             const res = await fetch(endpoint, {
                 method: 'POST',
@@ -73,9 +75,9 @@ export default function CorrectionSystem({ isManager }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     date: selectedDay.date,
-                    clock_in: form.clock_in || null,
-                    clock_out: form.clock_out || null,
-                    reason: form.reason,
+                    clock_in: formatTime(form.clock_in),
+                    clock_out: formatTime(form.clock_out),
+                    reason: form.reason || 'Daily Attendance Log',
                     client_date: new Date().toLocaleDateString('en-CA')
                 })
             });
@@ -110,7 +112,7 @@ export default function CorrectionSystem({ isManager }) {
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-[#8b8ba3] text-[10px] uppercase font-black tracking-widest animate-pulse">Loading Correction Data...</div>;
+    if (loading) return <div className="p-8 text-center text-[#8b8ba3] text-[10px] uppercase font-black tracking-widest animate-pulse">Loading Attendance Data...</div>;
 
     const renderGrid = () => {
         if (!windowData) return null;
@@ -124,12 +126,13 @@ export default function CorrectionSystem({ isManager }) {
         // Reverse so the current week is at the top
         const reversedWeeks = [...weeks].reverse();
 
-        const getStatusColor = (status, track, pending) => {
+        const getStatusColor = (status, track, pending, isToday) => {
             if (pending) return 'bg-amber-100 border-amber-300 text-amber-700';
-            if (track === 'future' || track === 'today' || track === 'before_join') return 'bg-gray-50 border-gray-200 text-gray-400 opacity-60';
+            if (track === 'future' || track === 'before_join') return 'bg-gray-50 border-gray-200 text-gray-400 opacity-60';
             if (status === 'Present') return 'bg-emerald-50 border-emerald-200 text-emerald-700';
             if (status === 'Absent' || status === 'Missing Clock-Out') return 'bg-red-50 border-red-200 text-red-700';
             if (status.includes('Half Day')) return 'bg-orange-50 border-orange-200 text-orange-700';
+            if (isToday && (status === 'Active' || status === 'No Record')) return 'bg-purple-50/50 border-purple-200 text-purple-900';
             return 'bg-white border-gray-200 text-gray-700';
         };
 
@@ -139,18 +142,18 @@ export default function CorrectionSystem({ isManager }) {
                 <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
                     {days.map(d => {
                         if (d.track === 'before_join') return <div key={d.date} className="p-3"></div>;
-                        
+                        const isToday = d.date === windowData.today;
                         return (
                         <div 
                             key={d.date} 
                             onClick={() => {
-                                if (d.track !== 'future' && d.track !== 'today') openDrawer(d);
+                                if (d.track !== 'future' && d.track !== 'before_join') openDrawer(d);
                             }}
-                            className={`p-3 rounded-2xl border transition-all cursor-pointer relative group ${getStatusColor(d.status, d.track, !!d.pending_correction)} ${d.track !== 'future' && d.track !== 'today' && !d.pending_correction ? 'hover:shadow-md hover:scale-105' : 'cursor-not-allowed'}`}
+                            className={`p-3 rounded-2xl border transition-all cursor-pointer relative group ${getStatusColor(d.status, d.track, !!d.pending_correction, isToday)} ${d.track !== 'future' && d.track !== 'before_join' && !d.pending_correction ? 'hover:shadow-md hover:scale-105' : 'cursor-not-allowed'} ${isToday ? 'ring-2 ring-[#8b5cf6] shadow-md' : ''}`}
                         >
                             {d.track === 'self_service' && !d.pending_correction && (
                                 <div className="absolute -top-2 -right-2 bg-[#8b5cf6] text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
-                                    <RefreshCcw size={10} />
+                                    <Edit2 size={10} />
                                 </div>
                             )}
                             {d.track === 'requested' && !d.pending_correction && (
@@ -158,12 +161,15 @@ export default function CorrectionSystem({ isManager }) {
                                     <AlertCircle size={10} />
                                 </div>
                             )}
-                            <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1">{d.weekday.substring(0,3)}</p>
+                            <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1 flex justify-between items-center">
+                                <span>{d.weekday.substring(0,3)}</span>
+                                {isToday && <span className="text-[#8b5cf6] font-extrabold not-italic">(TODAY)</span>}
+                            </p>
                             <p className="text-xs font-bold mb-2">{d.date.split('-')[2]}</p>
                             
                             <div className="text-[9px] font-mono leading-tight opacity-80 h-6">
-                                {d.clock_in && d.clock_in !== 'None' ? <span>In: {d.clock_in}</span> : <span>--:--</span>}<br/>
-                                {d.clock_out && d.clock_out !== 'None' ? <span>Out: {d.clock_out}</span> : <span>--:--</span>}
+                                {d.clock_in && d.clock_in !== 'None' ? <span>In: {d.clock_in.substring(0,5)}</span> : <span>--:--</span>}<br/>
+                                {d.clock_out && d.clock_out !== 'None' ? <span>Out: {d.clock_out.substring(0,5)}</span> : <span>--:--</span>}
                             </div>
                             
                             <div className="mt-3 text-[8px] font-black uppercase tracking-widest text-center py-1 rounded bg-black/5">
@@ -180,12 +186,12 @@ export default function CorrectionSystem({ isManager }) {
             <div className="bg-white border border-[#ebe4ff] rounded-[2rem] p-6 sm:p-8">
                 <div className="flex justify-between items-center mb-6">
                     <div>
-                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black">Correction Window</h3>
-                        <p className="text-[10px] text-[#8b8ba3] uppercase font-bold mt-1">Select a past day to correct</p>
+                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black">Daily Attendance Grid</h3>
+                        <p className="text-[10px] text-[#8b8ba3] uppercase font-bold mt-1">Click any active day to log attendance or update record</p>
                     </div>
                     <div className="flex gap-4">
                         <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
-                            <div className="w-2 h-2 rounded-full bg-[#8b5cf6]"></div> Self-Service
+                            <div className="w-2 h-2 rounded-full bg-[#8b5cf6]"></div> Self-Service Window (Current & Previous Week)
                         </div>
                         <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
                             <div className="w-2 h-2 rounded-full bg-gray-600"></div> Manager Approval
@@ -198,8 +204,8 @@ export default function CorrectionSystem({ isManager }) {
                         if (weekDays.every(d => d.track === 'before_join')) return null;
 
                         let title = "Week of " + weekDays[0].date;
-                        if (index === 0) title = "Current Week";
-                        else if (index === 1) title = "Previous Week";
+                        if (index === 0) title = "Current Week (Self-Service)";
+                        else if (index === 1) title = "Previous Week (Self-Service)";
                         
                         return renderWeek(title, weekDays);
                     })}
@@ -211,7 +217,7 @@ export default function CorrectionSystem({ isManager }) {
     const renderHistory = () => (
         <div className="bg-white border border-[#ebe4ff] rounded-[2rem] overflow-hidden">
             <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff]">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280]">My Correction History</h3>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280]">My Attendance & Correction History</h3>
             </div>
             <div className="max-h-96 overflow-y-auto divide-y divide-[#ece2ff]">
                 {history.length === 0 ? (
@@ -251,7 +257,7 @@ export default function CorrectionSystem({ isManager }) {
                     </thead>
                     <tbody className="divide-y divide-[#ece2ff]">
                         {pendingRequests.length === 0 ? (
-                            <tr><td colSpan={5} className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">Queue is empty</td></tr>
+                            <tr><td colSpan={6} className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">Queue is empty</td></tr>
                         ) : pendingRequests.map(req => (
                             <tr key={req.id} className="hover:bg-[#faf7ff]">
                                 <td className="px-6 py-4 font-bold text-xs uppercase italic">{req.employee_name} <br/><span className="text-[9px] font-mono text-[#8b8ba3] not-italic">{req.employee_code}</span></td>
@@ -277,8 +283,8 @@ export default function CorrectionSystem({ isManager }) {
         <div className="space-y-6">
             {!isManager && (
                 <div className="flex gap-2 mb-6">
-                    <button onClick={() => setActiveTab('window')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'window' ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg shadow-transparent' : 'bg-[#f5efff] text-[#6b7280] border border-[#ece2ff]'}`}>Correction Grid</button>
-                    <button onClick={() => setActiveTab('history')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg shadow-transparent' : 'bg-[#f5efff] text-[#6b7280] border border-[#ece2ff]'}`}>History</button>
+                    <button onClick={() => setActiveTab('window')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'window' ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg shadow-transparent' : 'bg-[#f5efff] text-[#6b7280] border border-[#ece2ff]'}`}>Attendance Grid</button>
+                    <button onClick={() => setActiveTab('history')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg shadow-transparent' : 'bg-[#f5efff] text-[#6b7280] border border-[#ece2ff]'}`}>Log History</button>
                 </div>
             )}
 
@@ -292,7 +298,7 @@ export default function CorrectionSystem({ isManager }) {
                 <div className={`absolute top-0 right-0 bottom-0 w-full max-w-md bg-white shadow-2xl transition-transform duration-300 transform ${drawerOpen ? 'translate-x-0' : 'translate-x-full'} flex flex-col`}>
                     <div className="p-6 border-b border-[#ece2ff] bg-[#faf7ff] flex justify-between items-center">
                         <div>
-                            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black">Correct Attendance</h3>
+                            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black">{selectedDay?.date === windowData?.today ? 'Log Today\'s Attendance' : 'Update Attendance'}</h3>
                             <p className="text-[10px] text-[#8b8ba3] font-mono tracking-widest uppercase mt-1">{selectedDay?.date}</p>
                         </div>
                         <button onClick={() => setDrawerOpen(false)} className="p-2 text-[#8b8ba3] hover:text-black bg-white rounded-full border border-[#ece2ff]"><ChevronRight size={16} /></button>
@@ -306,8 +312,8 @@ export default function CorrectionSystem({ isManager }) {
                                     <p className="text-[10px] font-black uppercase tracking-widest mb-1">{selectedDay.track === 'self_service' ? 'Self-Service Window Active' : 'Manager Approval Required'}</p>
                                     <p className="text-xs opacity-80">
                                         {selectedDay.track === 'self_service' 
-                                            ? "Corrections made to this date will be applied instantly without manager approval." 
-                                            : "This date is past the self-service window. Your correction will be routed to your manager for approval."}
+                                            ? "You are within the self-service period (Current & Previous Week). Your attendance will be logged immediately without manager approval." 
+                                            : "This date is outside the self-service window. Your correction will be routed to your manager for approval."}
                                     </p>
                                 </div>
                             </div>
@@ -316,20 +322,18 @@ export default function CorrectionSystem({ isManager }) {
                         <form onSubmit={submitCorrection} className="space-y-5">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Clock In Time</label>
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time In</label>
                                     <input 
                                         type="time" 
-                                        step="1"
                                         value={form.clock_in}
                                         onChange={e => setForm({...form, clock_in: e.target.value})}
                                         className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] font-mono"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Clock Out Time</label>
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time Out</label>
                                     <input 
                                         type="time" 
-                                        step="1"
                                         value={form.clock_out}
                                         onChange={e => setForm({...form, clock_out: e.target.value})}
                                         className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] font-mono"
@@ -338,11 +342,11 @@ export default function CorrectionSystem({ isManager }) {
                             </div>
                             
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Reason <span className="text-red-500">*</span></label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Work Log / Reason <span className="text-red-500">*</span></label>
                                 <textarea
                                     required
                                     rows="4"
-                                    placeholder="Explain why this correction is needed..."
+                                    placeholder="Describe your daily work summary or reason for updating..."
                                     value={form.reason}
                                     onChange={e => setForm({...form, reason: e.target.value})}
                                     className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] resize-none"
@@ -350,7 +354,7 @@ export default function CorrectionSystem({ isManager }) {
                             </div>
 
                             <button type="submit" className="w-full py-4 mt-4 rounded-2xl bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-500/20 hover:opacity-90">
-                                {selectedDay?.track === 'self_service' ? 'Apply Correction' : 'Submit Request'}
+                                {selectedDay?.date === windowData?.today ? 'Save Today\'s Attendance' : (selectedDay?.track === 'self_service' ? 'Save Attendance Log' : 'Submit Approval Request')}
                             </button>
                         </form>
                     </div>

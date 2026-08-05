@@ -1,9 +1,11 @@
 """
-Phygitron 360 — Extended Email Service
-========================================
-SMTP email functions for Source (Talent Vault) and Verify module notifications.
-Falls back to structured logging if SMTP is not configured.
+Phygitron 360 — Extended HR & Operational Email Service
+=========================================================
+SMTP email suite for Talent Vault, Onboarding, Attendance, and Workforce exit management.
+Supports automatic PDF attachment delivery and falls back to structured logging when offline.
+All layouts adhere strictly to the Phygitron 360 White-Label Email Design standard.
 """
+
 import smtplib
 import logging
 import os
@@ -15,21 +17,32 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+try:
+    from common.services.email_template_builder import (
+        build_white_label_html, build_white_label_text, build_cta_button_html,
+        build_info_box_html, build_key_value_table_html
+    )
+except ImportError:
+    import sys
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+    from common.services.email_template_builder import (
+        build_white_label_html, build_white_label_text, build_cta_button_html,
+        build_info_box_html, build_key_value_table_html
+    )
+
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Internal Helpers
 # ---------------------------------------------------------------------------
 
 def _get_smtp_config():
-    """Returns (host, port, user, password) from env or Nones."""
     host = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER")
     port = int(os.getenv("SMTP_PORT", 587))
-    user = os.getenv("SMTP_USER")
-    password = os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD")
+    user = os.getenv("SMTP_USER") or os.getenv("SENDER_EMAIL")
+    password = os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD") or os.getenv("SENDER_PASSWORD")
     return host, port, user, password
 
 
 def _send_via_smtp(msg: MIMEMultipart) -> bool:
-    """Attempt to send a pre-built MIMEMultipart message via SMTP. Returns True/False."""
     host, port, user, password = _get_smtp_config()
     if not all([host, user, password]):
         return False
@@ -40,29 +53,24 @@ def _send_via_smtp(msg: MIMEMultipart) -> bool:
             server.send_message(msg)
         return True
     except Exception as exc:
-        logger.error(f"SMTP send failed: {exc}")
+        logger.error(f"SMTP dispatch failed: {exc}")
         return False
 
 
 SENT_MOCK_EMAILS = []
 
 def _mock_log(to_email: str, subject: str, plain_body: str):
-    """Write a mock email dispatch to logs when SMTP is unavailable."""
-    logger.warning("[EMAIL MOCK] SMTP not configured — logging email instead.")
-    print(f"\n--- 📧 MOCK EMAIL DISPATCH ---")
+    logger.warning("[EMAIL MOCK] SMTP offline or unconfigured — logging email instead.")
+    print(f"\n--- 📧 MOCK EMAIL DISPATCH [Extended Service] ---")
     print(f"To:      {to_email}")
     print(f"Subject: {subject}")
     print(f"Body:\n{plain_body}")
-    print(f"------------------------------\n")
-    SENT_MOCK_EMAILS.append({
-        "to": to_email,
-        "subject": subject,
-        "body": plain_body
-    })
+    print(f"---------------------------------------------------\n")
+    SENT_MOCK_EMAILS.append({"to": to_email, "subject": subject, "body": plain_body})
 
 
 # ---------------------------------------------------------------------------
-# Public functions
+# Talent Acquisition & Candidate Emails
 # ---------------------------------------------------------------------------
 
 def send_invite_email(
@@ -72,58 +80,40 @@ def send_invite_email(
     company_name: str,
     temp_password: str,
     deadline: Optional[str] = None,
+    portal_link: Optional[str] = None,
     custom_subject: Optional[str] = None,
     custom_body: Optional[str] = None,
 ) -> bool:
-    """
-    Send a talent-portal invitation email to a candidate with their temporary credentials.
-    Falls back to structured logging if SMTP is not configured.
-    """
-    subject = custom_subject if custom_subject else f"You've been invited to apply for {role_name} at {company_name}"
-    deadline_line = f"Application Deadline: {deadline}" if deadline else "Please complete your application at your earliest convenience."
+    """Candidate Invitation Email (Template Library #2)"""
+    subject = custom_subject if custom_subject else f"Invitation to Apply — {role_name} at {company_name}"
+    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron360.com")
+    deadline_line = deadline if deadline else "Please submit at your earliest convenience"
 
     if custom_body:
-        plain_body = custom_body
-        html_body = f"<html><body style=\"font-family: Arial, sans-serif; color: #333; line-height: 1.6;\">{custom_body.replace(chr(10), '<br/>')}</body></html>"
+        body_html = f"<div style='font-size: 15px; color: #334155; margin-bottom: 24px;'>{custom_body.replace(chr(10), '<br/>')}</div>"
+        body_text = custom_body
     else:
-        plain_body = f"""
-Dear {candidate_name},
+        body_html = f"""
+        <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{candidate_name}</strong>,</p>
+        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Thank you for your interest in career opportunities with <strong>{company_name}</strong>. You have been officially invited to submit your candidate application for the position of <strong>{role_name}</strong>.</p>
+        """
+        body_html += build_key_value_table_html([
+            ("Role / Position", role_name),
+            ("Application Deadline", deadline_line),
+            ("Portal Username", to_email),
+            ("Temporary Password", f"<code style='color: #7000FF; font-weight: bold; font-size: 16px; background: #F1F5F9; padding: 4px 8px; border-radius: 4px;'>{temp_password}</code>")
+        ])
+        body_html += build_cta_button_html(link, "Access Candidate Portal &rarr;")
+        body_html += build_info_box_html("We look forward to reviewing your profile and credentials. Should you have any questions or require support during your application submission, please reach out to our Talent Acquisition Team.")
+        
+        body_text = f"Hello {candidate_name},\n\nYou have been invited to apply for the position of {role_name} at {company_name}.\n\nDeadline: {deadline_line}\nUsername: {to_email}\nTemporary Password: {temp_password}\n\nPortal Link: {link}\n\nWe look forward to reviewing your application."
 
-You have been invited to apply for the position of {role_name} at {company_name}.
-
-Please use the following temporary credentials to access the candidate portal:
-  Email:            {to_email}
-  Temporary Password: {temp_password}
-
-{deadline_line}
-
-We look forward to reviewing your application.
-
-Best regards,
-Talent Acquisition Team
-{company_name}
-"""
-
-        html_body = f"""
-<html><body style="font-family: Arial, sans-serif; color: #333;">
-  <h2 style="color:#4f46e5;">You've Been Invited!</h2>
-  <p>Dear <strong>{candidate_name}</strong>,</p>
-  <p>You have been invited to apply for the position of <strong>{role_name}</strong> at <strong>{company_name}</strong>.</p>
-  <p>Please use the following temporary credentials to access the candidate portal:</p>
-  <table style="border-collapse:collapse;margin:12px 0;">
-    <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Email:</td><td>{to_email}</td></tr>
-    <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Temporary Password:</td><td><code>{temp_password}</code></td></tr>
-  </table>
-  <p>{deadline_line}</p>
-  <p>We look forward to reviewing your application.</p>
-  <br/>
-  <p>Best regards,<br/><strong>Talent Acquisition Team</strong><br/>{company_name}</p>
-</body></html>
-"""
+    html_content = build_white_label_html("Invitation to Apply", f"You have been invited to apply for {role_name}!", body_html, f"{company_name} Talent Acquisition Team", link)
+    text_content = build_white_label_text("Invitation to Apply", f"Invitation to apply for {role_name}", body_text, f"{company_name} Talent Acquisition Team", link)
 
     host, _, user, _ = _get_smtp_config()
     if not all([host, user]):
-        _mock_log(to_email, subject, plain_body)
+        _mock_log(to_email, subject, text_content)
         return True
 
     try:
@@ -131,13 +121,10 @@ Talent Acquisition Team
         msg["From"] = user
         msg["To"] = to_email
         msg["Subject"] = subject
-        msg.attach(MIMEText(plain_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
-        result = _send_via_smtp(msg)
-        if result:
-            logger.info(f"Invite email sent to {to_email} for role '{role_name}'")
-        else:
-            _mock_log(to_email, subject, plain_body)
+        msg.attach(MIMEText(text_content, "plain"))
+        msg.attach(MIMEText(html_content, "html"))
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, subject, text_content)
         return True
     except Exception as exc:
         logger.error(f"send_invite_email failed for {to_email}: {exc}")
@@ -149,58 +136,35 @@ def send_offer_letter_email(
     candidate_name: str,
     company_name: str,
     role_title: str,
-    department: Optional[str] = None,
-    salary: Optional[str] = None,
-    location: Optional[str] = None,
+    department: Optional[str] = "General",
+    salary: Optional[str] = "As agreed",
+    location: Optional[str] = "Headquarters / Remote",
+    joining_date: Optional[str] = "To be advised",
     attachment_bytes: Optional[bytes] = None,
 ) -> bool:
-    """
-    Send an offer letter email to a candidate.
-    Optionally attaches a PDF if attachment_bytes is provided.
-    Falls back to structured logging if SMTP is not configured.
-    """
+    """Offer Letter Email (Template Library #5) with optional PDF attachment support"""
     subject = f"Offer Letter — {role_title} at {company_name}"
-    dept_line = f"Department: {department}" if department else ""
-    sal_line = f"Offered Salary: {salary}" if salary else ""
-    loc_line = f"Work Location: {location}" if location else ""
 
-    plain_body = f"""
-Dear {candidate_name},
+    body_html = f"""
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Dear <strong>{candidate_name}</strong>,</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Congratulations! We are thrilled to extend an official offer of employment for the position of <strong>{role_title}</strong> at <strong>{company_name}</strong>.</p>
+    """
+    body_html += build_key_value_table_html([
+        ("Position / Role", role_title),
+        ("Department", department or "N/A"),
+        ("Work Location", location or "N/A"),
+        ("Expected Joining Date", joining_date or "To be confirmed"),
+        ("Compensation", salary or "As discussed")
+    ])
+    body_html += build_info_box_html("<strong>Next Step:</strong> Please find your comprehensive formal Offer Letter attached to this email for your detailed review. We request you to review, sign, and return the document at your earliest convenience. We look forward to welcoming you to the team!", border_color="#10B981")
 
-We are pleased to extend an offer of employment for the position of {role_title} at {company_name}.
-
-{dept_line}
-{sal_line}
-{loc_line}
-
-Please review the attached offer letter and respond at your earliest convenience.
-
-We look forward to welcoming you to the team!
-
-Warm regards,
-HR Operations Team
-{company_name}
-"""
-
-    html_body = f"""
-<html><body style="font-family: Arial, sans-serif; color: #333;">
-  <h2 style="color:#059669;">Congratulations, {candidate_name}!</h2>
-  <p>We are pleased to extend an offer of employment for the position of <strong>{role_title}</strong> at <strong>{company_name}</strong>.</p>
-  <table style="border-collapse:collapse;margin:12px 0;">
-    {'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Department:</td><td>' + department + '</td></tr>' if department else ''}
-    {'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Offered Salary:</td><td>' + salary + '</td></tr>' if salary else ''}
-    {'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Work Location:</td><td>' + location + '</td></tr>' if location else ''}
-  </table>
-  <p>Please review the attached offer letter and respond at your earliest convenience.</p>
-  <p>We look forward to welcoming you to the team!</p>
-  <br/>
-  <p>Warm regards,<br/><strong>HR Operations Team</strong><br/>{company_name}</p>
-</body></html>
-"""
+    html_content = build_white_label_html("Employment Offer", "Congratulations on your Offer!", body_html, f"{company_name} HR & Operations Team")
+    body_text = f"Dear {candidate_name},\n\nCongratulations! We are pleased to extend an offer for the position of {role_title} at {company_name}.\n\nJoining Date: {joining_date}\nLocation: {location}\n\nPlease review the attached offer letter and respond at your earliest convenience."
+    text_content = build_white_label_text("Employment Offer", "Congratulations on your Offer!", body_text, f"{company_name} HR & Operations Team")
 
     host, _, user, _ = _get_smtp_config()
     if not all([host, user]):
-        _mock_log(to_email, subject, plain_body)
+        _mock_log(to_email, subject, text_content)
         return True
 
     try:
@@ -210,25 +174,22 @@ HR Operations Team
         msg["Subject"] = subject
 
         alt = MIMEMultipart("alternative")
-        alt.attach(MIMEText(plain_body, "plain"))
-        alt.attach(MIMEText(html_body, "html"))
+        alt.attach(MIMEText(text_content, "plain"))
+        alt.attach(MIMEText(html_content, "html"))
         msg.attach(alt)
 
         if attachment_bytes:
             part = MIMEBase("application", "pdf")
             part.set_payload(attachment_bytes)
             encoders.encode_base64(part)
-            part.add_header("Content-Disposition", 'attachment; filename="offer_letter.pdf"')
+            part.add_header("Content-Disposition", 'attachment; filename="Offer_Letter.pdf"')
             msg.attach(part)
 
-        result = _send_via_smtp(msg)
-        if result:
-            logger.info(f"Offer letter email sent to {to_email}")
-        else:
-            _mock_log(to_email, subject, plain_body)
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, subject, text_content)
         return True
     except Exception as exc:
-        logger.error(f"send_offer_letter_email failed for {to_email}: {exc}")
+        logger.error(f"send_offer_letter_email failed: {exc}")
         return False
 
 
@@ -236,66 +197,42 @@ def send_assessment_notification_email(
     to_email: str,
     candidate_name: str,
     assessment_title: str,
-    deadline: Optional[str] = None,
-    duration_mins: Optional[int] = None,
+    company_name: str = "Phygitron 360",
+    deadline: Optional[str] = "Within 48 hours",
+    duration_mins: Optional[int] = 60,
     question_count: Optional[int] = None,
     pass_score: Optional[float] = None,
+    assessment_link: Optional[str] = None
 ) -> bool:
+    """Assessment Assigned Email (Template Library #6)"""
+    subject = f"Next Step in Your Application — Assessment Assignment"
+    link = assessment_link or os.getenv("APP_BASE_URL", "https://app.phygitron360.com/assessments")
+    
+    body_html = f"""
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{candidate_name}</strong>,</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Thank you for your interest in career opportunities with <strong>{company_name}</strong>. After reviewing your profile, we are pleased to advance your application to the next evaluation phase.</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 24px 0;">To help us better evaluate your core competencies and domain experience, you have been assigned an interactive talent assessment:</p>
     """
-    Send an assessment assignment notification to a candidate.
-    Falls back to structured logging if SMTP is not configured.
-    """
-    subject = f"Assessment Assigned: {assessment_title}"
-    deadline_line = f"Complete by: {deadline}" if deadline else "Please complete the assessment at your earliest convenience."
-
-    detail_rows = ""
+    
+    details = [("Assessment Module", assessment_title), ("Completion Deadline", deadline or "ASAP")]
     if duration_mins:
-        detail_rows += f"  Time Limit: {duration_mins} minutes\n"
+        details.append(("Time Limit", f"{duration_mins} minutes"))
     if question_count:
-        detail_rows += f"  Questions: {question_count}\n"
+        details.append(("Total Questions", str(question_count)))
     if pass_score is not None:
-        detail_rows += f"  Passing Score: {pass_score}%\n"
+        details.append(("Qualifying Score", f"{pass_score}%"))
+        
+    body_html += build_key_value_table_html(details)
+    body_html += build_cta_button_html(link, "Start Assessment &rarr;")
+    body_html += build_info_box_html("<strong>Recommendation:</strong> We recommend starting your assessment well ahead of the deadline to avoid any last-minute connectivity or scheduling conflicts. Ensure you have a quiet environment before commencing.")
 
-    plain_body = f"""
-Dear {candidate_name},
-
-You have been assigned a new assessment: {assessment_title}
-
-{detail_rows}
-{deadline_line}
-
-Please log in to the candidate portal to begin your assessment.
-
-Best regards,
-Assessment Team — Phygitron 360
-"""
-
-    html_detail_rows = ""
-    if duration_mins:
-        html_detail_rows += f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Time Limit:</td><td>{duration_mins} minutes</td></tr>'
-    if question_count:
-        html_detail_rows += f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Questions:</td><td>{question_count}</td></tr>'
-    if pass_score is not None:
-        html_detail_rows += f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Passing Score:</td><td>{pass_score}%</td></tr>'
-
-    html_body = f"""
-<html><body style="font-family: Arial, sans-serif; color: #333;">
-  <h2 style="color:#4f46e5;">Assessment Assigned</h2>
-  <p>Dear <strong>{candidate_name}</strong>,</p>
-  <p>You have been assigned a new assessment: <strong>{assessment_title}</strong></p>
-  <table style="border-collapse:collapse;margin:12px 0;">
-    {html_detail_rows}
-  </table>
-  <p>{deadline_line}</p>
-  <p>Please log in to the candidate portal to begin your assessment.</p>
-  <br/>
-  <p>Best regards,<br/><strong>Assessment Team — Phygitron 360</strong></p>
-</body></html>
-"""
+    html_content = build_white_label_html("Assessment Assigned", "Next Step: Candidate Assessment", body_html, f"{company_name} Talent Acquisition Team", link)
+    body_text = f"Hello {candidate_name},\n\nYou have been assigned an assessment: {assessment_title}.\nDeadline: {deadline}\n\nPlease access your portal to complete it: {link}\n\nWe appreciate your time and wish you the very best."
+    text_content = build_white_label_text("Assessment Assigned", "Next Step: Candidate Assessment", body_text, f"{company_name} Talent Acquisition Team", link)
 
     host, _, user, _ = _get_smtp_config()
     if not all([host, user]):
-        _mock_log(to_email, subject, plain_body)
+        _mock_log(to_email, subject, text_content)
         return True
 
     try:
@@ -303,118 +240,148 @@ Assessment Team — Phygitron 360
         msg["From"] = user
         msg["To"] = to_email
         msg["Subject"] = subject
-        msg.attach(MIMEText(plain_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
-        result = _send_via_smtp(msg)
-        if result:
-            logger.info(f"Assessment notification sent to {to_email} for '{assessment_title}'")
-        else:
-            _mock_log(to_email, subject, plain_body)
+        msg.attach(MIMEText(text_content, "plain"))
+        msg.attach(MIMEText(html_content, "html"))
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, subject, text_content)
         return True
     except Exception as exc:
-        logger.error(f"send_assessment_notification_email failed for {to_email}: {exc}")
+        logger.error(f"send_assessment_notification failed: {exc}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Employee & Internal Opportunities
+# ---------------------------------------------------------------------------
+
+def send_internal_opportunity_email(
+    to_email: str,
+    employee_name: str,
+    job_title: str,
+    department: str,
+    application_deadline: str,
+    company_name: str = "Phygitron 360",
+    portal_link: Optional[str] = None
+) -> bool:
+    """[NEW] Internal Employee Application Invitation (Template Library #3)"""
+    subject = f"Internal Opportunity — {job_title} ({department})"
+    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron360.com/internal-jobs")
+
+    body_html = f"""
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{employee_name}</strong>,</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">As part of our commitment to professional growth and internal career advancement at <strong>{company_name}</strong>, we are pleased to announce an exciting internal mobility opportunity:</p>
+    """
+    body_html += build_key_value_table_html([
+        ("Position / Role", job_title),
+        ("Department", department),
+        ("Application Deadline", application_deadline)
+    ])
+    body_html += build_cta_button_html(link, "View Internal Opening &rarr;")
+    body_html += build_info_box_html("If your qualifications match this profile and you are ready for your next career challenge, we invite you to securely submit your internal expression of interest via the Employee Central Portal. Best of luck!")
+
+    html_content = build_white_label_html("Internal Opportunity", f"New Internal Role: {job_title}", body_html, f"{company_name} HR Team", link)
+    body_text = f"Hello {employee_name},\n\nAn exciting internal opportunity is available within the organization.\nPosition: {job_title}\nDepartment: {department}\nDeadline: {application_deadline}\n\nApply via your portal: {link}"
+    text_content = build_white_label_text("Internal Opportunity", f"New Internal Role: {job_title}", body_text, f"{company_name} HR Team", link)
+
+    host, _, user, _ = _get_smtp_config()
+    if not all([host, user]):
+        _mock_log(to_email, subject, text_content)
+        return True
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = user
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(text_content, "plain"))
+        msg.attach(MIMEText(html_content, "html"))
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, subject, text_content)
+        return True
+    except Exception as exc:
+        logger.error(f"send_internal_opportunity_email failed: {exc}")
+        return False
+
 
 def send_generic_notification_email(
     to_email: str,
     candidate_name: str,
     notification_subject: str,
     notification_message: str,
-    company_name: str,
+    company_name: str = "Phygitron 360",
+    action_url: Optional[str] = None,
+    action_label: str = "View Dashboard &rarr;"
 ) -> bool:
-    """
-    Send a custom HR notification to a candidate/trainee.
-    Falls back to structured logging if SMTP is not configured.
-    """
-    subject = notification_subject
-
-    plain_body = f"""
-Dear {candidate_name},
-
-You have a new update from {company_name}:
-
-{notification_message}
-
-Please log in to your Trainee Dashboard to view more details.
-
-Best regards,
-Talent Acquisition Team
-{company_name}
-"""
-
-    html_message = notification_message.replace('\n', '<br/>')
+    """Generic HR Notification (Template Library #4 — e.g., Course assignment, updates)"""
+    link = action_url or os.getenv("APP_BASE_URL", "https://app.phygitron360.com/dashboard")
     
-    # We use a simple regex approach (or just let the email client auto-link) but we can wrap http(s) in a tags for the html body if needed. 
-    # For now, most email clients auto-link raw URLs. To be safe, we just render it nicely.
+    body_html = f"""
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{candidate_name}</strong>,</p>
+    <div style="font-size: 15px; color: #334155; line-height: 1.6; margin-bottom: 24px;">
+        {notification_message.replace(chr(10), '<br/>')}
+    </div>
+    """
+    body_html += build_cta_button_html(link, action_label)
+    body_html += build_info_box_html("Please log in to your employee or learning portal using your credentials to review additional details and complete any assigned objectives.")
 
-    html_body = f"""
-<html><body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-  <h2 style="color:#4f46e5;">New Notification</h2>
-  <p>Dear <strong>{candidate_name}</strong>,</p>
-  <p>You have a new update from <strong>{company_name}</strong>:</p>
-  <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 16px 0; border: 1px solid #e5e7eb;">
-    {html_message}
-  </div>
-  <p>Please log in to your Trainee Dashboard to view more details.</p>
-  <br/>
-  <p>Best regards,<br/><strong>Talent Acquisition Team</strong><br/>{company_name}</p>
-</body></html>
-"""
+    html_content = build_white_label_html("HR Notification", notification_subject, body_html, f"{company_name} HR Operations Team", link)
+    body_text = f"Hello {candidate_name},\n\n{notification_message}\n\nAccess your portal here: {link}"
+    text_content = build_white_label_text("HR Notification", notification_subject, body_text, f"{company_name} HR Operations Team", link)
 
     host, _, user, _ = _get_smtp_config()
     if not all([host, user]):
-        _mock_log(to_email, subject, plain_body)
+        _mock_log(to_email, notification_subject, text_content)
         return True
 
     try:
         msg = MIMEMultipart("alternative")
         msg["From"] = user
         msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(plain_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
-        result = _send_via_smtp(msg)
-        if result:
-            logger.info(f"Custom notification sent to {to_email} with subject '{subject}'")
-        else:
-            _mock_log(to_email, subject, plain_body)
+        msg["Subject"] = notification_subject
+        msg.attach(MIMEText(text_content, "plain"))
+        msg.attach(MIMEText(html_content, "html"))
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, notification_subject, text_content)
         return True
     except Exception as exc:
-        logger.error(f"send_generic_notification_email failed for {to_email}: {exc}")
+        logger.error(f"send_generic_notification failed: {exc}")
         return False
 
+
+# ---------------------------------------------------------------------------
+# Attendance, Time & Corrections
+# ---------------------------------------------------------------------------
 
 def send_clockout_reminder_email(
     to_email: str,
     employee_name: str,
     clockin_time: str,
     date: str,
+    company_name: str = "Phygitron 360"
 ) -> bool:
-    """Send a reminder notification email to an employee who forgot to clock out."""
-    subject = f"Forgot to Clock Out: Reminder for {date}"
-    plain_body = f"""
-Dear {employee_name},
+    """Forgot to Clock Out Reminder (Template Library #13)"""
+    subject = f"Attendance Reminder — Action Required for {date}"
+    link = os.getenv("APP_BASE_URL", "https://app.phygitron360.com/attendance")
 
-Our records show that you clocked in at {clockin_time} on {date}, but have not clocked out yet.
+    body_html = f"""
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{employee_name}</strong>,</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Our automated attendance records indicate that you clocked in on <strong>{date}</strong> at <strong>{clockin_time}</strong>, but we have not recorded a valid clock-out punch for the shift.</p>
+    """
+    body_html += build_key_value_table_html([
+        ("Shift Date", date),
+        ("Recorded Clock-In", clockin_time),
+        ("Clock-Out Status", "<span style='color: #EF4444; font-weight: 600;'>Missing Punch / Pending</span>")
+    ])
+    body_html += build_cta_button_html(link, "Update Attendance &rarr;")
+    body_html += build_info_box_html("Please log in to your employee Self-Service Portal as soon as possible to review your timesheets and submit a corresponding attendance correction request if required.", border_color="#F97316")
 
-Please log in to the employee portal and submit an attendance correction request to update your clock-out time.
+    html_content = build_white_label_html("Attendance Reminder", "Missing Clock-Out Record", body_html, f"{company_name} HR Operations Team", link)
+    body_text = f"Hello {employee_name},\n\nOur records indicate that you may have forgotten to clock out on {date} (Clock-in: {clockin_time}).\n\nPlease review and update your attendance record at: {link}"
+    text_content = build_white_label_text("Attendance Reminder", "Missing Clock-Out Record", body_text, f"{company_name} HR Operations Team", link)
 
-Best regards,
-Operations Team
-"""
-    html_body = f"""
-<html><body style="font-family: Arial, sans-serif; color: #333;">
-  <h2 style="color:#ef4444;">Forgot to Clock Out</h2>
-  <p>Dear <strong>{employee_name}</strong>,</p>
-  <p>Our records show that you clocked in at <strong>{clockin_time}</strong> on <strong>{date}</strong>, but have not clocked out yet.</p>
-  <p>Please log in to the employee portal and submit an attendance correction request to update your clock-out time.</p>
-  <br/>
-  <p>Best regards,<br/><strong>Operations Team</strong></p>
-</body></html>
-"""
     host, _, user, _ = _get_smtp_config()
     if not all([host, user]):
-        _mock_log(to_email, subject, plain_body)
+        _mock_log(to_email, subject, text_content)
         return True
 
     try:
@@ -422,83 +389,126 @@ Operations Team
         msg["From"] = user
         msg["To"] = to_email
         msg["Subject"] = subject
-        msg.attach(MIMEText(plain_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
-        result = _send_via_smtp(msg)
-        if result:
-            logger.info(f"Clock-out reminder email sent to {to_email}")
-        else:
-            _mock_log(to_email, subject, plain_body)
+        msg.attach(MIMEText(text_content, "plain"))
+        msg.attach(MIMEText(html_content, "html"))
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, subject, text_content)
         return True
     except Exception as exc:
-        logger.error(f"send_clockout_reminder_email failed for {to_email}: {exc}")
+        logger.error(f"send_clockout_reminder failed: {exc}")
         return False
+
+
+def send_attendance_correction_request_email(
+    to_email: str,
+    manager_name: str,
+    employee_name: str,
+    date: str,
+    reason: str,
+    company_name: str = "Phygitron 360",
+    portal_link: Optional[str] = None
+) -> bool:
+    """[NEW] Attendance Correction Approval Request (Template Library #14)"""
+    subject = f"Attendance Correction Approval Required — {employee_name}"
+    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron360.com/approvals")
+
+    body_html = f"""
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{manager_name}</strong>,</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">A formal attendance correction and punch override request has been submitted by your team member, <strong>{employee_name}</strong>, requiring your managerial review.</p>
+    """
+    body_html += build_key_value_table_html([
+        ("Employee Name", employee_name),
+        ("Date of Record", date),
+        ("Submitted Reason", f"<em style='color: #475569;'>{reason}</em>"),
+        ("Approval Status", "<span style='color: #EAB308; font-weight: 600;'>Pending Manager Approval</span>")
+    ])
+    body_html += build_cta_button_html(link, "Review Request in Portal &rarr;")
+    body_html += build_info_box_html("Please log in to your Manager Self-Service dashboard to verify shift timing logs and authorize or decline this correction request at your earliest convenience.")
+
+    html_content = build_white_label_html("Approval Required", "Attendance Correction Request", body_html, f"{company_name} HR Operations", link)
+    body_text = f"Hello {manager_name},\n\nAn attendance correction request has been submitted by {employee_name}.\nDate: {date}\nReason: {reason}\n\nPlease review and approve/reject the request at: {link}"
+    text_content = build_white_label_text("Approval Required", "Attendance Correction Request", body_text, f"{company_name} HR Operations", link)
+
+    host, _, user, _ = _get_smtp_config()
+    if not all([host, user]):
+        _mock_log(to_email, subject, text_content)
+        return True
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = user
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(text_content, "plain"))
+        msg.attach(MIMEText(html_content, "html"))
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, subject, text_content)
+        return True
+    except Exception as exc:
+        logger.error(f"send_attendance_correction_request failed: {exc}")
+        return False
+
 
 def send_bimonthly_report_email(
     to_email: str,
     manager_name: str,
     report_data: list,
     period_label: str,
-    company_name: str
+    company_name: str = "Phygitron 360"
 ) -> bool:
-    """Send bimonthly attendance report to a manager, attaching a generated PDF."""
+    """Attendance Report Email (Template Library #15) with generated ReportLab PDF table"""
     from reportlab.lib.pagesizes import letter
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib import colors
     import io
 
-    subject = f"Bimonthly Attendance Report: {period_label}"
-    plain_body = f"""
-Dear {manager_name},
+    subject = f"Attendance Report — {period_label} ({company_name})"
+    link = os.getenv("APP_BASE_URL", "https://app.phygitron360.com/reports")
 
-Please find attached the attendance report for your team for the period {period_label}.
+    body_html = f"""
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{manager_name}</strong>,</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Please find attached the formal workforce attendance and exception summary report for your organizational department covering the period <strong>{period_label}</strong>.</p>
+    """
+    body_html += build_key_value_table_html([
+        ("Reporting Period", period_label),
+        ("Total Records", str(len(report_data))),
+        ("Attachment Format", "PDF Document (.pdf)")
+    ])
+    body_html += build_cta_button_html(link, "Access Analytics Dashboard &rarr;")
+    body_html += build_info_box_html("The accompanying PDF report details present shift hours, unexcused absences, half-days, and leaves. Please review exceptions requiring managerial attention.", border_color="#3B82F6")
 
-Best regards,
-Operations Team
-{company_name}
-"""
-    html_body = f"""
-<html><body style="font-family: Arial, sans-serif; color: #333;">
-  <h2 style="color:#2563eb;">Bimonthly Attendance Report</h2>
-  <p>Dear <strong>{manager_name}</strong>,</p>
-  <p>Please find attached the attendance report for your team for the period <strong>{period_label}</strong>.</p>
-  <br/>
-  <p>Best regards,<br/><strong>Operations Team</strong><br/>{company_name}</p>
-</body></html>
-"""
-    
-    # Generate PDF
+    html_content = build_white_label_html("Attendance Report", f"Team Attendance Report: {period_label}", body_html, f"{company_name} HR Operations", link)
+    body_text = f"Hello {manager_name},\n\nPlease find attached the attendance report for your team for the period {period_label}.\n\nThe attached report contains attendance summaries and exceptions requiring attention."
+    text_content = build_white_label_text("Attendance Report", f"Team Attendance Report: {period_label}", body_text, f"{company_name} HR Operations", link)
+
+    # Compile ReportLab PDF
     pdf_buffer = io.BytesIO()
     doc = SimpleDocTemplate(pdf_buffer, pagesize=letter)
     styles = getSampleStyleSheet()
-    elements = []
+    elements = [
+        Paragraph(f"Attendance Report: {period_label}", styles['Title']),
+        Spacer(1, 12)
+    ]
     
-    elements.append(Paragraph(f"Attendance Report: {period_label}", styles['Title']))
-    elements.append(Spacer(1, 12))
-    
-    # Create Table Data
     data = [["Employee Name", "Code", "Present", "Absent", "Half-Day", "Leave"]]
     for emp in report_data:
         stats = emp.get("stats", {})
         data.append([
-            emp.get("name", ""),
-            emp.get("code", ""),
-            str(stats.get("present", 0)),
-            str(stats.get("absent", 0)),
-            str(stats.get("half_day", 0)),
-            str(stats.get("leave", 0))
+            emp.get("name", ""), emp.get("code", ""),
+            str(stats.get("present", 0)), str(stats.get("absent", 0)),
+            str(stats.get("half_day", 0)), str(stats.get("leave", 0))
         ])
         
     t = Table(data)
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#7000FF")),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F8FAFC")),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor("#CBD5E1"))
     ]))
     elements.append(t)
     doc.build(elements)
@@ -507,7 +517,7 @@ Operations Team
 
     host, _, user, _ = _get_smtp_config()
     if not all([host, user]):
-        _mock_log(to_email, subject, plain_body)
+        _mock_log(to_email, subject, text_content)
         return True
 
     try:
@@ -515,24 +525,88 @@ Operations Team
         msg["From"] = user
         msg["To"] = to_email
         msg["Subject"] = subject
-        
+
         alt = MIMEMultipart("alternative")
-        alt.attach(MIMEText(plain_body, "plain"))
-        alt.attach(MIMEText(html_body, "html"))
+        alt.attach(MIMEText(text_content, "plain"))
+        alt.attach(MIMEText(html_content, "html"))
         msg.attach(alt)
 
         part = MIMEBase("application", "pdf")
         part.set_payload(pdf_bytes)
         encoders.encode_base64(part)
-        part.add_header("Content-Disposition", 'attachment; filename="bimonthly_report.pdf"')
+        part.add_header("Content-Disposition", f'attachment; filename="Attendance_Report_{period_label.replace(" ", "_")}.pdf"')
         msg.attach(part)
 
-        result = _send_via_smtp(msg)
-        if result:
-            logger.info(f"Bimonthly report email sent to {to_email}")
-        else:
-            _mock_log(to_email, subject, plain_body)
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, subject, text_content)
         return True
     except Exception as exc:
-        logger.error(f"send_bimonthly_report_email failed for {to_email}: {exc}")
+        logger.error(f"send_bimonthly_report failed: {exc}")
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Exit Management & Offboarding
+# ---------------------------------------------------------------------------
+
+def send_relieving_letter_email(
+    to_email: str,
+    employee_name: str,
+    company_name: str = "Phygitron 360",
+    last_working_day: Optional[str] = "Recorded date",
+    designation: Optional[str] = "Team Member",
+    attachment_bytes: Optional[bytes] = None,
+    attachment_filename: str = "Relieving_Letter_and_Exit_Documents.pdf"
+) -> bool:
+    """[NEW] Relieving Letter & Exit Documents Email (Template Library #16) with PDF attachment"""
+    subject = f"Relieving Letter and Exit Documents — {company_name}"
+    portal_link = os.getenv("APP_BASE_URL", "https://app.phygitron360.com")
+
+    body_html = f"""
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Dear <strong>{employee_name}</strong>,</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Thank you sincerely for your dedicated contributions during your employment tenure with <strong>{company_name}</strong>.</p>
+    """
+    body_html += build_key_value_table_html([
+        ("Employee Name", employee_name),
+        ("Last Designation", designation),
+        ("Last Working Day", last_working_day),
+        ("Enclosed Documents", "Formal Relieving Letter & Exit Pack")
+    ])
+    body_html += build_info_box_html("<strong>Enclosures Attached:</strong> Please find attached your official Relieving Letter and associated clearance exit documents for your professional archives.<br><br>We wish you continued growth, fulfillment, and success in all your future endeavors!", border_color="#7000FF")
+    body_html += f"""
+    <p style="font-size: 15px; color: #334155; margin: 20px 0 0 0;">Should you have any subsequent inquiries or require additional support regarding your post-employment benefits, tax certificates, or exit formalities, please feel free to reach out directly to the HR Operations team.</p>
+    """
+
+    html_content = build_white_label_html("Exit Formalities & Relieving Letter", "Thank you for your contributions", body_html, f"{company_name} HR & People Team")
+    body_text = f"Dear {employee_name},\n\nThank you for your contributions to {company_name}.\n\nPlease find attached your relieving letter and associated exit documents for your records. We wish you continued success in your future endeavors.\n\nShould you have any questions regarding your exit formalities, please feel free to reach out to the HR team."
+    text_content = build_white_label_text("Exit Formalities & Relieving Letter", "Thank you for your contributions", body_text, f"{company_name} HR & People Team")
+
+    host, _, user, _ = _get_smtp_config()
+    if not all([host, user]):
+        _mock_log(to_email, subject, text_content)
+        return True
+
+    try:
+        msg = MIMEMultipart("mixed")
+        msg["From"] = user
+        msg["To"] = to_email
+        msg["Subject"] = subject
+
+        alt = MIMEMultipart("alternative")
+        alt.attach(MIMEText(text_content, "plain"))
+        alt.attach(MIMEText(html_content, "html"))
+        msg.attach(alt)
+
+        if attachment_bytes:
+            part = MIMEBase("application", "pdf")
+            part.set_payload(attachment_bytes)
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", f'attachment; filename="{attachment_filename}"')
+            msg.attach(part)
+
+        if not _send_via_smtp(msg):
+            _mock_log(to_email, subject, text_content)
+        return True
+    except Exception as exc:
+        logger.error(f"send_relieving_letter_email failed: {exc}")
         return False

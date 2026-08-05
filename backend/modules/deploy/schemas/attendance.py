@@ -54,6 +54,7 @@ class CorrectionRequestSchema(BaseModel):
     clock_in: Optional[str] = None
     clock_out: Optional[str] = None
     reason: str
+    client_date: Optional[str] = None  # Employee's local date (YYYY-MM-DD) for timezone-aware validation
 
 class CorrectionActionRequest(BaseModel):
     """Manager approves or rejects a requested correction."""

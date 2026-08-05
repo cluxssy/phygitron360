@@ -59,12 +59,18 @@ app.add_middleware(
 def health_check():
     return JSONResponse(content={"status": "online", "message": "PHYGITRON 360 Platform is operational"})
 
-# Static Files
+# Static Files — uploads (user documents)
 from backend.core.database import DATA_DIR
 uploads_dir = os.path.join(DATA_DIR, 'uploads')
 if not os.path.exists(uploads_dir):
     os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+# Static Files — branding assets (logos, platform images served in emails)
+import pathlib
+static_assets_dir = pathlib.Path(__file__).parent / "assets" / "static"
+static_assets_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_assets_dir)), name="static")
 
 # Background Workers
 import asyncio
