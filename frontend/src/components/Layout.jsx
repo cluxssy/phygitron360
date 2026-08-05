@@ -318,7 +318,7 @@ function LayoutContent({ children }) {
       )}
 
       {/* ================= MODAL ================= */}
-      {hasPermission(P.ADMIN_USERS_MANAGE) && !user?.employee_code && (
+      {hasPermission(P.ADMIN_USERS_MANAGE) && !user?.employee_code && user?.role !== 'super_admin' && (
         <OrgAdminSetupModal user={user} onComplete={() => refreshUser()} />
       )}
     </div>
