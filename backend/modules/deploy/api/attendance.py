@@ -207,7 +207,7 @@ def apply_correction_request(req: CorrectionRequestSchema, user=Depends(get_curr
     """Employee requests correction for a date outside the self-service window (needs manager approval)."""
     emp_code = _require_employee_code(user)
     try:
-        return service.apply_correction_request(emp_code, req.date, req.clock_in, req.clock_out, req.reason)
+        return service.apply_correction_request(emp_code, req.date, req.clock_in, req.clock_out, req.reason, client_date=getattr(req, 'client_date', None))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
