@@ -560,7 +560,12 @@ class AttendanceService:
                     
                     if to_email:
                         from backend.core.email_service_extended import send_clockout_reminder_email
-                        send_clockout_reminder_email(to_email, emp_name, str(clockin_time), str(att_date))
+                        import os
+                        company = os.getenv("COMPANY_NAME", self.tenant_id)
+                        try:
+                            send_clockout_reminder_email(to_email, emp_name, str(clockin_time), str(att_date), company_name=company)
+                        except Exception as mail_err:
+                            logger.warning(f"Clockout reminder email failed for {record.get('employee_code')} (non-blocking): {mail_err}")
                         
                     # Trigger in-app notification
                     add_notification(
@@ -855,18 +860,20 @@ class AttendanceService:
             if manager_email:
                 employee_name = self.repo.get_employee_name(employee_code, self.tenant_id)
                 manager_name = self.repo.get_employee_name(manager_code, self.tenant_id)
-                from backend.core.email_service_extended import send_generic_notification_email
-                send_generic_notification_email(
-                    to_email=manager_email,
-                    candidate_name=manager_name,
-                    notification_subject="Attendance Correction Pending Approval",
-                    notification_message=(
-                        f"Employee {employee_name} ({employee_code}) submitted a correction request "
-                        f"for {date_str}. Requested times: "
-                        f"{clock_in or 'N/A'} → {clock_out or 'N/A'}. Reason: {reason}"
-                    ),
-                    company_name=self.tenant_id
-                )
+                from backend.core.email_service_extended import send_attendance_correction_request_email
+                import os
+                company = os.getenv("COMPANY_NAME", self.tenant_id)
+                try:
+                    send_attendance_correction_request_email(
+                        to_email=manager_email,
+                        manager_name=manager_name or "Manager",
+                        employee_name=f"{employee_name} ({employee_code})",
+                        date=f"{date_str} (Requested times: {clock_in or 'N/A'} → {clock_out or 'N/A'})",
+                        reason=reason,
+                        company_name=company
+                    )
+                except Exception as mail_err:
+                    logger.warning(f"Correction request email to manager {manager_code} failed (non-blocking): {mail_err}")
 
         # Confirm to employee
         add_notification(

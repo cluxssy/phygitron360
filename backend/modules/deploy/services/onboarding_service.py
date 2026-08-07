@@ -12,7 +12,7 @@ from passlib.hash import pbkdf2_sha256
 class OnboardingService:
     def __init__(self):
         self.repo = OnboardingRepository()
-        self.email_service = EmailService()
+        self.email_service = EmailService(tenant_id=self.tenant_id)
 
     def create_invite(self, data: Dict[str, Any], tenant_id: str = 'public'):
         existing_user = self.repo.get_user_by_email(data['email'], tenant_id=tenant_id)

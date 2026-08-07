@@ -19,7 +19,7 @@ class EmployeeService:
         self.asset_repo = AssetRepository()
         self.attendance_repo = AttendanceRepository()
         self.user_repo = UserRepository()
-        self.email_service = EmailService()
+        self.email_service = EmailService(tenant_id=self.tenant_id)
         self.tenant_id = tenant_id
 
     def get_all_employees(self):
@@ -213,8 +213,9 @@ class EmployeeService:
                                 temporary_password=temp_password
                             )
                             email_sent = email_result.get('success', False)
-                    except:
-                        pass
+                    except Exception as user_create_err:
+                        import logging
+                        logging.getLogger(__name__).error(f"Failed to create user account for employee {data.get('code')}: {user_create_err}")
             else:
                 # Link existing user to this employee code if not already linked
                 if not existing_user.get('employee_code'):
@@ -388,6 +389,24 @@ class EmployeeService:
              deactivate = False
              
          self.repo.offboard_employee(employee_code, exit_date, full_reason, status=status, deactivate=deactivate, tenant_id=self.tenant_id)
+         
+         if status == 'Exited':
+             try:
+                 from backend.core.email_service_extended import send_relieving_letter_email
+                 emp = self.repo.get_employee_by_code(employee_code, self.tenant_id)
+                 if emp and (emp.get('email_id') or emp.get('email')):
+                     recipient = emp.get('email_id') or emp.get('email')
+                     send_relieving_letter_email(
+                         to_email=recipient,
+                         employee_name=emp.get('name', employee_code),
+                         company_name=self.email_service.company_name,
+                         last_working_day=str(exit_date),
+                         designation=emp.get('designation', 'Team Member')
+                     )
+             except Exception as ex_mail:
+                 import logging
+                 logging.getLogger(__name__).warning(f"Failed to send relieving letter email: {ex_mail}")
+
          audit_log(self.tenant_id, actor, 'OFFBOARD_EMPLOYEE',
                    f"Employee {employee_code} offboarded — Status: {status}, Reason: {full_reason[:80]}",
                    module='deploy')

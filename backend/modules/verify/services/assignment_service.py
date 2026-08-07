@@ -67,9 +67,26 @@ class AssignmentService:
         try:
             from backend.core.email_service_extended import send_assessment_notification_email
             from backend.modules.deploy.services.notification_service import add_notification
+            import os
             asm_title = asm.get('title', 'a new assessment')
+            duration = asm.get('time_limit_minutes', 60)
+            question_count = len(base_questions) if base_questions else None
+            company_name = os.getenv("COMPANY_NAME", "Phygitron 360")
+            
             for uid in user_ids:
-                send_assessment_notification_email(uid, asm_id, self.tenant_id)
+                u_info = self.repo.get_user_info(uid)
+                if u_info and u_info.get("email"):
+                    c_name = u_info.get("name") or u_info.get("email", "").split("@")[0]
+                    send_assessment_notification_email(
+                        to_email=u_info["email"],
+                        candidate_name=c_name,
+                        assessment_title=asm_title,
+                        company_name=company_name,
+                        deadline=deadline or "Within 48 hours",
+                        duration_mins=duration,
+                        question_count=question_count
+                    )
+
                 add_notification(
                     title="New Assessment Assigned",
                     message=f"You have been assigned: {asm_title}. Please complete it before the deadline.",

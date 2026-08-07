@@ -68,8 +68,8 @@ def generate_professional_offer_pdf(content: Dict, output_path: str):
     
     doc.build(elements)
 
-def generate_ewandz_offer_pdf(offer_data: Dict) -> bytes:
-    """Generate the EWANDZDIGITAL specific offer letter PDF."""
+def generate_offer_pdf(offer_data: Dict) -> bytes:
+    """Generate a white-label offer letter PDF using offer_data company details."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import inch
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -84,7 +84,7 @@ def generate_ewandz_offer_pdf(offer_data: Dict) -> bytes:
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
     styles = getSampleStyleSheet()
     
-    PURPLE_COLOR = HexColor("#874AF4") # Ewandz purple from template
+    PURPLE_COLOR = HexColor("#7000FF")  # Phygitron purple
     
     styles.add(ParagraphStyle(name='CustomAddressRight', parent=styles['Normal'], fontSize=12, leading=14, alignment=TA_RIGHT, fontName='Helvetica'))
     styles.add(ParagraphStyle(name='CustomTitleRight', parent=styles['Heading1'], fontSize=20, alignment=TA_RIGHT, spaceAfter=12, textColor=PURPLE_COLOR, fontName='Helvetica-Bold'))
@@ -99,7 +99,14 @@ def generate_ewandz_offer_pdf(offer_data: Dict) -> bytes:
     # The template has the logo around mid-page, so we push the address to 6.4 inches down to sit below it.
     elements.append(Spacer(1, 6.4*inch))
     
-    elements.append(Paragraph("<b>EWANDZDIGITAL SERVICES PVT LTD</b><br/>20, Okhla Phase III,<br/>Okhla Industrial Estate,<br/>New Delhi-110020, INDIA<br/><font color='#874AF4'>www.ewandzdigital.com</font>", styles['CustomAddressRight']))
+    # Company address block — pulled from offer_data or env
+    company_name_pdf = offer_data.get('company_name') or os.getenv('COMPANY_NAME', 'Phygitron 360')
+    company_address = offer_data.get('company_address') or os.getenv('COMPANY_ADDRESS', 'New Delhi, India')
+    company_website = offer_data.get('company_website') or os.getenv('COMPANY_WEBSITE', 'www.phygitron.com')
+    elements.append(Paragraph(
+        f"<b>{company_name_pdf}</b><br/>{company_address}<br/><font color='#7000FF'>{company_website}</font>",
+        styles['CustomAddressRight']
+    ))
     
     # Add the thin purple separator line from the original template
     from reportlab.platypus.flowables import HRFlowable
@@ -153,7 +160,8 @@ def generate_ewandz_offer_pdf(offer_data: Dict) -> bytes:
         else:
             start_date_str = "TBD"
 
-        p1 = f"EWANDZ is excited to bring you on board as a <b>{role_title}</b>, with a joining date of {start_date_str}. We are just a few formalities away from getting started. Please take some time to review our offer."
+        company_greeting = offer_data.get('company_name') or os.getenv('COMPANY_NAME', 'Phygitron 360')
+        p1 = f"{company_greeting} is excited to bring you on board as a <b>{role_title}</b>, with a joining date of {start_date_str}. We are just a few formalities away from getting started. Please take some time to review our offer."
         elements.append(Paragraph(p1, styles['CustomBodyText']))
         
         probation_months = offer_data.get('probation_months', '6')
@@ -216,3 +224,10 @@ def generate_ewandz_offer_pdf(offer_data: Dict) -> bytes:
         return doc_template.write()
     else:
         return text_pdf_bytes
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible alias — callers still importing generate_ewandz_offer_pdf
+# will continue to work. Prefer using generate_offer_pdf going forward.
+# ---------------------------------------------------------------------------
+generate_ewandz_offer_pdf = generate_offer_pdf

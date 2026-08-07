@@ -86,7 +86,7 @@ def send_invite_email(
 ) -> bool:
     """Candidate Invitation Email (Template Library #2)"""
     subject = custom_subject if custom_subject else f"Invitation to Apply — {role_name} at {company_name}"
-    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron360.com")
+    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron.com")
     deadline_line = deadline if deadline else "Please submit at your earliest convenience"
 
     if custom_body:
@@ -206,7 +206,7 @@ def send_assessment_notification_email(
 ) -> bool:
     """Assessment Assigned Email (Template Library #6)"""
     subject = f"Next Step in Your Application — Assessment Assignment"
-    link = assessment_link or os.getenv("APP_BASE_URL", "https://app.phygitron360.com/assessments")
+    link = assessment_link or os.getenv("APP_BASE_URL", "https://app.phygitron.com/assessments")
     
     body_html = f"""
     <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{candidate_name}</strong>,</p>
@@ -265,7 +265,7 @@ def send_internal_opportunity_email(
 ) -> bool:
     """[NEW] Internal Employee Application Invitation (Template Library #3)"""
     subject = f"Internal Opportunity — {job_title} ({department})"
-    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron360.com/internal-jobs")
+    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron.com/internal-jobs")
 
     body_html = f"""
     <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{employee_name}</strong>,</p>
@@ -313,7 +313,7 @@ def send_generic_notification_email(
     action_label: str = "View Dashboard &rarr;"
 ) -> bool:
     """Generic HR Notification (Template Library #4 — e.g., Course assignment, updates)"""
-    link = action_url or os.getenv("APP_BASE_URL", "https://app.phygitron360.com/dashboard")
+    link = action_url or os.getenv("APP_BASE_URL", "https://app.phygitron.com/dashboard")
     
     body_html = f"""
     <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{candidate_name}</strong>,</p>
@@ -361,7 +361,7 @@ def send_clockout_reminder_email(
 ) -> bool:
     """Forgot to Clock Out Reminder (Template Library #13)"""
     subject = f"Attendance Reminder — Action Required for {date}"
-    link = os.getenv("APP_BASE_URL", "https://app.phygitron360.com/attendance")
+    link = os.getenv("APP_BASE_URL", "https://app.phygitron.com/attendance")
 
     body_html = f"""
     <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{employee_name}</strong>,</p>
@@ -410,7 +410,7 @@ def send_attendance_correction_request_email(
 ) -> bool:
     """[NEW] Attendance Correction Approval Request (Template Library #14)"""
     subject = f"Attendance Correction Approval Required — {employee_name}"
-    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron360.com/approvals")
+    link = portal_link or os.getenv("APP_BASE_URL", "https://app.phygitron.com/approvals")
 
     body_html = f"""
     <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{manager_name}</strong>,</p>
@@ -464,7 +464,7 @@ def send_bimonthly_report_email(
     import io
 
     subject = f"Attendance Report — {period_label} ({company_name})"
-    link = os.getenv("APP_BASE_URL", "https://app.phygitron360.com/reports")
+    link = os.getenv("APP_BASE_URL", "https://app.phygitron.com/reports")
 
     body_html = f"""
     <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{manager_name}</strong>,</p>
@@ -560,7 +560,7 @@ def send_relieving_letter_email(
 ) -> bool:
     """[NEW] Relieving Letter & Exit Documents Email (Template Library #16) with PDF attachment"""
     subject = f"Relieving Letter and Exit Documents — {company_name}"
-    portal_link = os.getenv("APP_BASE_URL", "https://app.phygitron360.com")
+    portal_link = os.getenv("APP_BASE_URL", "https://app.phygitron.com")
 
     body_html = f"""
     <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Dear <strong>{employee_name}</strong>,</p>
