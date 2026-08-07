@@ -823,7 +823,7 @@ export default function AttendancePanel({ mode }) {
                     <div className="space-y-1">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Commencement <span className="text-red-500">*</span></label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Start Date <span className="text-red-500">*</span></label>
                                 <input 
                                     type="date"
                                     required
@@ -834,7 +834,7 @@ export default function AttendancePanel({ mode }) {
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Termination <span className="text-red-500">*</span></label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">End Date <span className="text-red-500">*</span></label>
                                 <input 
                                     type="date"
                                     required

@@ -10,6 +10,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import { isEmail, validatePassword } from '../../../core/utils/validators';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 import { getInitials } from '../../../core/utils/nameHelpers';
+import { MODULE_CONFIG } from '../../../core/config/modules';
 
 import logo from '../../../assets/phy360.png';
 import bellIcon from '../../../assets/bell.png';
@@ -709,10 +710,10 @@ export default function SuperadminDashboard() {
                 <label style={S.label}>Feature Activation</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: 10 }}>
                   {[
-                    { id: 'source', name: 'Source', color: '#CC97FF', Icon: Database },
-                    { id: 'forge',  name: 'Forge',  color: '#10B981', Icon: School },
-                    { id: 'verify', name: 'Verify', color: '#F59E0B', Icon: ShieldCheck },
-                    { id: 'deploy', name: 'Deploy', color: '#6366F1', Icon: Rocket },
+                    { id: 'source', name: MODULE_CONFIG.source.label, color: '#CC97FF', Icon: Database },
+                    { id: 'forge',  name: MODULE_CONFIG.forge.label,  color: '#10B981', Icon: School },
+                    { id: 'verify', name: MODULE_CONFIG.verify.label, color: '#F59E0B', Icon: ShieldCheck },
+                    { id: 'deploy', name: MODULE_CONFIG.deploy.label, color: '#6366F1', Icon: Rocket },
                   ].map(mod => {
                     const active = tenantOps.modules_enabled.includes(mod.id);
                     return (
@@ -731,8 +732,10 @@ export default function SuperadminDashboard() {
                         }}>
                           <mod.Icon size={16} />
                         </div>
-                        <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.08em', color: '#000' }}>
-                          {mod.name}
+                        <span style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.08em', color: '#000', textAlign: 'center', lineHeight: 1.4 }}>
+                          {mod.name.split(' ').map((word, i) => (
+                            <span key={i} style={{ display: 'block' }}>{word}</span>
+                          ))}
                         </span>
                       </button>
                     );

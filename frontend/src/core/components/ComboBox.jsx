@@ -10,7 +10,8 @@ export default function ComboBox({
     label = '',
     allowCustom = true,
     className = "",
-    required = false
+    required = false,
+    isLightMode: isLightModeProp
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -19,7 +20,11 @@ export default function ComboBox({
     const dropdownRef = useRef(null);
     const searchInputRef = useRef(null);
 
-    const isLightMode = window.location.pathname.startsWith('/deploy');
+    // The dropdown panel portals to document.body, escaping any theme scoped
+    // to a page's own class (e.g. onboard-page's light-mode CSS overrides) —
+    // so callers outside /deploy must pass `isLightMode` explicitly rather
+    // than relying on this URL-based guess.
+    const isLightMode = isLightModeProp !== undefined ? isLightModeProp : window.location.pathname.startsWith('/deploy');
 
     // Filter options based on search
     const filteredOptions = options.filter(opt =>
@@ -29,23 +34,20 @@ export default function ComboBox({
     );
 
     // Positions the dropdown against the viewport (not the nearest scroll
-    // container) so it can never be clipped by a modal/table's overflow, and
-    // flips it above the trigger when there isn't enough room below.
+    // container) so it can never be clipped by a modal/table's overflow.
+    // Always opens below the trigger, regardless of scroll position — never
+    // flips upward, even when there isn't much room left beneath it.
     const PANEL_CAP = 260; // don't let the panel stretch further than this, even if there's room
     const updatePosition = useCallback(() => {
         const trigger = containerRef.current;
         if (!trigger) return;
         const rect = trigger.getBoundingClientRect();
-        const estimatedHeight = Math.min(PANEL_CAP, window.innerHeight * 0.6);
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const openUpward = spaceBelow < estimatedHeight && rect.top > spaceBelow;
 
         setDropdownStyle({
             left: rect.left,
             width: Math.max(rect.width, 320),
-            ...(openUpward
-                ? { bottom: window.innerHeight - rect.top + 8, maxHeight: Math.min(PANEL_CAP, rect.top - 16) }
-                : { top: rect.bottom + 8, maxHeight: Math.min(PANEL_CAP, window.innerHeight - rect.bottom - 16) }),
+            top: rect.bottom + 8,
+            maxHeight: Math.max(120, Math.min(PANEL_CAP, window.innerHeight - rect.bottom - 16)),
         });
     }, []);
 
