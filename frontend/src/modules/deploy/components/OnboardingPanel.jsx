@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { P } from '../../../core/permissions';
@@ -6,7 +6,8 @@ import {
   UserPlus, Mail, CheckCircle, Clock, Trash2, Plus,
   FileText, Briefcase, GraduationCap, MapPin, Phone,
   ChevronRight, BadgeCheck, ShieldAlert, Eye, ExternalLink,
-  Copy, Link, Ban, Save, User, CreditCard, Lock, X, Download, Upload
+  Copy, Link, Ban, Save, User, CreditCard, Lock, X, Download, Upload,
+  AlertCircle, Loader2
 } from 'lucide-react';
 import ComboBox from '../../../core/components/ComboBox';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
@@ -20,6 +21,9 @@ import {
   isNonEmpty,
   isValidPhone,
   isValidDate,
+  isPan,
+  isBankAccount,
+  isIfsc,
 } from '../../../core/utils/validators';
 
 const DESIGNATIONS = [
@@ -51,10 +55,15 @@ const FIELD_TOOLTIPS = {
   'Mediclaim Included': 'Choose whether this employee is covered by mediclaim.',
 };
 
-const Field = ({ label, children, isLightMode, required = false }) => (
+const Field = ({ label, children, isLightMode, required = false, error }) => (
   <div className="space-y-1.5">
     <label data-tooltip={FIELD_TOOLTIPS[label]} className={`text-[9px] font-black uppercase tracking-widest ml-2 ${isLightMode ? 'text-[#8b5cf6]' : 'text-white/30'}`}>{label} {required && <span className="text-red-500">*</span>}</label>
     {children}
+    {error && (
+      <p className="flex items-center gap-1 text-[9px] font-bold text-red-500 ml-2">
+        <AlertCircle size={10} className="shrink-0" /> {error}
+      </p>
+    )}
   </div>
 );
 
@@ -83,12 +92,20 @@ export default function OnboardingPanel() {
   const [form, setForm] = useState({ employee_code: '', first_name: '', middle_name: '', last_name: '', guardian_name: '', email: '', role: 'employee', department: '', designation: '', doj: '' });
   const [submitting, setSubmitting] = useState(false);
   const [editApprovalForm, setEditApprovalForm] = useState(null);
-  useUnsavedChangesWarning(!!editApprovalForm);
+  // Autosave: profile edits are persisted to the server automatically (debounced)
+  // as the reviewer types, so closing the drawer never loses in-progress edits.
+  const [saveStatus, setSaveStatus] = useState('idle'); // idle | pending | saving | saved | error
+  const autoSaveTimerRef = useRef(null);
+  const skipNextAutoSaveRef = useRef(false);
+  // Format/required-field errors are only surfaced once the reviewer attempts
+  // to activate the profile, then stay live as they fix each field.
+  const [attemptedActivate, setAttemptedActivate] = useState(false);
+  useUnsavedChangesWarning(saveStatus === 'pending' || saveStatus === 'saving');
 
   const isLightMode = window.location.pathname.startsWith('/deploy');
 
   useEscapeClose(() => setShowForm(false), showForm);
-  useEscapeClose(() => setSelectedApproval(null), !!selectedApproval);
+  useEscapeClose(() => closeApprovalDrawer(), !!selectedApproval);
   const handleTabKeyNav = useTabListKeyNav();
 
   // Approval Form Stats
@@ -305,6 +322,11 @@ export default function OnboardingPanel() {
 
   const openApprovalReview = (approval) => {
     setSelectedApproval(approval);
+    // The form is about to be populated from server data — skip the autosave
+    // effect's very next run so loading a profile doesn't immediately re-PUT it.
+    skipNextAutoSaveRef.current = true;
+    setSaveStatus('idle');
+    setAttemptedActivate(false);
 
     // education_details comes back from the API as a JSONB array (or a JSON string in edge cases)
     let eduList = [];
@@ -467,29 +489,63 @@ export default function OnboardingPanel() {
     }
   };
 
-  // Shared by "Save Changes" and "Activate Profile" — both must validate the
-  // same edited fields before anything is sent to the server.
-  const validateApprovalEditForm = () => {
-    if (!editApprovalForm.first_name?.trim() || !editApprovalForm.last_name?.trim()) {
-      return "First name and last name are required";
+  // Single source of truth for what's wrong with the profile the reviewer is
+  // editing. Used to gate "Activate Profile" and to render inline messages
+  // next to each field — non-blocking fields (bank details) are validated
+  // separately below since HR can't fix those from this locked panel.
+  const buildApprovalErrors = (form) => {
+    const errors = {};
+    if (!form?.first_name?.trim()) errors.first_name = 'First name is required';
+    if (!form?.last_name?.trim()) errors.last_name = 'Last name is required';
+    if (!form?.email_id?.trim()) errors.email_id = 'Email is required';
+    else if (!isEmail(form.email_id)) errors.email_id = 'Enter a valid email address';
+    if (!form?.role?.trim()) errors.role = 'Access role is required';
+    if (!form?.dob?.trim()) errors.dob = 'Date of birth is required';
+    else if (!isValidDate(form.dob)) errors.dob = 'Enter a valid date of birth';
+    if (!form?.contact_number?.trim()) errors.contact_number = 'Contact number is required';
+    else if (!isValidPhone(form.contact_number)) errors.contact_number = 'Enter a valid contact number (10 digits)';
+    if (form?.emergency_contact_number && !isValidPhone(form.emergency_contact_number)) {
+      errors.emergency_contact_number = 'Enter a valid contact number (10 digits)';
     }
-    if (editApprovalForm.email_id && !isEmail(editApprovalForm.email_id)) {
-      return "Enter a valid email address";
+    if (!form?.current_address?.trim()) errors.current_address = 'Current address is required';
+    if (!form?.cv_path) errors.cv_path = 'Resume / CV is required';
+    if (!form?.id_proofs) errors.id_proofs = 'ID Proof is required';
+    if (form?.employee_code && !isEmployeeCode(form.employee_code)) {
+      errors.employee_code = 'Employee code must be 3-20 letters, numbers, hyphens, or underscores';
     }
-    if (editApprovalForm.employee_code && !isEmployeeCode(editApprovalForm.employee_code)) {
-      return "Employee code must be 3-20 letters, numbers, hyphens, or underscores";
-    }
-    if (editApprovalForm.contact_number && !isValidPhone(editApprovalForm.contact_number)) {
-      return "Enter a valid contact number";
-    }
-    if (editApprovalForm.emergency_contact_number && !isValidPhone(editApprovalForm.emergency_contact_number)) {
-      return "Enter a valid emergency contact number";
-    }
-    if (editApprovalForm.dob && !isValidDate(editApprovalForm.dob)) {
-      return "Enter a valid date of birth";
-    }
-    return null;
+    if (form?.pan_no && !isPan(form.pan_no)) errors.pan_no = 'Enter a valid PAN (e.g. ABCDE1234F)';
+    return errors;
   };
+
+  const buildApproveFormErrors = (af) => {
+    const errors = {};
+    if (af?.manager && !isNonEmpty(af.manager)) errors.manager = 'Reporting manager name cannot be empty';
+    if (af?.location && !isNonEmpty(af.location)) errors.location = 'Location cannot be empty';
+    if (af?.code && !isEmployeeCode(af.code)) errors.code = 'Employee code must be 3-20 letters, numbers, hyphens, or underscores';
+    if (af?.doj && !isValidDate(af.doj)) errors.doj = 'Date of joining is invalid';
+    return errors;
+  };
+
+  // Bank details are locked in this panel (HR can't fix them here), so these
+  // are shown inline whenever they're wrong but never block activation.
+  const bankFieldErrors = useMemo(() => {
+    const errors = {};
+    if (editApprovalForm?.bank_account_no && !isBankAccount(editApprovalForm.bank_account_no)) {
+      errors.bank_account_no = 'Bank account number must be 9-18 digits';
+    }
+    if (editApprovalForm?.ifsc_code && !isIfsc(editApprovalForm.ifsc_code)) {
+      errors.ifsc_code = 'Enter a valid IFSC code (e.g. HDFC0001234)';
+    }
+    return errors;
+  }, [editApprovalForm]);
+
+  const profileErrors = useMemo(() => buildApprovalErrors(editApprovalForm), [editApprovalForm]);
+  const approveFormErrors = useMemo(() => buildApproveFormErrors(approveForm), [approveForm]);
+  // Everything but the locked bank fields waits for a failed activation
+  // attempt before showing red text, so the panel isn't screaming errors at
+  // a reviewer who just opened the drawer.
+  const visibleProfileErrors = attemptedActivate ? profileErrors : {};
+  const visibleApproveErrors = attemptedActivate ? approveFormErrors : {};
 
   // Persists the edited profile fields (name/contact/address/etc.) via the
   // same PUT used by "Save Changes". Shared with "Activate Profile" so
@@ -521,23 +577,63 @@ export default function OnboardingPanel() {
     // Update selected approval with new data
     const combinedName = [editApprovalForm.first_name, editApprovalForm.middle_name, editApprovalForm.last_name].filter(Boolean).join(' ');
     setSelectedApproval(prev => ({ ...prev, ...payload, name: combinedName }));
+    // Also sync the row in the approvals list itself — otherwise it still
+    // holds the pre-edit snapshot, so closing the drawer (e.g. pressing Esc)
+    // and reopening the same profile would repopulate the form from stale
+    // data and make the autosaved draft look lost even though it's on the server.
+    setApprovals(prev => prev.map(app =>
+      app.employee_code === selectedApproval.employee_code
+        ? { ...app, ...payload, name: combinedName }
+        : app
+    ));
     return payload;
   };
 
-  const handleSaveApprovalEdit = async () => {
-    const validationError = validateApprovalEditForm();
-    if (validationError) {
-      toast.error(validationError);
+  // Debounced autosave: fires ~1s after the reviewer stops typing anywhere in
+  // the profile form and silently persists the draft, so there's never a
+  // "Save" button to forget to click before closing the drawer.
+  useEffect(() => {
+    if (!editApprovalForm || !selectedApproval) return;
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
       return;
     }
+    setSaveStatus('pending');
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        setSaveStatus('saving');
+        await persistApprovalEdits();
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('error');
+      }
+    }, 1000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editApprovalForm]);
 
+  // Flushes any debounced autosave immediately rather than waiting out the
+  // timer, so closing the drawer right after a keystroke can't drop it.
+  const flushPendingAutoSave = async () => {
+    if (!autoSaveTimerRef.current) return;
+    clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = null;
+    if (!editApprovalForm || !selectedApproval) return;
     try {
+      setSaveStatus('saving');
       await persistApprovalEdits();
-      toast.success('Profile details saved successfully');
-      loadApprovals();
-    } catch (e) {
-      toast.error(e.message);
+      setSaveStatus('saved');
+    } catch {
+      setSaveStatus('error');
     }
+  };
+
+  const closeApprovalDrawer = async () => {
+    await flushPendingAutoSave();
+    setSelectedApproval(null);
   };
 
   const handleRejectProfile = async () => {
@@ -559,65 +655,17 @@ export default function OnboardingPanel() {
     }
   };
 
-  // Fields that must be filled in (on the profile itself, via "Save Changes")
-  // before an account can be activated. Bank details are not required —
-  // accounts can be activated without them.
-  const MANDATORY_ACTIVATION_FIELDS = [
-    ['first_name', 'First Name'],
-    ['last_name', 'Last Name'],
-    ['email_id', 'Email'],
-    ['role', 'Access Role'],
-    ['dob', 'Date of Birth'],
-    ['contact_number', 'Contact Number'],
-    ['current_address', 'Current Address'],
-    ['cv_path', 'Resume / CV'],
-    ['id_proofs', 'ID Proof'],
-  ];
-
   const handleApprove = async (e) => {
     e.preventDefault();
+    setAttemptedActivate(true);
 
-    // ── Mandatory field gate ──
-    for (const [field, label] of MANDATORY_ACTIVATION_FIELDS) {
-      if (!String(editApprovalForm?.[field] || '').trim()) {
-        toast.error(`${label} is required before this account can be activated.`);
-        return;
-      }
-    }
-
-    const editValidationError = validateApprovalEditForm();
-    if (editValidationError) {
-      toast.error(editValidationError);
+    // ── Validation gate — same checks now render inline next to each field ──
+    const errors = buildApprovalErrors(editApprovalForm);
+    const approveErrors = buildApproveFormErrors(approveForm);
+    const firstErrorKey = Object.keys(errors)[0] || Object.keys(approveErrors)[0];
+    if (firstErrorKey) {
+      toast.error(errors[firstErrorKey] || approveErrors[firstErrorKey]);
       return;
-    }
-
-    // ── Validation ──
-    // Only validate fields that have values
-    // Manager: only validate if filled
-    if (approveForm.manager && !isNonEmpty(approveForm.manager)) {
-      toast.error("Reporting manager name cannot be empty");
-      return;
-    }
-    
-    // Location: only validate if filled
-    if (approveForm.location && !isNonEmpty(approveForm.location)) {
-      toast.error("Location cannot be empty");
-      return;
-    }
-    
-    // Employee Code: only validate if filled
-    if (approveForm.code && !isEmployeeCode(approveForm.code)) {
-      toast.error("Employee code must be 3-20 letters, numbers, hyphens, or underscores");
-      return;
-    }
-    
-    // DOJ: only validate if filled
-    if (approveForm.doj) {
-      if (!isValidDate(approveForm.doj)) {
-        toast.error("Date of joining is invalid");
-        return;
-      }
-      
     }
 
     setSubmitting(true);
@@ -1134,20 +1182,19 @@ export default function OnboardingPanel() {
                         </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                       <button
-                         onClick={handleSaveApprovalEdit}
-                         disabled={!canEditApprovalPanel}
-                         title={!canEditApprovalPanel ? "You don't have permission to edit onboarding profiles" : undefined}
-                         className={`flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-lg text-[9px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
-                           !canEditApprovalPanel
-                             ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-400'
-                             : isLightMode
-                               ? 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed] shadow-lg shadow-[#8b5cf6]/20'
-                               : 'bg-primary text-black hover:bg-white shadow-lg shadow-primary/20'
-                         }`}
-                       >
-                         <Save size={11} /> Save Changes
-                       </button>
+                       {canEditApprovalPanel && (
+                         <div className={`flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-lg text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
+                           saveStatus === 'error'
+                             ? (isLightMode ? 'bg-red-50 text-red-500' : 'bg-error/10 text-error')
+                             : (isLightMode ? 'bg-[#faf7ff] text-[#8b8ba3] border border-[#ebe4ff]' : 'bg-white/5 text-white/40 border border-white/5')
+                         }`}>
+                           {saveStatus === 'saving' && <><Loader2 size={11} className="animate-spin" /> Saving...</>}
+                           {saveStatus === 'pending' && <><Save size={11} /> Unsaved changes...</>}
+                           {saveStatus === 'saved' && <><CheckCircle size={11} /> Draft saved</>}
+                           {saveStatus === 'error' && <><AlertCircle size={11} /> Save failed — retrying on next edit</>}
+                           {saveStatus === 'idle' && <><CheckCircle size={11} /> Autosave on</>}
+                         </div>
+                       )}
                        <button
                          onClick={handleRejectProfile}
                          disabled={!canReviewSubmissions}
@@ -1174,7 +1221,7 @@ export default function OnboardingPanel() {
                         : 'bg-white/5 border-white/5'
                     }`}>
                       <div className="grid grid-cols-3 gap-2">
-                        <Field label="First Name" isLightMode={isLightMode} required>
+                        <Field label="First Name" isLightMode={isLightMode} required error={visibleProfileErrors.first_name}>
                           <input
                             type="text"
                             value={editApprovalForm?.first_name || ''}
@@ -1200,7 +1247,7 @@ export default function OnboardingPanel() {
                             placeholder="Middle name"
                           />
                         </Field>
-                        <Field label="Last Name" isLightMode={isLightMode} required>
+                        <Field label="Last Name" isLightMode={isLightMode} required error={visibleProfileErrors.last_name}>
                           <input
                             type="text"
                             value={editApprovalForm?.last_name || ''}
@@ -1228,7 +1275,7 @@ export default function OnboardingPanel() {
                             placeholder="Guardian's name"
                           />
                         </Field>
-                        <Field label="Date of Birth" isLightMode={isLightMode} required>
+                        <Field label="Date of Birth" isLightMode={isLightMode} required error={visibleProfileErrors.dob}>
                           <input
                             type="date"
                             value={editApprovalForm?.dob || ''}
@@ -1240,7 +1287,7 @@ export default function OnboardingPanel() {
                             }`}
                           />
                         </Field>
-                        <Field label="Employee Code" isLightMode={isLightMode}>
+                        <Field label="Employee Code" isLightMode={isLightMode} error={visibleProfileErrors.employee_code}>
                           <input
                             type="text"
                             value={editApprovalForm?.employee_code || ''}
@@ -1263,7 +1310,7 @@ export default function OnboardingPanel() {
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
                     }`}>
-                      <Field label="Email" isLightMode={isLightMode} required>
+                      <Field label="Email" isLightMode={isLightMode} required error={visibleProfileErrors.email_id}>
                         <input
                           type="email"
                           value={editApprovalForm?.email_id || ''}
@@ -1276,7 +1323,7 @@ export default function OnboardingPanel() {
                           placeholder="Enter email address"
                         />
                       </Field>
-                      <Field label="Contact Number" isLightMode={isLightMode} required>
+                      <Field label="Contact Number" isLightMode={isLightMode} required error={visibleProfileErrors.contact_number}>
                         <input
                           type="text"
                           value={editApprovalForm?.contact_number || ''}
@@ -1302,7 +1349,7 @@ export default function OnboardingPanel() {
                           placeholder="Emergency contact name"
                         />
                       </Field>
-                      <Field label="Emergency Contact Number" isLightMode={isLightMode}>
+                      <Field label="Emergency Contact Number" isLightMode={isLightMode} error={visibleProfileErrors.emergency_contact_number}>
                         <input
                           type="text"
                           value={editApprovalForm?.emergency_contact_number || ''}
@@ -1325,7 +1372,7 @@ export default function OnboardingPanel() {
                         ? 'bg-[#faf7ff] border-[#f1ebff]'
                         : 'bg-white/5 border-white/5'
                     }`}>
-                      <Field label="Current Address" isLightMode={isLightMode} required>
+                      <Field label="Current Address" isLightMode={isLightMode} required error={visibleProfileErrors.current_address}>
                         <textarea
                           value={editApprovalForm?.current_address || ''}
                           onChange={e => setEditApprovalForm(prev => ({ ...prev, current_address: e.target.value }))}
@@ -1377,7 +1424,7 @@ export default function OnboardingPanel() {
                           placeholder="Select Department..."
                         />
                       </Field>
-                      <Field label="Access Role" isLightMode={isLightMode} required>
+                      <Field label="Access Role" isLightMode={isLightMode} required error={visibleProfileErrors.role}>
                         <select
                           value={editApprovalForm?.role || 'employee'}
                           onChange={e => setEditApprovalForm(prev => ({ ...prev, role: e.target.value }))}
@@ -1522,7 +1569,13 @@ export default function OnboardingPanel() {
                         { label: 'CV / Resume', docType: 'cv', path: editApprovalForm?.cv_path, accept: '.pdf', required: true },
                         { label: 'ID Proof', docType: 'id_proof', path: editApprovalForm?.id_proofs, accept: 'image/*,.pdf', required: true },
                       ].map(doc => (
-                        <Field key={doc.label} label={doc.label} isLightMode={isLightMode} required={doc.required}>
+                        <Field
+                          key={doc.label}
+                          label={doc.label}
+                          isLightMode={isLightMode}
+                          required={doc.required}
+                          error={doc.docType === 'cv' ? visibleProfileErrors.cv_path : doc.docType === 'id_proof' ? visibleProfileErrors.id_proofs : null}
+                        >
                           <input
                             type="file"
                             id={`approval-upload-${doc.docType}`}
@@ -1606,7 +1659,7 @@ export default function OnboardingPanel() {
                             }`}
                           />
                         </Field>
-                        <Field label="Bank Account No." isLightMode={isLightMode}>
+                        <Field label="Bank Account No." isLightMode={isLightMode} error={bankFieldErrors.bank_account_no}>
                           <input
                             type="text"
                             value={editApprovalForm?.bank_account_no || ''}
@@ -1618,7 +1671,7 @@ export default function OnboardingPanel() {
                             }`}
                           />
                         </Field>
-                        <Field label="IFSC Code" isLightMode={isLightMode}>
+                        <Field label="IFSC Code" isLightMode={isLightMode} error={bankFieldErrors.ifsc_code}>
                           <input
                             type="text"
                             value={editApprovalForm?.ifsc_code || ''}
@@ -1630,7 +1683,7 @@ export default function OnboardingPanel() {
                             }`}
                           />
                         </Field>
-                        <Field label="PAN No." isLightMode={isLightMode}>
+                        <Field label="PAN No." isLightMode={isLightMode} error={visibleProfileErrors.pan_no}>
                           <input
                             type="text"
                             value={editApprovalForm?.pan_no || ''}
@@ -1689,16 +1742,16 @@ export default function OnboardingPanel() {
                     }`}>
                        <fieldset disabled={!canApproveBasic} className="m-0 p-0 border-0 space-y-6 disabled:opacity-50">
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <Field label="Reporting Manager" isLightMode={isLightMode}>
-                            <ComboBox 
+                          <Field label="Reporting Manager" isLightMode={isLightMode} error={visibleApproveErrors.manager}>
+                            <ComboBox
                               options={activeManagers}
                               value={approveForm.manager}
                               onChange={val => setApproveForm({...approveForm, manager: val})}
                               placeholder="Select Manager..."
                             />
                           </Field>
-                          <Field label="Location" isLightMode={isLightMode}>
-                            <ComboBox 
+                          <Field label="Location" isLightMode={isLightMode} error={visibleApproveErrors.location}>
+                            <ComboBox
                               options={locations}
                               value={approveForm.location}
                               onChange={val => setApproveForm({...approveForm, location: val})}
@@ -1708,9 +1761,9 @@ export default function OnboardingPanel() {
                        </div>
 
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <Field label="New Employee Code" isLightMode={isLightMode}>
-                            <input 
-                              value={approveForm.code} 
+                          <Field label="New Employee Code" isLightMode={isLightMode} error={visibleApproveErrors.code}>
+                            <input
+                              value={approveForm.code}
                               onChange={e => setApproveForm({...approveForm, code: e.target.value})}
                               className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
                                 isLightMode 
@@ -1720,10 +1773,10 @@ export default function OnboardingPanel() {
                               placeholder="e.g., EMP-001"
                             />
                           </Field>
-                          <Field label="Date of Joining" isLightMode={isLightMode}>
-                            <input 
+                          <Field label="Date of Joining" isLightMode={isLightMode} error={visibleApproveErrors.doj}>
+                            <input
                               type="date"
-                              value={approveForm.doj} 
+                              value={approveForm.doj}
                               onChange={e => setApproveForm({...approveForm, doj: e.target.value})}
                               className={`w-full text-xs px-5 py-3.5 rounded-xl outline-none transition-all ${
                                 isLightMode 
@@ -1811,14 +1864,14 @@ export default function OnboardingPanel() {
                           <div className="flex gap-4">
                             <button
                               type="button"
-                              onClick={() => setSelectedApproval(null)}
+                              onClick={closeApprovalDrawer}
                               className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                                 isLightMode
                                   ? 'border border-[#ebe4ff] text-[#6b7280] hover:bg-[#faf7ff] hover:text-black'
                                   : 'border border-white/10 text-white/40 hover:text-white'
                               }`}
                             >
-                              Cancel
+                              Close
                             </button>
                             <button
                               type="submit"
