@@ -12,7 +12,7 @@ import os
 class PasswordService:
     def __init__(self):
         self.repo = PasswordResetRepository()
-        self.email_service = EmailService(tenant_id=self.tenant_id)
+        self.email_service = EmailService(tenant_id='public')
     
     def generate_temp_password(self, length: int = 12) -> str:
         """Generate a secure temporary password"""
