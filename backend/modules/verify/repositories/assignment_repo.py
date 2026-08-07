@@ -25,6 +25,25 @@ class AssignmentRepository:
         finally:
             conn.close()
 
+    def get_user_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    """
+                    SELECT u.id AS user_id, u.username AS email, e.name
+                    FROM users u
+                    LEFT JOIN employees e ON e.employee_code = u.employee_code
+                    WHERE u.id = %s
+                    """,
+                    (user_id,)
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+        finally:
+            conn.close()
+
     def get_user_assignments(self, user_id: int) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:

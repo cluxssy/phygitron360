@@ -22,6 +22,21 @@ def get_default_logo_url() -> str:
     return f"{backend_url}/static/logo.png"
 
 
+def get_tenant_portal_url(subdomain: str = None, path: str = "") -> str:
+    """
+    Builds the correct tenant-aware portal URL.
+    - If APP_BASE_URL is set in env, uses that (for local dev / custom setups).
+    - If a subdomain is provided, builds  https://{subdomain}.phygitron.com{path}
+    - Falls back to https://app.phygitron.com{path}
+    """
+    env_url = os.getenv("APP_BASE_URL")
+    if env_url:
+        return f"{env_url.rstrip('/')}{path}"
+    if subdomain:
+        return f"https://{subdomain}.phygitron.com{path}"
+    return f"https://app.phygitron.com{path}"
+
+
 def build_cta_button_html(url: str, label: str) -> str:
     """Returns a resilient, table-based button for email clients."""
     return f"""

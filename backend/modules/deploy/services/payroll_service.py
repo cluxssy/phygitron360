@@ -276,15 +276,32 @@ class PayrollService:
         else:
             logo = ''
 
-        company_info = [
-            Paragraph('<b>ewandzdigital Services Pvt. Ltd.</b>', ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=18, alignment=TA_CENTER, leading=22)),
-            Paragraph('20, Okhla Phase 3, New Delhi, Delhi - 110020', ParagraphStyle('Address', fontName='Helvetica', fontSize=10, alignment=TA_CENTER, leading=14)),
-            Paragraph('CIN: U72900DL2017PTC327055', ParagraphStyle('CIN', fontName='Helvetica', fontSize=10, alignment=TA_CENTER, leading=14))
+        # Dynamic company info from tenant DB or env fallback
+        payslip_company_name = os.getenv('COMPANY_NAME', 'Phygitron 360')
+        payslip_company_address = os.getenv('COMPANY_ADDRESS', 'New Delhi, India')
+        payslip_company_cin = os.getenv('COMPANY_CIN', '')
+        try:
+            from backend.core.database import get_db_connection
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute("SELECT company_name, subdomain FROM public.tenants WHERE id = %s", (self.tenant_id,))
+                row = cur.fetchone()
+                if row:
+                    payslip_company_name = row[0] or payslip_company_name
+            conn.close()
+        except Exception:
+            pass
+
+        company_info_paras = [
+            Paragraph(f'<b>{payslip_company_name}</b>', ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=18, alignment=TA_CENTER, leading=22)),
+            Paragraph(payslip_company_address, ParagraphStyle('Address', fontName='Helvetica', fontSize=10, alignment=TA_CENTER, leading=14)),
         ]
-        
+        if payslip_company_cin:
+            company_info_paras.append(Paragraph(f'CIN: {payslip_company_cin}', ParagraphStyle('CIN', fontName='Helvetica', fontSize=10, alignment=TA_CENTER, leading=14)))
+
         # Use a 3-column table to force the company info into the absolute center of the page
         # while keeping the logo on the far left. (Total width = 7.27 inches)
-        header_table = Table([[logo, company_info, '']], colWidths=[1.5*inch, 4.27*inch, 1.5*inch])
+        header_table = Table([[logo, company_info_paras, '']], colWidths=[1.5*inch, 4.27*inch, 1.5*inch])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('ALIGN', (0,0), (0,0), 'LEFT'),

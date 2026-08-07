@@ -29,16 +29,43 @@ class EmailService:
     """
     Email service for onboarding invitations, security resets, and employee notifications.
     Uses configurable SMTP credentials and unified white-label styling.
+    tenant_id is used to resolve the correct subdomain portal URL per tenant.
     """
 
-    def __init__(self):
+    def __init__(self, tenant_id: str = None):
         self.smtp_server = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER") or "smtp.gmail.com"
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_user = os.getenv("SMTP_USER") or os.getenv("SENDER_EMAIL") or ""
         self.smtp_password = os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD") or os.getenv("SENDER_PASSWORD") or ""
         self.sender_name = os.getenv("SENDER_NAME", "Phygitron 360")
         self.company_name = os.getenv("COMPANY_NAME", "Phygitron 360")
-        
+        self.tenant_id = tenant_id
+
+        # Resolve tenant-specific subdomain and portal URL
+        self._subdomain = None
+        if tenant_id:
+            try:
+                from backend.core.database import get_db_connection
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.execute("SELECT company_name, subdomain FROM public.tenants WHERE id = %s", (tenant_id,))
+                    row = cur.fetchone()
+                    if row:
+                        self.company_name = row[0] or self.company_name
+                        self._subdomain = row[1]
+                conn.close()
+            except Exception:
+                pass
+
+        # Build the portal URL: {subdomain}.phygitron.com or env override
+        env_base = os.getenv("APP_BASE_URL")
+        if env_base:
+            self.portal_url = env_base.rstrip("/")
+        elif self._subdomain:
+            self.portal_url = f"https://{self._subdomain}.phygitron.com"
+        else:
+            self.portal_url = "https://app.phygitron.com"
+
         backend_url = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
         self.platform_logo_url = os.getenv("LOGO_URL", f"{backend_url}/static/logo.png")
 
@@ -141,7 +168,7 @@ class EmailService:
     ) -> dict:
         """11. Temporary Password Sent by Admin"""
         subject = f"Temporary Login Credentials — {self.company_name}"
-        login_url = os.getenv("APP_BASE_URL", "https://app.phygitron360.com")
+        login_url = self.portal_url
         
         body_html = f"""
         <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{recipient_name}</strong>,</p>
@@ -221,7 +248,7 @@ class EmailService:
     ) -> dict:
         """8. Employee Welcome Email (Direct HR login account provisioning)"""
         if not login_url:
-            login_url = os.getenv("APP_BASE_URL", "https://app.phygitron360.com")
+            login_url = self.portal_url
         subject = f"Welcome to {self.company_name} — Your Account is Ready"
 
         body_html = f"""

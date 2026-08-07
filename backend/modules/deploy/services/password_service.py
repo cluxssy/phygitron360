@@ -12,7 +12,7 @@ import os
 class PasswordService:
     def __init__(self):
         self.repo = PasswordResetRepository()
-        self.email_service = EmailService()
+        self.email_service = EmailService(tenant_id=self.tenant_id)
     
     def generate_temp_password(self, length: int = 12) -> str:
         """Generate a secure temporary password"""
@@ -139,14 +139,17 @@ class PasswordService:
         # Mark token as used
         self.repo.mark_token_used(raw_token, tenant_id=tenant_id)
         
-        # Send notification email
-        user = self.repo.get_user_by_email(email, tenant_id=tenant_id)
-        user_name = user.get('name', email.split('@')[0]) if user else email.split('@')[0]
-        self.email_service.send_password_changed_notification(
-            recipient_email=email,
-            recipient_name=user_name,
-            changed_by="You"
-        )
+        # Send notification email (non-blocking — password already committed)
+        try:
+            user = self.repo.get_user_by_email(email, tenant_id=tenant_id)
+            user_name = user.get('name', email.split('@')[0]) if user else email.split('@')[0]
+            self.email_service.send_password_changed_notification(
+                recipient_email=email,
+                recipient_name=user_name,
+                changed_by="You"
+            )
+        except Exception as mail_err:
+            print(f"[non-critical] Password changed notification failed: {mail_err}")
         
         return {"success": True, "message": "Password reset successfully"}
     
@@ -268,12 +271,15 @@ class PasswordService:
         # Update password
         self.repo.update_password(email, password_hash, changed_by="Self", must_change=False, tenant_id=tenant_id)
         
-        # Send notification
-        user_name = user.get('name', email.split('@')[0])
-        self.email_service.send_password_changed_notification(
-            recipient_email=email,
-            recipient_name=user_name,
-            changed_by="You"
-        )
+        # Send notification (non-blocking — password already committed)
+        try:
+            user_name = user.get('name', email.split('@')[0])
+            self.email_service.send_password_changed_notification(
+                recipient_email=email,
+                recipient_name=user_name,
+                changed_by="You"
+            )
+        except Exception as mail_err:
+            print(f"[non-critical] Password changed notification failed: {mail_err}")
         
         return {"success": True, "message": "Password changed successfully"}

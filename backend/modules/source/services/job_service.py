@@ -242,8 +242,20 @@ class JobService:
         
         from backend.core.security import hash_password
         import os
-        base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
-        portal_link = f"{base_url}/login"
+        # Build tenant-aware portal link: {subdomain}.phygitron.com or env fallback
+        _portal_base = os.getenv("APP_BASE_URL")
+        if not _portal_base:
+            try:
+                from backend.core.database import get_db_connection
+                _conn = get_db_connection()
+                with _conn.cursor() as _cur:
+                    _cur.execute("SELECT subdomain FROM public.tenants WHERE id = %s", (self.tenant_id,))
+                    _row = _cur.fetchone()
+                    _portal_base = f"https://{_row[0]}.phygitron.com" if _row and _row[0] else "https://app.phygitron.com"
+                _conn.close()
+            except Exception:
+                _portal_base = "https://app.phygitron.com"
+        portal_link = f"{_portal_base.rstrip('/')}/login"
 
         for i, cid in enumerate(candidate_ids):
             try:
@@ -307,22 +319,21 @@ class JobService:
                                          .replace("{temp_password}", temp_password)
 
                 if is_internal:
-                    # Internal employee notification
-                    from backend.core.email_service_extended import send_email
+                    # Internal employee opportunity notification
+                    from backend.core.email_service_extended import send_internal_opportunity_email
                     try:
-                        send_email(
+                        dept = role.get("department", "General Operations") if role_id is not None and 'role' in locals() and role else "Internal Careers"
+                        send_internal_opportunity_email(
                             to_email=to_email,
-                            subject=f"Internal Application Update: {role_name}",
-                            body_html=f"""
-                                <h2>Internal Application Update</h2>
-                                <p>Hi {cand['full_name']},</p>
-                                <p>Your application for <strong>{role_name}</strong> has advanced to the next stage.</p>
-                                <p>Please log in to your Employee Central dashboard and check the "My Opportunities" tab for any pending assessments or updates.</p>
-                                <p>{cand_body or ''}</p>
-                            """
+                            employee_name=cand["full_name"],
+                            job_title=role_name,
+                            department=dept,
+                            application_deadline=deadline or "Open via Employee Central",
+                            company_name="Phygitron 360",
+                            portal_link=portal_link
                         )
                     except Exception as exc:
-                        logger.warning(f"Internal invite email failed for {to_email}: {exc}")
+                        logger.warning(f"Internal opportunity email failed for {to_email}: {exc}")
                         
                     # System notification
                     try:

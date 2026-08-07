@@ -648,7 +648,7 @@ export default function OnboardPage() {
                                          </button>
                                      )}
                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                         <ComboBox options={DEGREE_OPTIONS} value={edu.degree} onChange={val => updateEducation(idx, 'degree', val)} placeholder="Select or type course..." />
+                                         <ComboBox options={DEGREE_OPTIONS} value={edu.degree} onChange={val => updateEducation(idx, 'degree', val)} placeholder="Select or type course..." isLightMode />
                                          <input placeholder="Institution / Board" value={edu.university} onChange={e => updateEducation(idx, 'university', e.target.value)} className="w-full glass-panel-input text-[11px] py-3 bg-black/40" />
                                      </div>
                                      <div className="grid grid-cols-2 gap-4">
