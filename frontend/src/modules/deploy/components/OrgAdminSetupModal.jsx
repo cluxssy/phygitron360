@@ -213,7 +213,14 @@ export default function OrgAdminSetupModal({ user, onComplete }) {
         body: fd
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(res.ok ? "Unexpected server response" : `Server error (${res.status}). Please try again.`);
+      }
+
       if (!res.ok) throw new Error(data.detail || "Failed to submit identity");
 
       toast.success("Identity initialized successfully");

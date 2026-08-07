@@ -15,12 +15,12 @@ from backend.core.audit import audit_log
 
 class EmployeeService:
     def __init__(self, tenant_id: str = 'public'):
+        self.tenant_id = tenant_id
         self.repo = EmployeeRepository()
         self.asset_repo = AssetRepository()
         self.attendance_repo = AttendanceRepository()
         self.user_repo = UserRepository()
         self.email_service = EmailService(tenant_id=self.tenant_id)
-        self.tenant_id = tenant_id
 
     def get_all_employees(self):
         return self.repo.get_all_employees_basic(self.tenant_id)
