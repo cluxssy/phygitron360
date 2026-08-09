@@ -34,6 +34,8 @@ def list_tenants(service: AdminService = Depends(get_service)):
 def provision_tenant(data: ProvisionTenantRequest, current_user: dict = Depends(get_current_user), service: AdminService = Depends(get_service)):
     try:
         return service.provision_tenant(data.company_name, data.admin_email, data.admin_password, current_user['username'])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Failed to provision tenant %s: %s", data.company_name, e)
         raise HTTPException(status_code=500, detail="Something went wrong while provisioning the tenant. Please try again.")
