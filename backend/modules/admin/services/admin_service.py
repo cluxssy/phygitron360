@@ -19,9 +19,19 @@ class AdminService:
 
     def provision_tenant(self, company_name: str, admin_email: str, admin_password: str, actor: str):
         # 1. Generate standard identifiers
+        import re
         safe_name = "".join([c for c in company_name.lower().replace(' ', '_') if c.isalnum() or c == '_'])
+        safe_name = re.sub(r'_+', '_', safe_name).strip('_')  # collapse double underscores
         tenant_schema = f"tenant_{safe_name}"
         subdomain = safe_name.replace('_', '')
+
+        # Guard: reject if this schema/subdomain already exists
+        existing = self.repo.get_all_tenants()
+        if any(t['id'] == tenant_schema for t in existing):
+            raise ValueError(
+                f"A workspace with the identifier '{tenant_schema}' already exists. "
+                f"Try a more specific company name (e.g. include a country or region)."
+            )
 
         # 2. Add to central registry (public schema)
         self.repo.register_tenant(tenant_schema, company_name, admin_email, subdomain)

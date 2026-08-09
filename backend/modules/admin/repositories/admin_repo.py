@@ -259,6 +259,12 @@ class AdminRepository:
                 
                 # 3. Cleanup global sessions related to this tenant
                 cur.execute("DELETE FROM sessions WHERE tenant_id = %s", (tenant_id,))
+
+                # 4. Cleanup onboarding invites — stored in public schema keyed by tenant_id,
+                #    NOT inside the tenant schema, so CASCADE does not catch these.
+                #    Without this, old invite history reappears if the tenant is recreated
+                #    with the same name/ID.
+                cur.execute("DELETE FROM onboarding_invites WHERE tenant_id = %s", (tenant_id,))
                 
                 conn.commit()
         finally:
