@@ -72,7 +72,7 @@ class P:
     DEPLOY_ATT_VIEW_PERSONAL        = "deploy.attendance.view_personal"
     DEPLOY_ATT_VIEW_TEAM            = "deploy.attendance.view_team"
     DEPLOY_ATT_VIEW_ALL             = "deploy.attendance.view_all"
-    DEPLOY_ATT_CLOCK_IN_OUT         = "deploy.attendance.clock_in_out"
+    DEPLOY_ATT_LOG_ATTENDANCE       = "deploy.attendance.log_attendance"
     DEPLOY_ATT_REQ_CORRECTION       = "deploy.attendance.request_correction"
     DEPLOY_ATT_APP_CORRECTION       = "deploy.attendance.approve_correction"
     DEPLOY_LEAVES_VIEW_PERSONAL     = "deploy.leaves.view_personal"
@@ -115,7 +115,12 @@ class P:
     DEPLOY_TRAIN_VIEW               = "deploy.training.view"
     DEPLOY_TRAIN_MANAGE             = "deploy.training.manage"
 
-    # ── Deploy: Dashboard / Notifications ────────────────────────────────────
+    # ── Deploy: Dashboard / Notifications / Analytics ────────────────────────
+    DEPLOY_ANALYTICS_VIEW_KPIS      = "deploy.analytics.view_kpis"
+    DEPLOY_ANALYTICS_VIEW_STATUS    = "deploy.analytics.view_status"
+    DEPLOY_ANALYTICS_VIEW_HIRING    = "deploy.analytics.view_hiring"
+    DEPLOY_ANALYTICS_VIEW_DEMO      = "deploy.analytics.view_demographics"
+    DEPLOY_ANALYTICS_VIEW_TALENT    = "deploy.analytics.view_talent"
     DEPLOY_DASH_ADMIN               = "deploy.dashboard.view_admin"
     DEPLOY_NOTIF_ADMIN              = "deploy.notifications.view_admin"
     DEPLOY_NOTIF_MANAGE             = "deploy.notifications.manage"
@@ -176,7 +181,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Deploy: Assets
         P.DEPLOY_ASSETS_VIEW_PERSONAL, P.DEPLOY_ASSETS_VIEW_ALL, P.DEPLOY_ASSETS_MANAGE_ONBOARDING, P.DEPLOY_ASSETS_MANAGE_CLEARANCE, P.DEPLOY_ASSETS_EXPORT_REPORTS,
         # Deploy: Attendance & Leaves
-        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_VIEW_TEAM, P.DEPLOY_ATT_VIEW_ALL, P.DEPLOY_ATT_CLOCK_IN_OUT, P.DEPLOY_ATT_REQ_CORRECTION, P.DEPLOY_ATT_APP_CORRECTION,
+        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_VIEW_TEAM, P.DEPLOY_ATT_VIEW_ALL, P.DEPLOY_ATT_LOG_ATTENDANCE, P.DEPLOY_ATT_REQ_CORRECTION, P.DEPLOY_ATT_APP_CORRECTION,
         P.DEPLOY_LEAVES_VIEW_PERSONAL, P.DEPLOY_LEAVES_VIEW_TEAM, P.DEPLOY_LEAVES_VIEW_ALL, P.DEPLOY_LEAVES_REQUEST, P.DEPLOY_LEAVES_APPROVE, P.DEPLOY_LEAVES_MANAGE_BALANCES,
         P.DEPLOY_ATT_MANAGE_POLICIES,
         # Deploy: Onboarding
@@ -188,7 +193,8 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Deploy: Learning (unmapped)
         P.DEPLOY_ASSESS_VIEW, P.DEPLOY_ASSESS_MANAGE,
         P.DEPLOY_TRAIN_VIEW, P.DEPLOY_TRAIN_MANAGE,
-        # Deploy: Dashboard / Notifications
+        # Deploy: Dashboard / Notifications / Analytics
+        P.DEPLOY_ANALYTICS_VIEW_KPIS, P.DEPLOY_ANALYTICS_VIEW_STATUS, P.DEPLOY_ANALYTICS_VIEW_HIRING, P.DEPLOY_ANALYTICS_VIEW_DEMO, P.DEPLOY_ANALYTICS_VIEW_TALENT,
         P.DEPLOY_DASH_ADMIN, P.DEPLOY_NOTIF_ADMIN, P.DEPLOY_NOTIF_MANAGE,
         # Source
         P.SOURCE_JOBS_VIEW, P.SOURCE_JOBS_MANAGE,
@@ -212,7 +218,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Deploy: Assets
         P.DEPLOY_ASSETS_VIEW_PERSONAL,
         # Deploy: Attendance
-        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_VIEW_TEAM, P.DEPLOY_ATT_CLOCK_IN_OUT, P.DEPLOY_ATT_REQ_CORRECTION, P.DEPLOY_ATT_APP_CORRECTION,
+        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_VIEW_TEAM, P.DEPLOY_ATT_LOG_ATTENDANCE, P.DEPLOY_ATT_REQ_CORRECTION, P.DEPLOY_ATT_APP_CORRECTION,
         P.DEPLOY_LEAVES_VIEW_PERSONAL, P.DEPLOY_LEAVES_VIEW_TEAM, P.DEPLOY_LEAVES_REQUEST, P.DEPLOY_LEAVES_APPROVE,
         # Deploy: Onboarding
         P.DEPLOY_ONBOARD_VIEW, P.DEPLOY_ONBOARD_MANAGE,
@@ -223,7 +229,8 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Deploy: Learning (unmapped)
         P.DEPLOY_ASSESS_VIEW, P.DEPLOY_ASSESS_MANAGE,
         P.DEPLOY_TRAIN_VIEW,
-        # Deploy: Dashboard / Notifications
+        # Deploy: Dashboard / Notifications / Analytics
+        P.DEPLOY_ANALYTICS_VIEW_KPIS, P.DEPLOY_ANALYTICS_VIEW_STATUS, P.DEPLOY_ANALYTICS_VIEW_DEMO, P.DEPLOY_ANALYTICS_VIEW_TALENT,
         P.DEPLOY_DASH_ADMIN, P.DEPLOY_NOTIF_ADMIN,
         # Source
         P.SOURCE_JOBS_VIEW, P.SOURCE_JOBS_MANAGE,
@@ -244,7 +251,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Deploy: Assets
         P.DEPLOY_ASSETS_VIEW_PERSONAL,
         # Deploy: Attendance
-        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_CLOCK_IN_OUT, P.DEPLOY_ATT_REQ_CORRECTION,
+        P.DEPLOY_ATT_VIEW_PERSONAL, P.DEPLOY_ATT_LOG_ATTENDANCE, P.DEPLOY_ATT_REQ_CORRECTION,
         P.DEPLOY_LEAVES_VIEW_PERSONAL, P.DEPLOY_LEAVES_REQUEST,
         # Deploy: Payroll
         P.DEPLOY_PAYROLL_VIEW_PERSONAL,

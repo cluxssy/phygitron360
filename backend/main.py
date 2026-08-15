@@ -70,7 +70,8 @@ app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 import pathlib
 static_assets_dir = pathlib.Path(__file__).parent / "assets" / "static"
 static_assets_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(static_assets_dir)), name="static")
+# Mount at /api/static because DO App Platform routes /api to backend
+app.mount("/api/static", StaticFiles(directory=str(static_assets_dir)), name="static")
 
 # Background Workers
 import asyncio

@@ -32,6 +32,8 @@ import {
 } from 'recharts';
 
 import { useNotifications } from '../../../core/context/NotificationContext';
+import { usePermissions } from '../../../core/auth/usePermissions';
+import { P } from '../../../core/permissions';
 
 const PALETTE = [
   '#8B5CF6', // primary lilac
@@ -161,6 +163,13 @@ const ChartCard = ({ title, children, className = '' }) => (
 export default function DeployAnalytics() {
   const navigate = useNavigate();
   const { setShowNotifications } = useNotifications();
+  const { hasPermission } = usePermissions();
+
+  const canViewKpis = hasPermission(P.DEPLOY_ANALYTICS_VIEW_KPIS);
+  const canViewStatus = hasPermission(P.DEPLOY_ANALYTICS_VIEW_STATUS);
+  const canViewHiring = hasPermission(P.DEPLOY_ANALYTICS_VIEW_HIRING);
+  const canViewDemographics = hasPermission(P.DEPLOY_ANALYTICS_VIEW_DEMO);
+  const canViewTalent = hasPermission(P.DEPLOY_ANALYTICS_VIEW_TALENT);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -393,7 +402,8 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
       </div>
 
       {/* ── KPI CARDS ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      {canViewKpis && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
 
         {/*  Employees - Purple */}
         <StatCard
@@ -439,12 +449,14 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
           onClick={handleAlertsClick}
         />
 
-      </div>
+        </div>
+      )}
 
       {/* ROW 1 */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-        <ChartCard title="Employment Status">
+        {canViewStatus && (
+          <ChartCard title="Employment Status">
           <ResponsiveContainer width="100%" height={320}>
             <PieChart>
               <Pie
@@ -476,7 +488,9 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
+        )}
 
+        {canViewHiring && (
         <ChartCard
           title="Hiring Trend"
           className="xl:col-span-2"
@@ -528,100 +542,106 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>
+        )}
 
       </div>
 
       {/* ROW 2 */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-        <ChartCard
-          title="Department Distribution"
-          className="xl:col-span-2"
-        >
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart
-              data={departmentData}
-              layout="vertical"
+        {canViewDemographics && (
+          <>
+            <ChartCard
+              title="Department Distribution"
+              className="xl:col-span-2"
             >
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart
+                  data={departmentData}
+                  layout="vertical"
+                >
 
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(124,58,237,0.08)"
-              />
-
-              <XAxis
-                type="number"
-                stroke="rgba(0,0,0,0.35)"
-                fontSize={10}
-                fontWeight={900}
-                tickLine={false}
-                axisLine={false}
-              />
-
-              <YAxis
-                dataKey="name"
-                type="category"
-                width={120}
-                stroke="rgba(0,0,0,0.35)"
-                fontSize={10}
-                fontWeight={900}
-                tickLine={false}
-                axisLine={false}
-              />
-
-              <Tooltip content={<CustomTooltip />} />
-
-              <Bar
-                dataKey="value"
-                radius={[0, 8, 8, 0]}
-              >
-                {departmentData.map((_, i) => (
-                  <Cell
-                    key={i}
-                    fill={CHART_COLORS[i % CHART_COLORS.length]}
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(124,58,237,0.08)"
                   />
-                ))}
-              </Bar>
 
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="Location Distribution">
-          <ResponsiveContainer width="100%" height={320}>
-            <PieChart>
-
-              <Pie
-                data={locationData}
-                dataKey="value"
-                nameKey="name"
-                outerRadius={100}
-              >
-                {locationData.map((_, i) => (
-                  <Cell
-                    key={i}
-                    fill={CHART_COLORS[i % CHART_COLORS.length]}
+                  <XAxis
+                    type="number"
+                    stroke="rgba(0,0,0,0.35)"
+                    fontSize={10}
+                    fontWeight={900}
+                    tickLine={false}
+                    axisLine={false}
                   />
-                ))}
-              </Pie>
 
-              <Tooltip content={<PercentTooltip data={locationData} />} />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    width={120}
+                    stroke="rgba(0,0,0,0.35)"
+                    fontSize={10}
+                    fontWeight={900}
+                    tickLine={false}
+                    axisLine={false}
+                  />
 
-              <Legend
-                wrapperStyle={{
-                  fontSize: '11px',
-                  fontWeight: 700
-                }}
-              />
+                  <Tooltip content={<CustomTooltip />} />
 
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
+                  <Bar
+                    dataKey="value"
+                    radius={[0, 8, 8, 0]}
+                  >
+                    {departmentData.map((_, i) => (
+                      <Cell
+                        key={i}
+                        fill={CHART_COLORS[i % CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Bar>
+
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+            <ChartCard title="Location Distribution">
+              <ResponsiveContainer width="100%" height={320}>
+                <PieChart>
+
+                  <Pie
+                    data={locationData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={100}
+                  >
+                    {locationData.map((_, i) => (
+                      <Cell
+                        key={i}
+                        fill={CHART_COLORS[i % CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+
+                  <Tooltip content={<PercentTooltip data={locationData} />} />
+
+                  <Legend
+                    wrapperStyle={{
+                      fontSize: '11px',
+                      fontWeight: 700
+                    }}
+                  />
+
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </>
+        )}
 
       </div>
 
       {/* ROW 3 */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      {canViewTalent && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         <ChartCard title="Top Skills">
           <ResponsiveContainer width="100%" height={320}>
@@ -746,10 +766,12 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
           </ResponsiveContainer>
         </ChartCard>
 
-      </div>
+        </div>
+      )}
 
       {/* TABLE */}
-      <div className="bg-white border border-[#ebe4ff]    overflow-hidden shadow-[0_10px_40px_rgba(180,140,255,0.08)]">
+      {canViewHiring && (
+        <div className="bg-white border border-[#ebe4ff]    overflow-hidden shadow-[0_10px_40px_rgba(180,140,255,0.08)]">
 
         <div className="px-8 py-6 border-b border-[#ebe4ff] flex items-center justify-between">
           <div>
@@ -846,6 +868,7 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
         </div>
 
       </div>
+      )}
 
     </div>
   );
