@@ -35,14 +35,14 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-def get_service():
-    return PasswordService()
+def get_service(tenant_id: str = 'public'):
+    """Create PasswordService bound to the given tenant."""
+    return PasswordService(tenant_id=tenant_id)
 
 
 @router.post("/forgot-password")
 def forgot_password(
     request: ForgotPasswordRequest,
-    service: PasswordService = Depends(get_service)
 ):
     """
     User requests password reset (forgot password).
@@ -71,7 +71,9 @@ def forgot_password(
                         return {"success": True, "message": "If an account exists with this email, a password reset link has been sent."}
             finally:
                 conn.close()
-                
+
+        # Instantiate service with the resolved tenant so portal_url is correct
+        service = get_service(tenant_id=tenant_context)
         result = service.request_password_reset(request.email, tenant_context)
         return result
     except Exception as e:
@@ -100,10 +102,14 @@ def verify_reset_token(
 @router.post("/reset-password")
 def reset_password(
     request: ResetPasswordRequest,
-    service: PasswordService = Depends(get_service)
 ):
-    """Reset password using token"""
+    """Reset password using token — tenant is encoded in the token itself"""
     try:
+        # Extract tenant from the token prefix (format: tenant_id:raw_token)
+        token_tenant = 'public'
+        if ':' in request.token:
+            token_tenant = request.token.split(':', 1)[0]
+        service = get_service(tenant_id=token_tenant)
         result = service.reset_password(request.token, request.new_password)
         if not result['success']:
             raise HTTPException(status_code=400, detail=result['message'])
@@ -119,7 +125,6 @@ def reset_password(
 def admin_reset_password(
     request: AdminResetRequest,
     current_user: dict = Depends(get_current_user),
-    service: PasswordService = Depends(get_service)
 ):
     """
     Admin/HR resets employee password.
@@ -128,6 +133,7 @@ def admin_reset_password(
     try:
         admin_email = current_user.get('username', 'Admin')
         tenant_id = current_user.get('tenant_id', 'public')
+        service = get_service(tenant_id=tenant_id)
         result = service.admin_reset_password(
             employee_code=request.employee_code,
             reset_type=request.reset_type,
@@ -150,7 +156,6 @@ def admin_reset_password(
 def change_password(
     request: ChangePasswordRequest,
     current_user: dict = Depends(get_current_user),
-    service: PasswordService = Depends(get_service)
 ):
     """Change password for logged-in user"""
     try:
@@ -159,6 +164,7 @@ def change_password(
             raise HTTPException(status_code=401, detail="Not authenticated")
         
         tenant_id = current_user.get('tenant_id', 'public')
+        service = get_service(tenant_id=tenant_id)
         result = service.change_password_logged_in(
             email=email,
             current_password=request.current_password,
@@ -180,12 +186,12 @@ def change_password(
 @router.get("/check-must-change-password")
 def check_must_change_password(
     current_user: dict = Depends(get_current_user),
-    service: PasswordService = Depends(get_service)
 ):
     """Check if user must change password"""
     try:
         email = current_user.get('username')
         tenant_id = current_user.get('tenant_id', 'public')
+        service = get_service(tenant_id=tenant_id)
         must_change = service.check_must_change_password(email, tenant_id=tenant_id)
         return {"must_change": must_change}
     except Exception as e:

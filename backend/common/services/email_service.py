@@ -25,6 +25,9 @@ except ImportError:
     )
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 class EmailService:
     """
     Email service for onboarding invitations, security resets, and employee notifications.
@@ -53,9 +56,13 @@ class EmailService:
                     if row:
                         self.company_name = row[0] or self.company_name
                         self._subdomain = row[1]
+                        
+                        # Dynamically set sender name to match the tenant's company name
+                        if row[0]:
+                            self.sender_name = f"{self.company_name} HR"
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("Failed to load tenant details for EmailService (tenant_id=%s): %s", tenant_id, e)
 
         # Build the portal URL: {subdomain}.phygitron.com or env override
         env_base = os.getenv("APP_BASE_URL")
@@ -66,8 +73,11 @@ class EmailService:
         else:
             self.portal_url = "https://app.phygitron.com"
 
-        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
-        self.platform_logo_url = os.getenv("LOGO_URL", f"{backend_url}/static/logo.png")
+        # Logo URL — prefer explicit LOGO_URL env var.
+        # Fall back to main app domain + /api/static/logo.png so it's always publicly reachable.
+        # DO App Platform routes /api to the backend.
+        fallback_logo = f"{os.getenv('APP_BASE_URL', 'https://phygitron.com').rstrip('/')}/api/static/logo.png"
+        self.platform_logo_url = os.getenv("LOGO_URL") or fallback_logo
 
     def _send(self, message: MIMEMultipart) -> dict:
         """Helper to send a preconfigured MIMEMultipart over SMTP."""

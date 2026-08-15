@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 
-def get_service():
-    return OnboardingService()
+def get_service(current_user: dict = Depends(require_permission("deploy.onboarding.view"))):
+    tenant_id = current_user.get("tenant_id", "public")
+    return OnboardingService(tenant_id=tenant_id)
 
 @router.post("/invite", dependencies=[Depends(require_module("deploy"))])
 def send_invite(invite: InviteRequest, current_user: dict = Depends(require_permission("deploy.onboarding.send_invite")), service: OnboardingService = Depends(get_service)):

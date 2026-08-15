@@ -10,9 +10,10 @@ from backend.common.utils.name_utils import join_name_parts
 from passlib.hash import pbkdf2_sha256
 
 class OnboardingService:
-    def __init__(self):
+    def __init__(self, tenant_id: str = 'public'):
         self.repo = OnboardingRepository()
-        self.email_service = EmailService(tenant_id='public')
+        self.tenant_id = tenant_id
+        self.email_service = EmailService(tenant_id=tenant_id)
 
     def create_invite(self, data: Dict[str, Any], tenant_id: str = 'public'):
         existing_user = self.repo.get_user_by_email(data['email'], tenant_id=tenant_id)
@@ -55,9 +56,8 @@ class OnboardingService:
         email_message = ""
         
         if self.email_service.is_configured():
-            # Get the base URL from environment or use a default
-            base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
-            full_link = f"{base_url}{relative_link}"
+            # Use the tenant's portal URL (resolves to {subdomain}.phygitron.com)
+            full_link = f"{self.email_service.portal_url}{relative_link}"
             
             email_result = self.email_service.send_onboarding_invitation(
                 recipient_email=data['email'],

@@ -23,7 +23,7 @@ import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 
 import { getHubTabs } from "../../../core/navigation/hubTabs";
-import { DEPLOY_MANAGEMENT_PERMS } from "../../../core/permissions/classification";
+import { DEPLOY_MANAGEMENT_PERMS, DEPLOY_PERSONAL_PERMS } from "../../../core/permissions/classification";
 import { getInitials } from "../../../core/utils/nameHelpers";
 
 const MANAGEMENT_TABS = ['dashboard', 'personnel', 'profile', 'attendance', 'performance', 'assets', 'onboard', 'payroll'];
@@ -42,8 +42,11 @@ export default function DeployDashboard() {
      ROLE / VIEW CONTROL
   ========================================= */
 
-  const hasAdminClearance = user?.permissions && DEPLOY_MANAGEMENT_PERMS.some(p => user.permissions[p]);
+  // Derived once on mount — whether the user has any management or personal permissions
+  const hasAdminClearance   = user?.permissions && DEPLOY_MANAGEMENT_PERMS.some(p => user.permissions[p]);
+  const hasPersonalClearance = user?.permissions && DEPLOY_PERSONAL_PERMS.some(p => user.permissions[p]);
 
+  // Start in management if they have it; fall back to personal; final fallback is employee view
   const [deployView, setDeployView] = useState(
     hasAdminClearance ? 'management' : 'employee'
   );
@@ -64,6 +67,14 @@ export default function DeployDashboard() {
   ========================================= */
 
   const canViewDashboard = hasAdminClearance;
+
+  const canViewAnalytics = 
+    hasPermission?.('deploy.analytics.view_kpis') || 
+    hasPermission?.('deploy.analytics.view_status') || 
+    hasPermission?.('deploy.analytics.view_hiring') || 
+    hasPermission?.('deploy.analytics.view_demographics') || 
+    hasPermission?.('deploy.analytics.view_talent') ||
+    hasPermission?.('deploy.dashboard.view_admin');
 
   const canViewProfile = hasPermission?.('deploy.employees.view_list') || hasPermission?.('deploy.employees.view_team');
 
@@ -244,32 +255,27 @@ export default function DeployDashboard() {
 
         <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
 
-          {/* VIEW TOGGLE */}
+          {/* VIEW TOGGLE — only renders when the user has BOTH types of clearance.
+               If only management → no toggle (stays in management view).
+               If only personal  → no toggle (stays in personal/employee view).
+               If both           → show the segmented toggle. */}
 
-          {hasAdminClearance && (
+          {hasAdminClearance && hasPersonalClearance && (
 
             <div
               className="
-                w-full
-                flex
-                bg-[#f3f0ff]
-                p-1
-                rounded-2xl
-                border
-                border-[#ebe4ff]
-                mb-6
+                w-full flex
+                bg-[#f3f0ff] p-1 rounded-2xl
+                border border-[#ebe4ff] mb-6
                 overflow-hidden
               "
             >
 
+              {/* MANAGEMENT BUTTON — shown only when user has management perms */}
               <button
                 className={`
-                  flex-1
-                  py-2.5
-                  rounded-xl
-                  text-[13px]
-                  font-bold
-                  transition-all
+                  flex-1 py-2.5 rounded-xl
+                  text-[13px] font-bold transition-all
                   ${
                     deployView === 'management'
                       ? '!bg-black !text-white shadow-md'
@@ -284,14 +290,11 @@ export default function DeployDashboard() {
                 Management
               </button>
 
+              {/* PERSONAL BUTTON — shown only when user has personal perms */}
               <button
                 className={`
-                  flex-1
-                  py-2.5
-                  rounded-xl
-                  text-[13px]
-                  font-bold
-                  transition-all
+                  flex-1 py-2.5 rounded-xl
+                  text-[13px] font-bold transition-all
                   ${
                     deployView === 'employee'
                       ? '!bg-black !text-white shadow-md'
@@ -316,12 +319,14 @@ export default function DeployDashboard() {
 
             <>
 
-              <button
-                className={currentTab === 'dashboard' ? 'active' : ''}
-                onClick={() => setTab('dashboard')}
-              >
-                Analytics
-              </button>
+              {canViewAnalytics && (
+                <button
+                  className={currentTab === 'dashboard' ? 'active' : ''}
+                  onClick={() => setTab('dashboard')}
+                >
+                  Analytics
+                </button>
+              )}
 
               {canViewProfile && (
                 <button

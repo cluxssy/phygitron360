@@ -56,7 +56,7 @@ export const P = {
   DEPLOY_ATT_VIEW_PERSONAL:        'deploy.attendance.view_personal',
   DEPLOY_ATT_VIEW_TEAM:            'deploy.attendance.view_team',
   DEPLOY_ATT_VIEW_ALL:             'deploy.attendance.view_all',
-  DEPLOY_ATT_CLOCK_IN_OUT:         'deploy.attendance.clock_in_out',
+  DEPLOY_ATT_LOG_ATTENDANCE:       'deploy.attendance.log_attendance',
   DEPLOY_ATT_REQ_CORRECTION:       'deploy.attendance.request_correction',
   DEPLOY_ATT_APP_CORRECTION:       'deploy.attendance.approve_correction',
   DEPLOY_LEAVES_VIEW_PERSONAL:     'deploy.leaves.view_personal',
@@ -99,8 +99,13 @@ export const P = {
   DEPLOY_TRAIN_VIEW:     'deploy.training.view',
   DEPLOY_TRAIN_MANAGE:   'deploy.training.manage',
 
-  // ── Deploy: Dashboard / Notifications ────────────────────────────────────
-  DEPLOY_DASH_ADMIN:     'deploy.dashboard.view_admin',
+  // ── Deploy: Dashboard / Notifications / Analytics ────────────────────────
+  DEPLOY_ANALYTICS_VIEW_KPIS:    'deploy.analytics.view_kpis',
+  DEPLOY_ANALYTICS_VIEW_STATUS:  'deploy.analytics.view_status',
+  DEPLOY_ANALYTICS_VIEW_HIRING:  'deploy.analytics.view_hiring',
+  DEPLOY_ANALYTICS_VIEW_DEMO:    'deploy.analytics.view_demographics',
+  DEPLOY_ANALYTICS_VIEW_TALENT:  'deploy.analytics.view_talent',
+  DEPLOY_DASH_ADMIN:             'deploy.dashboard.view_admin',
   DEPLOY_NOTIF_ADMIN:    'deploy.notifications.view_admin',
   DEPLOY_NOTIF_MANAGE:   'deploy.notifications.manage',
 

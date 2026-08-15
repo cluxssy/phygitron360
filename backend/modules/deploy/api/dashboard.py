@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from backend.core.dependencies import require_permission, get_current_user
+from backend.core.dependencies import require_permission, get_current_user, P
 from backend.modules.deploy.services.dashboard_service import DashboardService
 import logging
 
@@ -10,7 +10,13 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 def get_service():
     return DashboardService()
 
-@router.get("/stats", dependencies=[Depends(require_permission("module.deploy.access"))])
+@router.get("/stats", dependencies=[Depends(require_permission([
+    P.DEPLOY_ANALYTICS_VIEW_KPIS, 
+    P.DEPLOY_ANALYTICS_VIEW_STATUS, 
+    P.DEPLOY_ANALYTICS_VIEW_HIRING, 
+    P.DEPLOY_ANALYTICS_VIEW_DEMO, 
+    P.DEPLOY_ANALYTICS_VIEW_TALENT
+]))])
 def get_dashboard_stats(current_user: dict = Depends(get_current_user), service: DashboardService = Depends(get_service)):
     try:
         tenant_id = current_user.get("tenant_id", "public")

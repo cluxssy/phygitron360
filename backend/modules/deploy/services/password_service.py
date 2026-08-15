@@ -10,9 +10,9 @@ import os
 
 
 class PasswordService:
-    def __init__(self):
+    def __init__(self, tenant_id: str = 'public'):
         self.repo = PasswordResetRepository()
-        self.email_service = EmailService(tenant_id='public')
+        self.email_service = EmailService(tenant_id=tenant_id)
     
     def generate_temp_password(self, length: int = 12) -> str:
         """Generate a secure temporary password"""
@@ -58,9 +58,8 @@ class PasswordService:
                 "reset_type": "self"
             }, tenant_id=tenant_id)
             
-            # Send email
-            base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
-            reset_link = f"{base_url}/reset-password?token={token}"
+            # Send email — use tenant's portal URL so the link points to {subdomain}.phygitron.com
+            reset_link = f"{self.email_service.portal_url}/reset-password?token={token}"
             
             # Get user name, fallback to email if not available
             user_name = user.get('name', email.split('@')[0])
@@ -221,9 +220,8 @@ class PasswordService:
                 "created_by": admin_email
             }, tenant_id=tenant_id)
             
-            # Send email
-            base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
-            reset_link = f"{base_url}/reset-password?token={token}"
+            # Send email — use tenant's portal URL
+            reset_link = f"{self.email_service.portal_url}/reset-password?token={token}"
             
             email_result = self.email_service.send_password_reset_link(
                 recipient_email=email,

@@ -15,7 +15,7 @@ export default function AttendancePanel({ mode }) {
   const { hasPermission } = usePermissions();
   
   // Granular Attendance Permissions
-  const canClockInOut = hasPermission(P.DEPLOY_ATT_CLOCK_IN_OUT);
+
   const canReqCorrection = hasPermission(P.DEPLOY_ATT_REQ_CORRECTION);
   const canAppCorrection = hasPermission(P.DEPLOY_ATT_APP_CORRECTION);
   const canReqLeave = hasPermission(P.DEPLOY_LEAVES_REQUEST);
