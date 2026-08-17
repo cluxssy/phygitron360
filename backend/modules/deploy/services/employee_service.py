@@ -130,12 +130,7 @@ class EmployeeService:
         
         data['name'] = join_name_parts(data.get('first_name'), data.get('middle_name'), data.get('last_name'))
 
-        # Generate employee code if not provided
-        if not data.get('code'):
-            import uuid
-            data['code'] = f"EMP{uuid.uuid4().hex[:8].upper()}"
-        
-        # Generate employee code if not provided
+        # Generate employee code if not provided (single-add path; bulk upload always provides one)
         if not data.get('code'):
             import uuid
             data['code'] = f"EMP{uuid.uuid4().hex[:8].upper()}"

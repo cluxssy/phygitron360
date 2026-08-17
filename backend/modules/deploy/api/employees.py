@@ -619,6 +619,14 @@ def bulk_upload_employees(employees: List[dict] = Body(...), current_user: dict 
             if not first_name or not last_name:
                 raise ValueError("First Name and Last Name are mandatory")
 
+            # Employee Code and Email are also mandatory for bulk upload
+            emp_code = str(row.get("Employee Code", "")).strip()
+            emp_email = str(row.get("Email ID", "")).strip()
+            if not emp_code:
+                raise ValueError("Employee Code is mandatory")
+            if not emp_email:
+                raise ValueError("Email ID is mandatory")
+
             # Build data dict with safe defaults for ALL fields
             data = {
                 "code": str(row.get("Employee Code", "")).strip() or None,
