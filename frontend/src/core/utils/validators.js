@@ -44,15 +44,23 @@ export const isPositiveNumber = (value) => {
   return Number.isFinite(n) && n > 0;
 };
 
+// Converts DD-MM-YYYY → YYYY-MM-DD so the JS Date constructor parses it correctly.
+// Any other format is returned unchanged.
+const normaliseDateString = (value = '') => {
+  const ddmmyyyy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
+  if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+  return value;
+};
+
 export const isDateString = (value = '') => {
   if (!value) return false;
-  const d = new Date(value);
+  const d = new Date(normaliseDateString(value));
   return !Number.isNaN(d.getTime());
 };
 
 export const isAtLeastAge = (value, minAge = 18) => {
   if (!isDateString(value)) return false;
-  const dob = new Date(value);
+  const dob = new Date(normaliseDateString(value));
   const today = new Date();
   let age = today.getFullYear() - dob.getFullYear();
   const monthDiff = today.getMonth() - dob.getMonth();
