@@ -260,15 +260,34 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
     reader.onload = (evt) => {
       try {
         const bstr = evt.target.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        // cellDates:true makes SheetJS convert Excel date serials to JS Date objects
+        // instead of raw numbers, so our age validation always receives a real date.
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
-        setBulkData(data);
-        if (data.length === 0) {
+        const raw = XLSX.utils.sheet_to_json(ws, { raw: false });
+
+        // Normalise every cell that looks like a Date object to YYYY-MM-DD string
+        const DATE_COLS = ['Date of Birth', 'Date of Joining'];
+        const normalised = raw.map((row) => {
+          const copy = { ...row };
+          DATE_COLS.forEach((col) => {
+            if (copy[col] instanceof Date) {
+              const d = copy[col];
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              copy[col] = `${yyyy}-${mm}-${dd}`;
+            }
+          });
+          return copy;
+        });
+
+        setBulkData(normalised);
+        if (normalised.length === 0) {
           toast.error('The uploaded file is empty.');
         } else {
-          toast.success(`Loaded ${data.length} records. Please review before confirming.`);
+          toast.success(`Loaded ${normalised.length} records. Please review before confirming.`);
         }
       } catch (err) {
         toast.error('Failed to parse Excel file. Please use the provided template.');
@@ -327,14 +346,15 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       const bankAccount = String(row["Bank Account No."] || '').trim();
       const pan = String(row["PAN No."] || '').trim();
 
-      // ── FIRST NAME AND LAST NAME ARE MANDATORY ──
+      // ── MANDATORY FIELDS ──
       if (!firstName || !lastName) return `Row ${rowNo}: First Name and Last Name are mandatory.`;
+      if (!code) return `Row ${rowNo}: Employee Code is mandatory.`;
+      if (!email) return `Row ${rowNo}: Email ID is mandatory.`;
 
-      // ── All other fields optional, only validate if filled ──
+      // ── Format validation ──
+      if (!isEmployeeCode(code)) return `Row ${rowNo}: Employee Code must be 3-20 letters/numbers/hyphen/underscore.`;
       
-      if (code && !isEmployeeCode(code)) return `Row ${rowNo}: Employee Code must be 3-20 letters/numbers/hyphen/underscore.`;
-      
-      if (email && !isEmail(email)) return `Row ${rowNo}: Enter a valid Email ID.`;
+      if (!isEmail(email)) return `Row ${rowNo}: Enter a valid Email ID.`;
       
       if (phone && !isPhone(phone)) return `Row ${rowNo}: Contact Number must be 7-15 digits.`;
       
