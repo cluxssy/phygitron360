@@ -89,7 +89,7 @@ export default function ForceChangePasswordPage() {
       <div className="relative z-10 w-full max-w-md animate-fade-in-up">
         {/* Portal Branding */}
         <div className="mb-12 flex flex-col items-center">
-          <div onClick={() => navigate('/')} className="cursor-pointer w-16 h-16 bg-primary flex items-center justify-center rounded-2xl shadow-[0_0_40px_rgba(204,151,255,0.4)] mb-6 transition-all hover:scale-110">
+          <div className="w-16 h-16 bg-primary flex items-center justify-center rounded-2xl shadow-[0_0_40px_rgba(204,151,255,0.4)] mb-6 transition-all">
              <Command className="text-black" size={32} />
           </div>
           <h1 className="text-3xl font-display font-extrabold tracking-tighter uppercase mb-2">Phygitron <span className="text-primary">360</span></h1>

@@ -79,6 +79,23 @@ function AdminGate() {
   return <Navigate to={fallback} replace />;
 }
 
+function PublicRoute({ children }) {
+  const { user, loading, hasPermission } = useAuth();
+  
+  if (loading) {
+    return <HorizontalLoader fullScreen label="Loading workspace..." />;
+  }
+
+  if (user) {
+    if (user.password_must_change) {
+      return <Navigate to="/force-change-password" replace />;
+    }
+    return <Navigate to={getFirstAllowedRoute(hasPermission)} replace />;
+  }
+
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -87,11 +104,11 @@ export default function App() {
 
         <Routes>
           {/* Landing & Auth */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+          <Route path="/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
           <Route path="/force-change-password" element={<ForceChangePasswordPage />} />
-          <Route path="/onboard" element={<OnboardPage />} />
+          <Route path="/onboard" element={<PublicRoute><OnboardPage /></PublicRoute>} />
 
           {/* Dashboards */}
           <Route 
