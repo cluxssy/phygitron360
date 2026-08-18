@@ -181,11 +181,18 @@ export default function HeroSection() {
 
       if (res.ok) {
         login(data.user);
-        // Refresh from /api/auth/check to pick up template-role permissions
-        // that the login response may not fully include
-        await refreshUser();
-        toast.success('Login successful! Welcome back.');
-        navigate(defaultRouteForUser(data.user));
+
+        if (data.user?.password_must_change) {
+          // Skip refreshUser — it can overwrite the flag before React re-renders.
+          // Navigate directly so ProtectedRoute sees password_must_change immediately.
+          navigate('/force-change-password');
+        } else {
+          // Refresh from /api/auth/check to pick up template-role permissions
+          // that the login response may not fully include
+          await refreshUser();
+          toast.success('Login successful! Welcome back.');
+          navigate(defaultRouteForUser(data.user));
+        }
       } else {
         setError(data.detail || 'Access Denied: Invalid Credentials.');
         toast.error(data.detail || 'Login failed');
