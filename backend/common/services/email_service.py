@@ -64,14 +64,18 @@ class EmailService:
             except Exception as e:
                 logger.error("Failed to load tenant details for EmailService (tenant_id=%s): %s", tenant_id, e)
 
-        # Build the portal URL: {subdomain}.phygitron.com or env override
-        env_base = os.getenv("APP_BASE_URL")
-        if env_base:
-            self.portal_url = env_base.rstrip("/")
-        elif self._subdomain:
+        # Build the portal URL — priority order:
+        # 1. Subdomain from DB (tenant-specific, always correct)
+        # 2. APP_BASE_URL env var (global fallback — used when no subdomain found)
+        # 3. Hard fallback to app.phygitron.com
+        # NOTE: APP_BASE_URL intentionally has LOWER priority than the DB subdomain
+        # because APP_BASE_URL on production is set to phygitron.com (the root domain)
+        # and would override tenant-specific subdomains if checked first.
+        if self._subdomain:
             self.portal_url = f"https://{self._subdomain}.phygitron.com"
         else:
-            self.portal_url = "https://app.phygitron.com"
+            env_base = os.getenv("APP_BASE_URL")
+            self.portal_url = env_base.rstrip("/") if env_base else "https://app.phygitron.com"
 
         # Logo URL — prefer explicit LOGO_URL env var.
         # Fall back to main app domain + /api/static/logo.png so it's always publicly reachable.
