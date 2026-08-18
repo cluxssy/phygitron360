@@ -317,12 +317,15 @@ class AttendanceRepository:
         finally:
             conn.close()
             
-    def get_all_active_employees_basic(self, tenant_id: str = 'public') -> List[Dict[str, Any]]:
+    def get_all_active_employees_basic(self, tenant_id: str = 'public', manager_code: Optional[str] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             self._set_path(cur, tenant_id)
-            cur.execute("SELECT name, employee_code FROM employees WHERE employment_status = 'Active' ORDER BY name")
+            if manager_code:
+                cur.execute("SELECT name, employee_code FROM employees WHERE employment_status = 'Active' AND reporting_manager = %s ORDER BY name", (manager_code,))
+            else:
+                cur.execute("SELECT name, employee_code FROM employees WHERE employment_status = 'Active' ORDER BY name")
             rows = cur.fetchall()
             return [dict(r) for r in rows]
         finally:

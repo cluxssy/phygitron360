@@ -290,8 +290,8 @@ class AttendanceService:
 
         return {"success": True, "message": f"Leave has been {action}"}
 
-    def get_monthly_summary(self, year: int, month: int):
-        employees = self.repo.get_all_active_employees_basic(self.tenant_id)
+    def get_monthly_summary(self, year: int, month: int, manager_code: Optional[str] = None):
+        employees = self.repo.get_all_active_employees_basic(self.tenant_id, manager_code)
         
         num_days = calendar.monthrange(year, month)[1]
         start_date = f"{year}-{month:02d}-01"
@@ -427,15 +427,19 @@ class AttendanceService:
             
         return summary
 
-    def get_active_employees(self):
-        return self.repo.get_all_active_employees_basic(self.tenant_id)
+    def get_active_employees(self, manager_code: Optional[str] = None):
+        return self.repo.get_all_active_employees_basic(self.tenant_id, manager_code)
 
-    def get_history_for_employee(self, employee_code: str, limit: int = 90):
+    def get_history_for_employee(self, employee_code: str, limit: int = 90, manager_code: Optional[str] = None):
         """Admin/Manager: retrieve full attendance history for a given employee."""
+        if manager_code and self.repo.get_manager_code(employee_code, self.tenant_id) != manager_code:
+            raise ValueError("Unauthorized to view this employee's history")
         return self.repo.get_history(employee_code, limit, self.tenant_id)
 
-    def get_leaves_for_employee(self, employee_code: str):
-        """Admin/Manager: retrieve all leave records for a given employee."""
+    def get_leaves_for_employee(self, employee_code: str, manager_code: Optional[str] = None):
+        """Admin/Manager: retrieve all leaves for a given employee."""
+        if manager_code and self.repo.get_manager_code(employee_code, self.tenant_id) != manager_code:
+            raise ValueError("Unauthorized to view this employee's leaves")
         return self.repo.get_employee_leaves(employee_code, self.tenant_id)
 
 
