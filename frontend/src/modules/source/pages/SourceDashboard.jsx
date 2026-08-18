@@ -37,6 +37,7 @@ import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 import { P } from '../../../core/permissions';
 import { getInitials } from '../../../core/utils/nameHelpers';
+import api from '../../../core/api/axios';
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
@@ -414,6 +415,7 @@ export default function SourceDashboard() {
     if (!files || files.length === 0) return;
 
     setUploading(true);
+    setUploadProgress(0);
     const fd = new FormData();
     const validExtensions = ['.pdf', '.doc', '.docx', '.txt', '.zip'];
     let validCount = 0;
@@ -450,31 +452,38 @@ export default function SourceDashboard() {
     }
 
     try {
-      const response = await fetch('/api/source/candidates/bulk-upload', {
-        method: 'POST',
-        credentials: 'include',
-        body: fd
+      const response = await api.post('/source/candidates/bulk-upload', fd, {
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.lengthComputable) {
+            const percentComplete = (progressEvent.loaded / progressEvent.total) * 100;
+            setUploadProgress(percentComplete);
+          }
+        }
       });
+      
+      const data = response.data;
 
-      const data = await response.json();
+      if (data.data?.job_id) {
+        const newJobId = data.data.job_id;
+        setBulkUploadTriggered(true);
+        setBulkJobId(newJobId);
+        setBulkJobProgress(null);
 
-      if (!response.ok) {
-        throw new Error(data.detail || 'Upload failed');
+        // Immediately poll once so the extraction panel appears without a 3s gap
+        try {
+          const r = await fetch(`/api/source/candidates/bulk-upload/${newJobId}`, { credentials: 'include' });
+          const d = await r.json();
+          if (r.ok && d.success) setBulkJobProgress(d.data);
+        } catch (_) { /* silent — the interval will catch up */ }
       }
 
       toast.success(`Queued ${validCount} file(s) for processing!`);
-
-      if (data.data?.job_id) {
-        setBulkUploadTriggered(true);
-        setBulkJobId(data.data.job_id);
-        setBulkJobProgress(null);
-      }
-
       setShowUpload(false);
     } catch (err) {
       toast.error('Upload error: ' + (err?.message || 'Unknown'));
     } finally {
       setUploading(false);
+      setUploadProgress(0);
       if (e.target) e.target.value = '';
     }
   };
