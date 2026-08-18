@@ -56,10 +56,6 @@ class EmailService:
                     if row:
                         self.company_name = row[0] or self.company_name
                         self._subdomain = row[1]
-                        
-                        # Dynamically set sender name to match the tenant's company name
-                        if row[0]:
-                            self.sender_name = f"{self.company_name} HR"
                 conn.close()
             except Exception as e:
                 logger.error("Failed to load tenant details for EmailService (tenant_id=%s): %s", tenant_id, e)
@@ -144,11 +140,11 @@ class EmailService:
         expires_hours: int = 1
     ) -> dict:
         """2 & 12. Forgot Password / Admin Password Reset Link"""
-        subject = f"Reset Your Password — {self.company_name}"
-        
+        subject = "Reset Your Password — Phygitron 360"
+
         body_html = f"""
         <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{recipient_name}</strong>,</p>
-        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">We received a request to reset the account password for your <strong>{self.company_name}</strong> workspace. To set a new password, click below:</p>
+        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">We received a request to reset the account password for your <strong>Phygitron 360</strong> workspace. To set a new password, click below:</p>
         """
         body_html += build_cta_button_html(reset_link, "Reset Password &rarr;")
         body_html += build_info_box_html(f"<strong>Security Warning:</strong> This link expires in <strong>{expires_hours} hour(s)</strong>.<br>If you did not initiate this request, please safely ignore this email or contact HR immediately.", border_color="#EAB308")
@@ -181,12 +177,12 @@ class EmailService:
         expires_hours: int = 24
     ) -> dict:
         """11. Temporary Password Sent by Admin"""
-        subject = f"Temporary Login Credentials — {self.company_name}"
+        subject = "Temporary Login Credentials — Phygitron 360"
         login_url = self.portal_url
-        
+
         body_html = f"""
         <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{recipient_name}</strong>,</p>
-        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">An system administrator has generated temporary login credentials for your <strong>{self.company_name}</strong> employee account.</p>
+        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">An system administrator has generated temporary login credentials for your <strong>Phygitron 360</strong> employee account.</p>
         """
         body_html += build_key_value_table_html([
             ("Username / Email", recipient_email),
@@ -222,11 +218,11 @@ class EmailService:
         changed_by: str = "You"
     ) -> dict:
         """10. Password Changed Confirmation / Profile Password Updated"""
-        subject = f"Password Successfully Changed — {self.company_name}"
-        
+        subject = "Password Successfully Changed — Phygitron 360"
+
         body_html = f"""
         <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{recipient_name}</strong>,</p>
-        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">This is an automated confirmation that your <strong>{self.company_name}</strong> account password was successfully updated through your security settings.</p>
+        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">This is an automated confirmation that your <strong>Phygitron 360</strong> account password was successfully updated through your security settings.</p>
         """
         body_html += build_info_box_html(f"<strong>Update Details:</strong><br>&bull; Modified by: {changed_by}<br>&bull; Timestamp: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}<br><br>No further action is required if you authorized this change.", border_color="#10B981")
         body_html += f"""
@@ -263,11 +259,11 @@ class EmailService:
         """8. Employee Welcome Email (Direct HR login account provisioning)"""
         if not login_url:
             login_url = self.portal_url
-        subject = f"Welcome to {self.company_name} — Your Account is Ready"
+        subject = "Welcome to Phygitron 360 — Your Account is Ready"
 
         body_html = f"""
         <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{recipient_name}</strong>,</p>
-        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Welcome to the team! Your employee account for <strong>{self.company_name}</strong> has been created and activated in our workforce management portal.</p>
+        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Welcome to the team! Your employee account for <strong>Phygitron 360</strong> has been created and activated in our workforce management portal.</p>
         """
         body_html += build_key_value_table_html([
             ("Employee Code", employee_code),
