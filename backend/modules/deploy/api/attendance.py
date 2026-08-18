@@ -128,9 +128,11 @@ def approve_reject_leave(
         raise HTTPException(status_code=500, detail="Something went wrong while processing this leave request. Please try again.")
 
 @router.get("/admin/summary")
-def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_permission("deploy.attendance.view_all")), service: AttendanceService = Depends(get_service)):
+def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_permission(["deploy.attendance.view_all", "deploy.attendance.view_team"])), service: AttendanceService = Depends(get_service)):
+    perms = user.get('permissions', {})
+    manager_code = None if perms.get('deploy.attendance.view_all') else user.get('employee_code')
     try:
-        return service.get_monthly_summary(year, month)
+        return service.get_monthly_summary(year, month, manager_code)
     except Exception as e:
         logger.exception("Failed to fetch monthly attendance summary: %s", e)
         raise HTTPException(status_code=500, detail="Something went wrong while fetching the attendance summary. Please try again.")
@@ -144,27 +146,33 @@ def edit_attendance(req: EditAttendanceRequest, user=Depends(require_permission(
         raise HTTPException(status_code=500, detail="Something went wrong while saving this attendance record. Please try again.")
 
 @router.get("/admin/employees")
-def get_active_employees(user=Depends(require_permission("deploy.attendance.view_team")), service: AttendanceService = Depends(get_service)):
-    return service.get_active_employees()
+def get_active_employees(user=Depends(require_permission(["deploy.attendance.view_all", "deploy.attendance.view_team"])), service: AttendanceService = Depends(get_service)):
+    perms = user.get('permissions', {})
+    manager_code = None if perms.get('deploy.attendance.view_all') else user.get('employee_code')
+    return service.get_active_employees(manager_code)
 
 @router.get("/admin/employee/{employee_code}/history")
 def get_employee_history_admin(
     employee_code: str,
     limit: int = 90,
-    user=Depends(require_permission("deploy.attendance.view_all")),
+    user=Depends(require_permission(["deploy.attendance.view_all", "deploy.attendance.view_team"])),
     service: AttendanceService = Depends(get_service)
 ):
     """Admin/Manager: get full attendance history for any employee."""
-    return service.get_history_for_employee(employee_code, limit)
+    perms = user.get('permissions', {})
+    manager_code = None if perms.get('deploy.attendance.view_all') else user.get('employee_code')
+    return service.get_history_for_employee(employee_code, limit, manager_code)
 
 @router.get("/admin/employee/{employee_code}/leaves")
 def get_employee_leaves_admin(
     employee_code: str,
-    user=Depends(require_permission("deploy.leaves.view_all")),
+    user=Depends(require_permission(["deploy.leaves.view_all", "deploy.leaves.view_team"])),
     service: AttendanceService = Depends(get_service)
 ):
     """Admin/Manager: get all leave records for any employee."""
-    return service.get_leaves_for_employee(employee_code)
+    perms = user.get('permissions', {})
+    manager_code = None if perms.get('deploy.leaves.view_all') else user.get('employee_code')
+    return service.get_leaves_for_employee(employee_code, manager_code)
 
 
 @router.post("/admin/trigger-reminders")
