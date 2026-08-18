@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import {
   MAX_FILE_SIZE,
   isAtLeastAge,
+  isDateString,
   isEmail,
   isEmployeeCode,
   isNonNegativeNumber,
@@ -265,7 +266,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
         const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const raw = XLSX.utils.sheet_to_json(ws, { raw: false });
+        const raw = XLSX.utils.sheet_to_json(ws);
 
         // Normalise every cell that looks like a Date object to YYYY-MM-DD string
         const DATE_COLS = ['Date of Birth', 'Date of Joining'];
@@ -360,7 +361,7 @@ export default function AddEmployeeModal({ onClose, onSuccess }) {
       
       if (dob && !isAtLeastAge(dob, 18)) return `Row ${rowNo}: Date of Birth must confirm age 18 or above.`;
       
-      if (doj && Number.isNaN(new Date(doj).getTime())) return `Row ${rowNo}: Date of Joining is invalid.`;
+      if (doj && !isDateString(doj)) return `Row ${rowNo}: Date of Joining is invalid.`;
       
       if (exp !== undefined && exp !== '' && !isNonNegativeNumber(exp)) {
         return `Row ${rowNo}: Experience Years must be 0 or greater.`;
