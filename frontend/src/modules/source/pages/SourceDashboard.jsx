@@ -37,6 +37,7 @@ import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 import { P } from '../../../core/permissions';
 import { getInitials } from '../../../core/utils/nameHelpers';
+import api from '../../../core/api/axios';
 
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
@@ -451,50 +452,32 @@ export default function SourceDashboard() {
     }
 
     try {
-      const data = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/source/candidates/bulk-upload', true);
-        xhr.withCredentials = true;
-
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percentComplete = (event.loaded / event.total) * 100;
+      const response = await api.post('/source/candidates/bulk-upload', fd, {
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.lengthComputable) {
+            const percentComplete = (progressEvent.loaded / progressEvent.total) * 100;
             setUploadProgress(percentComplete);
           }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              resolve(JSON.parse(xhr.responseText));
-            } catch (err) {
-              resolve({});
-            }
-          } else {
-            let errorMsg = 'Upload failed';
-            try {
-              const errData = JSON.parse(xhr.responseText);
-              if (errData.detail) errorMsg = errData.detail;
-            } catch(e) {}
-            reject(new Error(errorMsg));
-          }
-        };
-
-        xhr.onerror = () => {
-          reject(new Error('Network Error'));
-        };
-
-        xhr.send(fd);
+        }
       });
-
-      toast.success(`Queued ${validCount} file(s) for processing!`);
+      
+      const data = response.data;
 
       if (data.data?.job_id) {
+        const newJobId = data.data.job_id;
         setBulkUploadTriggered(true);
-        setBulkJobId(data.data.job_id);
+        setBulkJobId(newJobId);
         setBulkJobProgress(null);
+
+        // Immediately poll once so the extraction panel appears without a 3s gap
+        try {
+          const r = await fetch(`/api/source/candidates/bulk-upload/${newJobId}`, { credentials: 'include' });
+          const d = await r.json();
+          if (r.ok && d.success) setBulkJobProgress(d.data);
+        } catch (_) { /* silent — the interval will catch up */ }
       }
 
+      toast.success(`Queued ${validCount} file(s) for processing!`);
       setShowUpload(false);
     } catch (err) {
       toast.error('Upload error: ' + (err?.message || 'Unknown'));
