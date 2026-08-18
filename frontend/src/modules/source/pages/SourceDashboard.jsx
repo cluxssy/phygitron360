@@ -414,6 +414,7 @@ export default function SourceDashboard() {
     if (!files || files.length === 0) return;
 
     setUploading(true);
+    setUploadProgress(0);
     const fd = new FormData();
     const validExtensions = ['.pdf', '.doc', '.docx', '.txt', '.zip'];
     let validCount = 0;
@@ -450,17 +451,41 @@ export default function SourceDashboard() {
     }
 
     try {
-      const response = await fetch('/api/source/candidates/bulk-upload', {
-        method: 'POST',
-        credentials: 'include',
-        body: fd
+      const data = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/source/candidates/bulk-upload', true);
+        xhr.withCredentials = true;
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            setUploadProgress(percentComplete);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (err) {
+              resolve({});
+            }
+          } else {
+            let errorMsg = 'Upload failed';
+            try {
+              const errData = JSON.parse(xhr.responseText);
+              if (errData.detail) errorMsg = errData.detail;
+            } catch(e) {}
+            reject(new Error(errorMsg));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('Network Error'));
+        };
+
+        xhr.send(fd);
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Upload failed');
-      }
 
       toast.success(`Queued ${validCount} file(s) for processing!`);
 
@@ -475,6 +500,7 @@ export default function SourceDashboard() {
       toast.error('Upload error: ' + (err?.message || 'Unknown'));
     } finally {
       setUploading(false);
+      setUploadProgress(0);
       if (e.target) e.target.value = '';
     }
   };
