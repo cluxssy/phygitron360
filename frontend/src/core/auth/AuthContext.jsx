@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import ChangePasswordModal from './ChangePasswordModal';
+
 import useIdleTimeout from '../hooks/useIdleTimeout';
 import toast from 'react-hot-toast';
 
@@ -11,7 +11,6 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mustChange, setMustChange] = useState(false);
 
   const refreshUser = async () => {
     try {
@@ -58,25 +57,6 @@ export function AuthProvider({ children }) {
 
         if (data.authenticated) {
           setUser(data.user);
-
-          try {
-            const mcRes = await fetch(
-              '/api/auth/check-must-change-password',
-              {
-                credentials: 'include',
-              }
-            );
-
-            if (mcRes.ok) {
-              const mcData = await mcRes.json();
-
-              if (mcData.must_change) {
-                setMustChange(true);
-              }
-            }
-          } catch (e) {
-            // Silent fail for password change check
-          }
         } else {
           setUser(null);
         }
@@ -223,10 +203,6 @@ export function AuthProvider({ children }) {
       }}
     >
       {children}
-
-      {mustChange && (
-        <ChangePasswordModal forceUpdate={true} />
-      )}
     </AuthContext.Provider>
   );
 }

@@ -164,7 +164,7 @@ class UserRepository:
                  # 2. Extract user info from specific tenant schema
                  cur.execute(f'SET search_path TO "{tenant_id}"')
                  cur.execute("""
-                    SELECT u.id as user_id, u.username, u.role, u.roles, u.templates, u.employee_code, u.is_active,
+                    SELECT u.id as user_id, u.username, u.role, u.roles, u.templates, u.employee_code, u.is_active, u.password_must_change,
                            e.name as employee_name, e.first_name as employee_first_name, e.photo_path as employee_photo_path,
                            c.full_name as candidate_name, c.first_name as candidate_first_name
                     FROM users u

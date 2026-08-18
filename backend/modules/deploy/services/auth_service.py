@@ -156,7 +156,8 @@ class AuthService:
             "employee_code": session['employee_code'],
             "photo_path": session.get('employee_photo_path'),
             "permissions": self.repo.get_user_permissions(session['user_id'], resolved_roles, tenant_id=tenant_id),
-            "modules_enabled": modules_enabled
+            "modules_enabled": modules_enabled,
+            "password_must_change": bool(session.get('password_must_change', 0))
         }
 
     def create_user(self, username: str, password: str, role: str, employee_code: str = None) -> dict:
