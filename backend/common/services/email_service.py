@@ -106,11 +106,11 @@ class EmailService:
         expires_days: int = 7
     ) -> dict:
         """1. Onboarding Invitation (Template Library #1)"""
-        subject = f"Complete Your Onboarding — {self.company_name}"
-        
+        subject = "Get Started: Complete Your Profile on Phygitron - Employee Central"
+
         body_html = f"""
         <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{recipient_name}</strong>,</p>
-        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Welcome aboard! We are excited to welcome you to <strong>{self.company_name}</strong>.</p>
+        <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Welcome aboard! We are excited to welcome you to <strong>Phygitron 360 Employee Central</strong>.</p>
         <p style="font-size: 15px; color: #334155; margin: 0 0 24px 0;">Please access the secure employee onboarding portal to submit your accurate personal records and upload necessary employment documents (Photo, ID Proof, CV):</p>
         """
         body_html += build_cta_button_html(onboarding_link, "Complete onboarding &rarr;")
@@ -125,7 +125,7 @@ class EmailService:
             logo_url=self.platform_logo_url
         )
         
-        body_text = f"Hello {recipient_name},\n\nWelcome aboard! We are excited to welcome you to {self.company_name}.\n\nPlease complete your onboarding form and document uploads using the link below before it expires in {expires_days} days."
+        body_text = f"Hello {recipient_name},\n\nWelcome aboard! We are excited to welcome you to Phygitron 360 Employee Central.\n\nPlease complete your onboarding form and document uploads using the link below before it expires in {expires_days} days."
         text_content = build_white_label_text("Complete Your Onboarding", "Welcome to your new workspace!", body_text, f"{self.company_name} HR & People Team", onboarding_link)
         
         message = MIMEMultipart("alternative")
