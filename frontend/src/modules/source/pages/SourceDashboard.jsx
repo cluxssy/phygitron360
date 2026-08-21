@@ -9,15 +9,16 @@ import {
   Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
   ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
   Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
-  Archive, Pause, Play
+  Archive, Pause, Play, Folder
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import CandidateDrawer from './CandidateDrawer';
 import OfferApprovals from './OfferApprovals';
 import ActiveCandidates from './ActiveCandidates';
 import InviteStatus from './InviteStatus';
+import ResumeRepo from './ResumeRepo';
 
 import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
@@ -68,7 +69,114 @@ const TAG_COLORS = [
   { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', dot: 'bg-violet-500' },
 ];
 
-const initFilters = { pool: 'all', location: '', min_exp: 0, sort_by: 'newest', role_id: '', limit: 20 };
+const initFilters = { pool: 'all', location: '', min_exp: 0, exp_range: '', upload_time: [], sort_by: 'newest', role_id: '', limit: 20 };
+
+
+const InlineEmailEditor = ({ candidate, fetchCandidates }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [email, setEmail] = useState(candidate.email || '');
+  const [loading, setLoading] = useState(false);
+  
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    if (!email.trim() || email === candidate.email) {
+      setIsEditing(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      // PUT API call to update the candidate email
+      // We will need to have a candidate update endpoint. Does it exist? Let's assume it does or we will update it.
+      await api.put(`/source/candidates/${candidate.id}`, { email });
+      setIsEditing(false);
+      fetchCandidates();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update email');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+        <input 
+          autoFocus
+          className="text-xs border border-gray-300 rounded px-1 py-0.5 w-32"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(e); if (e.key === 'Escape') setIsEditing(false); }}
+        />
+        <button onClick={handleSave} disabled={loading} className="text-green-600 hover:text-green-700">✓</button>
+        <button onClick={() => setIsEditing(false)} className="text-red-500 hover:text-red-600">✕</button>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="flex items-center gap-1 group/email">
+      <p className="text-xs text-gray-500 truncate">{candidate.email}</p>
+      <button 
+        onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+        className="opacity-0 group-hover/email:opacity-100 text-gray-400 hover:text-purple-600 p-0.5"
+      >
+        ✎
+      </button>
+    </div>
+  );
+};
+
+
+const MultiSelectDropdown = ({ options, selected, onChange, label }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors w-40 flex justify-between items-center text-left"
+      >
+        <span className="truncate pr-2">
+          {selected.length === 0 ? "Any Date" : `${selected.length} Selected`}
+        </span>
+        <ChevronDown size={14} className="text-gray-400 shrink-0" />
+      </button>
+      
+      {isOpen && (
+        <div className="absolute z-50 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar p-2">
+          {options.map(opt => (
+            <label key={opt.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded transition-colors">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                checked={selected.includes(opt.value)}
+                onChange={(e) => {
+                  const newSelected = e.target.checked 
+                    ? [...selected, opt.value]
+                    : selected.filter(v => v !== opt.value);
+                  onChange(newSelected);
+                }}
+              />
+              <span className="text-sm text-gray-700 select-none">{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function SourceDashboard() {
   const location = useLocation();
@@ -214,6 +322,21 @@ export default function SourceDashboard() {
   const [inviteStatusRoleId, setInviteStatusRoleId] = useState('');
   const [showInviteStatus, setShowInviteStatus] = useState(false);
 
+  
+  // Filter helpers
+  const getRecentMonths = () => {
+    const months = [];
+    const d = new Date();
+    for (let i = 0; i < 12; i++) {
+      const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const label = d.toLocaleString('default', { month: 'short' }) + ' ' + d.getFullYear();
+      months.push({ value: ym, label });
+      d.setMonth(d.getMonth() - 1);
+    }
+    return months;
+  };
+  const recentMonths = getRecentMonths();
+
   const handleTabKeyNav = useTabListKeyNav();
 
   // Form states
@@ -250,7 +373,10 @@ export default function SourceDashboard() {
       const params = new URLSearchParams();
       if (filters.pool !== 'all') params.set('pool', filters.pool);
       if (filters.location) params.set('location', filters.location);
-      if (filters.min_exp > 0) params.set('min_exp', filters.min_exp);
+      if (filters.exp_range) params.set('exp_range', filters.exp_range);
+      if (filters.upload_time && filters.upload_time.length > 0) {
+        filters.upload_time.forEach(time => params.append('upload_time', time));
+      }
       params.set('sort_by', filters.sort_by);
       if (filters.role_id) {
         params.set('role_id', filters.role_id);
@@ -317,7 +443,27 @@ export default function SourceDashboard() {
     }
   }, [currentTab, fetchActivities, fetchPendingOffers]);
 
+
+  // Restore active bulk upload job on mount
+  useEffect(() => {
+    const fetchActiveJobOnMount = async () => {
+      try {
+        const res = await fetch('/api/source/candidates/bulk-upload/active');
+        const data = await res.json();
+        if (res.ok && data.success && data.data && data.data.job) {
+          setBulkJobId(data.data.job.id);
+          setBulkJobProgress(data.data);
+          setBulkUploadTriggered(true);
+        }
+      } catch (err) {
+        console.error('Failed to fetch active bulk upload job', err);
+      }
+    };
+    fetchActiveJobOnMount();
+  }, []);
+
   const fetchActiveJob = useCallback(async () => {
+
     if (!bulkJobId) return;
     try {
       const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`);
@@ -409,10 +555,9 @@ export default function SourceDashboard() {
   const clearSel = () => setSelectedIds(new Set());
 
   // ── Upload ─────────────────────────────────────────────────────────────────
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
-    if (!files || files.length === 0) return;
+  
+  const handleBulkUploadDirect = async (filesArray, overrideDate = null) => {
+    if (!filesArray || filesArray.length === 0) return;
 
     setUploading(true);
     setUploadProgress(0);
@@ -421,11 +566,11 @@ export default function SourceDashboard() {
     let validCount = 0;
     let invalidFiles = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (let i = 0; i < filesArray.length; i++) {
+      const file = filesArray[i];
 
       if (file.size < 1024) {
-        invalidFiles.push(`${file.name} (too small: ${file.size} bytes)`);
+        invalidFiles.push(`${file.name} (too small)`);
         continue;
       }
 
@@ -440,14 +585,17 @@ export default function SourceDashboard() {
       validCount++;
     }
 
+    if (overrideDate) {
+      fd.append('override_date', overrideDate);
+    }
+
     if (invalidFiles.length > 0) {
-      toast.error(`Skipped ${invalidFiles.length} invalid file(s): ${invalidFiles.join(', ')}`);
+      toast.error(`Skipped ${invalidFiles.length} invalid file(s).`);
     }
 
     if (validCount === 0) {
-      toast.error('No valid files found. Please upload PDF, DOCX, TXT, or ZIP files with content.');
+      toast.error('No valid files found.');
       setUploading(false);
-      if (e.target) e.target.value = '';
       return;
     }
 
@@ -469,24 +617,30 @@ export default function SourceDashboard() {
         setBulkJobId(newJobId);
         setBulkJobProgress(null);
 
-        // Immediately poll once so the extraction panel appears without a 3s gap
         try {
           const r = await fetch(`/api/source/candidates/bulk-upload/${newJobId}`, { credentials: 'include' });
           const d = await r.json();
           if (r.ok && d.success) setBulkJobProgress(d.data);
-        } catch (_) { /* silent — the interval will catch up */ }
+        } catch (_) { /* silent */ }
       }
 
       toast.success(`Queued ${validCount} file(s) for processing!`);
       setShowUpload(false);
     } catch (err) {
-      toast.error('Upload error: ' + (err?.message || 'Unknown'));
+      toast.error('Upload error: ' + (err.response?.data?.detail || err?.message || 'Unknown'));
     } finally {
       setUploading(false);
       setUploadProgress(0);
-      if (e.target) e.target.value = '';
     }
   };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
+    await handleBulkUploadDirect(files);
+    if (e.target) e.target.value = '';
+  };
+
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -844,6 +998,7 @@ export default function SourceDashboard() {
         <div className="sidebar" data-no-tooltip onKeyDown={handleTabKeyNav}>
           <button className={currentTab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>Home</button>
           {hasPermission(P.SOURCE_CANDIDATES_VIEW) && <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>}
+          {hasPermission(P.SOURCE_CANDIDATES_VIEW) && <button className={currentTab === 'repo' ? 'active' : ''} onClick={() => setTab('repo')}>Resume Repo</button>}
           {hasPermission(P.SOURCE_JOBS_VIEW) && <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>}
           {hasPermission(P.SOURCE_CANDIDATES_MANAGE) && <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>}
           {hasPermission(P.SOURCE_OFFERS_VIEW) && <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>}
@@ -867,6 +1022,7 @@ export default function SourceDashboard() {
              currentTab === 'active' ? 'RECRUITMENT STAGES' :
              currentTab === 'invite-status' ? 'CANDIDATE INVITATIONS' :
              currentTab === 'archive' ? 'CANDIDATE ARCHIVE' :
+             currentTab === 'repo' ? 'RESUME REPOSITORY' :
              'CANDIDATE DATABASE'}
           </p>
           <h1 className="text-4xl font-black text-black tracking-tight leading-none">
@@ -880,6 +1036,8 @@ export default function SourceDashboard() {
               <>Offer Management</>
             ) : currentTab === 'active' ? (
               <>Recruitment Stages</>
+            ) : currentTab === 'repo' ? (
+              <>Resume Repository</>
             ) : currentTab === 'invite-status' ? (
               <>Candidate Invitations</>
             ) : (
@@ -1546,6 +1704,10 @@ export default function SourceDashboard() {
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           <ActiveCandidates onViewProfile={(c) => setDrawerCandidate(c)} />
         </div>
+      ) : currentTab === 'repo' ? (
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <ResumeRepo onBulkUpload={handleBulkUploadDirect} />
+        </div>
       ) : currentTab === 'invite-status' ? (
         <div className="flex-1 flex items-center justify-center">
           {!inviteStatusRoleId ? (
@@ -1614,12 +1776,26 @@ export default function SourceDashboard() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-gray-500">Min. Experience (yrs)</label>
-                <input
-                  type="number" min={0} max={30}
-                  className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors w-36"
-                  value={filters.min_exp}
-                  onChange={e => setFilters(f => ({ ...f, min_exp: parseInt(e.target.value) || 0 }))}
+                
+                <select
+                  className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  value={filters.exp_range}
+                  onChange={e => setFilters(f => ({ ...f, exp_range: e.target.value }))}
+                >
+                  <option value="">Any</option>
+                  <option value="fresher">Fresher (&lt; 1 yr)</option>
+                  <option value="1-2">1 - 2 years</option>
+                  <option value="2-5">2 - 5 years</option>
+                  <option value="5+">5+ years</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-500">Upload Date</label>
+                <MultiSelectDropdown 
+                  options={recentMonths} 
+                  selected={filters.upload_time} 
+                  onChange={(newSelected) => setFilters(f => ({ ...f, upload_time: newSelected }))} 
                 />
               </div>
 
@@ -1742,7 +1918,7 @@ export default function SourceDashboard() {
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-800 text-sm truncate">{c.full_name || '—'}</p>
-                      <p className="text-xs text-gray-500 truncate">{c.email}</p>
+                      <InlineEmailEditor candidate={c} fetchCandidates={fetchCandidates} />
                     </div>
                   </div>
 

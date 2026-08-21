@@ -3,7 +3,7 @@ import uuid
 import math
 import logging
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from backend.modules.source.repositories.candidate_repo import CandidateRepository
 from backend.modules.source.repositories.skill_repo import SkillRepository
@@ -27,7 +27,10 @@ class CandidateService:
         self.UPLOAD_DIR = os.path.join(self.BASE_DIR, "data", self.tenant_id, "source", "resumes")
         os.makedirs(self.UPLOAD_DIR, exist_ok=True)
 
-    async def process_and_save_resume(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+    def get_repository_folders(self) -> List[Dict[str, Any]]:
+        return self.repo.get_repository_folders()
+
+    async def process_and_save_resume(self, file_content: bytes, filename: str, override_date: Optional[str] = None) -> Dict[str, Any]:
         """
         Orchestrates resume upload, text extraction, AI parsing, and database saving.
         """
@@ -144,6 +147,17 @@ class CandidateService:
                 certifications.append(cert)
 
         first_name, middle_name, last_name = split_full_name(name or "Unknown Candidate")
+        
+        parsed_override_date = None
+        if override_date:
+            try:
+                # expecting YYYY-MM
+                if len(override_date) == 7 and '-' in override_date:
+                    y, m = override_date.split('-')
+                    parsed_override_date = f"{y}-{m}-01 12:00:00"
+            except Exception:
+                pass
+
         candidate_data = {
             "full_name": name or "Unknown Candidate",
             "first_name": first_name,
@@ -164,7 +178,8 @@ class CandidateService:
             "primary_skills": primary_skills,
             "secondary_skills": secondary_skills,
             "experience": experience,
-            "education": education
+            "education": education,
+            "created_at": parsed_override_date
         }
         
         # We only try to upsert if we actually had a valid email from the AI.
@@ -460,11 +475,12 @@ class CandidateService:
         search: Optional[str] = None,
         sort_by: str = "newest",
         role_id: Optional[int] = None,
+        upload_time: Optional[Union[str, List[str]]] = None,
         limit: int = 20
     ) -> tuple[List[Dict[str, Any]], int]:
         candidates, total_count = self.repo.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
-            search=search, sort_by=sort_by, limit=limit, role_id=role_id
+            search=search, sort_by=sort_by, limit=limit, role_id=role_id, upload_time=upload_time
         )
 
         req_skills = []
@@ -734,7 +750,7 @@ class CandidateService:
         finally:
             conn.close()
 
-    async def bulk_upload_resumes(self, files: List[tuple], user_id: int, temp_dir: str = None) -> Dict[str, Any]:
+    async def bulk_upload_resumes(self, files: List[tuple], user_id: int, temp_dir: str = None, override_date: Optional[str] = None) -> Dict[str, Any]:
         """files is a list of tuples: (filename, file_path_source).
         Phase 1: Spin up background thread to extract text immediately at upload time, save to disk, batch-insert queue items.
         Phase 2: parallel workers pick up items and call AI asynchronously.
@@ -747,7 +763,7 @@ class CandidateService:
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
 
-        job_id = self.repo.create_bulk_upload_job(user_id, 0)
+        job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date)
         job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
         os.makedirs(job_dir, exist_ok=True)
 
@@ -978,7 +994,7 @@ class CandidateService:
                                             with open(item["file_path"], "rb") as f:
                                                 file_content = f.read()
 
-                                        result = await self._save_ai_parsed_candidate(ai_result, item["file_path"], file_content, conn=conn, cur=cur)
+                                        result = await self._save_ai_parsed_candidate(ai_result, item["file_path"], file_content, conn=conn, cur=cur, override_date=item.get("override_date"))
                                         self.repo.update_bulk_upload_job_item(
                                             item["id"], status="success", candidate_id=result["candidate_id"], conn=conn, cur=cur
                                         )
@@ -1028,7 +1044,7 @@ class CandidateService:
         # Launch all workers as concurrent tasks
         await asyncio.gather(*[_single_worker(i) for i in range(num_workers)])
 
-    async def _save_ai_parsed_candidate(self, ai_result: Dict[str, Any], file_path: str, file_content: bytes, conn=None, cur=None) -> Dict[str, Any]:
+    async def _save_ai_parsed_candidate(self, ai_result: Dict[str, Any], file_path: str, file_content: bytes, conn=None, cur=None, override_date: Optional[str] = None) -> Dict[str, Any]:
         """Save AI-parsed resume data to the database. Extracted from process_and_save_resume for reuse by bulk workers."""
         import uuid
         email = ai_result.get("e") or ai_result.get("email")
@@ -1128,6 +1144,15 @@ class CandidateService:
                 raise Exception("Failed to write resume file to persistent storage (Local or S3)")
             final_path = saved_path
 
+        parsed_override_date = None
+        if override_date:
+            try:
+                if len(override_date) == 7 and '-' in override_date:
+                    y, m = override_date.split('-')
+                    parsed_override_date = f"{y}-{m}-01 12:00:00"
+            except Exception:
+                pass
+
         first_name, middle_name, last_name = split_full_name(name or "Unknown Candidate")
         candidate_data = {
             "full_name": name or "Unknown Candidate",
@@ -1149,7 +1174,8 @@ class CandidateService:
             "primary_skills": primary_skills,
             "secondary_skills": secondary_skills,
             "experience": experience,
-            "education": education
+            "education": education,
+            "created_at": parsed_override_date
         }
 
         existing = None

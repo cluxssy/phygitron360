@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 logger = logging.getLogger(__name__)
 from backend.core.database import get_db_connection
@@ -26,8 +26,8 @@ class CandidateRepository:
             cur.execute('''
                 INSERT INTO candidates
                 (full_name, first_name, middle_name, last_name, email, phone, location, total_experience_years,
-                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP))
                 RETURNING id
             ''', (
                 data.get("full_name"),
@@ -49,7 +49,8 @@ class CandidateRepository:
                 data.get("portfolio_url"),
                 json.dumps(data.get("certifications", [])),
                 data.get("primary_skills", []),
-                data.get("secondary_skills", [])
+                data.get("secondary_skills", []),
+                data.get("created_at")
             ))
             candidate_id = cur.fetchone()[0]
 
@@ -388,7 +389,7 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -424,6 +425,14 @@ class CandidateRepository:
                         conditions.append("c.total_experience_years > 2 AND c.total_experience_years <= 5")
                     elif exp_range == "5+":
                         conditions.append("c.total_experience_years > 5")
+                        
+                if upload_time:
+                    if isinstance(upload_time, str):
+                        upload_time = [upload_time]
+                    valid_times = [ut for ut in upload_time if isinstance(ut, str) and len(ut.split('-')) == 2]
+                    if valid_times:
+                        conditions.append("TO_CHAR(c.created_at, 'YYYY-MM') = ANY(%s)")
+                        params.append(valid_times)
 
                 if search:
                     conditions.append("(c.full_name ILIKE %s OR c.email ILIKE %s OR c.current_designation ILIKE %s)")
@@ -556,15 +565,15 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def create_bulk_upload_job(self, user_id: int, total_files: int) -> int:
+    def create_bulk_upload_job(self, user_id: int, total_files: int, override_date: Optional[str] = None) -> int:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status)
-                       VALUES (%s, %s, 'processing') RETURNING id""",
-                    (user_id, total_files)
+                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status, override_date)
+                       VALUES (%s, %s, 'processing', %s) RETURNING id""",
+                    (user_id, total_files, override_date)
                 )
                 job_id = cur.fetchone()[0]
                 conn.commit()
@@ -667,11 +676,11 @@ class CandidateRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """SELECT i.* FROM bulk_upload_job_items i
+                    """SELECT i.*, j.override_date, j.created_by FROM bulk_upload_job_items i
                        JOIN bulk_upload_jobs j ON i.job_id = j.id
                        WHERE i.status = 'pending' AND j.status IN ('processing', 'pending', 'extracting')
                        ORDER BY i.created_at ASC
-                       LIMIT %s FOR UPDATE SKIP LOCKED""",
+                       LIMIT %s FOR UPDATE OF i SKIP LOCKED""",
                     (limit,)
                 )
                 rows = cur.fetchall()
@@ -955,3 +964,52 @@ class CandidateRepository:
                 return results
         finally:
             conn.close()
+
+    def get_repository_folders(self, conn=None, cur=None) -> List[Dict[str, Any]]:
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            should_close = True
+        elif not isinstance(cur, RealDictCursor):
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            should_close = True
+            
+        try:
+            self._set_search_path(cur)
+            cur.execute('''
+                SELECT 
+                    CAST(EXTRACT(YEAR FROM created_at) AS INTEGER) AS year,
+                    CAST(EXTRACT(MONTH FROM created_at) AS INTEGER) AS month_num,
+                    COUNT(id) AS count
+                FROM candidates
+                GROUP BY 
+                    EXTRACT(YEAR FROM created_at), 
+                    EXTRACT(MONTH FROM created_at)
+                ORDER BY 
+                    year DESC, 
+                    month_num DESC
+            ''')
+            rows = cur.fetchall()
+            
+            import calendar
+            folders = []
+            for row in rows:
+                y = row['year']
+                m = row['month_num']
+                count = row['count']
+                if not y or not m: continue
+                month_name = calendar.month_name[m] if 1 <= m <= 12 else str(m)
+                folders.append({
+                    "id": f"{y}-{m:02d}",
+                    "year": y,
+                    "month_num": m,
+                    "label": f"{month_name} {y}",
+                    "count": count
+                })
+                
+            return folders
+        finally:
+            if should_close:
+                cur.close()
+                conn.close()

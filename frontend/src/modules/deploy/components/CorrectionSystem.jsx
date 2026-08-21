@@ -322,18 +322,20 @@ export default function CorrectionSystem({ isManager }) {
                         <form onSubmit={submitCorrection} className="space-y-5">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time In</label>
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time In <span className="text-red-500">*</span></label>
                                     <input 
                                         type="time" 
+                                        required
                                         value={form.clock_in}
                                         onChange={e => setForm({...form, clock_in: e.target.value})}
                                         className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] font-mono"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time Out</label>
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Time Out <span className="text-red-500">*</span></label>
                                     <input 
                                         type="time" 
+                                        required
                                         value={form.clock_out}
                                         onChange={e => setForm({...form, clock_out: e.target.value})}
                                         className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] font-mono"
@@ -342,9 +344,8 @@ export default function CorrectionSystem({ isManager }) {
                             </div>
                             
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Work Log / Reason <span className="text-red-500">*</span></label>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Notes</label>
                                 <textarea
-                                    required
                                     rows="4"
                                     placeholder="Describe your daily work summary or reason for updating..."
                                     value={form.reason}

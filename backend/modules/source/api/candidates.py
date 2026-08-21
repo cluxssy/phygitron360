@@ -107,17 +107,18 @@ def get_candidate_service(user=Depends(get_current_user)):
 async def upload_and_parse_resume(
     file: UploadFile = File(...),
     tenant_id: str = Form("public"),
+    override_date: Optional[str] = Form(None),
     current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Upload a single resume PDF/DOCX/TXT and run AI parse pipeline."""
-    allowed_exts = (".pdf", ".docx", ".doc", ".txt")
+    allowed_exts = (".pdf", ".docx", ".doc", ".txt", ".zip")
     if not file.filename.lower().endswith(allowed_exts):
         raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(allowed_exts)}")
 
     try:
         content = await file.read()
-        result = await service.process_and_save_resume(content, file.filename)
+        result = await service.process_and_save_resume(content, file.filename, override_date=override_date)
         return {
             "success": True,
             "message": "Resume uploaded and parsed successfully",
@@ -129,14 +130,29 @@ async def upload_and_parse_resume(
         logger.exception(f"Resume upload failed: {exc}")
         raise HTTPException(status_code=500, detail="Something went wrong while uploading the resume. Please try again.")
 
+@router.get("/repository/folders", dependencies=[Depends(require_permission("source.candidates.view"))])
+async def get_repository_folders(service: CandidateService = Depends(get_candidate_service)):
+    """Get candidate count grouped by year and month for the repository view."""
+    try:
+        folders = service.get_repository_folders()
+        return {"success": True, "data": folders}
+    except Exception as exc:
+        logger.exception(f"Failed to fetch repository folders: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to fetch folders.")
+
 
 @router.post("/bulk-upload", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def bulk_upload_resumes(
     files: List[UploadFile] = File(...),
+    override_date: Optional[str] = Form(None),
     user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
     """Process multiple resume files at once. Returns a job ID to track progress."""
+    active_job = service.repo.get_active_bulk_upload_job()
+    if active_job:
+        raise HTTPException(status_code=400, detail="Another bulk upload is currently in progress. Please wait for it to finish or cancel it before starting a new one.")
+
     import tempfile
     import shutil
     import os
@@ -151,7 +167,7 @@ async def bulk_upload_resumes(
                 shutil.copyfileobj(f.file, buffer)
             files_data.append((f.filename, temp_path))
             
-        result = await service.bulk_upload_resumes(files_data, user.get("id"), temp_dir)
+        result = await service.bulk_upload_resumes(files_data, user.get("id"), temp_dir, override_date=override_date)
         return {
             "success": True,
             "data": result,
@@ -265,6 +281,7 @@ def search_candidates(
     search: Optional[str] = Query(None),
     sort_by: Optional[str] = Query("newest"),   # newest, experience
     role_id: Optional[int] = Query(None),
+    upload_time: Optional[List[str]] = Query(None),   # Multiple YYYY-MM
     limit: int = Query(50, ge=1, le=5000),
     current_user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
@@ -273,7 +290,7 @@ def search_candidates(
     try:
         results, total_count = service.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
-            search=search, sort_by=sort_by, role_id=role_id, limit=limit
+            search=search, sort_by=sort_by, role_id=role_id, upload_time=upload_time, limit=limit
         )
         return {"success": True, "data": results, "count": len(results), "total_count": total_count}
     except Exception as exc:
