@@ -149,9 +149,6 @@ class AttendanceService:
         if self.repo.check_overlapping_leaves(employee_code, req.start_date, req.end_date, self.tenant_id):
             raise ValueError("Leave dates overlap with an existing leave request.")
             
-        cutoff = _today_ist() - timedelta(days=15)
-        if d1.date() < cutoff and user_role not in ['org_admin', 'super_admin']:
-            raise ValueError("Leave applications cannot be more than 15 days in the past.")
 
         days = float((d2 - d1).days + 1)
         if d1 == d2:

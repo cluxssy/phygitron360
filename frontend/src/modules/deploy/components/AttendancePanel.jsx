@@ -366,7 +366,7 @@ export default function AttendancePanel({ mode }) {
                 <div className="w-12 h-12 rounded-2xl bg-[#f3e8ff] flex items-center justify-center text-[#8b5cf6] group-hover:bg-[#8b5cf6] group-hover:text-white transition-all">
                     <Calendar size={24} />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] group-hover:text-black">Request Absence</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] group-hover:text-black">Apply Leave</span>
             </button>
           )}
         </div>
@@ -807,7 +807,7 @@ export default function AttendancePanel({ mode }) {
             <div className="absolute top-0 right-0 p-8 opacity-5"><Calendar size={100} /></div>
             
             <div className="relative z-10">
-                <h3 className="text-xl font-display font-black text-black uppercase italic tracking-widest mb-1">Request <span className="text-[#8b5cf6]">Absence</span></h3>
+                <h3 className="text-xl font-display font-black text-black uppercase italic tracking-widest mb-1">Apply <span className="text-[#8b5cf6]">Leave</span></h3>
                 <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#8b8ba3] mb-8">Leave Request</p>
 
                 <div className="space-y-4">
@@ -827,7 +827,6 @@ export default function AttendancePanel({ mode }) {
                                 <input 
                                     type="date"
                                     required
-                                    min={new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                                     value={leaveForm.start_date}
                                     onChange={e => setLeaveForm({...leaveForm, start_date: e.target.value})}
                                     className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-4 py-4 rounded-xl focus:outline-none focus:border-[#d4b5fd] transition-all uppercase font-mono"
@@ -838,14 +837,12 @@ export default function AttendancePanel({ mode }) {
                                 <input 
                                     type="date"
                                     required
-                                    min={new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                                     value={leaveForm.end_date}
                                     onChange={e => setLeaveForm({...leaveForm, end_date: e.target.value})}
                                     className="w-full bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_10px_40px_rgba(180,140,255,0.08)] border-white/10 text-black text-xs bg-white/5 px-4 py-4 rounded-xl focus:outline-none focus:border-primary/50 transition-all uppercase font-mono"
                                 />
                             </div>
                         </div>
-                        <p className="text-[8px] font-bold text-[#8b8ba3] px-2">* You can apply for leaves up to 15 days in the past.</p>
                         {leaveForm.start_date && new Date(leaveForm.start_date) < new Date(new Date().setHours(0,0,0,0)) && (
                             <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded bg-amber-50 text-amber-600 border border-amber-200">
                                 <AlertCircle size={10} />
@@ -929,7 +926,7 @@ export default function AttendancePanel({ mode }) {
                         type="submit"
                         className="flex-1 py-4 rounded-2xl bg-primary text-black text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-primary/10 font-display italic"
                     >
-                        File Request
+                        Apply Leave
                     </button>
                 </div>
             </div>
