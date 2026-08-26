@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'react-hot-toast';
-import { X, ChevronDown, Check, Upload, Send } from 'lucide-react';
+import { X, ChevronDown, Check, Upload, Send, AlertCircle } from 'lucide-react';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import {
   isValidEmail,
@@ -52,13 +52,23 @@ const oldValueFor = (details, field) => {
   return details[field.key] || '';
 };
 
-export default function RequestEditsModal({ details, onClose, onSubmitted }) {
+export default function RequestEditsModal({ details, rejectedRequest, onClose, onSubmitted }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [selected, setSelected] = useState([]);
-  const [fieldValues, setFieldValues] = useState({});
+  const [selected, setSelected] = useState(() => {
+    return rejectedRequest?.requested_fields?.map(f => f.field) || [];
+  });
+  const [fieldValues, setFieldValues] = useState(() => {
+    const vals = {};
+    if (rejectedRequest?.requested_fields) {
+      rejectedRequest.requested_fields.forEach(f => {
+        if (!f.is_document) vals[f.field] = f.new_value;
+      });
+    }
+    return vals;
+  });
   const [docFiles, setDocFiles] = useState({});
   const [supportingFiles, setSupportingFiles] = useState([]);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(rejectedRequest?.notes || '');
   const [submitting, setSubmitting] = useState(false);
   const dropdownRef = useRef(null);
   const supportInputRef = useRef();
@@ -216,6 +226,17 @@ export default function RequestEditsModal({ details, onClose, onSubmitted }) {
         <p className="text-xs text-black/50 font-medium">
           Your profile stays exactly as it is until a reviewer approves these changes. You'll get a notification once you submit.
         </p>
+
+        {rejectedRequest && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3 items-start">
+            <AlertCircle size={14} className="text-red-600 mt-0.5 shrink-0" />
+            <div className="text-xs text-red-800">
+              <p className="font-bold mb-1">Previous request rejected</p>
+              {rejectedRequest.review_notes && <p className="mb-2 text-red-700">Reason: {rejectedRequest.review_notes}</p>}
+              <p className="text-red-600/80">We've restored your text inputs. Please review them and re-upload any required documents before submitting again.</p>
+            </div>
+          </div>
+        )}
 
         {/* Field picker dropdown */}
         <div className="relative" ref={dropdownRef}>

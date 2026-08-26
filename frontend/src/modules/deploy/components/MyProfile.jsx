@@ -442,10 +442,14 @@ export default function MyProfile() {
           {showRequestModal && (
             <RequestEditsModal
               details={details}
+              rejectedRequest={rejectedRequest}
               onClose={() => setShowRequestModal(false)}
               onSubmitted={() => {
                 setShowRequestModal(false);
                 fetchPendingRequest(details.employee_code);
+                if (rejectedRequest) {
+                  dismissRejectedRequest();
+                }
               }}
             />
           )}
