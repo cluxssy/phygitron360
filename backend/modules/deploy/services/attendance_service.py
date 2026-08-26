@@ -15,6 +15,10 @@ def _today_utc():
     """Fallback: return today in UTC when no client date is available."""
     return datetime.utcnow().date()
 
+def _today_ist():
+    """Return today in IST timezone."""
+    return datetime.now(_IST).date()
+
 
 class AttendanceService:
     def __init__(self, tenant_id: str = 'public'):
