@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import calendar
 from typing import List, Dict, Any, Optional
 from backend.modules.deploy.repositories.attendance_repo import AttendanceRepository
+from backend.modules.deploy.repositories.holiday_repo import HolidayRepository
 from backend.modules.deploy.services.notification_service import add_notification
 from backend.modules.deploy.schemas.attendance import (
     ClockOutRequest, AttendanceStatus, LeaveBalance, LeaveRequest, EditAttendanceRequest
@@ -23,6 +24,7 @@ def _today_ist():
 class AttendanceService:
     def __init__(self, tenant_id: str = 'public'):
         self.repo = AttendanceRepository()
+        self.holiday_repo = HolidayRepository()
         self.tenant_id = tenant_id
 
     def get_status(self, employee_code: str) -> AttendanceStatus:
@@ -150,15 +152,36 @@ class AttendanceService:
             raise ValueError("Leave dates overlap with an existing leave request.")
             
 
-        days = float((d2 - d1).days + 1)
-        if d1 == d2:
-            if req.start_day_type in ["First Half", "Second Half"]:
-                days = 0.5
-        else:
-            if req.start_day_type == "Second Half":
-                days -= 0.5
-            if req.end_day_type == "First Half":
-                days -= 0.5
+        # Fetch declared company holidays in range
+        holidays = self.holiday_repo.get_holidays_in_range(req.start_date, req.end_date, self.tenant_id)
+        holiday_dates = {h['date']: h for h in holidays}
+
+        # Calculate working days (exclude weekends and full holidays)
+        curr = d1
+        days = 0.0
+        while curr <= d2:
+            d_str = curr.strftime('%Y-%m-%d')
+            is_weekend = curr.weekday() >= 5
+            is_holiday = d_str in holiday_dates
+
+            if not is_weekend and not is_holiday:
+                if d1 == d2:
+                    if req.start_day_type in ["First Half", "Second Half"]:
+                        days += 0.5
+                    else:
+                        days += 1.0
+                else:
+                    day_val = 1.0
+                    if curr == d1 and req.start_day_type == "Second Half":
+                        day_val = 0.5
+                    elif curr == d2 and req.end_day_type == "First Half":
+                        day_val = 0.5
+                    days += day_val
+            elif is_holiday and holiday_dates[d_str].get('is_half_day'):
+                # Half-day holiday only discounts half a day
+                days += 0.5
+            curr += timedelta(days=1)
+
         if days < 0:
             days = 0.0
         
@@ -300,6 +323,8 @@ class AttendanceService:
         
         attendance_rows = self.repo.get_monthly_attendance(start_date, end_date, self.tenant_id)
         leave_rows = self.repo.get_monthly_approved_leaves(start_date, end_date, self.tenant_id)
+        holiday_rows = self.holiday_repo.get_holidays_in_range(start_date, end_date, self.tenant_id)
+        holidays_map = {h['date']: h for h in holiday_rows}
         
         # Process maps
         att_map = {}
@@ -380,6 +405,7 @@ class AttendanceService:
             half_day_count = 0
             leave_count = 0
             absent_count = 0
+            holiday_count = 0
             
             for day in range(1, num_days + 1):
                 date_str = f"{year}-{month:02d}-{day:02d}"
@@ -399,6 +425,9 @@ class AttendanceService:
                         half_day_count += 1
                     elif status == 'Absent':
                         absent_count += 1
+                elif date_str in holidays_map:
+                    status = 'Holiday'
+                    holiday_count += 1
                 else:
                     try:
                         dt = datetime(year, month, day)
@@ -417,13 +446,14 @@ class AttendanceService:
                     except:
                         pass
                 
-                days.append({"day": day, "status": status, "date": date_str})
+                h_name = holidays_map[date_str]['name'] if date_str in holidays_map else None
+                days.append({"day": day, "status": status, "date": date_str, "holiday_name": h_name})
 
             summary.append({
                 "name": emp['name'],
                 "code": code,
                 "days": days,
-                "stats": {"present": present_count, "half_day": half_day_count, "leave": leave_count, "absent": absent_count}
+                "stats": {"present": present_count, "half_day": half_day_count, "leave": leave_count, "absent": absent_count, "holiday": holiday_count}
             })
             
         return summary
@@ -638,11 +668,14 @@ class AttendanceService:
         WEEKS_BACK = 12
         start_monday = this_monday - timedelta(weeks=WEEKS_BACK)
 
-        # Fetch attendance records for the window
+        # Fetch attendance records and holidays for the window
         window_start_str = start_monday.strftime('%Y-%m-%d')
         window_end_str = (this_monday + timedelta(days=6)).strftime('%Y-%m-%d')  # next Sunday
         att_records = self.repo.get_attendance_in_range(employee_code, window_start_str, window_end_str, self.tenant_id)
         att_map = {r['date']: r for r in att_records}
+        
+        holidays_in_window = self.holiday_repo.get_holidays_in_range(window_start_str, window_end_str, self.tenant_id)
+        holidays_map = {h['date']: h for h in holidays_in_window}
 
         # Fetch pending correction requests in this range
         pending_corrections = self.repo.get_my_corrections(employee_code, self.tenant_id)
@@ -660,6 +693,11 @@ class AttendanceService:
             d = start_monday + timedelta(days=i)
             d_str = d.strftime('%Y-%m-%d')
             att = att_map.get(d_str)
+            h_info = holidays_map.get(d_str)
+            is_holiday = bool(h_info)
+            holiday_name = h_info['name'] if h_info else None
+            holiday_type = h_info.get('holiday_type') if h_info else None
+            is_half_day = bool(h_info.get('is_half_day')) if h_info else False
 
             if doj and d < doj:
                 track = 'before_join'
@@ -671,7 +709,7 @@ class AttendanceService:
                 track = 'requested'
 
             # Compute effective status from attendance record
-            status = 'No Record'
+            status = 'Holiday' if is_holiday else 'No Record'
             clock_in = None
             clock_out = None
             work_log = None
@@ -698,7 +736,7 @@ class AttendanceService:
                 elif clock_in:
                     status = 'Active' if d_str == today_str else 'Missing Clock-Out'
                 else:
-                    status = 'Absent'
+                    status = 'Holiday' if is_holiday else 'Absent'
 
             days_out.append({
                 'date': d_str,
@@ -708,7 +746,11 @@ class AttendanceService:
                 'clock_out': str(clock_out) if clock_out else None,
                 'work_log': work_log,
                 'track': track,
-                'pending_correction': pending_map.get(d_str)
+                'pending_correction': pending_map.get(d_str),
+                'is_holiday': is_holiday,
+                'holiday_name': holiday_name,
+                'holiday_type': holiday_type,
+                'is_half_day': is_half_day
             })
 
         return {
@@ -766,6 +808,11 @@ class AttendanceService:
                 "This date is outside the self-service window. "
                 "Please submit a correction request for manager approval instead."
             )
+
+        # Disallow logging attendance on declared company holidays
+        holidays = self.holiday_repo.get_holidays_in_range(date_str, date_str, self.tenant_id)
+        if holidays and not holidays[0].get('is_half_day'):
+            raise ValueError(f"Attendance logging is disabled for {date_str} as it is a declared Company Holiday ({holidays[0]['name']}).")
 
         if clock_out and clock_in and clock_out < clock_in:
             raise ValueError("Clock-out time cannot be earlier than clock-in time.")
@@ -831,6 +878,11 @@ class AttendanceService:
 
         if target_date > today:
             raise ValueError("Cannot request correction for a future date.")
+
+        # Disallow logging attendance on declared company holidays
+        holidays = self.holiday_repo.get_holidays_in_range(date_str, date_str, self.tenant_id)
+        if holidays and not holidays[0].get('is_half_day'):
+            raise ValueError(f"Attendance logging is disabled for {date_str} as it is a declared Company Holiday ({holidays[0]['name']}).")
 
         if self._is_self_service_date(target_date, today):
             raise ValueError(
@@ -991,6 +1043,8 @@ class AttendanceService:
         # 3. Fetch attendance and leave records for the date range
         attendance_rows = self.repo.get_monthly_attendance(start_date, end_date, self.tenant_id)
         leave_rows = self.repo.get_monthly_approved_leaves(start_date, end_date, self.tenant_id)
+        holiday_rows = self.holiday_repo.get_holidays_in_range(start_date, end_date, self.tenant_id)
+        holidays_map = {h['date']: h for h in holiday_rows}
         
         # Process maps
         att_map = {}
@@ -1067,6 +1121,7 @@ class AttendanceService:
             half_day_count = 0
             leave_count = 0
             absent_count = 0
+            holiday_count = 0
             
             for day in range(start_day, end_day + 1):
                 date_str = f"{year}-{month:02d}-{day:02d}"
@@ -1086,6 +1141,9 @@ class AttendanceService:
                         half_day_count += 1
                     elif status == 'Absent':
                         absent_count += 1
+                elif date_str in holidays_map:
+                    status = 'Holiday'
+                    holiday_count += 1
                 else:
                     try:
                         dt = datetime(year, month, day)
@@ -1104,7 +1162,8 @@ class AttendanceService:
                     except:
                         pass
                 
-                days.append({"day": day, "status": status, "date": date_str})
+                h_name = holidays_map[date_str]['name'] if date_str in holidays_map else None
+                days.append({"day": day, "status": status, "date": date_str, "holiday_name": h_name})
                 
             report.append({
                 "name": emp['name'],
@@ -1114,7 +1173,8 @@ class AttendanceService:
                     "present": present_count,
                     "half_day": half_day_count,
                     "leave": leave_count,
-                    "absent": absent_count
+                    "absent": absent_count,
+                    "holiday": holiday_count
                 }
             })
             
