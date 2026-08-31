@@ -107,6 +107,7 @@ def create_tables(schema_name='public'):
             ''')
             
             cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'Asia/Kolkata'")
+            cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}'::jsonb")
             
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -580,6 +581,10 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS terminated_by_proctor BOOLEAN DEFAULT FALSE")
         cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS custom_questions JSONB")
         cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ")
+        # Proctoring config (strictness + feature toggles) stored per assignment
+        cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS proctoring_config JSONB")
+        # Resume count — incremented each time a candidate reopens a started test
+        cur.execute("ALTER TABLE assessment_assignments ADD COLUMN IF NOT EXISTS resume_count INTEGER DEFAULT 0")
 
         cur.execute("ALTER TABLE assessment_results ADD COLUMN IF NOT EXISTS is_malpractice BOOLEAN DEFAULT FALSE")
         cur.execute("ALTER TABLE assessment_results ADD COLUMN IF NOT EXISTS weak_skill_ids JSONB DEFAULT '[]'::jsonb")
@@ -588,6 +593,18 @@ def create_tables(schema_name='public'):
 
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb")
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::jsonb")
+
+        # Proctoring strikes — individual strike log (survives page reloads, tracks reason)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS proctoring_strikes (
+                id SERIAL PRIMARY KEY,
+                assignment_id INTEGER NOT NULL REFERENCES assessment_assignments(id) ON DELETE CASCADE,
+                violation_name TEXT NOT NULL,
+                flag_type TEXT DEFAULT 'proctoring_violation',
+                strike_index INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         # 3.1) Candidate Experience (For AI Analysis)
         cur.execute('''
@@ -1208,6 +1225,14 @@ def create_tables(schema_name='public'):
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leaves_date ON leaves(employee_code, start_date, end_date)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leaves_status ON leaves(status, start_date)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_attendance_date_status ON attendance(date, status)")
+
+        cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS sections JSONB DEFAULT '[]'::jsonb")
+        cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS section_id TEXT")
+        cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS difficulty TEXT DEFAULT 'medium'")
+        cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS parent_id INTEGER")
+        cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS tags JSONB")
+        cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS images JSONB")
+
 
         conn.commit()
     except Exception as e:

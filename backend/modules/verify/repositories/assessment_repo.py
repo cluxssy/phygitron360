@@ -19,8 +19,8 @@ class AssessmentRepository:
                 cur.execute('''
                     INSERT INTO assessments 
                     (title, description, type, time_limit_minutes, pass_score, 
-                     shuffle_questions, show_result_immediately, created_by, status, is_deleted, org_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     shuffle_questions, show_result_immediately, created_by, status, is_deleted, org_id, sections)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 ''', (
                     data.get("title"),
@@ -33,7 +33,8 @@ class AssessmentRepository:
                     data.get("created_by"),
                     data.get("status", "draft"),
                     False,
-                    data.get("org_id")
+                    data.get("org_id"),
+                    json.dumps(data.get("sections", []))
                 ))
                 asm_id = cur.fetchone()[0]
                 
@@ -43,8 +44,8 @@ class AssessmentRepository:
                         INSERT INTO assessment_questions 
                         (assessment_id, question_text, question_type, options, correct_answer, 
                          model_answer, starter_code, test_cases, programming_language, 
-                         accepted_file_types, skill_id, marks, order_index)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         accepted_file_types, skill_id, marks, order_index, tags, images, section_id, difficulty)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ''', (
                         asm_id,
                         q.get("question_text"),
@@ -58,7 +59,11 @@ class AssessmentRepository:
                         q.get("accepted_file_types"),
                         q.get("skill_id"),
                         q.get("marks", 1.0),
-                        q.get("order_index", 0)
+                        q.get("order_index", 0),
+                        json.dumps(q.get("tags", [])),
+                        json.dumps(q.get("images", [])),
+                        q.get("section_id"),
+                        q.get("difficulty", "medium"),
                     ))
                 
                 conn.commit()

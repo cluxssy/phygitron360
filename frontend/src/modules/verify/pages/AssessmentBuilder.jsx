@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { verifyApi } from '../../../core/api/verifyApi';
 import {
-  Plus, Loader2, Save, Send, UploadCloud, Link as LinkIcon,
+  Plus, Loader2, Save, Send, Upload, UploadCloud, Link as LinkIcon,
   Image as ImageIcon, Play, CheckCircle, Trash2, ArrowUp, ArrowDown,
   Wand2, Settings, List, Eye, Shuffle, X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import {
   isPositiveNumber,
   isValidUrl,
@@ -67,8 +68,14 @@ export default function AssessmentBuilder() {
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [showResultImmediately, setShowResultImmediately] = useState(true);
 
+  // Sections
+  const [sections, setSections] = useState([]);
+
   // Questions
   const [questions, setQuestions] = useState([]);
+
+  // File import
+  const [importingFile, setImportingFile] = useState(false);
   
   // Modals
   const [showImportUrl, setShowImportUrl] = useState(false);
@@ -119,11 +126,63 @@ export default function AssessmentBuilder() {
             setShuffleQuestions(asm.shuffle_questions);
             setShowResultImmediately(asm.show_result_immediately);
             setQuestions(asm.questions || []);
+            setSections(Array.isArray(asm.sections) ? asm.sections : []);
           }
         })
         .finally(() => setLoading(false));
     }
   }, [asmId]);
+
+  // ── Section helpers ───────────────────────────────────────────────────────
+  const addSection = () => {
+    const id = `sec_${Date.now()}`;
+    setSections(prev => [...prev, { id, title: `Section ${prev.length + 1}`, instructions: '', time_limit_minutes: null }]);
+  };
+  const updateSection = (id, field, value) =>
+    setSections(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  const removeSection = (id) => {
+    setSections(prev => prev.filter(s => s.id !== id));
+    setQuestions(prev => prev.map(q => q.section_id === id ? { ...q, section_id: null } : q));
+  };
+
+  // ── File upload handler ───────────────────────────────────────────────────
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportingFile(true);
+    const toastId = toast.loading(`AI is reading ${file.name}…`);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/verify/builder/import-questions', {
+        method: 'POST', credentials: 'include', body: fd,
+      });
+      const d = await r.json();
+      if (r.ok && d.success && Array.isArray(d.data) && d.data.length > 0) {
+        setQuestions(prev => [...prev, ...d.data.map(q => ({
+          id: `temp_${Date.now()}_${Math.random()}`,
+          question_type: q.question_type || 'mcq',
+          question_text: q.question_text || '',
+          marks: q.marks || 1.0,
+          options: q.options || ['', ''],
+          correct_answer: q.correct_answer || '',
+          model_answer: q.model_answer || '',
+          starter_code: q.starter_code || '',
+          test_cases: q.test_cases || [],
+          programming_language: q.programming_language || 'python',
+          section_id: null,
+        }))]);
+        toast.success(`AI extracted ${d.data.length} questions from ${file.name}!`, { id: toastId });
+      } else {
+        toast.error(d.detail || 'No questions could be extracted.', { id: toastId });
+      }
+    } catch {
+      toast.error('File upload failed.', { id: toastId });
+    } finally {
+      setImportingFile(false);
+    }
+  };
 
   const addQuestion = () => {
     setQuestions([
@@ -208,6 +267,7 @@ export default function AssessmentBuilder() {
       pass_score: passScore,
       shuffle_questions: shuffleQuestions,
       show_result_immediately: showResultImmediately,
+      sections,
       questions: questions.map((q, i) => ({ ...q, order_index: i }))
     };
 
@@ -384,7 +444,60 @@ export default function AssessmentBuilder() {
       {/* STEP 2: Questions */}
       {step === 2 && (
         <div className="space-y-6">
-          <div className="flex gap-3">
+
+          {/* ── Sections Panel ──────────────────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">Assessment Sections</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Optional — divide the assessment into named sections, each with its own time limit</p>
+              </div>
+              <button onClick={addSection} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold hover:bg-purple-100 transition-colors">
+                <Plus size={12} /> Add Section
+              </button>
+            </div>
+            {sections.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">No sections — all questions are in a single flat list.</p>
+            ) : (
+              <div className="space-y-3">
+                {sections.map((sec, si) => (
+                  <div key={sec.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center mt-1">{si + 1}</div>
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input
+                        value={sec.title}
+                        onChange={e => updateSection(sec.id, 'title', e.target.value)}
+                        placeholder="Section title"
+                        className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none"
+                      />
+                      <input
+                        value={sec.instructions || ''}
+                        onChange={e => updateSection(sec.id, 'instructions', e.target.value)}
+                        placeholder="Instructions (optional)"
+                        className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none"
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={sec.time_limit_minutes || ''}
+                          onChange={e => updateSection(sec.id, 'time_limit_minutes', e.target.value ? Number(e.target.value) : null)}
+                          placeholder="Time (mins)"
+                          min={1}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none"
+                        />
+                        <button onClick={() => removeSection(sec.id)} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors flex-shrink-0">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Toolbar ─────────────────────────────────────────────────── */}
+          <div className="flex flex-wrap gap-3">
             <button onClick={addQuestion} className="px-4 py-3 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold hover:bg-purple-100 transition-colors flex items-center gap-2">
               <Plus size={14} /> Add Question
             </button>
@@ -394,6 +507,12 @@ export default function AssessmentBuilder() {
             <button onClick={() => setShowImportUrl(true)} className="px-4 py-3 rounded-xl bg-gray-50 text-gray-600 border border-gray-200 text-xs font-medium hover:bg-gray-100 transition-colors flex items-center gap-2">
               <LinkIcon size={14} /> Import from URL
             </button>
+            {/* File Upload */}
+            <label className={`px-4 py-3 rounded-xl border text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors ${importingFile ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'}`}>
+              {importingFile ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              {importingFile ? 'Extracting…' : 'Upload File (AI)'}
+              <input type="file" className="hidden" accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.json" onChange={handleFileUpload} disabled={importingFile} />
+            </label>
           </div>
 
           {questions.length === 0 ? (
@@ -404,6 +523,20 @@ export default function AssessmentBuilder() {
             <div className="space-y-6">
               {questions.map((q, i) => (
                 <div key={q.id || i} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm border-l-4 border-l-purple-600 relative group">
+                  {/* Section assignment — only shown when sections exist */}
+                  {sections.length > 0 && (
+                    <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Section</span>
+                      <select
+                        value={q.section_id || ''}
+                        onChange={e => updateQuestion(i, 'section_id', e.target.value || null)}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-purple-300 outline-none"
+                      >
+                        <option value="">— Unassigned —</option>
+                        {sections.map(sec => <option key={sec.id} value={sec.id}>{sec.title}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div className="absolute right-4 top-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => moveQuestion(i, 'up')} disabled={i === 0} aria-label="Move question up" className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-30"><ArrowUp size={14}/></button>
                     <button onClick={() => moveQuestion(i, 'down')} disabled={i === questions.length - 1} aria-label="Move question down" className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-30"><ArrowDown size={14}/></button>
@@ -430,7 +563,17 @@ export default function AssessmentBuilder() {
                         value={q.question_text}
                         onChange={e => updateQuestion(i, 'question_text', e.target.value)}
                         placeholder="Enter question text..."
-                        className="w-full bg-transparent border-b border-gray-200 focus:border-purple-400 outline-none py-2 text-sm text-gray-700 resize-none min-h-[60px]"
+                        className="w-full bg-transparent border-b border-gray-200 focus:border-purple-400 outline-none py-2 text-sm text-gray-700 resize-y min-h-[120px]"
+                        ref={el => {
+                          if (el) {
+                            el.style.height = 'auto';
+                            el.style.height = (el.scrollHeight) + 'px';
+                          }
+                        }}
+                        onInput={e => {
+                          e.target.style.height = 'auto';
+                          e.target.style.height = e.target.scrollHeight + 'px';
+                        }}
                       />
 
                       {/* Type-specific UI */}
@@ -574,7 +717,8 @@ export default function AssessmentBuilder() {
       )}
 
       {/* Import Modal */}
-      {showImportUrl && (
+      {showImportUrl && createPortal(
+        
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...importUrlOverlayHandlers}>
           <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowImportUrl(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
@@ -583,6 +727,9 @@ export default function AssessmentBuilder() {
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-3">
               <LinkIcon className="text-purple-600"/> Import from URL
             </h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Supports <span className="font-semibold text-purple-600">LeetCode</span> and <span className="font-semibold text-orange-500">HackerRank</span> problem URLs (auto-extracts coding questions with starter code), or any generic webpage with question content.
+            </p>
             <form onSubmit={handleImportUrl}>
               <div className="mb-6">
                 <label className="block text-xs font-medium text-gray-600 mb-2">URL</label>
@@ -591,7 +738,7 @@ export default function AssessmentBuilder() {
                   required
                   value={importUrl}
                   onChange={e => setImportUrl(e.target.value)}
-                  placeholder="https://leetcode.com/problems/two-sum/"
+                  placeholder="https://leetcode.com/problems/two-sum/ or any page with questions"
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
                 />
               </div>
@@ -601,10 +748,13 @@ export default function AssessmentBuilder() {
             </form>
           </div>
         </div>
+      ,
+        document.body
       )}
 
       {/* Bank Import Modal */}
-      {showBankImport && (
+      {showBankImport && createPortal(
+        
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" {...bankImportOverlayHandlers}>
           <div className="bg-white rounded-2xl w-full max-w-2xl p-8 relative shadow-2xl border border-gray-200 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowBankImport(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
@@ -639,6 +789,8 @@ export default function AssessmentBuilder() {
             </div>
           </div>
         </div>
+      ,
+        document.body
       )}
     </div>
   );

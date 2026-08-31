@@ -186,8 +186,18 @@ class SubmissionRepository:
                     'id': result['assessment_id'],
                     'title': result['assessment_title'],
                     'pass_score': result['pass_score'],
-                    'show_result_immediately': result['show_result_immediately']
+                    'show_result_immediately': result['show_result_immediately'],
+                    'questions': []
                 }
+
+                # Fetch the questions so the frontend can render the detailed answer review
+                cur.execute('''
+                    SELECT id, question_text, question_type, options, correct_answer, marks, difficulty, section_id, parent_id
+                    FROM assessment_questions
+                    WHERE assessment_id = %s
+                    ORDER BY id ASC
+                ''', (result['assessment_id'],))
+                result['assessment']['questions'] = [dict(q) for q in cur.fetchall()]
                 
                 cur.execute("SELECT * FROM proctoring_flags WHERE assessment_result_id = %s", (result_id,))
                 result['flags'] = [dict(r) for r in cur.fetchall()]

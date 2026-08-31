@@ -5,6 +5,7 @@ import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useOverlayClose from '../../../core/hooks/useOverlayClose';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { createPortal } from 'react-dom';
 
 const QTYPES = [
   { value: 'mcq', label: 'Multiple Choice' },
@@ -17,7 +18,7 @@ const QTYPES = [
 function Modal({ onClose, title, children, maxWidth = "max-w-lg" }) {
   useEscapeClose(onClose);
   const overlayHandlers = useOverlayClose(onClose);
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...overlayHandlers}>
       <div className={`bg-white rounded-2xl w-full ${maxWidth} p-8 relative shadow-2xl border border-gray-200 my-8`} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
@@ -27,6 +28,8 @@ function Modal({ onClose, title, children, maxWidth = "max-w-lg" }) {
         {children}
       </div>
     </div>
+  ,
+    document.body
   );
 }
 
@@ -35,8 +38,9 @@ function ImportModal({ onClose, onImport, uniqueTopics }) {
   const [importing, setImporting] = useState(false);
   const [topic, setTopic] = useState('');
   const [tags, setTags] = useState('');
+  const [preview, setPreview] = useState(null); // null = not extracted, [] = extracted list
 
-  const handleSubmit = async (e) => {
+  const handleExtract = async (e) => {
     e.preventDefault();
     if (!file) return toast.error('Please select a file');
     setImporting(true);
@@ -47,9 +51,31 @@ function ImportModal({ onClose, onImport, uniqueTopics }) {
 
     try {
       const r = await fetch('/api/verify/question-bank/import-file', {
+        method: 'POST', credentials: 'include', body: fd
+      });
+      const d = await r.json();
+      if (r.ok && d.data) {
+        setPreview(d.data);
+        toast.success(`AI extracted ${d.data.length} questions — review before saving.`);
+      } else {
+        toast.error(d.detail || 'No questions could be extracted');
+      }
+    } catch {
+      toast.error('Network error during extraction');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!preview?.length) return;
+    setImporting(true);
+    try {
+      const r = await fetch('/api/verify/question-bank/bulk', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: fd
+        body: JSON.stringify({ items: preview })
       });
       const d = await r.json();
       if (r.ok) {
@@ -57,27 +83,78 @@ function ImportModal({ onClose, onImport, uniqueTopics }) {
         onImport();
         onClose();
       } else {
-        toast.error(d.detail || 'Import failed');
+        toast.error(d.detail || 'Save failed');
       }
     } catch {
-      toast.error('Network error during import');
+      toast.error('Network error during save');
     } finally {
       setImporting(false);
     }
   };
 
+  const removePreviewItem = (idx) => setPreview(prev => prev.filter((_, i) => i !== idx));
+  const updatePreviewItem = (idx, field, val) =>
+    setPreview(prev => prev.map((q, i) => i === idx ? { ...q, [field]: val } : q));
+
+  // Preview step
+  if (preview) {
+    return (
+      <Modal onClose={onClose} title={`Review Extracted Questions (${preview.length})`}>
+        <p className="text-xs text-gray-500 mb-4">
+          Review the AI-extracted questions below. Edit or delete any incorrect entries before saving to the bank.
+        </p>
+        <div className="max-h-[50vh] overflow-y-auto space-y-3 mb-4 pr-1">
+          {preview.length === 0 && <p className="text-sm text-gray-400 text-center py-8">All questions removed.</p>}
+          {preview.map((q, idx) => (
+            <div key={idx} className="border border-gray-200 rounded-xl p-4 bg-gray-50 relative">
+              <button onClick={() => removePreviewItem(idx)} className="absolute top-3 right-3 p-1 rounded-lg text-rose-500 hover:bg-rose-50"><X size={13}/></button>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full uppercase">{q.question_type}</span>
+                <span className="text-[10px] text-gray-400">{q.marks} mark{q.marks !== 1 ? 's' : ''}</span>
+              </div>
+              <textarea
+                value={q.question_text}
+                onChange={e => updatePreviewItem(idx, 'question_text', e.target.value)}
+                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none resize-y min-h-[100px]"
+                ref={el => {
+                          if (el) {
+                            el.style.height = 'auto';
+                            el.style.height = (el.scrollHeight) + 'px';
+                          }
+                        }}
+                        onInput={e => {
+                          e.target.style.height = 'auto';
+                          e.target.style.height = e.target.scrollHeight + 'px';
+                        }}
+              />
+              {(q.question_type === 'mcq' || q.question_type === 'mcq_multi') && (
+                <p className="text-[10px] text-gray-400 mt-1">✓ Correct: {q.correct_answer}</p>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-3">
+          <button onClick={() => setPreview(null)} className="px-4 py-2 rounded-xl text-gray-500 font-medium hover:bg-gray-100 text-sm">← Back</button>
+          <button onClick={handleSave} disabled={importing || preview.length === 0} className="flex items-center gap-2 px-6 py-2 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700 disabled:opacity-50 text-sm">
+            {importing ? <Loader2 size={16} className="animate-spin" /> : `Save ${preview.length} to Bank`}
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal onClose={onClose} title="Import Questions with AI">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <form onSubmit={handleExtract} className="flex flex-col gap-5">
         <p className="text-sm text-gray-600">
-          Upload a PDF, Word document, or text file. Our AI will automatically parse and add them to your Question Bank.
+          Upload a <span className="font-medium">PDF, Word, Excel, CSV, or JSON</span> file. AI will extract questions for you to review before saving.
         </p>
         <div className="border-2 border-dashed border-purple-200 rounded-xl p-8 text-center bg-purple-50">
           <input
             type="file"
             id="file-upload"
             className="hidden"
-            accept=".pdf,.txt,.docx,.csv,.json"
+            accept=".pdf,.txt,.docx,.doc,.xlsx,.xls,.csv,.json"
             onChange={e => setFile(e.target.files[0])}
           />
           <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center gap-2">
@@ -85,16 +162,17 @@ function ImportModal({ onClose, onImport, uniqueTopics }) {
             <span className="text-sm font-medium text-purple-700">
               {file ? file.name : "Click to select a file"}
             </span>
+            <span className="text-xs text-gray-400">PDF, Word, Excel, CSV, JSON</span>
           </label>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Topic Folder (Optional)</label>
-            <input 
-              type="text" 
-              value={topic} 
-              onChange={e=>setTopic(e.target.value)} 
+            <input
+              type="text"
+              value={topic}
+              onChange={e => setTopic(e.target.value)}
               list="topic-list"
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
               placeholder="e.g. Java Basics"
@@ -105,10 +183,10 @@ function ImportModal({ onClose, onImport, uniqueTopics }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Default Tags (Optional)</label>
-            <input 
-              type="text" 
-              value={tags} 
-              onChange={e=>setTags(e.target.value)} 
+            <input
+              type="text"
+              value={tags}
+              onChange={e => setTags(e.target.value)}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
               placeholder="Comma separated"
             />
@@ -118,7 +196,7 @@ function ImportModal({ onClose, onImport, uniqueTopics }) {
         <div className="flex justify-end gap-3 mt-4">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-gray-500 font-medium hover:bg-gray-100">Cancel</button>
           <button type="submit" disabled={importing || !file} className="flex items-center gap-2 px-6 py-2 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700 disabled:opacity-50">
-            {importing ? <Loader2 size={16} className="animate-spin" /> : "Extract & Import"}
+            {importing ? <Loader2 size={16} className="animate-spin" /> : "Extract & Preview"}
           </button>
         </div>
       </form>
@@ -131,8 +209,9 @@ function ImportUrlModal({ onClose, onImport, uniqueTopics }) {
   const [topic, setTopic] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState(null);
 
-  const save = async () => {
+  const handleExtract = async () => {
     if (!url.trim()) { toast.error('URL required'); return; }
     setSaving(true);
     try {
@@ -144,25 +223,102 @@ function ImportUrlModal({ onClose, onImport, uniqueTopics }) {
         body: JSON.stringify({ url: url.trim(), topic: topic.trim() || null, tags: tags.length ? tags : null })
       });
       const res = await r.json();
-      if (r.ok) {
-        toast.success(`Imported ${res.data.added} questions!`);
-        onImport();
-        onClose();
+      if (r.ok && res.data) {
+        setPreview(res.data);
+        toast.success(`AI extracted ${res.data.length} question(s) — review before saving.`);
       } else {
-        toast.error(res.detail || 'Failed to import URL');
+        toast.error(res.detail || 'Failed to extract from URL');
       }
     } catch {
-      toast.error('Network error during import');
+      toast.error('Network error during extraction');
     } finally {
       setSaving(false);
     }
   };
 
+  const handleSave = async () => {
+    if (!preview?.length) return;
+    setSaving(true);
+    try {
+      const r = await fetch('/api/verify/question-bank/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ items: preview })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        toast.success(d.message);
+        onImport();
+        onClose();
+      } else {
+        toast.error(d.detail || 'Save failed');
+      }
+    } catch {
+      toast.error('Network error during save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removePreviewItem = (idx) => setPreview(prev => prev.filter((_, i) => i !== idx));
+  const updatePreviewItem = (idx, field, val) =>
+    setPreview(prev => prev.map((q, i) => i === idx ? { ...q, [field]: val } : q));
+
+  if (preview) {
+    return (
+      <Modal onClose={onClose} title={`Review URL Questions (${preview.length})`}>
+        <p className="text-xs text-gray-500 mb-4">
+          Review the AI-extracted questions below. Edit or delete any incorrect entries before saving to the bank.
+        </p>
+        <div className="max-h-[50vh] overflow-y-auto space-y-3 mb-4 pr-1">
+          {preview.length === 0 && <p className="text-sm text-gray-400 text-center py-8">All questions removed.</p>}
+          {preview.map((q, idx) => (
+            <div key={idx} className="border border-gray-200 rounded-xl p-4 bg-gray-50 relative">
+              <button onClick={() => removePreviewItem(idx)} className="absolute top-3 right-3 p-1 rounded-lg text-rose-500 hover:bg-rose-50"><X size={13}/></button>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full uppercase">{q.question_type}</span>
+                <span className="text-[10px] text-gray-400">{q.marks} mark{q.marks !== 1 ? 's' : ''}</span>
+              </div>
+              <textarea
+                value={q.question_text}
+                onChange={e => updatePreviewItem(idx, 'question_text', e.target.value)}
+                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none resize-y min-h-[100px]"
+                ref={el => {
+                          if (el) {
+                            el.style.height = 'auto';
+                            el.style.height = (el.scrollHeight) + 'px';
+                          }
+                        }}
+                        onInput={e => {
+                          e.target.style.height = 'auto';
+                          e.target.style.height = e.target.scrollHeight + 'px';
+                        }}
+              />
+              {q.question_type === 'coding' && (
+                <div className="mt-2 text-[10px] text-gray-500 font-mono bg-white p-2 border border-gray-200 rounded">
+                  {q.starter_code ? 'Starter code included' : 'No starter code'}
+                  {q.test_cases?.length > 0 ? ` | ${q.test_cases.length} test cases` : ''}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-3">
+          <button onClick={() => setPreview(null)} className="px-4 py-2 rounded-xl text-gray-500 font-medium hover:bg-gray-100 text-sm">← Back</button>
+          <button onClick={handleSave} disabled={saving || preview.length === 0} className="flex items-center gap-2 px-6 py-2 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700 disabled:opacity-50 text-sm">
+            {saving ? <Loader2 size={16} className="animate-spin" /> : `Save ${preview.length} to Bank`}
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal onClose={onClose} title="Import from URL">
       <div className="flex flex-col gap-5">
         <p className="text-sm text-gray-600">
-          Paste a URL to a coding problem (e.g. LeetCode) or any web page. The AI will extract questions and add them to the bank.
+          Paste a URL to a coding problem (<span className="font-semibold text-purple-600">LeetCode</span> / <span className="font-semibold text-orange-500">HackerRank</span>) or any web page. The AI will extract questions for you to review.
         </p>
         
         <div>
@@ -205,8 +361,8 @@ function ImportUrlModal({ onClose, onImport, uniqueTopics }) {
 
         <div className="flex justify-end gap-3 mt-4">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-gray-500 font-medium hover:bg-gray-100">Cancel</button>
-          <button type="button" onClick={save} disabled={saving || !url.trim()} className="flex items-center gap-2 px-6 py-2 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700 disabled:opacity-50">
-            {saving ? <Loader2 size={16} className="animate-spin" /> : "Extract & Import"}
+          <button type="button" onClick={handleExtract} disabled={saving || !url.trim()} className="flex items-center gap-2 px-6 py-2 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700 disabled:opacity-50">
+            {saving ? <Loader2 size={16} className="animate-spin" /> : "Extract & Preview"}
           </button>
         </div>
       </div>
@@ -552,45 +708,101 @@ export default function QuestionBank() {
             <p className="text-sm text-gray-500 mt-1">Adjust your filters or add new questions to the bank.</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto pr-2 pb-10 flex flex-col gap-4">
-            {filtered.map(q => (
-              <div key={q.id} className="bg-white p-5 rounded-xl border border-gray-200 flex gap-4 items-start shadow-sm hover:shadow-md transition">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    {q.topic && (
-                      <span className="px-2 py-1 bg-gray-100 border border-gray-200 text-gray-700 text-[10px] font-bold uppercase rounded flex items-center gap-1">
-                        <Folder size={10}/> {q.topic}
-                      </span>
-                    )}
-                    <span className="px-2 py-1 bg-gray-800 text-white text-[10px] font-bold uppercase rounded">
-                      {QTYPES.find(t=>t.value===q.question_type)?.label || q.question_type}
-                    </span>
-                    <span className="text-xs text-gray-500 font-medium ml-auto">Pts: {q.marks}</span>
-                  </div>
-                  
-                  <p className="text-sm font-semibold text-gray-900 mb-2 whitespace-pre-wrap">{q.question_text}</p>
-                  
-                  {q.tags && q.tags.length > 0 && (
-                    <div className="flex items-center gap-1.5 mt-3">
-                      {q.tags.map((t, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-purple-50 text-purple-600 text-[10px] font-bold uppercase rounded-full">#{t}</span>
-                      ))}
+          <div className="flex-1 overflow-y-auto pr-2 pb-10 flex flex-col gap-3">
+            {filtered.map(q => {
+              const typeInfo = QTYPES.find(t => t.value === q.question_type);
+              const TYPE_STYLES = {
+                mcq:         { bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-violet-200' },
+                mcq_multi:   { bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-200'   },
+                written:     { bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-200'  },
+                coding:      { bg: 'bg-emerald-100',text: 'text-emerald-700',border: 'border-emerald-200'},
+                file_upload: { bg: 'bg-rose-100',   text: 'text-rose-700',   border: 'border-rose-200'   },
+              };
+              const style = TYPE_STYLES[q.question_type] || { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' };
+
+              // Parse options if they're stored as a JSON string
+              let options = q.options;
+              if (typeof options === 'string') {
+                try { options = JSON.parse(options); } catch { options = null; }
+              }
+
+              // Clean tags — filter out noise like "extracted", "EXTRACTED"
+              const displayTags = (Array.isArray(q.tags) ? q.tags : [])
+                .filter(t => t && t.toLowerCase() !== 'extracted');
+
+              return (
+                <div key={q.id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                  <div className="flex gap-4 items-start p-5">
+                    <div className="flex-1 min-w-0">
+                      {/* Header: topic folder + type badge + points */}
+                      <div className="flex items-center gap-2 mb-2.5 flex-wrap">
+                        {q.topic && (
+                          <span className="px-2 py-0.5 bg-gray-100 border border-gray-200 text-gray-600 text-[10px] font-bold uppercase rounded-md flex items-center gap-1">
+                            <Folder size={9}/> {q.topic}
+                          </span>
+                        )}
+                        <span className={`px-2.5 py-0.5 text-[10px] font-bold uppercase rounded-md border ${style.bg} ${style.text} ${style.border}`}>
+                          {typeInfo?.label || q.question_type}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-medium ml-auto">
+                          {q.marks} {q.marks === 1 ? 'pt' : 'pts'}
+                        </span>
+                      </div>
+
+                      {/* Question text */}
+                      <p className="text-sm font-medium text-gray-800 leading-relaxed whitespace-pre-wrap">{q.question_text}</p>
+
+                      {/* MCQ options preview */}
+                      {(q.question_type === 'mcq' || q.question_type === 'mcq_multi') && options && Array.isArray(options) && options.length > 0 && (
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {options.map((opt, i) => {
+                            const isCorrect = q.correct_answer === opt ||
+                              (Array.isArray(q.correct_answer) && q.correct_answer.includes(opt)) ||
+                              (typeof q.correct_answer === 'string' && (() => { try { return JSON.parse(q.correct_answer).includes(opt); } catch { return false; } })());
+                            return (
+                              <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                                isCorrect
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                  : 'bg-gray-50 border-gray-100 text-gray-600'
+                              }`}>
+                                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                                  isCorrect ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500'
+                                }`}>
+                                  {String.fromCharCode(65 + i)}
+                                </span>
+                                {opt}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Tags */}
+                      {displayTags.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                          {displayTags.map((t, idx) => (
+                            <span key={idx} className="px-2 py-0.5 bg-purple-50 text-purple-600 text-[10px] font-semibold rounded-full border border-purple-100">
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                
-                {canManage && (
-                  <div className="flex items-center gap-2 shrink-0 border-l border-gray-100 pl-4 py-2">
-                    <button onClick={() => handleEdit(q)} className="p-2 text-gray-400 hover:text-purple-600 bg-gray-50 hover:bg-purple-50 rounded-lg transition" title="Edit Question">
-                      <Edit3 size={16} />
-                    </button>
-                    <button onClick={() => handleDelete(q.id)} className="p-2 text-gray-400 hover:text-rose-600 bg-gray-50 hover:bg-rose-50 rounded-lg transition" title="Delete Question">
-                      <Trash2 size={16} />
-                    </button>
+
+                    {canManage && (
+                      <div className="flex flex-col items-center gap-1.5 shrink-0 border-l border-gray-100 pl-4 py-1">
+                        <button onClick={() => handleEdit(q)} className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition" title="Edit Question">
+                          <Edit3 size={15} />
+                        </button>
+                        <button onClick={() => handleDelete(q.id)} className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Delete Question">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
