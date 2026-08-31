@@ -122,8 +122,27 @@ Respond ONLY with valid JSON: {"questions": [ ...reworded questions... ]}"""
             except Exception as e:
                 logger.error(f"Variant generation failed for user {user_id}: {e}")
 
-    def start_session(self, asm_id: int, user_id: int) -> bool:
+    def start_session(self, asm_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Start or resume a session. Returns session metadata dict or None if not assigned.
+        On a fresh start: stamps started_at, sets status='in_progress'.
+        On a resume: increments resume_count only.
+        """
         return self.repo.start_session(asm_id, user_id)
 
-    def record_strike(self, asm_id: int, user_id: int) -> Dict[str, Any]:
-        return self.repo.record_strike(asm_id, user_id)
+    def record_strike(
+        self,
+        asm_id: int,
+        user_id: int,
+        violation_name: str = "proctoring_violation",
+        flag_type: str = "proctoring_violation",
+        is_terminal: bool = False,
+    ) -> Dict[str, Any]:
+        """Record a proctoring strike and persist the violation reason."""
+        return self.repo.record_strike(
+            asm_id=asm_id,
+            user_id=user_id,
+            violation_name=violation_name,
+            flag_type=flag_type,
+            is_terminal=is_terminal,
+        )

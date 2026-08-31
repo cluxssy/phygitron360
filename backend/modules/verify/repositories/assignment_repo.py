@@ -93,10 +93,16 @@ class AssignmentRepository:
                 cur.execute(
                     """
                     UPDATE assessment_assignments
-                    SET status = %s, deadline = COALESCE(%s, deadline), updated_at = CURRENT_TIMESTAMP
+                    SET status = %s, 
+                        deadline = COALESCE(%s, deadline),
+                        started_at = CASE WHEN %s = 'pending' THEN NULL ELSE started_at END,
+                        strike_count = CASE WHEN %s = 'pending' THEN 0 ELSE strike_count END,
+                        resume_count = CASE WHEN %s = 'pending' THEN 0 ELSE resume_count END,
+                        terminated_by_proctor = CASE WHEN %s = 'pending' THEN FALSE ELSE terminated_by_proctor END,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE assessment_id = %s AND user_id = %s
                     """,
-                    (status, deadline, asm_id, user_id),
+                    (status, deadline, status, status, status, status, asm_id, user_id),
                 )
                 conn.commit()
         finally:
@@ -190,45 +196,144 @@ class AssignmentRepository:
         finally:
             conn.close()
 
-    def start_session(self, asm_id: int, user_id: int) -> bool:
-        conn = get_db_connection()
-        try:
-            with conn.cursor() as cur:
-                self._set_search_path(cur)
-                cur.execute(
-                    """
-                    UPDATE assessment_assignments
-                    SET status = 'in_progress', started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                    WHERE assessment_id = %s AND user_id = %s AND status = 'pending'
-                    RETURNING id
-                    """,
-                    (asm_id, user_id)
-                )
-                row = cur.fetchone()
-                conn.commit()
-                return bool(row)
-        finally:
-            conn.close()
-
-    def record_strike(self, asm_id: int, user_id: int, max_strikes: int = 5) -> Dict[str, Any]:
+    def start_session(self, asm_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Start or resume a session.
+        - Fresh start: sets started_at, status='in_progress'. Returns session meta.
+        - Resume (already started): increments resume_count. Returns session meta.
+        - Not assigned: returns None.
+        """
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute(
                     """
-                    UPDATE assessment_assignments
-                    SET strike_count = strike_count + 1,
-                        updated_at = CURRENT_TIMESTAMP,
-                        terminated_by_proctor = CASE WHEN strike_count + 1 >= %s THEN TRUE ELSE FALSE END,
-                        status = CASE WHEN strike_count + 1 >= %s THEN 'terminated' ELSE status END
-                    WHERE assessment_id = %s AND user_id = %s
-                    RETURNING strike_count, terminated_by_proctor
+                    SELECT aa.id, aa.started_at, aa.resume_count, aa.strike_count,
+                           aa.terminated_by_proctor, aa.proctoring_config, aa.status,
+                           a.time_limit_minutes
+                    FROM assessment_assignments aa
+                    JOIN assessments a ON a.id = aa.assessment_id
+                    WHERE aa.assessment_id = %s AND aa.user_id = %s
                     """,
-                    (max_strikes, max_strikes, asm_id, user_id)
+                    (asm_id, user_id)
                 )
                 row = cur.fetchone()
+                if not row:
+                    return None
+
+                if row['started_at'] is None:
+                    # Fresh start
+                    cur.execute(
+                        """
+                        UPDATE assessment_assignments
+                        SET status = 'in_progress', started_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE assessment_id = %s AND user_id = %s
+                        RETURNING started_at
+                        """,
+                        (asm_id, user_id)
+                    )
+                    new_row = cur.fetchone()
+                    started_at = new_row['started_at'] if new_row else None
+                    time_remaining = row['time_limit_minutes'] * 60 if row['time_limit_minutes'] else None
+                else:
+                    # Resume — bump resume_count, do NOT reset started_at
+                    cur.execute(
+                        """
+                        UPDATE assessment_assignments
+                        SET resume_count = COALESCE(resume_count, 0) + 1,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE assessment_id = %s AND user_id = %s
+                        """,
+                        (asm_id, user_id)
+                    )
+                    started_at = row['started_at']
+                    if row['time_limit_minutes'] and started_at:
+                        from datetime import datetime, timezone
+                        now = datetime.now(timezone.utc)
+                        if started_at.tzinfo is None:
+                            from datetime import timezone as tz
+                            started_at = started_at.replace(tzinfo=tz.utc)
+                        elapsed = (now - started_at).total_seconds()
+                        time_remaining = max(0, int(row['time_limit_minutes'] * 60 - elapsed))
+                    else:
+                        time_remaining = None
+
                 conn.commit()
-                return dict(row) if row else {"strike_count": 0, "terminated_by_proctor": False}
+                return {
+                    "assignment_id": row['id'],
+                    "session_already_started": row['started_at'] is not None,
+                    "strike_count": row['strike_count'] or 0,
+                    "terminated_by_proctor": row['terminated_by_proctor'] or False,
+                    "proctoring_config": row['proctoring_config'],
+                    "time_remaining_seconds": time_remaining,
+                }
+        finally:
+            conn.close()
+
+    def record_strike(
+        self,
+        asm_id: int,
+        user_id: int,
+        violation_name: str = "proctoring_violation",
+        flag_type: str = "proctoring_violation",
+        is_terminal: bool = False,
+        max_strikes: int = 5,
+    ) -> Dict[str, Any]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+
+                # Fetch current assignment
+                cur.execute(
+                    """
+                    SELECT id, strike_count, terminated_by_proctor
+                    FROM assessment_assignments
+                    WHERE assessment_id = %s AND user_id = %s
+                    """,
+                    (asm_id, user_id)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {"strike_count": 0, "terminated_by_proctor": False}
+
+                assignment_id = row['id']
+
+                # If already terminated, return current state without incrementing
+                if row['terminated_by_proctor']:
+                    return {"strike_count": row['strike_count'], "terminated_by_proctor": True}
+
+                new_count = (row['strike_count'] or 0) + 1
+                should_terminate = is_terminal or new_count >= max_strikes
+
+                cur.execute(
+                    """
+                    UPDATE assessment_assignments
+                    SET strike_count = %s,
+                        terminated_by_proctor = %s,
+                        status = CASE WHEN %s THEN 'terminated' ELSE status END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (new_count, should_terminate, should_terminate, assignment_id)
+                )
+
+                # Write detailed strike record to proctoring_strikes
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO proctoring_strikes
+                            (assignment_id, violation_name, flag_type, strike_index)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (assignment_id, violation_name, flag_type, new_count)
+                    )
+                except Exception as e:
+                    logger.warning("Failed to write proctoring_strike detail: %s", e)
+
+                conn.commit()
+                return {"strike_count": new_count, "terminated_by_proctor": should_terminate}
         finally:
             conn.close()

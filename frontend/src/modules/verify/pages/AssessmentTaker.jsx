@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -15,6 +15,8 @@ import {
   isValidURL,
   isPositiveNumber
 } from '../../../core/utils/validators';
+import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
+import { normalizeProctoringConfig } from '../proctoringConfig';
 
 export default function AssessmentTaker({ assessmentId: propAsmId }) {
   const navigate = useNavigate();
@@ -24,11 +26,12 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
 
   const [assessment, setAssessment] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+
   // States
   const [step, setStep] = useState('setup'); // setup, taking, finished
   const [stream, setStream] = useState(null);
   const [cameraError, setCameraError] = useState('');
+  const [browserSupported, setBrowserSupported] = useState(true);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -41,28 +44,42 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const startTimeRef = useRef(null);
+  const sessionStartedAtRef = useRef(null);
   const [errors, setErrors] = useState({});
-  
+  const [strikeCount, setStrikeCount] = useState(0);
+
+  // Resume state
+  const [sessionAlreadyStarted, setSessionAlreadyStarted] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+
+  // Proctoring config — derived from assignment's saved config (strictness + toggles)
+  const [savedProctoringConfig, setSavedProctoringConfig] = useState(null);
+  const proctoringConfig = useMemo(() => normalizeProctoringConfig(savedProctoringConfig), [savedProctoringConfig]);
+
   // Proctoring Refs
   const strikes = useRef(0);
-  const PROCTORING_START_GRACE_MS = 8000;
   const canvasRef = useRef(null);
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
   const speechRecognitionRef = useRef(null);
-  const faceDetectorRef = useRef(null);
-  
   const violationCooldownsRef = useRef({});
   const lastStrikeTime = useRef(0);
   const seenFaceOnceRef = useRef(false);
-  
-  const audioCalibrationRef = useRef({ samples: [], baseline: 0 });
+  const audioCalibrationRef = useRef({ samples: [], baseline: null });
+  const audioStateRef = useRef({ quietSamples: 0, lockedUntil: 0 });
   const audioViolationTimer = useRef(null);
-  const cameraViolationTimer = useRef(null);
   const cameraTrackViolationTimer = useRef(null);
-  const motionViolationTimer = useRef(null);
-  const multipleFacesTimerRef = useRef(null);
-  const backgroundMovementTimer = useRef(null);
+  const cameraObstructedTimerRef = useRef(null);
+  const lastSpeechStrikeRef = useRef({ transcript: '', time: 0 });
+
+  // MediaPipe FaceLandmarker refs (replaces skin-pixel heuristics + native FaceDetector)
+  const faceLandmarkerRef = useRef(null);
+  const faceLandmarkerReadyRef = useRef(false);
+  const gazeStrikeTimerRef = useRef(null);
+  const headTurnStrikeTimerRef = useRef(null);
+  const faceMissingTimerRef = useRef(null);
+  const multiFaceStartRef = useRef(0);
+  const multiFaceSamplesRef = useRef(0);
 
   const handleCheatAttemptRef = useRef(null);
   const submitRef = useRef(null);
@@ -74,44 +91,84 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       .then(r => r.json())
       .then(d => {
         if (d.success) {
-          setAssessment(d.data);
-          setTimeLeft(d.data.time_limit_minutes * 60);
+          const data = d.data;
+          setAssessment(data);
+
+          // Restore saved proctoring config (strictness + feature toggles)
+          if (data.proctoring_config) setSavedProctoringConfig(data.proctoring_config);
+
+          // Restore strikes from DB (survives page reloads)
+          if (data.strike_count !== undefined) {
+            strikes.current = data.strike_count;
+            setStrikeCount(data.strike_count);
+          }
+
+          // Server-authoritative timer
+          if (data.session_already_started) {
+            setSessionAlreadyStarted(true);
+            if (data.time_remaining_seconds !== null && data.time_remaining_seconds !== undefined) {
+              setTimeLeft(data.time_remaining_seconds);
+            }
+          } else if (data.time_limit_minutes) {
+            setTimeLeft(data.time_limit_minutes * 60);
+          }
         } else {
           toast.error('Failed to load assessment');
         }
       })
       .finally(() => setLoading(false));
-      
+
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
     };
   }, [asmId]);
 
-  // Timer
+  
+  const [webGlSupported, setWebGlSupported] = useState(null); // null = checking
+
   useEffect(() => {
-    if (step === 'taking' && timeLeft > 0) {
-      const timer = setInterval(() => {
-        setTimeLeft(t => {
-          if (t <= 1) {
-            clearInterval(timer);
-            submitRef.current?.(true);
-            return 0;
-          }
-          return t - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
+    // Browser check
+    const ua = navigator.userAgent;
+    const isChrome = /Chrome/.test(ua) && /Google Inc/.test(navigator.vendor);
+    const isEdge = /Edg/.test(ua);
+    const isBrave = navigator.brave !== undefined;
+    if ((!isChrome && !isEdge) || isBrave) {
+      setBrowserSupported(false);
     }
-  }, [step, timeLeft]);
+
+    // WebGL capability check — determines whether CV proctoring features work.
+    // CV features (face detection, gaze, head turn, multiple people) require WebGL.
+    // If unavailable (hardware accel disabled, VM, old GPU), those features are
+    // silently skipped and the candidate is shown which checks ARE active.
+    try {
+      const testCanvas = document.createElement('canvas');
+      const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+      setWebGlSupported(!!gl);
+      if (gl) {
+        // Release the context so we don't waste it
+        const ext = gl.getExtension('WEBGL_lose_context');
+        if (ext) ext.loseContext();
+      }
+    } catch {
+      setWebGlSupported(false);
+    }
+  }, []);
+
+  // Timer — only ticks once hasStarted (user clicked Start/Resume)
+  useEffect(() => {
+    if (!hasStarted || timeLeft === null) return;
+    if (timeLeft <= 0) { submitRef.current?.(true); return; }
+    const t = setTimeout(() => setTimeLeft(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [timeLeft, hasStarted]);
 
   const captureScreenshot = useCallback((label = 'Snapshot') => {
     if (videoRef.current && canvasRef.current) {
       const vid = videoRef.current;
       const can = canvasRef.current;
-      if (vid.readyState >= 2) { // HAVE_CURRENT_DATA or higher
-        can.width = vid.videoWidth || 640; 
+      if (vid.readyState >= 2) {
+        can.width = vid.videoWidth || 640;
         can.height = vid.videoHeight || 480;
         const ctx = can.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(vid, 0, 0, can.width, can.height);
@@ -124,28 +181,25 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
   }, []);
 
   const handleProctoringViolation = useCallback(async (actionName, eventType = 'proctoring_violation', cooldownMs = 15000) => {
-    if (step !== 'taking' || submittingRef.current) return false;
-    
-    const startedAt = startTimeRef.current || 0;
-    if (startedAt && (Date.now() - startedAt) < PROCTORING_START_GRACE_MS) return false;
+    if (!hasStarted || submittingRef.current) return false;
+
+    const GRACE_MS = proctoringConfig.grace_ms || 8000;
+    const startedAt = sessionStartedAtRef.current || 0;
+    if (startedAt && (Date.now() - startedAt) < GRACE_MS) return false;
 
     const now = Date.now();
     const lastForThisViolation = violationCooldownsRef.current[actionName] || 0;
-    if (now - lastForThisViolation < cooldownMs) return false;   // blocked by per-violation cooldown
-    if (now - lastStrikeTime.current < 1000) return false;        // min 1s between any two strikes
-    
+    if (now - lastForThisViolation < cooldownMs) return false;
+    if (now - lastStrikeTime.current < 1000) return false;
+
     violationCooldownsRef.current[actionName] = now;
     lastStrikeTime.current = now;
 
     strikes.current++;
+    setStrikeCount(strikes.current);
     captureScreenshot(`Cheat: ${actionName}`);
 
-    const detailStr = actionName;
-    const evt = {
-      type: eventType,
-      timestamp: new Date().toISOString(),
-      details: detailStr
-    };
+    const evt = { type: eventType, timestamp: new Date().toISOString(), details: actionName };
     pgEvents.current.push(evt);
     setProctoringEvents(prev => [...prev, evt]);
 
@@ -160,9 +214,7 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
           const reader = new FileReader();
           reader.readAsDataURL(blob);
           reader.onloadend = () => {
-             const audioEvt = { type: 'audio_snippet', details: reader.result, timestamp: new Date().toISOString() };
-             pgEvents.current.push(audioEvt);
-             setProctoringEvents(prev => [...prev, audioEvt]);
+            pgEvents.current.push({ type: 'audio_snippet', details: reader.result, timestamp: new Date().toISOString() });
           };
         };
         recorder.start();
@@ -170,68 +222,81 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       } catch (e) { console.error('Snippet capture failed:', e); }
     }
 
+    const MAX_STRIKES = proctoringConfig.max_strikes || 5;
+    const isTerminal = strikes.current >= MAX_STRIKES;
+
     try {
       const r = await fetch(`/api/verify/assignments/${asmId}/record-strike`, {
-        method: 'POST', credentials: 'include'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          violation_name: actionName,
+          flag_type: eventType,
+          is_terminal: isTerminal,
+        }),
       });
       const d = await r.json();
-      if (d.data?.terminated_by_proctor) {
+      if (d.data?.terminated_by_proctor || isTerminal) {
         toast.error('Assessment terminated due to excessive proctoring violations.', { duration: 5000 });
         submitRef.current?.(true);
       } else {
-        toast.error(`Warning: ${detailStr}!`, { icon: '⚠️', duration: 4000 });
+        toast.error(`Warning: ${actionName}! (Strike ${strikes.current}/${MAX_STRIKES})`, { icon: '⚠️', duration: 4000 });
       }
-    } catch(e){}
+    } catch (e) { console.error('Strike record failed', e); }
     return true;
-  }, [step, asmId, captureScreenshot]);
+  }, [hasStarted, asmId, captureScreenshot, proctoringConfig]);
 
-  useEffect(() => { submitRef.current = handleSubmit; }, [answers, proctoringEvents]); // will define handleSubmit later properly, just a ref sync
+  useEffect(() => { submitRef.current = handleSubmit; }, [answers, proctoringEvents]);
   useEffect(() => { handleCheatAttemptRef.current = handleProctoringViolation; }, [handleProctoringViolation]);
 
   // Periodic screenshots
   useEffect(() => {
-    if (step !== 'taking') return;
+    if (!hasStarted) return;
     const t0 = setTimeout(() => captureScreenshot('Initial Snapshot'), 5000);
     const t1 = setInterval(() => captureScreenshot('Periodic Screenshot'), 60000);
     return () => { clearTimeout(t0); clearInterval(t1); };
-  }, [step, captureScreenshot]);
+  }, [hasStarted, captureScreenshot]);
 
-  // Tab & Fullscreen monitors
+  // Tab & Fullscreen monitors — respect proctoringConfig feature toggles
   useEffect(() => {
-    if (step !== 'taking') return;
+    if (!hasStarted) return;
     const handleVisibility = () => {
-      if (document.hidden) handleProctoringViolation('Tab switching');
+      if (document.hidden && proctoringConfig.tab_switch !== false) {
+        handleProctoringViolation('Tab Switching / Window Change', 'tab_switch',
+          proctoringConfig.tab_switch_cooldown_ms || 15000);
+      }
     };
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) handleProctoringViolation('Exiting fullscreen');
+      if (!document.fullscreenElement && proctoringConfig.full_screen !== false) {
+        handleProctoringViolation('Exited Full Screen', 'proctoring_violation', 10000);
+      }
     };
-    
+
+    const handleBlur = () => {
+      if (proctoringConfig.tab_switch !== false) {
+        handleProctoringViolation('Window Lost Focus / Clicked Away', 'tab_switch', proctoringConfig.tab_switch_cooldown_ms || 15000);
+      }
+    };
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('blur', handleBlur);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
     };
-  }, [step, handleProctoringViolation]);
+  }, [hasStarted, proctoringConfig, handleProctoringViolation]);
 
-  // Advanced Computer Vision & Audio Analysis Loop
+  // ── MediaPipe FaceLandmarker + Audio proctoring loop ──────────────────────────
   useEffect(() => {
-    if (step !== 'taking') return;
+    if (!hasStarted) return;
 
-    // Auto-seed seenFaceOnceRef after 10 s
-    const seedTimer = setTimeout(() => {
-      if (!seenFaceOnceRef.current) seenFaceOnceRef.current = true;
-    }, 10000);
-
-    // Initialize native FaceDetector (Chrome, behind flag)
-    if ('FaceDetector' in window && !faceDetectorRef.current) {
-      try { faceDetectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 4 }); }
-      catch (_) { faceDetectorRef.current = null; }
-    }
-
-    // LAYER 1: SpeechRecognition
+    // ── LAYER 1: SpeechRecognition ─────────────────────────────────────────────
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
+    if (SpeechRecognition && proctoringConfig.audio_detect) {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -243,18 +308,21 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
         if (!transcript) return;
         const highConfidenceInterim = !last.isFinal && (last[0]?.confidence || 0) >= 0.85 && transcript.length >= 3;
         if (last.isFinal || highConfidenceInterim) {
+          const last_ = lastSpeechStrikeRef.current;
+          const now_ = Date.now();
+          if (transcript === last_.transcript && now_ - last_.time < 12000) return;
+          lastSpeechStrikeRef.current = { transcript, time: now_ };
           handleCheatAttemptRef.current?.('Speaking Detected During Assessment', 'audio_detected', 8000);
         }
       };
-      recognition.onerror = (e) => {
-        if (e.error !== 'no-speech' && e.error !== 'aborted') console.warn('SR error:', e.error);
-      };
+      recognition.onerror = (e) => { if (e.error !== 'no-speech' && e.error !== 'aborted') console.warn('SR:', e.error); };
       recognition.onend = () => { try { recognition.start(); } catch (_) {} };
       try { recognition.start(); } catch (_) {}
       speechRecognitionRef.current = recognition;
     }
 
-    // LAYER 2: Web Audio (every 500ms)
+    // ── LAYER 2: Web Audio FFT (murmur detection, every 500ms) ────────────────
+    const VOICE_SUSTAIN_MS = proctoringConfig.voice_sustain_ms || 3200;
     const audioInterval = setInterval(() => {
       if (!analyserRef.current || !audioCtxRef.current) return;
       const fftSize = analyserRef.current.fftSize;
@@ -287,8 +355,9 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
 
       if (isVoiceLike) {
         if (!audioViolationTimer.current) audioViolationTimer.current = Date.now();
-        if (Date.now() - audioViolationTimer.current > 1500) {
-          const fired = handleCheatAttemptRef.current?.('Voice / Audio Detected Near Microphone', 'audio_detected', 8000);
+        if (Date.now() - audioViolationTimer.current > VOICE_SUSTAIN_MS) {
+          const fired = handleCheatAttemptRef.current?.('Voice / Audio Detected Near Microphone', 'audio_detected',
+            proctoringConfig.audio_cooldown_ms || 45000);
           if (fired) audioViolationTimer.current = null;
         }
       } else {
@@ -297,184 +366,248 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       }
     }, 500);
 
-    // LAYER 3 & 4: CV / FACE (every 1800ms)
-    const cvInterval = setInterval(async () => {
-      const vid = videoRef.current;
-      const videoTrack = streamRef.current?.getVideoTracks?.()[0];
-      const trackDead = !videoTrack || videoTrack.readyState !== 'live' || videoTrack.muted || !videoTrack.enabled;
-
-      if (trackDead) {
-        if (!cameraTrackViolationTimer.current) cameraTrackViolationTimer.current = Date.now();
-        if (Date.now() - cameraTrackViolationTimer.current > 1500) {
-          handleCheatAttemptRef.current?.('Camera Disabled or Unavailable', 'camera_disabled', 15000);
+    // ── LAYER 3: Camera track health check (every 2s) ─────────────────────────
+    const trackHealthInterval = setInterval(() => {
+        const videoTrack = streamRef.current?.getVideoTracks?.()[0];
+        const trackDead = !videoTrack || videoTrack.readyState !== 'live' || videoTrack.muted || !videoTrack.enabled;
+        if (trackDead) {
+          if (!cameraTrackViolationTimer.current) cameraTrackViolationTimer.current = Date.now();
+          if (Date.now() - cameraTrackViolationTimer.current > 2000) {
+            handleCheatAttemptRef.current?.('Camera Disabled or Unavailable', 'camera_disabled', 15000);
+            cameraTrackViolationTimer.current = null;
+          }
+        } else {
           cameraTrackViolationTimer.current = null;
         }
-        return;
-      }
-      cameraTrackViolationTimer.current = null;
+      }, 2000);
+
+    // ── LAYER 4: MediaPipe FaceLandmarker CV detection (every 250ms) ──────────
+    let rafId = null;
+    let lastCvTs = 0;
+    const CV_INTERVAL_MS = 250;
+
+    const FACE_SUSTAIN   = proctoringConfig.face_missing_sustain_ms || 7000;
+    const GAZE_SUSTAIN   = proctoringConfig.gaze_averted_sustain_ms || 4000;
+    const HEAD_SUSTAIN   = proctoringConfig.head_turn_sustain_ms || 6000;
+    const MULTI_SUSTAIN  = proctoringConfig.multiple_people_sustain_ms || 6000;
+    const MULTI_SAMPLES  = proctoringConfig.multiple_people_min_samples || 3;
+
+    const runCV = async (ts) => {
+      rafId = requestAnimationFrame(runCV);
+      if (ts - lastCvTs < CV_INTERVAL_MS) return;
+      lastCvTs = ts;
+
+      const vid = videoRef.current;
       if (!vid || vid.readyState < 2 || vid.videoWidth === 0) return;
 
+      // ── Camera obstruction check (brightness) ─────────────────────────────
+      // avgBright of a normal lit room is ~80-150. Dark room / covered = <20.
       const can = canvasRef.current;
-      if (!can) return;
-      const ctx = can.getContext('2d', { willReadFrequently: true });
-      const W = 160, H = 120;
-      can.width = W; can.height = H;
-      ctx.drawImage(vid, 0, 0, W, H);
-      const data = ctx.getImageData(0, 0, W, H).data;
-
-      let brightness = 0;
-      for (let i = 0; i < data.length; i += 4) brightness += (data[i] + data[i+1] + data[i+2]) / 3;
-      const avgBright = brightness / (W * H);
-
-      if (avgBright < 15) {
-        if (!cameraViolationTimer.current) cameraViolationTimer.current = Date.now();
-        if (Date.now() - cameraViolationTimer.current > 2000) {
-          handleCheatAttemptRef.current?.('Camera Obstructed / Covered', 'camera_obstructed', 15000);
-          cameraViolationTimer.current = null;
-        }
-      } else {
-        cameraViolationTimer.current = null;
-      }
-
-      // Skin-pixel analysis
-      const faceZoneH = Math.floor(H * 0.70);
-      const skinHistogram = new Array(W).fill(0);
-      let totalSkinPixels = 0;
-      let centerSkinPixels = 0;
-      const cStartX = Math.floor(W * 0.20);
-      const cEndX   = Math.floor(W * 0.80);
-
-      for (let i = 0; i < data.length; i += 4) {
-        const px = i / 4, x = px % W, y = Math.floor(px / W);
-        if (y >= faceZoneH) continue;
-        const r = data[i], g = data[i+1], b = data[i+2];
-        const isSkin = (
-          r > 50 && g > 20 && b > 10 &&
-          r > g && r > b &&
-          (r - Math.min(g, b)) > 10 &&
-          Math.max(r, g, b) - Math.min(r, g, b) > 10
-        );
-        if (isSkin) {
-          skinHistogram[x]++;
-          totalSkinPixels++;
-          if (x >= cStartX && x < cEndX) centerSkinPixels++;
+      if (can) {
+        const ctx = can.getContext('2d', { willReadFrequently: true });
+        can.width = 80; can.height = 60;
+        ctx.drawImage(vid, 0, 0, 80, 60);
+        const px = ctx.getImageData(0, 0, 80, 60).data;
+        let bright = 0;
+        for (let i = 0; i < px.length; i += 4) bright += (px[i] + px[i+1] + px[i+2]) / 3;
+        const avgBright = bright / (80 * 60);
+        // Fire only when very dark (hand/finger covering lens)
+        if (avgBright < 20) {
+          if (!cameraObstructedTimerRef.current) cameraObstructedTimerRef.current = Date.now();
+          if (Date.now() - cameraObstructedTimerRef.current > 2000) {
+            handleCheatAttemptRef.current?.('Camera Obstructed / Covered', 'camera_obstructed', 15000);
+            cameraObstructedTimerRef.current = Date.now();
+          }
+        } else {
+          cameraObstructedTimerRef.current = null;
         }
       }
 
-      const overallRatio = totalSkinPixels / (W * faceZoneH);
-      
-      // Native FaceDetector
-      if (faceDetectorRef.current && vid.readyState >= 2) {
-        try {
-          const faces = await faceDetectorRef.current.detect(vid);
-          const frameArea = (vid.videoWidth || 1) * (vid.videoHeight || 1);
-          const sigFaces = faces.filter(f => {
-            const box = f.boundingBox;
-            if (!box) return false;
-            return (box.width * box.height) / frameArea >= 0.030;
-          });
+      if (!faceLandmarkerReadyRef.current || !faceLandmarkerRef.current) return;
 
-          if (sigFaces.length >= 1) {
-            seenFaceOnceRef.current = true;
-            motionViolationTimer.current = null;
-          } else if (seenFaceOnceRef.current) {
-            if (!motionViolationTimer.current) motionViolationTimer.current = Date.now();
-            else if (Date.now() - motionViolationTimer.current > 7000) {
-              handleCheatAttemptRef.current?.('Face Not Visible — Please Stay in Frame', 'person_not_visible', 12000);
-              captureScreenshot('Face Not Visible');
-              motionViolationTimer.current = null;
-            }
-          }
-
-          if (sigFaces.length >= 2) {
-            if (!multipleFacesTimerRef.current) multipleFacesTimerRef.current = Date.now();
-            else if (Date.now() - multipleFacesTimerRef.current > 5000) {
-              handleCheatAttemptRef.current?.(`Multiple People in Camera (${sigFaces.length} faces)`, 'proctoring_violation', 45000);
-              multipleFacesTimerRef.current = null;
-            }
-          } else {
-            multipleFacesTimerRef.current = null;
-          }
-          return;
-        } catch (_) { }
+      // ── MediaPipe FaceLandmarker detectForVideo ────────────────────────────
+      let result;
+      try {
+        result = faceLandmarkerRef.current.detectForVideo
+          ? faceLandmarkerRef.current.detectForVideo(vid, Math.floor(ts))  // MediaPipe
+          : await faceLandmarkerRef.current.detect(vid);                   // FaceDetector fallback
+      } catch (e) {
+        console.error('[Proctoring] CV detect error:', e);
+        return;
       }
 
-      // Pixel-heuristic Fallback
-      const facePresent = avgBright > 12 && overallRatio > 0.007;
-      const faceMissing = avgBright > 16 && overallRatio < 0.003;
+      // Normalise result shape: MediaPipe uses faceLandmarks[], FaceDetector uses array directly
+      const isMp = !!result?.faceLandmarks;
+      const faces         = isMp ? (result.faceLandmarks || [])              : (result || []);
+      const blendshapes   = isMp ? (result.faceBlendshapes || [])            : [];
+      const matrices      = isMp ? (result.facialTransformationMatrixes || []) : [];
 
-      if (facePresent) {
+      // ── Face present / missing ─────────────────────────────────────────────
+      if (faces.length >= 1) {
         seenFaceOnceRef.current = true;
-        motionViolationTimer.current = null;
-      } else if (seenFaceOnceRef.current && faceMissing) {
-        if (!motionViolationTimer.current) motionViolationTimer.current = Date.now();
-        else if (Date.now() - motionViolationTimer.current > 7000) {
-          handleCheatAttemptRef.current?.('Face Not Visible — Please Stay in Frame', 'person_not_visible', 12000);
-          captureScreenshot('Face Not Visible');
-          motionViolationTimer.current = null;
-        }
-      } else if (!faceMissing) {
-        motionViolationTimer.current = null;
-      }
-
-      const smoothed = [...skinHistogram];
-      for (let x = 2; x < W - 2; x++) {
-        smoothed[x] = (skinHistogram[x-2] + skinHistogram[x-1] + skinHistogram[x] + skinHistogram[x+1] + skinHistogram[x+2]) / 5;
-      }
-
-      const peakThreshold = faceZoneH * 0.20;
-      const peaks = [];
-      let inPeak = false, pkStart = 0;
-      for (let x = 0; x < W; x++) {
-        if (smoothed[x] > peakThreshold) {
-          if (!inPeak) { inPeak = true; pkStart = x; }
-        } else if (inPeak) {
-          inPeak = false;
-          peaks.push({ start: pkStart, end: x, width: x - pkStart });
-        }
-      }
-      if (inPeak) peaks.push({ start: pkStart, end: W, width: W - pkStart });
-
-      const MIN_PEAK_W = 20;
-      const MAX_PEAK_W = 70;
-      const facePeaks = peaks.filter(p => p.width >= MIN_PEAK_W && p.width <= MAX_PEAK_W);
-      const MIN_GAP_PX = Math.floor(W * 0.20);
-      let hasWellSeparatedPair = false;
-      for (let i = 0; i < facePeaks.length - 1; i++) {
-        if (facePeaks[i + 1].start - facePeaks[i].end >= MIN_GAP_PX) {
-          hasWellSeparatedPair = true;
-          break;
+        if (faceMissingTimerRef.current) { clearTimeout(faceMissingTimerRef.current); faceMissingTimerRef.current = null; }
+      } else if (seenFaceOnceRef.current && proctoringConfig.face_not_visible) {
+        if (!faceMissingTimerRef.current) {
+          faceMissingTimerRef.current = setTimeout(() => {
+            faceMissingTimerRef.current = null;
+            handleCheatAttemptRef.current?.('Face Not Visible — Please Stay in Frame', 'person_not_visible', 12000);
+            captureScreenshot('Face Not Visible');
+          }, FACE_SUSTAIN);
         }
       }
 
-      if (hasWellSeparatedPair && avgBright > 16 && overallRatio > 0.05) {
-        if (!backgroundMovementTimer.current) backgroundMovementTimer.current = Date.now();
-        else if (Date.now() - backgroundMovementTimer.current > 6000) {
-          handleCheatAttemptRef.current?.('Multiple People Detected in Camera', 'proctoring_violation', 45000);
-          backgroundMovementTimer.current = null;
+      // ── Multiple people ────────────────────────────────────────────────────
+      if (proctoringConfig.multiple_people) {
+        if (faces.length >= 2) {
+          multiFaceSamplesRef.current++;
+          if (multiFaceStartRef.current === 0) multiFaceStartRef.current = Date.now();
+          const elapsed = Date.now() - multiFaceStartRef.current;
+          if (elapsed >= MULTI_SUSTAIN && multiFaceSamplesRef.current >= MULTI_SAMPLES) {
+            handleCheatAttemptRef.current?.(`Multiple People Detected in Camera (${faces.length} faces)`, 'proctoring_violation', 45000);
+            multiFaceStartRef.current = 0;
+            multiFaceSamplesRef.current = 0;
+          }
+        } else {
+          multiFaceStartRef.current = 0;
+          multiFaceSamplesRef.current = 0;
+        }
+      }
+
+      if (faces.length === 0) {
+        if (gazeStrikeTimerRef.current)    { clearTimeout(gazeStrikeTimerRef.current); gazeStrikeTimerRef.current = null; }
+        if (headTurnStrikeTimerRef.current){ clearTimeout(headTurnStrikeTimerRef.current); headTurnStrikeTimerRef.current = null; }
+        return;
+      }
+
+      // ── Gaze & Head turn — MediaPipe blendshapes + transformation matrix ──
+      let gazeAverted = false;
+      let headTurnDetected = false;
+
+      if (isMp && blendshapes.length > 0) {
+        // MediaPipe: precise blendshape-based gaze + 3D matrix head pose
+        const bs = blendshapes[0]?.categories || [];
+        const get = (name) => bs.find(c => c.categoryName === name)?.score ?? 0;
+        const GAZE_H = 0.55, GAZE_V = 0.60;
+        gazeAverted = proctoringConfig.eye_tracking && (
+          get('eyeLookOutLeft') > GAZE_H || get('eyeLookInLeft') > GAZE_H ||
+          get('eyeLookOutRight') > GAZE_H || get('eyeLookInRight') > GAZE_H ||
+          get('eyeLookUpRight') > GAZE_V  || get('eyeLookDownRight') > GAZE_V
+        );
+        if (proctoringConfig.head_turn && matrices.length > 0) {
+          const m = matrices[0].data;
+          if (m && m.length >= 16) {
+            const yawDeg = Math.abs(Math.asin(Math.max(-1, Math.min(1, -m[2]))) * 180 / Math.PI);
+            headTurnDetected = yawDeg > 20;
+          }
+        }
+      } else if (!isMp) {
+        // FaceDetector fallback: approximate from landmark geometry
+        const lms = faces[0].landmarks || [];
+        const box = faces[0].boundingBox;
+        if (lms.length >= 2 && box) {
+          const rightEye = lms[0], leftEye = lms[1];
+          const eyeMidX = (rightEye.x + leftEye.x) / 2;
+          const bboxCenterX = box.x + box.width / 2;
+          headTurnDetected = proctoringConfig.head_turn &&
+            Math.abs(eyeMidX - bboxCenterX) / (box.width || 1) > 0.18;
+          const eyeSpanX = Math.abs(leftEye.x - rightEye.x);
+          const eyeOffsetNorm = Math.abs(eyeMidX - bboxCenterX) / (box.width || 1);
+          gazeAverted = proctoringConfig.eye_tracking &&
+            (eyeOffsetNorm > 0.22 || eyeSpanX / (box.width || 1) < 0.20);
+        }
+      }
+
+      if (gazeAverted) {
+        if (!gazeStrikeTimerRef.current) {
+          gazeStrikeTimerRef.current = setTimeout(() => {
+            gazeStrikeTimerRef.current = null;
+            handleCheatAttemptRef.current?.('Looking Away from Screen', 'gaze_averted', 8000);
+          }, GAZE_SUSTAIN);
         }
       } else {
-        backgroundMovementTimer.current = null;
+        if (gazeStrikeTimerRef.current) { clearTimeout(gazeStrikeTimerRef.current); gazeStrikeTimerRef.current = null; }
       }
-    }, 1800);
+
+      if (headTurnDetected) {
+        if (!headTurnStrikeTimerRef.current) {
+          headTurnStrikeTimerRef.current = setTimeout(() => {
+            headTurnStrikeTimerRef.current = null;
+            handleCheatAttemptRef.current?.('Head Turned Away from Screen', 'head_turn', 10000);
+          }, HEAD_SUSTAIN);
+        }
+      } else {
+        if (headTurnStrikeTimerRef.current) { clearTimeout(headTurnStrikeTimerRef.current); headTurnStrikeTimerRef.current = null; }
+      }
+    };
+
+    // ── Face detector init: MediaPipe primary, FaceDetector fallback ──────────
+    // MediaPipe provides blendshape-based gaze + 3D matrix head-pose (most accurate).
+    // FaceDetector (browser built-in) used as fallback if MediaPipe init fails
+    // (e.g. model download failure).
+    (async () => {
+      if (!faceLandmarkerReadyRef.current) {
+        try {
+          const vision = await FilesetResolver.forVisionTasks('/mediapipe-wasm');
+          // Provide a DOM canvas so emscripten can bind its WebGL context to it.
+          // Without this, emscripten tries to create its own OffscreenCanvas and fails.
+          const mpCanvas = document.createElement('canvas');
+          mpCanvas.width = 1; mpCanvas.height = 1;
+          mpCanvas.style.position = 'fixed';
+          mpCanvas.style.top = '-9999px';
+          mpCanvas.style.left = '-9999px';
+          document.body.appendChild(mpCanvas);
+
+          faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+              delegate: 'GPU',
+            },
+            canvas: mpCanvas,
+            runningMode: 'VIDEO',
+            numFaces: 3,
+            outputFaceBlendshapes: true,
+            outputFacialTransformationMatrixes: true,
+          });
+          faceLandmarkerReadyRef.current = true;
+          console.log('[Proctoring] MediaPipe FaceLandmarker ready ✓ (blendshapes + head-pose active)');
+        } catch (e) {
+          console.warn('[Proctoring] MediaPipe failed, trying native FaceDetector fallback:', e.message);
+          // Fallback: browser built-in FaceDetector (no WASM, no extra GL context)
+          if ('FaceDetector' in window) {
+            try {
+              faceLandmarkerRef.current = new window.FaceDetector({ maxDetectedFaces: 4, fastMode: false });
+              faceLandmarkerReadyRef.current = true;
+              console.log('[Proctoring] FaceDetector fallback ready ✓ (gaze/head-turn via geometry)');
+            } catch (e2) {
+              console.warn('[Proctoring] FaceDetector fallback also failed:', e2.message);
+            }
+          }
+        }
+      }
+      // seed seenFaceOnceRef after 10s regardless
+      setTimeout(() => { if (!seenFaceOnceRef.current) seenFaceOnceRef.current = true; }, 10000);
+      rafId = requestAnimationFrame(runCV);
+    })();
+
+
 
     return () => {
-      clearTimeout(seedTimer);
+      if (rafId) cancelAnimationFrame(rafId);
       clearInterval(audioInterval);
-      clearInterval(cvInterval);
+      clearInterval(trackHealthInterval);
       if (speechRecognitionRef.current) {
         speechRecognitionRef.current.onend = null;
         try { speechRecognitionRef.current.abort(); } catch (_) {}
         speechRecognitionRef.current = null;
       }
+      if (gazeStrikeTimerRef.current)    { clearTimeout(gazeStrikeTimerRef.current); gazeStrikeTimerRef.current = null; }
+      if (headTurnStrikeTimerRef.current) { clearTimeout(headTurnStrikeTimerRef.current); headTurnStrikeTimerRef.current = null; }
+      if (faceMissingTimerRef.current)   { clearTimeout(faceMissingTimerRef.current); faceMissingTimerRef.current = null; }
       audioViolationTimer.current = null;
-      cameraViolationTimer.current = null;
       cameraTrackViolationTimer.current = null;
-      motionViolationTimer.current = null;
-      multipleFacesTimerRef.current = null;
-      backgroundMovementTimer.current = null;
+      cameraObstructedTimerRef.current = null;
     };
-  }, [step]);
+  }, [hasStarted, proctoringConfig]);
 
 
   const requestCamera = async () => {
@@ -502,7 +635,7 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       toast.error('Camera & Mic access required to start');
       return;
     }
-    
+
     // Initialize Web Audio Context requiring user gesture
     if (!audioCtxRef.current) {
       try {
@@ -523,12 +656,35 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     try {
       const r = await fetch(`/api/verify/assignments/${asmId}/start-session`, {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
       });
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen rejected by browser', e));
+      const d = await r.json();
+      if (d.success && d.data) {
+        // Restore server-side state (strikes, time) on every start/resume
+        if (d.data.strike_count !== undefined) {
+          strikes.current = d.data.strike_count;
+          setStrikeCount(d.data.strike_count);
+        }
+        if (d.data.time_remaining_seconds !== null && d.data.time_remaining_seconds !== undefined) {
+          setTimeLeft(d.data.time_remaining_seconds);
+        }
+        if (d.data.proctoring_config) setSavedProctoringConfig(d.data.proctoring_config);
+        if (d.data.terminated_by_proctor) {
+          toast.error('This assessment was terminated due to proctoring violations.');
+          return;
+        }
       }
+
+      // Fullscreen (only if configured)
+      if (proctoringConfig.full_screen !== false) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen rejected', e));
+        }
+      }
+
+      sessionStartedAtRef.current = Date.now();
       setStep('taking');
+      setHasStarted(true);
       startTimeRef.current = Date.now();
     } catch (e) {
       toast.error('Failed to start session');
@@ -646,6 +802,7 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
           <p className="text-gray-500 mt-2">{assessment.description}</p>
         </div>
         
+        {browserSupported ? (
         <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6">
           <h2 className="text-sm font-bold uppercase tracking-wider text-purple-600 border-b border-purple-200 pb-4">Proctoring Setup</h2>
           
@@ -678,6 +835,46 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
             <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Time limit: {assessment.time_limit_minutes} minutes.</li>
           </ul>
 
+          {/* Proctoring capability status — always show what's active */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Active Proctoring Checks</p>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {[
+                { label: 'Tab Switch & Window Focus', active: true, note: '' },
+                { label: 'Fullscreen Exit Detection', active: true, note: '' },
+                { label: 'Audio / Speech Detection', active: true, note: '' },
+                { label: 'Camera Obstruction (Brightness)', active: !!stream, note: stream ? '' : 'Requires camera' },
+                { label: 'Face Not Visible', active: !!stream, note: stream ? '' : 'Requires camera' },
+                { label: 'Multiple People Detected', active: !!stream, note: stream ? '' : 'Requires camera' },
+                { label: 'Gaze & Eye Tracking', active: !!stream, note: stream ? (webGlSupported === false ? '(Geometry mode — limited accuracy)' : '') : 'Requires camera' },
+                { label: 'Head Turn Detection', active: !!stream, note: stream ? (webGlSupported === false ? '(Geometry mode — limited accuracy)' : '') : 'Requires camera' },
+              ].map(({ label, active, note }) => (
+                <div key={label} className="flex items-center justify-between px-4 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    {active
+                      ? <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                      : <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                    }
+                    <span className={`text-xs font-medium ${active ? 'text-gray-700' : 'text-gray-400'}`}>{label}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {!active && note && (
+                      <span className="text-xs text-amber-500 font-medium">{note}</span>
+                    )}
+                    {active && note && (
+                      <span className="text-xs text-gray-400">{note}</span>
+                    )}
+                    {active && (
+                      <span className="text-xs text-emerald-500 font-semibold">Active</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <button 
             onClick={startAssessment}
             disabled={!stream} 
@@ -686,6 +883,17 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
             Start Assessment
           </button>
         </div>
+        ) : (
+          <div className="bg-white rounded-2xl p-8 border border-rose-200 shadow-sm space-y-6 text-center">
+            <AlertTriangle size={48} className="text-rose-500 mx-auto mb-2 opacity-80" />
+            <h2 className="text-xl font-bold text-gray-800">Unsupported Browser</h2>
+            <p className="text-sm text-gray-600 leading-relaxed max-w-md mx-auto">
+              For security and proctoring reliability, this assessment must be taken using <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>. 
+              <br/><br/>
+              Please copy the assessment link and open it in a supported browser to continue.
+            </p>
+          </div>
+        )}
       </div>
     );
   }

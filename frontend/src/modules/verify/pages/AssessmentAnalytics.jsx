@@ -1,10 +1,117 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Users, Award, ShieldAlert, Clock, Loader2, ChevronDown, ChevronUp, AlertTriangle, Play, Image as ImageIcon } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Award, ShieldAlert, CheckCircle, Clock, Loader2, ChevronDown, ChevronUp, AlertTriangle, Play, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useOverlayClose from '../../../core/hooks/useOverlayClose';
 import { useAuth } from '../../../core/auth/AuthContext';
+
+
+// ── Single Question Answer Block ──────────────────────────────────────────────
+function AnswerBlock({ question, answer, scoreObj }) {
+  const qt = question.question_type;
+  const actualScore = scoreObj != null && typeof scoreObj === 'object' ? scoreObj.score : scoreObj;
+  const maxMarks = (scoreObj != null && typeof scoreObj === 'object' && scoreObj.max != null)
+    ? scoreObj.max
+    : (parseFloat(question.marks) || 0);
+  const hasScore = actualScore !== undefined && actualScore !== null;
+  const scoreColor = !hasScore ? 'text-gray-500' : actualScore > 0 ? 'text-emerald-600' : 'text-rose-600';
+
+  return (
+    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mb-3">
+      {/* Header row */}
+      <div className="flex justify-between items-start gap-3 flex-wrap mb-2">
+        <span className="text-[0.78rem] font-bold text-gray-500 uppercase tracking-wider">
+          {qt?.replace(/_/g, ' ')}
+        </span>
+        {hasScore ? (
+          <span className={`font-bold text-[0.82rem] ${scoreColor}`}>
+            {actualScore > 0 ? '✅' : '❌'} {actualScore}/{maxMarks} marks
+          </span>
+        ) : (
+          <span className="text-[0.78rem] text-gray-500">{maxMarks} marks</span>
+        )}
+      </div>
+
+      {/* Question text */}
+      <div className="text-[0.92rem] font-medium mb-3 leading-relaxed text-gray-800">
+        {question.question_text}
+      </div>
+
+      {/* MCQ */}
+      {qt === 'mcq' && (
+        <div className="flex flex-col gap-2">
+          {(question.options || []).map((opt, i) => {
+            const isSelected = answer === opt;
+            const isCorrect = question.correct_answer === opt;
+            let bg = 'bg-transparent', border = 'border-gray-200', icon = null;
+            if (isSelected && isCorrect) { bg = 'bg-emerald-50'; border = 'border-emerald-500'; icon = '✅'; }
+            else if (isSelected && !isCorrect) { bg = 'bg-rose-50'; border = 'border-rose-500'; icon = '❌'; }
+            else if (!isSelected && isCorrect) { bg = 'bg-emerald-50/50'; border = 'border-emerald-500 border-dashed'; icon = '✓'; }
+            return (
+              <div key={i} className={`flex justify-between py-2 px-3 rounded-lg border text-[0.85rem] ${bg} ${border}`}>
+                <span>{opt}</span>
+                {icon && <span className="font-bold">{icon}</span>}
+              </div>
+            );
+          })}
+          {!answer && <div className="text-gray-500 text-[0.82rem] italic mt-1">Not answered</div>}
+        </div>
+      )}
+
+      {/* MCQ Multi */}
+      {qt === 'mcq_multi' && (() => {
+        const ansArr = Array.isArray(answer) ? answer : [];
+        let corrArr = [];
+        try {
+          corrArr = typeof question.correct_answer === 'string' && question.correct_answer.startsWith('[')
+            ? JSON.parse(question.correct_answer)
+            : [question.correct_answer];
+        } catch { corrArr = [question.correct_answer]; }
+        return (
+          <div className="flex flex-col gap-2">
+            {(question.options || []).map((opt, i) => {
+              const isSelected = ansArr.includes(opt);
+              const isCorrect = corrArr.includes(opt);
+              let bg = 'bg-transparent', border = 'border-gray-200', icon = null;
+              if (isSelected && isCorrect) { bg = 'bg-emerald-50'; border = 'border-emerald-500'; icon = '✅'; }
+              else if (isSelected && !isCorrect) { bg = 'bg-rose-50'; border = 'border-rose-500'; icon = '❌'; }
+              else if (!isSelected && isCorrect) { bg = 'bg-emerald-50/50'; border = 'border-emerald-500 border-dashed'; icon = '✓'; }
+              return (
+                <div key={i} className={`flex justify-between items-center py-2 px-3 rounded-lg border text-[0.85rem] ${bg} ${border}`}>
+                  <label className="flex items-center gap-2 m-0 cursor-default">
+                    <input type="checkbox" checked={isSelected} readOnly className="pointer-events-none rounded text-purple-600" />
+                    <span>{opt}</span>
+                  </label>
+                  {icon && <span className="font-bold">{icon}</span>}
+                </div>
+              );
+            })}
+            {ansArr.length === 0 && <div className="text-gray-500 text-[0.82rem] italic mt-1">Not answered</div>}
+          </div>
+        );
+      })()}
+
+      {/* Written / Fill in */}
+      {(qt === 'written' || qt === 'fill_in') && (
+        <div className="bg-white border border-gray-200 rounded-lg p-3 text-[0.87rem] whitespace-pre-wrap text-gray-700 min-h-[3rem]">
+          {answer || <span className="text-gray-400 italic">No answer provided</span>}
+        </div>
+      )}
+
+      {/* Coding */}
+      {qt === 'coding' && (() => {
+        let code = '';
+        try { const p = typeof answer === 'string' ? JSON.parse(answer) : answer; code = p?.code || answer || ''; } catch { code = answer || ''; }
+        return (
+          <pre className="bg-[#1E1B4B] text-[#A5B4FC] p-3 rounded-lg text-[0.78rem] overflow-x-auto m-0 font-mono max-h-[280px] overflow-y-auto">
+            {code || 'No code submitted'}
+          </pre>
+        );
+      })()}
+    </div>
+  );
+}
 
 export default function AssessmentAnalytics({ assessmentId: initialAssessmentId }) {
   const { hasPermission } = useAuth();
@@ -419,122 +526,149 @@ export default function AssessmentAnalytics({ assessmentId: initialAssessmentId 
     );
   };
 
-  const renderEvidencePanel = (details) => {
+    const renderEvidencePanel = (details) => {
     if (!details) return <div className="text-rose-500 text-sm">Failed to load details</div>;
     
+    // Parse candidate answers
+    let answersObj = {};
+    let scoresObj = {};
+    try { answersObj = typeof details.answers === 'string' ? JSON.parse(details.answers) : (details.answers || {}); } catch(e) {}
+    try { scoresObj = typeof details.scores_per_question === 'string' ? JSON.parse(details.scores_per_question) : (details.scores_per_question || {}); } catch(e) {}
+    
+    const questions = details.assessment?.questions || [];
+    
+    // Proctoring Data
     const flags = details.flags || [];
-    if (flags.length === 0 && !details.is_malpractice) {
-      return (
-        <div className="text-center py-6">
-          <Award size={32} className="text-emerald-400 mx-auto mb-2" />
-          <p className="text-gray-600 text-sm font-medium">Clean session. No proctoring events recorded.</p>
-        </div>
-      );
-    }
-
-    // Sort flags chronologically (assuming ID correlates or use timestamp from details if present)
+    const hasProctoring = flags.length > 0 || details.is_malpractice;
+    
     const screenshots = flags.filter(f => f.flag_type === 'screenshot');
     const audioClips = flags.filter(f => f.flag_type === 'audio_snippet');
     const violations = flags.filter(f => f.flag_type !== 'screenshot' && f.flag_type !== 'audio_snippet');
 
     return (
-      <div className="space-y-6">
-        <h4 className="font-bold text-gray-800 flex items-center gap-2">
-          <ShieldAlert className="text-purple-600" size={18} /> Proctoring Evidence Report
-        </h4>
+      <div className="space-y-10">
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Violation Log */}
-          <div className="lg:col-span-1 bg-white rounded-xl border border-rose-100 shadow-sm p-4">
-            <h5 className="text-xs font-semibold text-rose-700 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <AlertTriangle size={14} /> Violation Log
-            </h5>
-            {violations.length === 0 ? (
-              <p className="text-xs text-gray-500 italic">No direct violations flagged.</p>
-            ) : (
-              <ul className="space-y-3">
-                {violations.map(v => {
-                  let data = {};
-                  try {
-                    data = typeof v.details === 'string' ? JSON.parse(v.details) : (v.details || {});
-                  } catch(e) {}
-                  
-                  // Handle legacy data where flag_type was the violation name
-                  const eventName = data.violation || data.details || v.flag_type;
-                  const timeStr = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date(v.created_at).toLocaleTimeString();
-
-                  return (
-                    <li key={v.id} className="text-sm p-2 bg-rose-50 rounded-lg border border-rose-100">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="font-bold text-rose-800 uppercase text-xs">{eventName.replace(/_/g, ' ')}</span>
-                      </div>
-                      <p className="text-xs text-rose-600">{timeStr}</p>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
-
-          {/* Media Evidence */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Screenshots */}
+        {/* Submissions Review (Candidate Answers) */}
+        <div className="space-y-4">
+          <h4 className="font-bold text-gray-800 flex items-center gap-2">
+            <CheckCircle className="text-emerald-600" size={18} /> Candidate Responses
+          </h4>
+          
+          {questions.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">No question details available.</p>
+          ) : (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-              <h5 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <ImageIcon size={14} /> Screen Captures
-              </h5>
-              {screenshots.length === 0 ? (
-                <p className="text-xs text-gray-500 italic">No screenshots available.</p>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                  {screenshots.map(s => {
-                    let src = '';
-                    try {
-                      const data = typeof s.details === 'string' ? JSON.parse(s.details) : s.details;
-                      src = data.image || data;
-                    } catch(e) {}
-                    
-                    return (
-                      <div 
-                        key={s.id} 
-                        className="aspect-video bg-gray-900 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all group relative"
-                        onClick={() => setLightboxImage({ src, type: 'Screenshot', time: s.created_at })}
-                      >
-                        <img src={src} alt="Snapshot" className="w-full h-full object-cover opacity-80 group-hover:opacity-100" />
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+              {questions.map(q => (
+                <AnswerBlock 
+                  key={q.id} 
+                  question={q} 
+                  answer={answersObj[q.id]} 
+                  scoreObj={scoresObj[q.id]} 
+                />
+              ))}
             </div>
+          )}
+        </div>
 
-            {/* Audio Snippets */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-              <h5 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Play size={14} /> Audio Recordings
-              </h5>
-              {audioClips.length === 0 ? (
-                <p className="text-xs text-gray-500 italic">No audio recorded.</p>
-              ) : (
-                <div className="space-y-3">
-                  {audioClips.map(a => {
-                    let src = '';
-                    try {
-                      const data = typeof a.details === 'string' ? JSON.parse(a.details) : a.details;
-                      src = data.audio || data;
-                    } catch(e) {}
-                    
-                    return (
-                      <div key={a.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-100">
-                        <audio controls src={src} className="h-8 w-full max-w-sm" />
-                        <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(a.created_at).toLocaleTimeString()}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+        {/* Proctoring Evidence */}
+        <div className="space-y-4 border-t border-purple-100 pt-6">
+          <h4 className="font-bold text-gray-800 flex items-center gap-2">
+            <ShieldAlert className="text-purple-600" size={18} /> Proctoring Evidence Report
+          </h4>
+          
+          {!hasProctoring ? (
+            <div className="text-center py-6 bg-white rounded-xl border border-emerald-100">
+              <Award size={32} className="text-emerald-400 mx-auto mb-2" />
+              <p className="text-gray-600 text-sm font-medium">Clean session. No proctoring events recorded.</p>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Violation Log */}
+              <div className="lg:col-span-1 bg-white rounded-xl border border-rose-100 shadow-sm p-4">
+                <h5 className="text-xs font-semibold text-rose-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <AlertTriangle size={14} /> Violation Log
+                </h5>
+                {violations.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">No direct violations flagged.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {violations.map(v => {
+                      let data = {};
+                      try { data = typeof v.details === 'string' ? JSON.parse(v.details) : (v.details || {}); } catch(e) {}
+                      const eventName = data.violation || data.details || v.flag_type;
+                      const timeStr = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date(v.created_at).toLocaleTimeString();
+                      return (
+                        <li key={v.id} className="text-sm p-2 bg-rose-50 rounded-lg border border-rose-100">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="font-bold text-rose-800 uppercase text-xs">{eventName.replace(/_/g, ' ')}</span>
+                          </div>
+                          <p className="text-xs text-rose-600">{timeStr}</p>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {/* Media Evidence */}
+              <div className="lg:col-span-2 space-y-4">
+                {/* Screenshots */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                  <h5 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <ImageIcon size={14} /> Screen Captures
+                  </h5>
+                  {screenshots.length === 0 ? (
+                    <p className="text-xs text-gray-500 italic">No screenshots available.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {screenshots.map(s => {
+                        let src = '';
+                        try {
+                          const data = typeof s.details === 'string' ? JSON.parse(s.details) : s.details;
+                          src = data.image || data;
+                        } catch(e) {}
+                        return (
+                          <div 
+                            key={s.id} 
+                            className="aspect-video bg-gray-900 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all group relative"
+                            onClick={() => setLightboxImage({ src, type: 'Screenshot', time: s.created_at })}
+                          >
+                            <img src={src} alt="Snapshot" className="w-full h-full object-cover opacity-80 group-hover:opacity-100" />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Audio Snippets */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                  <h5 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Play size={14} /> Audio Recordings
+                  </h5>
+                  {audioClips.length === 0 ? (
+                    <p className="text-xs text-gray-500 italic">No audio recorded.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {audioClips.map(a => {
+                        let src = '';
+                        try {
+                          const data = typeof a.details === 'string' ? JSON.parse(a.details) : a.details;
+                          src = data.audio || data;
+                        } catch(e) {}
+                        return (
+                          <div key={a.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                            <audio controls src={src} className="h-8 w-full max-w-sm" />
+                            <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(a.created_at).toLocaleTimeString()}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

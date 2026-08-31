@@ -28,6 +28,11 @@ class AssignRequest(BaseModel):
     question_ids: Optional[List[int]] = None # Optional subset of questions to assign
     shuffle_questions: bool = False         # Whether to shuffle per user
 
+class RecordStrikeRequest(BaseModel):
+    violation_name: str = "proctoring_violation"
+    flag_type: str = "proctoring_violation"
+    is_terminal: bool = False   # True when MAX_STRIKES is reached on the client
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/verify/assignments", tags=["Verify - Assignments"])
 
@@ -119,7 +124,7 @@ def list_candidates(
     return {"success": True, "data": rows}
 
 # ---------------------------------------------------------------------------
-# 4. POST /{asm_id}/start-session — mark assessment as started
+# 4. POST /{asm_id}/start-session — mark assessment as started (or resumed)
 # ---------------------------------------------------------------------------
 
 @router.post("/{asm_id}/start-session")
@@ -128,30 +133,43 @@ async def start_assessment_session(
     current_user: dict = Depends(get_current_user),
     service: AssignmentService = Depends(get_assignment_service),
 ):
-    """Mark the assessment status as 'in_progress' and record start time."""
-    success = service.start_session(asm_id, current_user["id"])
-    if not success:
-        raise HTTPException(status_code=400, detail="Cannot start session. It may be already started or not assigned.")
-    
-    # Broadcast to HR
+    """
+    Mark the assessment as started. If already started (resume scenario),
+    increments resume_count and returns session state without resetting the timer.
+    """
+    result = service.start_session(asm_id, current_user["id"])
+    if result is None:
+        raise HTTPException(status_code=400, detail="Cannot start session. It may not be assigned to you.")
+
+    # Broadcast to HR live monitor
     asyncio.create_task(notify_live_monitor(asm_id, "session_started", current_user["id"]))
-    
-    return {"success": True, "message": "Session started"}
+
+    return {"success": True, "data": result, "message": "Session started"}
 
 # ---------------------------------------------------------------------------
-# 5. POST /{asm_id}/record-strike — increment strike count
+# 5. POST /{asm_id}/record-strike — increment strike count + log violation reason
 # ---------------------------------------------------------------------------
 
 @router.post("/{asm_id}/record-strike")
 async def record_proctoring_strike(
     asm_id: int,
+    body: RecordStrikeRequest,
     current_user: dict = Depends(get_current_user),
     service: AssignmentService = Depends(get_assignment_service),
 ):
-    """Increment strike count. Will terminate if limit reached."""
-    result = service.record_strike(asm_id, current_user["id"])
-    
-    # Broadcast to HR
+    """
+    Increment strike count and persist the violation reason to proctoring_strikes.
+    Will terminate the assignment if is_terminal=True.
+    """
+    result = service.record_strike(
+        asm_id=asm_id,
+        user_id=current_user["id"],
+        violation_name=body.violation_name,
+        flag_type=body.flag_type,
+        is_terminal=body.is_terminal,
+    )
+
+    # Broadcast to HR live monitor
     asyncio.create_task(notify_live_monitor(asm_id, "strike_recorded", current_user["id"], result))
-    
+
     return {"success": True, "data": result, "message": "Strike recorded"}

@@ -12,6 +12,7 @@ import CandidateDashboard from './CandidateDashboard';
 import QuestionBank from './QuestionBank';
 import LiveMonitor from './LiveMonitor';
 import AssessmentDashboard from './AssessmentDashboard';
+import ProctoringSettings from './ProctoringSettings';
 
 import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
@@ -77,6 +78,7 @@ export default function VerifyDashboard() {
       case 'bank': return <QuestionBank />;
       case 'live': return <LiveMonitor />;
       case 'candidate': return <CandidateDashboard />;
+      case 'proctoring': return <ProctoringSettings />;
       default: return isManagementAvailable ? <ManageAssessments /> : <CandidateDashboard />;
     }
   };
@@ -117,6 +119,15 @@ export default function VerifyDashboard() {
       fetchHeaderStats();
     }
   }, [isManagementAvailable, verifyView, showHeader]);
+
+
+  if (tab === 'take') {
+    return (
+      <div className="w-full min-h-screen bg-gray-50 p-4 md:p-8 light-theme-override">
+        {renderContent()}
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-page light-theme-override" style={{ backgroundColor: '#FFFFFF' }}>
@@ -176,8 +187,8 @@ export default function VerifyDashboard() {
               <button
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
                   verifyView === 'management'
-                    ? 'bg-white text-purple-700 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                    ? '!bg-black !text-white shadow-md'
+                    : 'text-black/60 hover:bg-white'
                 }`}
                 onClick={() => { setVerifyView('management'); setTab('dashboard'); }}
               >
@@ -186,8 +197,8 @@ export default function VerifyDashboard() {
               <button
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
                   verifyView === 'personal'
-                    ? 'bg-white text-purple-700 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                    ? '!bg-black !text-white shadow-md'
+                    : 'text-black/60 hover:bg-white'
                 }`}
                 onClick={() => { setVerifyView('personal'); setTab('candidate'); }}
               >
@@ -217,6 +228,11 @@ export default function VerifyDashboard() {
               )}
               {canViewMonitoring && (
                 <button className={tab === 'live' ? 'active' : ''} onClick={() => setTab('live')}>Live Monitor</button>
+              )}
+              {canManageAssessments && (
+                <button className={tab === 'proctoring' ? 'active' : ''} onClick={() => setTab('proctoring')}>
+                  <Shield size={13} className="inline mr-1.5" />Proctoring
+                </button>
               )}
             </>
           )}

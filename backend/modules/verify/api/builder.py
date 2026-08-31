@@ -73,7 +73,7 @@ def get_assessment_service(current_user: dict = Depends(get_current_user)) -> As
 
 class QuestionIn(BaseModel):
     question_text: str
-    question_type: str  # mcq | mcq_multi | coding | written | file_upload
+    question_type: str  # mcq | mcq_multi | coding | written | file_upload | fill_in
     options: List[Any] = []
     correct_answer: Optional[str] = None
     model_answer: Optional[str] = None
@@ -85,6 +85,16 @@ class QuestionIn(BaseModel):
     marks: float = 1.0
     order_index: int = 0
     images: List[str] = []
+    tags: List[str] = []
+    section_id: Optional[str] = None
+    difficulty: Optional[str] = "medium"
+
+
+class SectionIn(BaseModel):
+    id: str           # client-generated e.g. "sec_1"
+    title: str
+    instructions: Optional[str] = None
+    time_limit_minutes: Optional[int] = None
 
 
 class AssessmentCreate(BaseModel):
@@ -96,6 +106,7 @@ class AssessmentCreate(BaseModel):
     shuffle_questions: bool = False
     show_result_immediately: bool = True
     questions: List[QuestionIn] = []
+    sections: List[SectionIn] = []
 
 
 class AssessmentUpdate(BaseModel):
@@ -106,6 +117,8 @@ class AssessmentUpdate(BaseModel):
     pass_score: Optional[float] = None
     shuffle_questions: Optional[bool] = None
     show_result_immediately: Optional[bool] = None
+    sections: Optional[List[SectionIn]] = None
+    questions: Optional[List[QuestionIn]] = None
 
 
 class StatusUpdate(BaseModel):
@@ -166,8 +179,58 @@ def get_assessment_stats(
     return {"success": True, "data": stats}
 
 # ---------------------------------------------------------------------------
-# 2. GET /assessments — list assessments (with question count)
+# Proctoring Settings — GET and PUT global defaults stored in tenants.settings
 # ---------------------------------------------------------------------------
+
+class ProctoringDefaultsBody(BaseModel):
+    proctoring_defaults: Dict[str, Any]
+
+@router.get("/proctoring-settings")
+def get_proctoring_settings(
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+):
+    """Return the tenant's global proctoring defaults."""
+    from backend.core.database import get_db_connection
+    from psycopg2.extras import RealDictCursor
+    tenant_id = current_user.get("tenant_id", "public")
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT settings FROM public.tenants WHERE id = %s", (tenant_id,))
+            row = cur.fetchone()
+            settings = dict(row["settings"]) if row and row["settings"] else {}
+    finally:
+        conn.close()
+    return {"success": True, "data": {"proctoring_defaults": settings.get("proctoring_defaults", {})}}
+
+@router.put("/proctoring-settings")
+def update_proctoring_settings(
+    body: ProctoringDefaultsBody,
+    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+):
+    """Persist the tenant's global proctoring defaults."""
+    from backend.core.database import get_db_connection
+    from psycopg2.extras import RealDictCursor
+    import json as _json
+    tenant_id = current_user.get("tenant_id", "public")
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Read existing settings first so we don't overwrite unrelated keys
+            cur.execute("SELECT settings FROM public.tenants WHERE id = %s", (tenant_id,))
+            row = cur.fetchone()
+            settings = dict(row["settings"]) if row and row["settings"] else {}
+            settings["proctoring_defaults"] = body.proctoring_defaults
+            cur.execute(
+                "UPDATE public.tenants SET settings = %s WHERE id = %s",
+                (_json.dumps(settings), tenant_id)
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"success": True, "message": "Proctoring settings saved."}
+
+
 
 @router.get("/assessments")
 def list_assessments(
@@ -185,12 +248,59 @@ def list_assessments(
 @router.get("/assessments/{asm_id}")
 def get_assessment(
     asm_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.view")),
+    current_user: dict = Depends(get_current_user),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     asm = service.get_assessment(asm_id)
     if not asm:
         raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Merge current user's assignment state so the frontend can restore proctoring
+    # state (strikes, timer, config) without a separate API call.
+    try:
+        from backend.core.database import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        from datetime import datetime, timezone
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(f'SET search_path TO "{current_user.get("tenant_id", "public")}"')
+            cur.execute(
+                """
+                SELECT aa.id AS assignment_id, aa.strike_count, aa.terminated_by_proctor,
+                       aa.proctoring_config, aa.started_at, aa.status
+                FROM assessment_assignments aa
+                WHERE aa.assessment_id = %s AND aa.user_id = %s
+                LIMIT 1
+                """,
+                (asm_id, current_user["id"])
+            )
+            row = cur.fetchone()
+        conn.close()
+
+        if row:
+            started_at = row['started_at']
+            session_already_started = started_at is not None
+
+            time_remaining = None
+            if session_already_started and asm.get('time_limit_minutes'):
+                now = datetime.now(timezone.utc)
+                if started_at.tzinfo is None:
+                    started_at = started_at.replace(tzinfo=timezone.utc)
+                elapsed = (now - started_at).total_seconds()
+                time_remaining = max(0, int(asm['time_limit_minutes'] * 60 - elapsed))
+
+            asm.update({
+                "assignment_id": row['assignment_id'],
+                "strike_count": row['strike_count'] or 0,
+                "terminated_by_proctor": row['terminated_by_proctor'] or False,
+                "proctoring_config": row['proctoring_config'],
+                "session_already_started": session_already_started,
+                "time_remaining_seconds": time_remaining,
+            })
+    except Exception as e:
+        logger.warning("Could not fetch assignment state for assessment %s: %s", asm_id, e)
+
     return {"success": True, "data": asm}
 
 # ---------------------------------------------------------------------------
@@ -204,20 +314,81 @@ def update_assessment(
     current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssessmentService = Depends(get_assessment_service),
 ):
-    updates = {k: v for k, v in body.dict().items() if v is not None}
-    if not updates:
-        raise HTTPException(status_code=422, detail="No fields to update")
+    import json as _json
+    from backend.core.database import get_db_connection
 
+    # Scalar fields that map directly to the assessments table
+    SCALAR_FIELDS = {"title", "description", "type", "time_limit_minutes", "pass_score",
+                     "shuffle_questions", "show_result_immediately"}
+
+    updates: Dict[str, Any] = {}
+    body_data = body.dict(exclude_unset=True)
+
+    for k, v in body_data.items():
+        if k in SCALAR_FIELDS and v is not None:
+            updates[k] = v
+
+    if "sections" in body_data and body_data["sections"] is not None:
+        updates["sections"] = _json.dumps([s if isinstance(s, dict) else s.dict() for s in body_data["sections"]])
+
+    tenant_id = current_user.get("tenant_id", "public")
+    conn = get_db_connection()
     try:
-        success = service.update_assessment(asm_id, updates)
-        if not success:
-            raise HTTPException(status_code=404, detail="Assessment not found")
-        return {"success": True, "message": "Assessment updated"}
-    except HTTPException:
-        raise
+        with conn.cursor() as cur:
+            cur.execute(f'SET search_path TO "{tenant_id}"')
+
+            # Update scalar columns if any
+            if updates:
+                set_clauses = ", ".join(f"{k} = %s" for k in updates)
+                values = list(updates.values()) + [asm_id]
+                cur.execute(
+                    f"UPDATE assessments SET {set_clauses}, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND is_deleted = FALSE",
+                    values,
+                )
+
+            # Full question replacement when questions list is provided
+            if "questions" in body_data and body_data["questions"] is not None:
+                cur.execute("DELETE FROM assessment_questions WHERE assessment_id = %s", (asm_id,))
+                for q in body_data["questions"]:
+                    qd = q if isinstance(q, dict) else q.dict()
+                    cur.execute('''
+                        INSERT INTO assessment_questions
+                        (assessment_id, question_text, question_type, options, correct_answer,
+                         model_answer, starter_code, test_cases, programming_language,
+                         accepted_file_types, skill_id, marks, order_index, tags, images,
+                         section_id, difficulty)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ''', (
+                        asm_id,
+                        qd.get("question_text"),
+                        qd.get("question_type"),
+                        _json.dumps(qd.get("options", [])),
+                        qd.get("correct_answer"),
+                        qd.get("model_answer"),
+                        qd.get("starter_code"),
+                        _json.dumps(qd.get("test_cases", [])),
+                        qd.get("programming_language"),
+                        qd.get("accepted_file_types"),
+                        qd.get("skill_id"),
+                        qd.get("marks", 1.0),
+                        qd.get("order_index", 0),
+                        _json.dumps(qd.get("tags", [])),
+                        _json.dumps(qd.get("images", [])),
+                        qd.get("section_id"),
+                        qd.get("difficulty", "medium"),
+                    ))
+
+        conn.commit()
     except Exception as e:
+        conn.rollback()
         logger.exception("Failed to update assessment %s: %s", asm_id, e)
-        raise HTTPException(status_code=500, detail="Something went wrong while updating the assessment. Please try again.")
+        raise HTTPException(status_code=500, detail="Something went wrong while updating the assessment.")
+    finally:
+        conn.close()
+
+    return {"success": True, "message": "Assessment updated"}
+
+
 
 # ---------------------------------------------------------------------------
 # 5. DELETE /assessments/{asm_id} — soft delete
@@ -353,13 +524,23 @@ async def import_from_url(
         if not qdata:
             raise HTTPException(status_code=502, detail="Could not fetch problem from LeetCode")
 
-        # Strip HTML from content
-        content_html = qdata.get("content", "") or ""
-        try:
-            from bs4 import BeautifulSoup
-            content_text = BeautifulSoup(content_html, "html.parser").get_text(separator="\n")
-        except Exception:
-            content_text = re.sub(r"<[^>]+>", "", content_html)
+        # Convert HTML to Markdown
+        text = qdata.get("content", "") or ""
+        text = re.sub(r'<strong>(.*?)</strong>', r'**\1**', text, flags=re.DOTALL)
+        text = re.sub(r'<b>(.*?)</b>', r'**\1**', text, flags=re.DOTALL)
+        text = re.sub(r'<em>(.*?)</em>', r'*\1*', text, flags=re.DOTALL)
+        text = re.sub(r'<i>(.*?)</i>', r'*\1*', text, flags=re.DOTALL)
+        text = re.sub(r'<code>(.*?)</code>', r'`\1`', text, flags=re.DOTALL)
+        text = re.sub(r'<pre>(.*?)</pre>', r'```\n\1\n```', text, flags=re.DOTALL)
+        text = re.sub(r'<ul>', r'', text)
+        text = re.sub(r'</ul>', r'', text)
+        text = re.sub(r'<li>(.*?)</li>', r'- \1\n', text, flags=re.DOTALL)
+        text = re.sub(r'<p>(.*?)</p>', r'\1\n\n', text, flags=re.DOTALL)
+        text = re.sub(r'<sup>(.*?)</sup>', r'^\1', text, flags=re.DOTALL)
+        text = re.sub(r'<sub>(.*?)</sub>', r'_\1', text, flags=re.DOTALL)
+        text = re.sub(r'<[^>]+>', '', text)  # strip remaining tags BEFORE unescaping
+        text = text.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"').replace('&#39;', "'")
+        content_text = text.strip()
 
         # Grab Python starter code
         starter_code = ""
@@ -372,13 +553,15 @@ async def import_from_url(
             if snippets:
                 starter_code = snippets[0].get("code", "")
 
-        # Build test cases from exampleTestcases
-        raw_tc = (qdata.get("exampleTestcases") or "").strip()
+        # Build test cases from the Markdown content (Example blocks)
+        tc_matches = re.findall(r'\*\*Input:\*\*(.*?)\n\*\*Output:\*\*(.*?)(?=\n|$)', content_text, re.IGNORECASE)
         test_cases = []
-        for line in raw_tc.split("\n"):
-            if line.strip():
-                test_cases.append({"input": line.strip(), "expected_output": ""})
-        # Ensure at least 3 (pad with empty)
+        for inp, out in tc_matches:
+            test_cases.append({
+                "input": inp.strip(),
+                "expected_output": out.strip()
+            })
+        
         while len(test_cases) < 3:
             test_cases.append({"input": "", "expected_output": ""})
 

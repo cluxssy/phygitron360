@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus, Loader2, RefreshCw, Filter, Trash2, Edit3, Users,
   BarChart2, Send, ChevronDown, Clock, FileText, CheckCircle,
@@ -30,7 +31,7 @@ const STATUSES = ['draft', 'active', 'closed'];
 function Modal({ onClose, title, children }) {
   useEscapeClose(onClose);
   const overlayHandlers = useOverlayClose(onClose);
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...overlayHandlers}>
       <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
@@ -39,7 +40,8 @@ function Modal({ onClose, title, children }) {
         <h2 className="text-xl font-bold text-gray-800 mb-6">{title}</h2>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
