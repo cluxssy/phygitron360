@@ -3,11 +3,12 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { P } from '../../../core/permissions';
-import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle, Sparkles, Gift } from 'lucide-react';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
 import CorrectionSystem from './CorrectionSystem';
+import HolidayManagementPanel from './HolidayManagementPanel';
 import { getInitials } from '../../../core/utils/nameHelpers';
 
 export default function AttendancePanel({ mode }) {
@@ -31,6 +32,8 @@ export default function AttendancePanel({ mode }) {
   const [myLeaves, setMyLeaves] = useState([]);
   const [allLeaves, setAllLeaves] = useState([]);
   const [dailyLog, setDailyLog] = useState([]);
+  const [holidaysList, setHolidaysList] = useState([]);
+  const [employeeTab, setEmployeeTab] = useState('attendance');
   const [loading, setLoading] = useState(true);
   const [workLog, setWorkLog] = useState('');
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -95,14 +98,29 @@ export default function AttendancePanel({ mode }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
+  const parseResJson = async (res) => {
+    if (!res.ok) {
+      let msg = 'Request failed';
+      try {
+        const data = await res.json();
+        msg = data.detail || msg;
+      } catch {
+        try {
+          const text = await res.text();
+          msg = text || res.statusText || msg;
+        } catch {
+          msg = res.statusText || msg;
+        }
+      }
+      throw new Error(msg);
+    }
+    return res.json();
+  };
+
   const fetchSummary = async () => {
       try {
           const res = await fetch(`/api/attendance/admin/summary?year=${selectedYear}&month=${selectedMonth}`, { credentials: 'include' });
-          if (!res.ok) {
-              const d = await res.json();
-              throw new Error(d.detail || 'Failed to load summary');
-          }
-          const data = await res.json();
+          const data = await parseResJson(res);
           setAttendanceSummary(Array.isArray(data) ? data : []);
       } catch (e) { toast.error(e.message || 'Failed to load summary'); }
   };
@@ -110,29 +128,37 @@ export default function AttendancePanel({ mode }) {
   const loadData = async () => {
   setLoading(true);
   try {
+    const fetchSafe = (url, fallback = []) =>
+      fetch(url, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : fallback)
+        .catch(() => fallback);
+
     if (user?.employee_code) {
-        const [s, h, b, ml] = await Promise.all([
-          fetch('/api/attendance/status', { credentials: 'include' }).then(r => r.json()),
-          fetch('/api/attendance/history', { credentials: 'include' }).then(r => r.json()),
-          fetch('/api/attendance/leave/balance', { credentials: 'include' }).then(r => r.json()),
-          fetch('/api/attendance/leave/my-requests', { credentials: 'include' }).then(r => r.json()),
+        const [s, h, b, ml, hl] = await Promise.all([
+          fetchSafe('/api/attendance/status', null),
+          fetchSafe('/api/attendance/history', []),
+          fetchSafe('/api/attendance/leave/balance', null),
+          fetchSafe('/api/attendance/leave/my-requests', []),
+          fetchSafe('/api/attendance/holidays', [])
         ]);
         setStatus(s);
         setHistory(Array.isArray(h) ? h : []);
         setLeaveBalance(b);
         setMyLeaves(Array.isArray(ml) ? ml : []);
+        setHolidaysList(Array.isArray(hl) ? hl : []);
     }
 
     if (isAdmin) {
-      const [al, dl, el, cq] = await Promise.all([
-        fetch('/api/attendance/leave/all-requests', { credentials: 'include' }).then(r => r.json()),
-        fetch('/api/attendance/admin/today', { credentials: 'include' }).then(r => r.json()),
-        // ── USE THE SAME EMPLOYEE API AS ASSETS PANEL ──
-        fetch('/api/employees', { credentials: 'include' }).then(r => r.json()),
-        fetch('/api/attendance/correction/pending-requests', { credentials: 'include' }).then(r => r.json()).catch(() => []),
+      const [al, dl, el, cq, hl] = await Promise.all([
+        fetchSafe('/api/attendance/leave/all-requests', []),
+        fetchSafe('/api/attendance/admin/today', []),
+        fetchSafe('/api/employees', []),
+        fetchSafe('/api/attendance/correction/pending-requests', []),
+        fetchSafe('/api/attendance/holidays', [])
       ]);
       setAllLeaves(Array.isArray(al) ? al : []);
       setDailyLog(Array.isArray(dl) ? dl : []);
+      setHolidaysList(Array.isArray(hl) ? hl : []);
       
       // ── FILTER ACTIVE EMPLOYEES (SAME LOGIC AS ASSETS PANEL) ──
       const employeeList = Array.isArray(el) ? el : [];
@@ -143,11 +169,7 @@ export default function AttendancePanel({ mode }) {
         emp.is_active === true
       );
       
-      console.log('All employees:', employeeList.length);
-      console.log('Active employees:', active.length);
-      
       setEmployees(employeeList);
-      // ── Store active employees for the dropdown ──
       setActiveEmployees(active);
       setCorrectionQueue(Array.isArray(cq) ? cq : []);
     }
@@ -301,18 +323,49 @@ export default function AttendancePanel({ mode }) {
 
   const isSingleDay = !leaveForm.end_date || leaveForm.start_date === leaveForm.end_date;
   let durationDays = 0;
+  let excludedHolidayCount = 0;
+  let holidayNamesInRange = [];
+
   if (leaveForm.start_date && leaveForm.end_date) {
     const s = new Date(leaveForm.start_date);
     const e = new Date(leaveForm.end_date);
     if (e >= s) {
-      let days = Math.ceil(Math.abs(e - s) / (1000 * 60 * 60 * 24)) + 1;
-      if (isSingleDay) {
-         if (leaveForm.start_day_type === 'First Half' || leaveForm.start_day_type === 'Second Half') {
-            days = 0.5;
-         }
-      } else {
-         if (leaveForm.start_day_type === 'Second Half') days -= 0.5;
-         if (leaveForm.end_day_type === 'First Half') days -= 0.5;
+      const holidayDatesMap = {};
+      holidaysList.forEach(h => {
+        holidayDatesMap[h.date] = h;
+      });
+
+      let curr = new Date(s);
+      let days = 0;
+
+      while (curr <= e) {
+        const dStr = curr.toISOString().split('T')[0];
+        const isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+        const holiday = holidayDatesMap[dStr];
+
+        if (holiday) {
+          excludedHolidayCount++;
+          if (!holidayNamesInRange.includes(holiday.name)) {
+            holidayNamesInRange.push(holiday.name);
+          }
+          if (holiday.is_half_day) {
+            days += 0.5;
+          }
+        } else if (!isWeekend) {
+          if (isSingleDay) {
+            if (leaveForm.start_day_type === 'First Half' || leaveForm.start_day_type === 'Second Half') {
+              days += 0.5;
+            } else {
+              days += 1.0;
+            }
+          } else {
+            let dayVal = 1.0;
+            if (dStr === leaveForm.start_date && leaveForm.start_day_type === 'Second Half') dayVal = 0.5;
+            if (dStr === leaveForm.end_date && leaveForm.end_day_type === 'First Half') dayVal = 0.5;
+            days += dayVal;
+          }
+        }
+        curr.setDate(curr.getDate() + 1);
       }
       durationDays = days;
     }
@@ -376,12 +429,13 @@ export default function AttendancePanel({ mode }) {
       {isAdmin && (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div onKeyDown={handleTabKeyNav} className="flex gap-2">
+            <div onKeyDown={handleTabKeyNav} className="flex flex-wrap gap-2">
                 {[
                 { id: 'today', label: "Daily Log", icon: Users },
                 { id: 'leaves', label: 'Absence Queue', icon: Clock },
                 { id: 'corrections', label: 'Corrections Queue', icon: Edit },
                 { id: 'heatmap', label: 'Team Attendance Overview', icon: BarChart3 },
+                { id: 'holidays', label: 'Company Holidays', icon: Gift },
                 { id: 'search', label: 'Employee Search', icon: Search },
                 ].map(t => (
                 <button key={t.id} onClick={() => setAdminTab(t.id)}
@@ -487,6 +541,12 @@ export default function AttendancePanel({ mode }) {
             </div>
           )}
 
+          {adminTab === 'holidays' && (
+            <div className="animate-fade-in-up">
+              <HolidayManagementPanel isAdmin={true} />
+            </div>
+          )}
+
           {/* TEAM ATTENDANCE OVERVIEW TAB */}
           {adminTab === 'heatmap' && (
               <div className="space-y-4 animate-fade-in-up">
@@ -571,6 +631,8 @@ export default function AttendancePanel({ mode }) {
                                               cellStyle = { backgroundColor: '#EF4444' };
                                           } else if (d.status === 'Leave') {
                                               cellStyle = { backgroundColor: '#3B82F6' };
+                                          } else if (d.status === 'Holiday' || d.status.startsWith('Holiday')) {
+                                              cellStyle = { backgroundColor: '#A855F7', boxShadow: '0 0 8px rgba(168,85,247,0.3)' };
                                           } else if (d.status === 'Weekend' || d.status === 'No Data') {
                                               cellStyle = { backgroundColor: '#E5E7EB' };
                                           }
@@ -579,7 +641,7 @@ export default function AttendancePanel({ mode }) {
                                               <td key={di} className="h-[40px] w-[32px] border-r border-[#ebe7f5] text-center align-middle">
                                                   <div className="flex items-center justify-center w-full h-full">
                                                       <div
-                                                          title={`${d.date}: ${d.status}`}
+                                                          title={d.holiday_name ? `${d.date}: Holiday (${d.holiday_name})` : `${d.date}: ${d.status}`}
                                                           className={`w-[24px] h-[24px] rounded-[6px] hover:scale-110 transition-all duration-200 cursor-pointer ${extraClass}`}
                                                           style={cellStyle}
                                                       />
@@ -600,6 +662,7 @@ export default function AttendancePanel({ mode }) {
                               { label: 'Absent', dotColor: '#EF4444', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
                               { label: 'Leave', dotColor: '#3B82F6', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
                               { label: 'Half Day (Leave)', dotColor: '#8B5CF6', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+                              { label: 'Holiday', dotColor: '#A855F7', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
                               { label: 'Weekend / No Data', dotColor: '#E5E7EB', bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' },
                           ].map(l => (
                               <div key={l.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${l.bg} ${l.text} border ${l.border}`}>
@@ -768,33 +831,64 @@ export default function AttendancePanel({ mode }) {
 
       {/* History & Correction Systems */}
       {!isAdmin && (
-        <div className="space-y-8">
-            <CorrectionSystem isManager={false} />
-            <div className="grid grid-cols-1 gap-8">              {/* Absence History */}
-              <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
-                <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff] flex justify-between items-center">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
-                    <Calendar size={14} className="text-secondary" /> Request History
-                  </h3>
-                </div>
-                <div className="max-h-80 overflow-y-auto divide-y divide-[#ece2ff] scrollbar-hide">
-                  {myLeaves.length === 0 ? (
-                    <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No requests filed</p>
-                  ) : myLeaves.map((l, i) => (
-                    <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
-                      <div>
-                        <p className="text-xs font-black text-black italic">{l.leave_type} Request {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
-                        <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
-                      </div>
-                      <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
-                        l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-600' :
-                        l.status === 'Rejected' ? 'bg-red-500/10 text-red-600' : 'bg-amber-500/10 text-amber-600'
-                      }`}>{l.status || 'Pending'}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        <div className="space-y-6">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEmployeeTab('attendance')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                employeeTab === 'attendance'
+                  ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg'
+                  : 'bg-[#f5efff] border border-[#ebe4ff] text-[#6b7280] hover:text-black'
+              }`}
+            >
+              <Clock size={14} /> My Attendance & Corrections
+            </button>
+            <button
+              onClick={() => setEmployeeTab('holidays')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                employeeTab === 'holidays'
+                  ? 'bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] text-white shadow-lg'
+                  : 'bg-[#f5efff] border border-[#ebe4ff] text-[#6b7280] hover:text-black'
+              }`}
+            >
+              <Gift size={14} /> Company Holidays
+            </button>
+          </div>
+
+          {employeeTab === 'holidays' ? (
+            <div className="animate-fade-in-up">
+              <HolidayManagementPanel isAdmin={false} />
             </div>
+          ) : (
+            <div className="space-y-8 animate-fade-in-up">
+                <CorrectionSystem isManager={false} />
+                <div className="grid grid-cols-1 gap-8">              {/* Absence History */}
+                  <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden flex flex-col">
+                    <div className="px-6 py-5 border-b border-[#ece2ff] bg-[#f5efff] flex justify-between items-center">
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6b7280] flex items-center gap-2">
+                        <Calendar size={14} className="text-secondary" /> Request History
+                      </h3>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto divide-y divide-[#ece2ff] scrollbar-hide">
+                      {myLeaves.length === 0 ? (
+                        <p className="p-10 text-center text-[9px] uppercase font-black text-[#b6b6c7]">No requests filed</p>
+                      ) : myLeaves.map((l, i) => (
+                        <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
+                          <div>
+                            <p className="text-xs font-black text-black italic">{l.leave_type} Request {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
+                            <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
+                          </div>
+                          <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
+                            l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-600' :
+                            l.status === 'Rejected' ? 'bg-red-500/10 text-red-600' : 'bg-amber-500/10 text-amber-600'
+                          }`}>{l.status || 'Pending'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -849,6 +943,12 @@ export default function AttendancePanel({ mode }) {
                                 <span className="text-[8px] font-black uppercase tracking-widest">This will be marked as a retroactive leave</span>
                             </div>
                         )}
+                        {excludedHolidayCount > 0 && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold">
+                                <Gift size={12} className="text-purple-600 shrink-0" />
+                                <span>Includes {excludedHolidayCount} Company Holiday ({holidayNamesInRange.join(', ')}) — excluded from deduction!</span>
+                            </div>
+                        )}
                     </div>
 
                     {leaveForm.start_date && leaveForm.end_date && isSingleDay && (
@@ -893,7 +993,7 @@ export default function AttendancePanel({ mode }) {
                         </div>
                     )}
 
-                    {leaveForm.start_date && leaveForm.end_date && durationDays > 0 && (
+                    {leaveForm.start_date && leaveForm.end_date && (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
                             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Total Deduction:</span>
                             <span className="text-sm font-black text-emerald-700">{durationDays} Day{durationDays !== 1 && 's'}</span>

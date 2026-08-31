@@ -47,6 +47,10 @@ export default function CorrectionSystem({ isManager }) {
 
     const openDrawer = (day) => {
         if (day.track === 'future' || day.track === 'before_join') return;
+        if (day.is_holiday || day.status === 'Holiday') {
+            toast(`${day.holiday_name ? `"${day.holiday_name}" is a` : 'This is a'} declared Company Holiday. Attendance logging is not required.`);
+            return;
+        }
         if (day.pending_correction) {
             toast.error("You already have a pending request for this date.");
             return;
@@ -126,12 +130,15 @@ export default function CorrectionSystem({ isManager }) {
         // Reverse so the current week is at the top
         const reversedWeeks = [...weeks].reverse();
 
-        const getStatusColor = (status, track, pending, isToday) => {
+        const getStatusColor = (status, track, pending, isToday, isHoliday) => {
             if (pending) return 'bg-amber-100 border-amber-300 text-amber-700';
+            if (isHoliday || status === 'Holiday' || (status && status.startsWith('Holiday'))) {
+                return 'bg-red-50 border-red-300 text-red-700 shadow-sm';
+            }
             if (track === 'future' || track === 'before_join') return 'bg-gray-50 border-gray-200 text-gray-400 opacity-60';
             if (status === 'Present') return 'bg-emerald-50 border-emerald-200 text-emerald-700';
             if (status === 'Absent' || status === 'Missing Clock-Out') return 'bg-red-50 border-red-200 text-red-700';
-            if (status.includes('Half Day')) return 'bg-orange-50 border-orange-200 text-orange-700';
+            if (status && status.includes('Half Day')) return 'bg-orange-50 border-orange-200 text-orange-700';
             if (isToday && (status === 'Active' || status === 'No Record')) return 'bg-purple-50/50 border-purple-200 text-purple-900';
             return 'bg-white border-gray-200 text-gray-700';
         };
@@ -143,20 +150,31 @@ export default function CorrectionSystem({ isManager }) {
                     {days.map(d => {
                         if (d.track === 'before_join') return <div key={d.date} className="p-3"></div>;
                         const isToday = d.date === windowData.today;
+                        const isHoliday = d.is_holiday || d.status === 'Holiday';
+                        const isClickable = d.track !== 'future' && d.track !== 'before_join' && !d.pending_correction && !isHoliday;
                         return (
                         <div 
                             key={d.date} 
                             onClick={() => {
+                                if (isHoliday) {
+                                    toast(`${d.holiday_name ? `"${d.holiday_name}" is a` : 'This is a'} declared Company Holiday. Attendance logging is not required.`);
+                                    return;
+                                }
                                 if (d.track !== 'future' && d.track !== 'before_join') openDrawer(d);
                             }}
-                            className={`p-3 rounded-2xl border transition-all cursor-pointer relative group ${getStatusColor(d.status, d.track, !!d.pending_correction, isToday)} ${d.track !== 'future' && d.track !== 'before_join' && !d.pending_correction ? 'hover:shadow-md hover:scale-105' : 'cursor-not-allowed'} ${isToday ? 'ring-2 ring-[#8b5cf6] shadow-md' : ''}`}
+                            className={`p-3 rounded-2xl border transition-all relative group ${getStatusColor(d.status, d.track, !!d.pending_correction, isToday, isHoliday)} ${isClickable ? 'cursor-pointer hover:shadow-md hover:scale-105' : 'cursor-not-allowed'} ${isToday ? 'ring-2 ring-[#8b5cf6] shadow-md' : ''}`}
                         >
-                            {d.track === 'self_service' && !d.pending_correction && (
+                            {isHoliday && (
+                                <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-md z-10">
+                                    Holiday
+                                </div>
+                            )}
+                            {d.track === 'self_service' && !d.pending_correction && !isHoliday && (
                                 <div className="absolute -top-2 -right-2 bg-[#8b5cf6] text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
                                     <Edit2 size={10} />
                                 </div>
                             )}
-                            {d.track === 'requested' && !d.pending_correction && (
+                            {d.track === 'requested' && !d.pending_correction && !isHoliday && (
                                 <div className="absolute -top-2 -right-2 bg-gray-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
                                     <AlertCircle size={10} />
                                 </div>
@@ -165,15 +183,26 @@ export default function CorrectionSystem({ isManager }) {
                                 <span>{d.weekday.substring(0,3)}</span>
                                 {isToday && <span className="text-[#8b5cf6] font-extrabold not-italic">(TODAY)</span>}
                             </p>
-                            <p className="text-xs font-bold mb-2">{d.date.split('-')[2]}</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-bold">{d.date.split('-')[2]}</p>
+                                {isHoliday && (
+                                    <span className="text-[8px] font-extrabold text-red-600 uppercase truncate max-w-[70px]" title={d.holiday_name}>
+                                        {d.holiday_name}
+                                    </span>
+                                )}
+                            </div>
                             
                             <div className="text-[9px] font-mono leading-tight opacity-80 h-6">
                                 {d.clock_in && d.clock_in !== 'None' ? <span>In: {d.clock_in.substring(0,5)}</span> : <span>--:--</span>}<br/>
                                 {d.clock_out && d.clock_out !== 'None' ? <span>Out: {d.clock_out.substring(0,5)}</span> : <span>--:--</span>}
                             </div>
                             
-                            <div className="mt-3 text-[8px] font-black uppercase tracking-widest text-center py-1 rounded bg-black/5">
-                                {d.pending_correction ? 'Pending' : d.status}
+                            <div className={`mt-3 text-[8px] font-black uppercase tracking-widest text-center py-1 rounded truncate px-1 ${
+                                isHoliday
+                                    ? 'bg-red-600 text-white shadow-sm'
+                                    : 'bg-black/5'
+                            }`}>
+                                {d.pending_correction ? 'Pending' : (isHoliday ? (d.holiday_name ? `Holiday: ${d.holiday_name}` : 'Holiday') : d.status)}
                             </div>
                         </div>
                         );
@@ -184,14 +213,17 @@ export default function CorrectionSystem({ isManager }) {
 
         return (
             <div className="bg-white border border-[#ebe4ff] rounded-[2rem] p-6 sm:p-8">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                     <div>
                         <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black">Daily Attendance Grid</h3>
                         <p className="text-[10px] text-[#8b8ba3] uppercase font-bold mt-1">Click any active day to log attendance or update record</p>
                     </div>
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-4">
                         <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
-                            <div className="w-2 h-2 rounded-full bg-[#8b5cf6]"></div> Self-Service Window (Current & Previous Week)
+                            <div className="w-2 h-2 rounded-full bg-red-500"></div> Company Holiday
+                        </div>
+                        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
+                            <div className="w-2 h-2 rounded-full bg-[#8b5cf6]"></div> Self-Service Window
                         </div>
                         <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
                             <div className="w-2 h-2 rounded-full bg-gray-600"></div> Manager Approval

@@ -951,6 +951,24 @@ def create_tables(schema_name='public'):
             )
         ''')
 
+        # 18.1) Company Holidays Table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS company_holidays (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                date TEXT NOT NULL,
+                holiday_type TEXT DEFAULT 'company_holiday',
+                description TEXT,
+                is_half_day BOOLEAN DEFAULT FALSE,
+                created_by TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE ON DELETE SET NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(date, name)
+            )
+        ''')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_company_holidays_date ON company_holidays(date)')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_company_holidays_type ON company_holidays(holiday_type)')
+
+
         # 19) Payroll Records Table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS payroll_records (

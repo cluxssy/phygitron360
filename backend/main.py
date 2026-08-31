@@ -11,6 +11,7 @@ from backend.modules.deploy.api.dashboard import router as dashboard_router
 from backend.modules.deploy.api.employees import router as employees_router
 from backend.modules.deploy.api.assets import router as assets_router
 from backend.modules.deploy.api.attendance import router as attendance_router
+from backend.modules.deploy.api.holidays import router as holidays_router
 from backend.modules.deploy.api.assessments import router as assessments_router
 from backend.modules.deploy.api.training import router as training_router
 from backend.modules.deploy.api.onboarding import router as onboarding_router
@@ -154,6 +155,7 @@ app.include_router(dashboard_router)
 app.include_router(employees_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(assets_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(attendance_router, dependencies=[Depends(require_module("deploy"))])
+app.include_router(holidays_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(assessments_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(training_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(onboarding_router)

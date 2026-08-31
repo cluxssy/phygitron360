@@ -107,3 +107,8 @@ class CorrectionWindowDay(BaseModel):
     work_log: Optional[str]
     track: str                      # 'self_service' | 'requested' | 'future' | 'today'
     pending_correction: Optional[dict] = None   # Existing pending correction if any
+    is_holiday: Optional[bool] = False
+    holiday_name: Optional[str] = None
+    holiday_type: Optional[str] = None
+    is_half_day: Optional[bool] = False
+
