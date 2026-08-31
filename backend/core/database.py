@@ -1111,6 +1111,7 @@ def create_tables(schema_name='public'):
                 total_files INTEGER DEFAULT 0,
                 processed_files INTEGER DEFAULT 0,
                 processed_details JSONB DEFAULT '[]'::jsonb,
+                override_date TEXT,
                 status TEXT DEFAULT 'pending',
                 error_message TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1234,6 +1235,7 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS images JSONB")
 
 
+        cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS override_date TEXT")
         conn.commit()
     except Exception as e:
         conn.rollback()

@@ -708,7 +708,7 @@ export default function QuestionBank() {
             <p className="text-sm text-gray-500 mt-1">Adjust your filters or add new questions to the bank.</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto pr-2 pb-10 flex flex-col gap-3">
+          <div className="flex-1 overflow-y-auto pr-2 pb-10 space-y-3">
             {filtered.map(q => {
               const typeInfo = QTYPES.find(t => t.value === q.question_type);
               const TYPE_STYLES = {
@@ -731,7 +731,7 @@ export default function QuestionBank() {
                 .filter(t => t && t.toLowerCase() !== 'extracted');
 
               return (
-                <div key={q.id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                <div key={q.id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden shrink-0">
                   <div className="flex gap-4 items-start p-5">
                     <div className="flex-1 min-w-0">
                       {/* Header: topic folder + type badge + points */}
