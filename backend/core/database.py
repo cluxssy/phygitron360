@@ -957,7 +957,7 @@ def create_tables(schema_name='public'):
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 date TEXT NOT NULL,
-                holiday_type TEXT DEFAULT 'company_holiday',
+                holiday_type TEXT DEFAULT 'regular_holiday',
                 description TEXT,
                 is_half_day BOOLEAN DEFAULT FALSE,
                 created_by TEXT REFERENCES employees(employee_code) ON UPDATE CASCADE ON DELETE SET NULL,
@@ -965,8 +965,15 @@ def create_tables(schema_name='public'):
                 UNIQUE(date, name)
             )
         ''')
+        # Ensure all columns exist even if table was created in an older revision
+        cur.execute("ALTER TABLE company_holidays ADD COLUMN IF NOT EXISTS holiday_type TEXT DEFAULT 'regular_holiday'")
+        cur.execute("ALTER TABLE company_holidays ADD COLUMN IF NOT EXISTS is_half_day BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE company_holidays ADD COLUMN IF NOT EXISTS description TEXT")
+        cur.execute("ALTER TABLE company_holidays ADD COLUMN IF NOT EXISTS created_by TEXT")
+        cur.execute("ALTER TABLE company_holidays ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         cur.execute('CREATE INDEX IF NOT EXISTS idx_company_holidays_date ON company_holidays(date)')
         cur.execute('CREATE INDEX IF NOT EXISTS idx_company_holidays_type ON company_holidays(holiday_type)')
+
 
 
         # 19) Payroll Records Table

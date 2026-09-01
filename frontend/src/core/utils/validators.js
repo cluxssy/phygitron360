@@ -162,3 +162,57 @@ export const isValidURL = isValidUrl;
 
 // Alias for isDateString
 export const isValidDate = isDateString;
+
+/**
+ * Safely extracts a user-readable string error message from any backend response,
+ * Error object, or FastAPI/Pydantic validation error array.
+ *
+ * Prevents React Error #31 ("Objects are not valid as a React child") when passing
+ * raw error responses or objects to toast.error() or JSX.
+ *
+ * @param {any} error - The error value (string, object, array, Error instance)
+ * @param {string} fallback - Fallback message if extraction yields nothing
+ * @returns {string}
+ */
+export function extractErrorMessage(error, fallback = 'An unexpected error occurred.') {
+  if (!error) return fallback;
+  if (typeof error === 'string') return error.trim() || fallback;
+
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+
+  const detail = error.detail !== undefined ? error.detail : (error.response?.data?.detail ?? error.message);
+  if (detail && typeof detail === 'string') return detail.trim() || fallback;
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map(item => {
+        if (!item) return null;
+        if (typeof item === 'string') return item;
+        if (typeof item === 'object') {
+          const loc = Array.isArray(item.loc)
+            ? item.loc.filter(l => l !== 'body').join('.')
+            : '';
+          const msg = item.msg || item.message || JSON.stringify(item);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(item);
+      })
+      .filter(Boolean);
+
+    if (messages.length > 0) return messages.join(' | ');
+  }
+
+  if (typeof detail === 'object' && detail !== null) {
+    if (detail.msg) return String(detail.msg);
+    if (detail.message) return String(detail.message);
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return fallback;
+    }
+  }
+
+  return String(error || fallback);
+}

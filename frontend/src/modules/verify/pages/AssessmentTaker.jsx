@@ -36,9 +36,12 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
   const streamRef = useRef(null);
 
   // Test state
-  const [currentQ, setCurrentQ] = useState(0);
+  const [activeSectionIdx, setActiveSectionIdx] = useState(0);
+  const [completedSectionIds, setCompletedSectionIds] = useState([]);
+  const [currentQIndexInSection, setCurrentQIndexInSection] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [sectionTimeLeft, setSectionTimeLeft] = useState(0);
+  const [showNextSectionModal, setShowNextSectionModal] = useState(false);
   const [proctoringEvents, setProctoringEvents] = useState([]);
   const pgEvents = useRef([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,10 +110,8 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
           if (data.session_already_started) {
             setSessionAlreadyStarted(true);
             if (data.time_remaining_seconds !== null && data.time_remaining_seconds !== undefined) {
-              setTimeLeft(data.time_remaining_seconds);
+              setSectionTimeLeft(data.time_remaining_seconds);
             }
-          } else if (data.time_limit_minutes) {
-            setTimeLeft(data.time_limit_minutes * 60);
           }
         } else {
           toast.error('Failed to load assessment');
@@ -155,13 +156,82 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     }
   }, []);
 
-  // Timer — only ticks once hasStarted (user clicked Start/Resume)
+  const resolvedSections = useMemo(() => {
+    if (!assessment) return [];
+    const rawSections = Array.isArray(assessment.sections) ? assessment.sections : [];
+    if (rawSections.length === 0) {
+      return [{
+        id: 'default_section',
+        title: 'All Questions',
+        instructions: assessment.description || '',
+        time_limit_minutes: assessment.time_limit_minutes || 60,
+        questions: assessment.questions || []
+      }];
+    }
+
+    return rawSections.map((sec, idx) => {
+      const secQuestions = (assessment.questions || []).filter(q => {
+        if (q.section_id) return q.section_id === sec.id;
+        return idx === 0;
+      });
+      return {
+        ...sec,
+        time_limit_minutes: sec.time_limit_minutes || Math.floor((assessment.time_limit_minutes || 60) / rawSections.length) || 30,
+        questions: secQuestions
+      };
+    });
+  }, [assessment]);
+
+  const activeSection = resolvedSections[activeSectionIdx] || resolvedSections[0];
+  const activeSectionQuestions = activeSection?.questions || [];
+  const currentQuestion = activeSectionQuestions[currentQIndexInSection] || activeSectionQuestions[0];
+
+  // Initialize/reset section timer when section changes or test starts
   useEffect(() => {
-    if (!hasStarted || timeLeft === null) return;
-    if (timeLeft <= 0) { submitRef.current?.(true); return; }
-    const t = setTimeout(() => setTimeLeft(s => s - 1), 1000);
+    if (!hasStarted || !activeSection) return;
+    const mins = activeSection.time_limit_minutes || assessment?.time_limit_minutes || 30;
+    setSectionTimeLeft(mins * 60);
+  }, [activeSectionIdx, hasStarted]);
+
+  // Section Timer Countdown
+  useEffect(() => {
+    if (!hasStarted || sectionTimeLeft === null || sectionTimeLeft === undefined) return;
+    if (sectionTimeLeft <= 0) {
+      const isLastSection = activeSectionIdx >= resolvedSections.length - 1;
+      if (isLastSection) {
+        toast.error('Time limit for final section has expired. Submitting assessment...', { duration: 6000 });
+        submitRef.current?.(true);
+      } else {
+        toast.error(`Time limit for ${activeSection?.title || 'current section'} expired! Advancing to next section.`, { duration: 6000 });
+        setCompletedSectionIds(prev => [...new Set([...prev, activeSection?.id])]);
+        setActiveSectionIdx(prev => prev + 1);
+        setCurrentQIndexInSection(0);
+      }
+      return;
+    }
+    const t = setTimeout(() => setSectionTimeLeft(s => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [timeLeft, hasStarted]);
+  }, [sectionTimeLeft, hasStarted, activeSectionIdx, resolvedSections.length, activeSection]);
+
+  const handleProceedToNextSection = () => {
+    const isLastSection = activeSectionIdx >= resolvedSections.length - 1;
+    if (isLastSection) {
+      handleSubmit();
+    } else {
+      setShowNextSectionModal(true);
+    }
+  };
+
+  const confirmProceedToNextSection = () => {
+    setShowNextSectionModal(false);
+    if (!activeSection) return;
+    setCompletedSectionIds(prev => [...new Set([...prev, activeSection.id])]);
+    const nextIdx = activeSectionIdx + 1;
+    setActiveSectionIdx(nextIdx);
+    setCurrentQIndexInSection(0);
+    const nextSec = resolvedSections[nextIdx];
+    toast.success(`Section ${activeSection.title} completed! Started ${nextSec?.title || 'next section'}.`);
+  };
 
   const captureScreenshot = useCallback((label = 'Snapshot') => {
     if (videoRef.current && canvasRef.current) {
@@ -731,8 +801,10 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       const firstError = Object.keys(errors)[0];
       if (firstError) {
         toast.error(errors[firstError]);
-        const questionIndex = assessment.questions.findIndex(q => q.id === firstError);
-        if (questionIndex !== -1) setCurrentQ(questionIndex);
+        const qIdxInActive = activeSectionQuestions.findIndex(q => q.id === firstError);
+        if (qIdxInActive !== -1) {
+          setCurrentQIndexInSection(qIdxInActive);
+        }
       }
       return;
     }
@@ -832,7 +904,12 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
           <ul className="space-y-3 text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-xl">
             <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Ensure you are in a well-lit room.</li>
             <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Do not switch tabs or minimize the window.</li>
-            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Time limit: {assessment.time_limit_minutes} minutes.</li>
+            <li className="flex gap-2">
+              <CheckCircle size={14} className="text-emerald-500 shrink-0"/>
+              {resolvedSections.length > 1
+                ? `${resolvedSections.length} Sections — Each section has its own dedicated time limit.`
+                : `Time limit: ${assessment.time_limit_minutes || 60} minutes.`}
+            </li>
           </ul>
 
           {/* Proctoring capability status — always show what's active */}
@@ -898,12 +975,12 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     );
   }
 
-  const q = assessment.questions[currentQ];
-  const mins = Math.floor(timeLeft / 60);
-  const secs = timeLeft % 60;
+  const q = currentQuestion;
+  const mins = Math.floor(sectionTimeLeft / 60);
+  const secs = sectionTimeLeft % 60;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden light-theme-override text-gray-900">
       {/* Hidden canvas for image processing */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
@@ -914,174 +991,298 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1] opacity-50" />
             <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </div>
-          <h2 className="text-sm font-semibold text-gray-800 truncate max-w-sm">{assessment.title}</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-800 truncate max-w-sm">{assessment.title}</h2>
+            {resolvedSections.length > 1 && (
+              <p className="text-[11px] font-medium text-purple-700">
+                {activeSection?.title || `Section ${activeSectionIdx + 1}`}
+              </p>
+            )}
+          </div>
         </div>
         
-        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${timeLeft < 300 ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-gray-100 border-gray-200 text-gray-700'}`}>
-          <Clock size={16} />
-          {mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${sectionTimeLeft < 300 ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse' : 'bg-white border-gray-200 text-gray-800 shadow-sm'}`}>
+          <Clock size={16} className={sectionTimeLeft < 300 ? 'text-rose-600' : 'text-purple-600'} />
+          <span>{mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}</span>
+          <span className="text-[10px] font-sans font-medium text-gray-400 uppercase ml-0.5">Section Time</span>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex flex-col md:flex-row">
-        {/* Left Sidebar - Question List */}
-        <div className="md:w-64 bg-gray-50 border-r border-gray-200 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Questions</h3>
-          <div className="grid grid-cols-4 gap-2">
-            {assessment.questions.map((_, i) => {
-              const hasError = errors[assessment.questions[i].id];
-              const isAnswered = answers[assessment.questions[i].id] && 
-                (typeof answers[assessment.questions[i].id] === 'string' ? 
-                  answers[assessment.questions[i].id].trim() : 
-                  true);
-              
+      {/* Section Stepper / Header Bar (Shown when multiple sections exist) */}
+      {resolvedSections.length > 1 && (
+        <div className="bg-gray-100/75 border-b border-gray-200 px-6 py-3">
+          <div className="flex items-center gap-3 overflow-x-auto">
+            {resolvedSections.map((sec, idx) => {
+              const isCompleted = completedSectionIds.includes(sec.id) || idx < activeSectionIdx;
+              const isActive = idx === activeSectionIdx;
+              const isLocked = idx > activeSectionIdx;
+
               return (
-                <button
-                  key={i}
-                  onClick={() => setCurrentQ(i)}
-                  className={`aspect-square rounded-lg flex items-center justify-center text-sm font-bold transition-colors relative ${
-                    currentQ === i 
-                      ? hasError ? 'bg-red-500 text-white' : 'bg-purple-600 text-white'
-                      : isAnswered 
-                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' 
-                        : 'bg-white text-gray-400 border border-gray-200 hover:bg-gray-50'
+                <div
+                  key={sec.id || idx}
+                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold shrink-0 transition select-none ${
+                    isCompleted
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed opacity-90'
+                      : isActive
+                        ? 'bg-purple-600 text-white shadow-sm ring-2 ring-purple-200'
+                        : 'bg-white text-gray-400 border border-gray-200 cursor-not-allowed'
                   }`}
+                  title={isCompleted ? 'Section completed (cannot return to this section)' : isActive ? 'Currently active section' : 'Locked — complete previous section to unlock'}
                 >
-                  {i + 1}
-                  {hasError && currentQ !== i && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">!</span>
-                  )}
-                </button>
+                  {isCompleted && <CheckCircle size={14} className="text-emerald-600" />}
+                  {isActive && <Clock size={14} className="text-purple-200" />}
+                  {isLocked && <Shield size={14} className="text-gray-400" />}
+                  <span>{sec.title}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                    isCompleted
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : isActive
+                        ? 'bg-purple-700 text-purple-100'
+                        : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {isCompleted ? 'Completed' : isActive ? `${sec.time_limit_minutes}m limit` : 'Locked'}
+                  </span>
+                </div>
               );
             })}
           </div>
         </div>
+      )}
 
-        {/* Question Area */}
-        <div className="flex-1 p-8">
-          <div className="flex justify-between items-center mb-6">
-            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${errors[q.id] ? 'bg-red-50 text-red-600 border-red-200' : 'bg-purple-50 text-purple-600 border-purple-200'}`}>
-              Question {currentQ + 1} of {assessment.questions.length}
-              {errors[q.id] && ' ⚠️'}
-            </span>
-            <span className="text-xs font-medium text-gray-500">
-              {q.marks} Points | {q.question_type}
-            </span>
-          </div>
-
-          <div className="mb-8 text-gray-800 leading-relaxed font-medium">
-            <div className="prose max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkBreaks]}>
-                {q.question_text}
-              </ReactMarkdown>
-            </div>
-            {renderError(q.id)}
-          </div>
-
-          {/* MCQ Answer Input */}
-          {q.question_type === 'mcq' && (
-            <div className="space-y-3">
-              {(q.options || []).map((opt, i) => (
-                <label 
-                  key={i} 
-                  onClick={() => {
-                    setAnswers({ ...answers, [q.id]: opt });
-                    if (errors[q.id]) {
-                      const newErrors = { ...errors };
-                      delete newErrors[q.id];
-                      setErrors(newErrors);
-                    }
-                  }}
-                  className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${answers[q.id] === opt ? 'bg-purple-50 border-purple-300 text-gray-800' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                >
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${answers[q.id] === opt ? 'border-purple-600' : 'border-gray-300'}`}>
-                    {answers[q.id] === opt && <div className="w-2.5 h-2.5 rounded-full bg-purple-600" />}
-                  </div>
-                  <span className="text-sm font-medium">{opt}</span>
-                </label>
-              ))}
-            </div>
-          )}
-
-          {/* Written Answer Input */}
-          {q.question_type === 'written' && (
-            <textarea
-              value={answers[q.id] || ''}
-              onChange={e => {
-                setAnswers({ ...answers, [q.id]: e.target.value });
-                // Clear error for this question when user types
-                if (errors[q.id]) {
-                  const newErrors = { ...errors };
-                  delete newErrors[q.id];
-                  setErrors(newErrors);
-                }
-              }}
-              placeholder="Type your answer here..."
-              className={`w-full bg-gray-50 border ${errors[q.id] ? 'border-red-400' : 'border-gray-200'} rounded-xl p-5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all min-h-[300px] resize-y`}
-            />
-          )}
-
-          {/* Coding Challenge Input */}
-          {q.question_type === 'coding' && (
-            <div className="flex flex-col h-[500px] border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
-              <div className="bg-gray-100 px-4 py-2 flex justify-between items-center border-b border-gray-200">
-                <span className="text-xs font-semibold text-purple-600">{q.programming_language || 'javascript'}</span>
-              </div>
-              <div className={`flex-1 ${errors[q.id] ? 'border-2 border-red-400' : ''}`}>
-                <Editor
-                  height="100%"
-                  language={(q.programming_language || 'javascript').toLowerCase()}
-                  theme="vs-dark"
-                  value={answers[q.id] !== undefined ? answers[q.id] : (q.starter_code || '')}
-                  onChange={(val) => {
-                    setAnswers({ ...answers, [q.id]: val });
-                    if (errors[q.id]) {
-                      const newErrors = { ...errors };
-                      delete newErrors[q.id];
-                      setErrors(newErrors);
-                    }
-                  }}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 14,
-                    scrollBeyondLastLine: false,
-                    padding: { top: 16 }
-                  }}
-                />
-              </div>
-            </div>
-          )}
-          
-          {/* Bottom Navigation */}
-          <div className="mt-8 pt-6 border-t border-gray-200 flex justify-between">
-            <button
-              onClick={() => setCurrentQ(q => Math.max(0, q - 1))}
-              disabled={currentQ === 0}
-              className="px-6 py-3 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-30 disabled:hover:bg-gray-100 flex items-center gap-2"
-            >
-              <ChevronLeft size={16} /> Previous
+      {/* Main Content Area */}
+      {!q ? (
+        <div className="p-16 text-center text-gray-500 space-y-4">
+          <p className="text-sm">No questions found in this section.</p>
+          {activeSectionIdx < resolvedSections.length - 1 ? (
+            <button onClick={confirmProceedToNextSection} className="px-6 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 transition">
+              Proceed to Next Section
             </button>
-            
-            {currentQ === assessment.questions.length - 1 ? (
-              <button
-                onClick={() => handleSubmit()}
-                disabled={isSubmitting}
-                className="px-8 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16} /> Submit Assessment</>}
-              </button>
-            ) : (
-              <button
-                onClick={() => setCurrentQ(q => Math.min(assessment.questions.length - 1, q + 1))}
-                className="px-6 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                Next <ChevronRight size={16} />
-              </button>
+          ) : (
+            <button onClick={() => handleSubmit()} className="px-6 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 transition">
+              Submit Assessment
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col md:flex-row">
+          {/* Left Sidebar - Section Questions List */}
+          <div className="md:w-64 bg-gray-50 border-r border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600 truncate">
+                {activeSection?.title || 'Questions'}
+              </h3>
+              <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                {currentQIndexInSection + 1} / {activeSectionQuestions.length}
+              </span>
+            </div>
+
+            {activeSection?.instructions && (
+              <p className="text-[11px] text-gray-500 mb-3 bg-white p-2 rounded-lg border border-gray-200 leading-snug">
+                {activeSection.instructions}
+              </p>
             )}
+
+            <div className="grid grid-cols-4 gap-2">
+              {activeSectionQuestions.map((sq, i) => {
+                const hasError = errors[sq.id];
+                const isAnswered = answers[sq.id] && 
+                  (typeof answers[sq.id] === 'string' ? answers[sq.id].trim() : true);
+                
+                return (
+                  <button
+                    key={sq.id || i}
+                    onClick={() => setCurrentQIndexInSection(i)}
+                    className={`aspect-square rounded-lg flex items-center justify-center text-sm font-bold transition-colors relative ${
+                      currentQIndexInSection === i 
+                        ? hasError ? 'bg-red-500 text-white' : 'bg-purple-600 text-white shadow-sm'
+                        : isAnswered 
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' 
+                          : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {i + 1}
+                    {hasError && currentQIndexInSection !== i && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">!</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Question Area */}
+          <div className="flex-1 p-8">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${errors[q.id] ? 'bg-red-50 text-red-600 border-red-200' : 'bg-purple-50 text-purple-600 border-purple-200'}`}>
+                  Question {currentQIndexInSection + 1} of {activeSectionQuestions.length}
+                  {errors[q.id] && ' ⚠️'}
+                </span>
+                {resolvedSections.length > 1 && (
+                  <span className="text-xs font-medium text-gray-500">
+                    ({activeSection?.title})
+                  </span>
+                )}
+              </div>
+              <span className="text-xs font-medium text-gray-500">
+                {q.marks} Point{q.marks !== 1 ? 's' : ''} | {q.question_type}
+              </span>
+            </div>
+
+            <div className="mb-8 text-gray-800 leading-relaxed font-medium">
+              <div className="prose max-w-none text-gray-900">
+                <ReactMarkdown remarkPlugins={[remarkBreaks]}>
+                  {q.question_text}
+                </ReactMarkdown>
+              </div>
+              {renderError(q.id)}
+            </div>
+
+            {/* MCQ Answer Input */}
+            {q.question_type === 'mcq' && (
+              <div className="space-y-3">
+                {(q.options || []).map((opt, i) => (
+                  <label 
+                    key={i} 
+                    onClick={() => {
+                      setAnswers({ ...answers, [q.id]: opt });
+                      if (errors[q.id]) {
+                        const newErrors = { ...errors };
+                        delete newErrors[q.id];
+                        setErrors(newErrors);
+                      }
+                    }}
+                    className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${answers[q.id] === opt ? 'bg-purple-50 border-purple-300 text-gray-900 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${answers[q.id] === opt ? 'border-purple-600' : 'border-gray-300'}`}>
+                      {answers[q.id] === opt && <div className="w-2.5 h-2.5 rounded-full bg-purple-600" />}
+                    </div>
+                    <span className="text-sm font-medium">{opt}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {/* Written Answer Input */}
+            {q.question_type === 'written' && (
+              <textarea
+                value={answers[q.id] || ''}
+                onChange={e => {
+                  setAnswers({ ...answers, [q.id]: e.target.value });
+                  if (errors[q.id]) {
+                    const newErrors = { ...errors };
+                    delete newErrors[q.id];
+                    setErrors(newErrors);
+                  }
+                }}
+                placeholder="Type your answer here..."
+                className={`w-full bg-gray-50 border ${errors[q.id] ? 'border-red-400' : 'border-gray-200'} rounded-xl p-5 text-sm text-gray-900 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all min-h-[300px] resize-y`}
+              />
+            )}
+
+            {/* Coding Challenge Input */}
+            {q.question_type === 'coding' && (
+              <div className="flex flex-col h-[500px] border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
+                <div className="bg-gray-100 px-4 py-2 flex justify-between items-center border-b border-gray-200">
+                  <span className="text-xs font-semibold text-purple-600">{q.programming_language || 'javascript'}</span>
+                </div>
+                <div className={`flex-1 ${errors[q.id] ? 'border-2 border-red-400' : ''}`}>
+                  <Editor
+                    height="100%"
+                    language={(q.programming_language || 'javascript').toLowerCase()}
+                    theme="vs-dark"
+                    value={answers[q.id] !== undefined ? answers[q.id] : (q.starter_code || '')}
+                    onChange={(val) => {
+                      setAnswers({ ...answers, [q.id]: val });
+                      if (errors[q.id]) {
+                        const newErrors = { ...errors };
+                        delete newErrors[q.id];
+                        setErrors(newErrors);
+                      }
+                    }}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      scrollBeyondLastLine: false,
+                      padding: { top: 16 }
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {/* Bottom Navigation */}
+            <div className="mt-8 pt-6 border-t border-gray-200 flex justify-between items-center">
+              <button
+                onClick={() => setCurrentQIndexInSection(q => Math.max(0, q - 1))}
+                disabled={currentQIndexInSection === 0}
+                className="px-6 py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-30 disabled:hover:bg-gray-100 flex items-center gap-2"
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+              
+              {currentQIndexInSection < activeSectionQuestions.length - 1 ? (
+                <button
+                  onClick={() => setCurrentQIndexInSection(q => q + 1)}
+                  className="px-6 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+              ) : activeSectionIdx < resolvedSections.length - 1 ? (
+                <button
+                  onClick={handleProceedToNextSection}
+                  className="px-6 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
+                >
+                  Complete {activeSection?.title || 'Section'} & Proceed <ChevronRight size={16} />
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleSubmit()}
+                  disabled={isSubmitting}
+                  className="px-8 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
+                >
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16} /> Submit Assessment</>}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Next Section Confirmation Modal */}
+      {showNextSectionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 text-gray-900 light-theme-override">
+            <div className="flex items-center gap-3 text-amber-600 mb-3">
+              <AlertTriangle size={24} />
+              <h3 className="text-lg font-bold text-gray-800">Complete {activeSection?.title}?</h3>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed mb-4">
+              Are you sure you want to finish <strong>{activeSection?.title}</strong> and proceed to <strong>{resolvedSections[activeSectionIdx + 1]?.title}</strong>?
+            </p>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium mb-6 flex items-start gap-2">
+              <span>⚠️</span>
+              <span>Once you proceed, this section will be locked and you <strong>cannot return</strong> to view or change your answers in this section.</span>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowNextSectionModal(false)}
+                className="px-4 py-2 rounded-xl text-gray-600 font-medium hover:bg-gray-100 text-sm transition"
+              >
+                Stay in Section
+              </button>
+              <button
+                type="button"
+                onClick={confirmProceedToNextSection}
+                className="px-5 py-2 rounded-xl bg-purple-600 text-white font-semibold hover:bg-purple-700 text-sm transition shadow-sm"
+              >
+                Confirm & Proceed →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

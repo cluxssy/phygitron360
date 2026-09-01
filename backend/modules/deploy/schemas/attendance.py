@@ -111,4 +111,7 @@ class CorrectionWindowDay(BaseModel):
     holiday_name: Optional[str] = None
     holiday_type: Optional[str] = None
     is_half_day: Optional[bool] = False
+    is_leave: Optional[bool] = False
+    leave_type: Optional[str] = None
+
 

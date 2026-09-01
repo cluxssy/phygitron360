@@ -22,8 +22,8 @@ class QuestionBankService:
     def delete_question(self, question_id: int) -> bool:
         return self.repo.delete_question(question_id)
 
-    def list_questions(self, tags: Optional[List[str]] = None, q_type: Optional[str] = None, topic: Optional[str] = None) -> List[Dict[str, Any]]:
-        return self.repo.list_questions(tags, q_type, topic)
+    def list_questions(self, tags: Optional[List[str]] = None, q_type: Optional[str] = None, topic: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
+        return self.repo.list_questions(tags, q_type, topic, search)
 
     def get_question_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:
         return self.repo.get_question_by_id(question_id)
@@ -36,6 +36,7 @@ For each question, determine its type (mcq, mcq_multi, written, coding).
 - For `mcq` and `mcq_multi`, extract `options` and identify the `correct_answer` (for mcq_multi, use a JSON string array like '["A", "C"]').
 - For `written`, write a comprehensive `model_answer` that can be used as a grading rubric.
 - For `coding`, deduce the `programming_language` (default to 'python' if unclear), generate `starter_code` (e.g., a function definition), and create robust `test_cases` as an array of objects: [{"input": "...", "expected_output": "..."}].
+- Generate 2-4 descriptive topic or skill tags (e.g. ["python", "algorithms", "data-structures"]).
 
 Respond ONLY with a JSON array of question objects matching this structure:
 {
@@ -50,7 +51,7 @@ Respond ONLY with a JSON array of question objects matching this structure:
       "test_cases": [{"input": "1, 2", "expected_output": "3"}],
       "programming_language": "python",
       "marks": 1.0,
-      "tags": ["extracted_tag"]
+      "tags": ["tag1", "tag2"]
     }
   ]
 }
@@ -67,9 +68,21 @@ Respond ONLY with a JSON array of question objects matching this structure:
             q["created_by"] = created_by
             if topic:
                 q["topic"] = topic
+            q_tags = q.get("tags", [])
+            if isinstance(q_tags, str):
+                try: q_tags = json.loads(q_tags)
+                except Exception: q_tags = [t.strip() for t in q_tags.split(",") if t.strip()]
+            if not isinstance(q_tags, list):
+                q_tags = []
             if default_tags:
-                q_tags = q.get("tags", [])
-                q["tags"] = list(set(q_tags + default_tags))
+                q_tags.extend(default_tags)
+            
+            clean_tags = []
+            for t in q_tags:
+                st = str(t).strip()
+                if st and st.lower() not in ("extracted", "extracted_tag", "none", "null") and st not in clean_tags:
+                    clean_tags.append(st)
+            q["tags"] = clean_tags
                 
             self.repo.create_question(q)
             count += 1

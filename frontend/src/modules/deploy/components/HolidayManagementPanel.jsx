@@ -147,7 +147,7 @@ export default function HolidayManagementPanel({ isAdmin }) {
     setForm({
       name: h.name,
       date: h.date,
-      holiday_type: h.holiday_type || 'company_holiday',
+      holiday_type: h.holiday_type || 'regular_holiday',
       description: h.description || '',
       is_half_day: !!h.is_half_day
     });
@@ -174,30 +174,26 @@ export default function HolidayManagementPanel({ isAdmin }) {
           bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
           badgeColor: '#10B981'
         };
+      case 'regular_holiday':
+      case 'company_holiday':
       case 'festival':
         return {
-          label: 'Festival',
-          icon: Gift,
-          bg: 'bg-amber-50 text-amber-700 border-amber-200',
-          badgeColor: '#F59E0B'
-        };
-      case 'company_holiday':
-        return {
-          label: 'Company Day Off',
-          icon: Building2,
+          label: 'Regular Holiday',
+          icon: Calendar,
           bg: 'bg-purple-50 text-purple-700 border-purple-200',
           badgeColor: '#8B5CF6'
         };
+      case 'restricted_holiday':
       case 'optional_holiday':
         return {
-          label: 'Optional / Restricted',
+          label: 'Restricted Holiday',
           icon: Star,
           bg: 'bg-blue-50 text-blue-700 border-blue-200',
           badgeColor: '#3B82F6'
         };
       default:
         return {
-          label: 'Holiday',
+          label: 'Regular Holiday',
           icon: Calendar,
           bg: 'bg-gray-50 text-gray-700 border-gray-200',
           badgeColor: '#6B7280'
@@ -210,7 +206,15 @@ export default function HolidayManagementPanel({ isAdmin }) {
     const matchesSearch =
       (h.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (h.description || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === 'ALL' || h.holiday_type === typeFilter;
+    
+    let matchesType = true;
+    if (typeFilter === 'national_holiday') {
+      matchesType = h.holiday_type === 'national_holiday';
+    } else if (typeFilter === 'regular_holiday') {
+      matchesType = h.holiday_type === 'regular_holiday' || h.holiday_type === 'company_holiday' || h.holiday_type === 'festival';
+    } else if (typeFilter === 'restricted_holiday') {
+      matchesType = h.holiday_type === 'restricted_holiday' || h.holiday_type === 'optional_holiday';
+    }
     return matchesSearch && matchesType;
   });
 
@@ -331,10 +335,9 @@ export default function HolidayManagementPanel({ isAdmin }) {
           <div className="flex items-center gap-1 bg-[#faf7ff] border border-[#ebe4ff] p-1 rounded-xl">
             {[
               { id: 'ALL', label: 'All' },
-              { id: 'national_holiday', label: 'National' },
-              { id: 'festival', label: 'Festivals' },
-              { id: 'company_holiday', label: 'Company Off' },
-              { id: 'optional_holiday', label: 'Optional' }
+              { id: 'national_holiday', label: 'National Holidays' },
+              { id: 'regular_holiday', label: 'Regular Holidays' },
+              { id: 'restricted_holiday', label: 'Restricted Holidays' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -553,9 +556,8 @@ export default function HolidayManagementPanel({ isAdmin }) {
                     className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-3 py-3 rounded-xl focus:outline-none focus:border-purple-400 font-medium"
                   >
                     <option value="national_holiday">National Holiday</option>
-                    <option value="festival">Festival</option>
-                    <option value="company_holiday">Company Day Off</option>
-                    <option value="optional_holiday">Optional Holiday</option>
+                    <option value="regular_holiday">Regular Holiday</option>
+                    <option value="restricted_holiday">Restricted Holiday</option>
                   </select>
                 </div>
               </div>
@@ -661,9 +663,8 @@ export default function HolidayManagementPanel({ isAdmin }) {
                     className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs px-3 py-3 rounded-xl focus:outline-none focus:border-purple-400 font-medium"
                   >
                     <option value="national_holiday">National Holiday</option>
-                    <option value="festival">Festival</option>
-                    <option value="company_holiday">Company Day Off</option>
-                    <option value="optional_holiday">Optional Holiday</option>
+                    <option value="regular_holiday">Regular Holiday</option>
+                    <option value="restricted_holiday">Restricted Holiday</option>
                   </select>
                 </div>
               </div>

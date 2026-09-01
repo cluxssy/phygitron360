@@ -54,11 +54,12 @@ def list_questions(
     tags: Optional[str] = None,
     q_type: Optional[str] = None,
     topic: Optional[str] = None,
+    search: Optional[str] = None,
     current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: QuestionBankService = Depends(get_qb_service)
 ):
-    tag_list = tags.split(",") if tags else None
-    rows = service.list_questions(tags=tag_list, q_type=q_type, topic=topic)
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+    rows = service.list_questions(tags=tag_list, q_type=q_type, topic=topic, search=search)
     return {"success": True, "data": rows}
 
 @router.get("/{q_id}")

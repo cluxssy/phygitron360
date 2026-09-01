@@ -12,6 +12,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useOverlayClose from '../../../core/hooks/useOverlayClose';
 import { P } from '../../../core/permissions';
+import { extractErrorMessage } from '../../../core/utils/validators';
 
 const TYPE_STYLE = {
   MCQ:     'bg-purple-50 text-purple-700 border-purple-200',
@@ -33,7 +34,7 @@ function Modal({ onClose, title, children }) {
   const overlayHandlers = useOverlayClose(onClose);
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...overlayHandlers}>
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8" onClick={e => e.stopPropagation()}>
+      <div className="bg-white text-gray-900 rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8 light-theme-override" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
           <XCircle size={18} />
         </button>
@@ -65,10 +66,10 @@ function AssignModal({ assessment, onClose }) {
         if (r.ok) {
           setUsers(d.data || []);
         } else {
-          toast.error(d.detail || 'Failed to fetch users');
+          toast.error(extractErrorMessage(d?.detail, 'Failed to fetch users'));
         }
-      } catch {
-        toast.error('Network error fetching users');
+      } catch (err) {
+        toast.error(extractErrorMessage(err, 'Network error fetching users'));
       } finally {
         setLoadingUsers(false);
       }
@@ -100,10 +101,13 @@ function AssignModal({ assessment, onClose }) {
         toast.success(`Assigned to ${selectedIds.length} candidate(s)`);
         onClose();
       } else {
-        toast.error(d.detail || 'Assignment failed');
+        toast.error(extractErrorMessage(d?.detail, 'Assignment failed'));
       }
-    } catch { toast.error('Network error'); }
-    finally { setSubmitting(false); }
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Network error'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const toggleUser = (id) => {
@@ -264,9 +268,9 @@ export default function ManageAssessments() {
         fetchAssessments();
       } else {
         const d = await r.json();
-        toast.error(d.detail || 'Publish failed');
+        toast.error(extractErrorMessage(d?.detail, 'Publish failed'));
       }
-    } catch { toast.error('Network error'); }
+    } catch (err) { toast.error(extractErrorMessage(err, 'Network error')); }
     finally { setPublishing(null); }
   };
 
@@ -283,9 +287,9 @@ export default function ManageAssessments() {
         fetchAssessments();
       } else {
         const d = await r.json();
-        toast.error(d.detail || 'Update failed');
+        toast.error(extractErrorMessage(d?.detail, 'Update failed'));
       }
-    } catch { toast.error('Network error'); }
+    } catch (err) { toast.error(extractErrorMessage(err, 'Network error')); }
   };
 
   const handleDelete = async (asm) => {
@@ -301,9 +305,9 @@ export default function ManageAssessments() {
         fetchAssessments();
       } else {
         const d = await r.json();
-        toast.error(d.detail || 'Delete failed');
+        toast.error(extractErrorMessage(d?.detail, 'Delete failed'));
       }
-    } catch { toast.error('Network error'); }
+    } catch (err) { toast.error(extractErrorMessage(err, 'Network error')); }
     finally { setDeleting(null); }
   };
 

@@ -82,8 +82,29 @@ class AssessmentRepository:
                     return None
                 
                 result = dict(row)
+                if isinstance(result.get("sections"), str):
+                    try:
+                        result["sections"] = json.loads(result["sections"])
+                    except Exception:
+                        result["sections"] = []
+                elif result.get("sections") is None:
+                    result["sections"] = []
+
                 cur.execute("SELECT * FROM assessment_questions WHERE assessment_id = %s ORDER BY order_index", (asm_id,))
-                result['questions'] = [dict(r) for r in cur.fetchall()]
+                raw_qs = cur.fetchall()
+                questions = []
+                for r in raw_qs:
+                    qd = dict(r)
+                    for col in ("options", "test_cases", "tags", "images"):
+                        if isinstance(qd.get(col), str):
+                            try:
+                                qd[col] = json.loads(qd[col])
+                            except Exception:
+                                qd[col] = []
+                        elif qd.get(col) is None:
+                            qd[col] = []
+                    questions.append(qd)
+                result['questions'] = questions
                 return result
         finally:
             conn.close()

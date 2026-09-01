@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { verifyApi } from '../../../core/api/verifyApi';
 import {
   Plus, Loader2, Save, Send, Upload, UploadCloud, Link as LinkIcon,
-  Image as ImageIcon, Play, CheckCircle, Trash2, ArrowUp, ArrowDown,
-  Wand2, Settings, List, Eye, Shuffle, X
+  Image as ImageIcon, Play, CheckCircle, Check, Trash2, ArrowUp, ArrowDown,
+  Wand2, Settings, List, Eye, Shuffle, X, Folder, FolderOpen, Search
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import {
   isPositiveNumber,
   isValidUrl,
+  extractErrorMessage,
 } from '../../../core/utils/validators';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useOverlayClose from '../../../core/hooks/useOverlayClose';
@@ -53,7 +54,7 @@ export default function AssessmentBuilder() {
       setQuestions(newQs);
       toast.success('Generated! Please review and edit if needed.');
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'AI generation failed');
+      toast.error(extractErrorMessage(err?.response?.data?.detail || err, 'AI generation failed'));
     } finally {
       setGeneratingFor(null);
     }
@@ -85,6 +86,8 @@ export default function AssessmentBuilder() {
   // Bank Import
   const [showBankImport, setShowBankImport] = useState(false);
   const [bankQuestions, setBankQuestions] = useState([]);
+  const [bankSearch, setBankSearch] = useState('');
+  const [selectedBankFolder, setSelectedBankFolder] = useState('All');
   useEscapeClose(() => setShowImportUrl(false), showImportUrl);
   useEscapeClose(() => setShowBankImport(false), showBankImport);
   const importUrlOverlayHandlers = useOverlayClose(() => setShowImportUrl(false));
@@ -175,10 +178,10 @@ export default function AssessmentBuilder() {
         }))]);
         toast.success(`AI extracted ${d.data.length} questions from ${file.name}!`, { id: toastId });
       } else {
-        toast.error(d.detail || 'No questions could be extracted.', { id: toastId });
+        toast.error(extractErrorMessage(d?.detail, 'No questions could be extracted.'), { id: toastId });
       }
-    } catch {
-      toast.error('File upload failed.', { id: toastId });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'File upload failed.'), { id: toastId });
     } finally {
       setImportingFile(false);
     }
@@ -245,10 +248,10 @@ export default function AssessmentBuilder() {
         setImportUrl('');
         toast.success('Questions imported!');
       } else {
-        toast.error(d.detail || 'Import failed');
+        toast.error(extractErrorMessage(d?.detail, 'Import failed'));
       }
     } catch (e) {
-      toast.error('Import failed');
+      toast.error(extractErrorMessage(e, 'Import failed'));
     } finally {
       setImportingUrl(false);
     }
@@ -260,15 +263,63 @@ export default function AssessmentBuilder() {
     
     setSaving(true);
     const payload = {
-      title,
-      description,
+      title: title.trim(),
+      description: description ? description.trim() : null,
       type,
-      time_limit_minutes: timeLimit,
-      pass_score: passScore,
-      shuffle_questions: shuffleQuestions,
-      show_result_immediately: showResultImmediately,
-      sections,
-      questions: questions.map((q, i) => ({ ...q, order_index: i }))
+      time_limit_minutes: timeLimit !== '' && timeLimit !== null && !isNaN(Number(timeLimit)) ? Number(timeLimit) : null,
+      pass_score: passScore !== '' && passScore !== null && !isNaN(Number(passScore)) ? Number(passScore) : 70.0,
+      shuffle_questions: Boolean(shuffleQuestions),
+      show_result_immediately: Boolean(showResultImmediately),
+      sections: sections.map(s => ({
+        id: String(s.id),
+        title: String(s.title || '').trim(),
+        instructions: s.instructions ? String(s.instructions).trim() : null,
+        time_limit_minutes: s.time_limit_minutes !== '' && s.time_limit_minutes !== null && !isNaN(Number(s.time_limit_minutes)) ? Number(s.time_limit_minutes) : null,
+      })),
+      questions: questions.map((q, i) => {
+        let opts = q.options;
+        if (typeof opts === 'string') {
+          try { opts = JSON.parse(opts); } catch { opts = []; }
+        }
+        if (!Array.isArray(opts)) opts = [];
+
+        let tcs = q.test_cases;
+        if (typeof tcs === 'string') {
+          try { tcs = JSON.parse(tcs); } catch { tcs = []; }
+        }
+        if (!Array.isArray(tcs)) tcs = [];
+
+        let qTags = q.tags;
+        if (typeof qTags === 'string') {
+          try { qTags = JSON.parse(qTags); } catch { qTags = []; }
+        }
+        if (!Array.isArray(qTags)) qTags = [];
+
+        let qImages = q.images;
+        if (typeof qImages === 'string') {
+          try { qImages = JSON.parse(qImages); } catch { qImages = []; }
+        }
+        if (!Array.isArray(qImages)) qImages = [];
+
+        return {
+          question_text: q.question_text || '',
+          question_type: q.question_type || 'mcq',
+          options: opts,
+          correct_answer: q.correct_answer ? String(q.correct_answer) : null,
+          model_answer: q.model_answer ? String(q.model_answer) : null,
+          starter_code: q.starter_code ? String(q.starter_code) : null,
+          test_cases: tcs,
+          programming_language: q.programming_language || 'python',
+          accepted_file_types: q.accepted_file_types || null,
+          skill_id: q.skill_id !== '' && q.skill_id !== null && !isNaN(Number(q.skill_id)) ? Number(q.skill_id) : null,
+          marks: Number(q.marks) || 1.0,
+          order_index: i,
+          tags: qTags,
+          images: qImages,
+          section_id: q.section_id || null,
+          difficulty: q.difficulty || 'medium',
+        };
+      })
     };
 
     try {
@@ -290,26 +341,118 @@ export default function AssessmentBuilder() {
       }
 
       if (r.ok && d.success) {
-        const newId = asmId || d.data.id;
+        const newId = asmId || d.data?.id;
         if (publish) {
           const pr = await fetch(`/api/verify/builder/assessments/${newId}/publish`, {
             method: 'POST'
           });
-          if (pr.ok) {
+          const pd = await pr.json();
+          if (pr.ok && pd.success) {
             toast.success('Assessment published!');
             navigate('/verify?tab=manage');
+            return;
+          } else {
+            toast.error(extractErrorMessage(pd?.detail, 'Publish failed'));
             return;
           }
         }
         toast.success('Assessment saved!');
         if (!asmId) navigate(`/verify?tab=builder&id=${newId}`);
       } else {
-        toast.error(d.detail || 'Save failed');
+        toast.error(extractErrorMessage(d?.detail, 'Save failed'));
       }
     } catch (e) {
-      toast.error('Save failed');
+      toast.error(extractErrorMessage(e, 'Save failed'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const validateStep1 = () => {
+    if (!title.trim()) {
+      toast.error('Assessment title is required.');
+      return false;
+    }
+    if (timeLimit === '' || !Number.isFinite(Number(timeLimit)) || Number(timeLimit) < 1 || Number(timeLimit) > 600) {
+      toast.error('Time limit must be between 1 and 600 minutes.');
+      return false;
+    }
+    if (passScore === '' || !Number.isFinite(Number(passScore)) || Number(passScore) < 0 || Number(passScore) > 100) {
+      toast.error('Pass score must be between 0% and 100%.');
+      return false;
+    }
+    return true;
+  };
+
+  const validateStep2 = () => {
+    if (questions.length === 0) {
+      toast.error('Please add at least one question before proceeding.');
+      return false;
+    }
+    for (let i = 0; i < questions.length; i += 1) {
+      const q = questions[i];
+      const label = `Question ${i + 1}`;
+      if (!q.question_text?.trim()) {
+        toast.error(`${label}: Question text is required.`);
+        return false;
+      }
+      if (!isPositiveNumber(q.marks || 0)) {
+        toast.error(`${label}: Marks must be greater than 0.`);
+        return false;
+      }
+      if (q.question_type === 'mcq') {
+        const filledOptions = (q.options || []).filter(opt => String(opt || '').trim());
+        if (filledOptions.length < 2) {
+          toast.error(`${label}: MCQ needs at least 2 options.`);
+          return false;
+        }
+        if (!q.correct_answer || !filledOptions.includes(q.correct_answer)) {
+          toast.error(`${label}: Please select a correct MCQ answer.`);
+          return false;
+        }
+      }
+      if (q.question_type === 'mcq_multi') {
+        const filledOptions = (q.options || []).filter(opt => String(opt || '').trim());
+        if (filledOptions.length < 2) {
+          toast.error(`${label}: Multi-select MCQ needs at least 2 options.`);
+          return false;
+        }
+      }
+      if (q.question_type === 'coding') {
+        const validTests = (q.test_cases || []).filter(tc => String(tc.expected_output ?? '').trim());
+        if (validTests.length < 1) {
+          toast.error(`${label}: Coding challenge needs at least 1 valid test case.`);
+          return false;
+        }
+      }
+    }
+
+    if (sections.length > 0) {
+      for (let s = 0; s < sections.length; s++) {
+        const sec = sections[s];
+        if (!sec.title?.trim()) {
+          toast.error(`Section ${s + 1} must have a title.`);
+          return false;
+        }
+        if (sec.time_limit_minutes !== null && sec.time_limit_minutes !== undefined && sec.time_limit_minutes !== '') {
+          if (!Number.isFinite(Number(sec.time_limit_minutes)) || Number(sec.time_limit_minutes) < 1) {
+            toast.error(`Section "${sec.title}" time limit must be at least 1 minute.`);
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handleNext = () => {
+    if (step === 1) {
+      if (!validateStep1()) return;
+      setStep(2);
+    } else if (step === 2) {
+      if (!validateStep2()) return;
+      setStep(3);
     }
   };
 
@@ -323,6 +466,18 @@ export default function AssessmentBuilder() {
     }
     if (questions.length === 0 && publish) return 'Add questions before publishing.';
 
+    if (sections.length > 0) {
+      for (let s = 0; s < sections.length; s++) {
+        const sec = sections[s];
+        if (!sec.title?.trim()) return `Section ${s + 1} must have a title.`;
+        if (sec.time_limit_minutes !== null && sec.time_limit_minutes !== undefined && sec.time_limit_minutes !== '') {
+          if (!Number.isFinite(Number(sec.time_limit_minutes)) || Number(sec.time_limit_minutes) < 1) {
+            return `Section "${sec.title}" time limit must be at least 1 minute.`;
+          }
+        }
+      }
+    }
+
     for (let i = 0; i < questions.length; i += 1) {
       const q = questions[i];
       const label = `Question ${i + 1}`;
@@ -335,7 +490,7 @@ export default function AssessmentBuilder() {
       }
       if (q.question_type === 'coding') {
         const validTests = (q.test_cases || []).filter(tc => String(tc.expected_output ?? '').trim());
-        if (validTests.length < 3) return `${label}: coding questions need at least 3 expected outputs.`;
+        if (validTests.length < 1) return `${label}: coding challenge needs at least 1 valid test case.`;
       }
       // Model answer - only validate on publish AND if it has a value (not empty)
       if (q.question_type === 'written' && publish && q.model_answer && !q.model_answer.trim()) {
@@ -343,6 +498,117 @@ export default function AssessmentBuilder() {
       }
     }
     return '';
+  };
+
+  // ── Bank Helpers ─────────────────────────────────────────────────────────
+  const sanitizeBankQuestion = (bq) => {
+    let opts = bq.options;
+    if (typeof opts === 'string') {
+      try { opts = JSON.parse(opts); } catch { opts = ['', '', '', '']; }
+    }
+    if (!Array.isArray(opts) || opts.length === 0) {
+      if (bq.question_type === 'mcq' || bq.question_type === 'mcq_multi') opts = ['', '', '', ''];
+      else opts = [];
+    }
+
+    let tcs = bq.test_cases;
+    if (typeof tcs === 'string') {
+      try { tcs = JSON.parse(tcs); } catch { tcs = []; }
+    }
+    if (!Array.isArray(tcs)) tcs = [];
+
+    let qTags = bq.tags;
+    if (typeof qTags === 'string') {
+      try { qTags = JSON.parse(qTags); } catch { qTags = []; }
+    }
+    if (!Array.isArray(qTags)) qTags = [];
+    qTags = qTags.filter(t => t && String(t).toLowerCase() !== 'extracted' && String(t).toLowerCase() !== 'extracted_tag');
+
+    return {
+      ...bq,
+      bank_id: bq.id,
+      id: `bank_${bq.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      options: opts,
+      test_cases: tcs,
+      tags: qTags
+    };
+  };
+
+  const isQuestionAdded = (bq) => {
+    return questions.some(q => 
+      (q.bank_id && q.bank_id === bq.id) || 
+      (q.id && (q.id === `bank_${bq.id}` || String(q.id).startsWith(`bank_${bq.id}_`))) ||
+      (q.question_text && bq.question_text && q.question_text.trim().toLowerCase() === bq.question_text.trim().toLowerCase())
+    );
+  };
+
+  const uniqueBankTopics = useMemo(() => {
+    const topics = new Set();
+    let hasUncategorized = false;
+    bankQuestions.forEach(q => {
+      if (q.topic && q.topic.trim()) {
+        topics.add(q.topic.trim());
+      } else {
+        hasUncategorized = true;
+      }
+    });
+    const list = [...topics].sort();
+    if (hasUncategorized) list.push('Uncategorized');
+    return list;
+  }, [bankQuestions]);
+
+  const filteredBankQuestions = useMemo(() => {
+    return bankQuestions.filter(bq => {
+      if (selectedBankFolder !== 'All') {
+        if (selectedBankFolder === 'Uncategorized') {
+          if (bq.topic && bq.topic.trim()) return false;
+        } else {
+          if ((bq.topic || '').trim() !== selectedBankFolder) return false;
+        }
+      }
+      if (bankSearch.trim()) {
+        const term = bankSearch.toLowerCase().trim();
+        const cleanTerm = term.startsWith('#') ? term.slice(1) : term;
+        const textMatch = (bq.question_text || '').toLowerCase().includes(term);
+        const topicMatch = (bq.topic || '').toLowerCase().includes(term);
+        const typeMatch = (bq.question_type || '').toLowerCase().includes(term);
+        const tags = Array.isArray(bq.tags) ? bq.tags : (typeof bq.tags === 'string' ? (() => { try { return JSON.parse(bq.tags); } catch { return []; } })() : []);
+        const tagMatch = tags.some(t => String(t).toLowerCase().includes(cleanTerm) || String(t).toLowerCase().includes(term));
+        if (!textMatch && !topicMatch && !typeMatch && !tagMatch) return false;
+      }
+      return true;
+    });
+  }, [bankQuestions, selectedBankFolder, bankSearch]);
+
+  const unaddedInCurrentView = filteredBankQuestions.filter(bq => !isQuestionAdded(bq));
+  const totalAddedFromBank = bankQuestions.filter(bq => isQuestionAdded(bq)).length;
+
+  const handleAddBankQuestion = (bq) => {
+    if (isQuestionAdded(bq)) return;
+    const newQ = sanitizeBankQuestion(bq);
+    setQuestions(prev => [...prev, newQ]);
+    toast.success('Question added to assessment');
+  };
+
+  const handleAddAllFromCurrentFolder = () => {
+    if (unaddedInCurrentView.length === 0) {
+      toast.error('All questions in this folder are already added.');
+      return;
+    }
+    const formatted = unaddedInCurrentView.map(bq => sanitizeBankQuestion(bq));
+    setQuestions(prev => [...prev, ...formatted]);
+    toast.success(`Added ${formatted.length} question(s) to assessment!`);
+  };
+
+  const handleAddAllFromEntireBank = () => {
+    const unaddedAll = bankQuestions.filter(bq => !isQuestionAdded(bq));
+    if (unaddedAll.length === 0) {
+      toast.error('All bank questions are already added.');
+      return;
+    }
+    const formatted = unaddedAll.map(bq => sanitizeBankQuestion(bq));
+    setQuestions(prev => [...prev, ...formatted]);
+    toast.success(`Added ${formatted.length} question(s) to assessment!`);
   };
 
   if (loading) return <HorizontalLoader label="Loading assessment..." />;
@@ -362,7 +628,7 @@ export default function AssessmentBuilder() {
             </button>
           )}
           {step < 3 ? (
-            <button onClick={() => setStep(step + 1)} className="px-6 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm">
+            <button onClick={handleNext} className="px-6 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm">
               Next Step
             </button>
           ) : (
@@ -384,12 +650,30 @@ export default function AssessmentBuilder() {
           { icon: Settings, label: 'Settings' },
           { icon: List, label: 'Questions' },
           { icon: Eye, label: 'Review' }
-        ].map((s, i) => (
-          <div key={i} className={`flex-1 flex items-center gap-3 p-4 rounded-xl border ${step === i + 1 ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-white border-gray-200 text-gray-500'}`}>
-            <s.icon size={18} />
-            <span className="text-xs font-semibold uppercase tracking-wider">Step {i + 1}: {s.label}</span>
-          </div>
-        ))}
+        ].map((s, i) => {
+          const targetStep = i + 1;
+          const isCurrent = step === targetStep;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                if (targetStep > step) {
+                  if (step === 1 && !validateStep1()) return;
+                  if (step === 2 && !validateStep2()) return;
+                  if (targetStep === 3 && step === 1) {
+                    if (!validateStep2()) return;
+                  }
+                }
+                setStep(targetStep);
+              }}
+              className={`flex-1 flex items-center gap-3 p-4 rounded-xl border text-left transition ${isCurrent ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+            >
+              <s.icon size={18} />
+              <span className="text-xs font-semibold uppercase tracking-wider">Step {i + 1}: {s.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* STEP 1: Settings */}
@@ -397,16 +681,16 @@ export default function AssessmentBuilder() {
         <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">Title <span className="text-red-500">*</span></label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" placeholder="e.g. Senior Frontend Developer Assessment" />
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" placeholder="e.g. Senior Frontend Developer Assessment" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">Description</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all min-h-[100px]" placeholder="Brief description of the assessment..." />
+            <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all min-h-[100px]" placeholder="Brief description of the assessment..." />
           </div>
           <div className="grid grid-cols-2 gap-6">
             <div>
               <label data-tooltip="Controls the kinds of questions allowed in this assessment" className="block text-xs font-medium text-gray-600 mb-2">Assessment Type</label>
-              <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all">
+              <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-gray-50 text-gray-900 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all">
                 <option value="Mixed">Mixed</option>
                 <option value="MCQ">Multiple Choice Only</option>
                 <option value="Coding">Coding Only</option>
@@ -415,11 +699,11 @@ export default function AssessmentBuilder() {
             </div>
             <div>
               <label data-tooltip="Maximum time a candidate has to complete the assessment" className="block text-xs font-medium text-gray-600 mb-2">Time Limit (Minutes)</label>
-              <input type="number" value={timeLimit} onChange={e => setTimeLimit(parseInt(e.target.value) || 0)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" />
+              <input type="number" value={timeLimit} onChange={e => setTimeLimit(parseInt(e.target.value) || 0)} className="w-full bg-gray-50 text-gray-900 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" />
             </div>
             <div>
               <label data-tooltip="Minimum percentage required to pass" className="block text-xs font-medium text-gray-600 mb-2">Pass Score (%)</label>
-              <input type="number" value={passScore} onChange={e => setPassScore(parseInt(e.target.value) || 0)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" />
+              <input type="number" value={passScore} onChange={e => setPassScore(parseInt(e.target.value) || 0)} className="w-full bg-gray-50 text-gray-900 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all" />
             </div>
           </div>
           <div className="flex gap-6 pt-4 border-t border-gray-200">
@@ -467,14 +751,14 @@ export default function AssessmentBuilder() {
                       <input
                         value={sec.title}
                         onChange={e => updateSection(sec.id, 'title', e.target.value)}
-                        placeholder="Section title"
-                        className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none"
+                        placeholder="Section title (e.g. Aptitude, Coding)"
+                        className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none text-gray-900 placeholder:text-gray-400 bg-white"
                       />
                       <input
                         value={sec.instructions || ''}
                         onChange={e => updateSection(sec.id, 'instructions', e.target.value)}
                         placeholder="Instructions (optional)"
-                        className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none"
+                        className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none text-gray-900 placeholder:text-gray-400 bg-white"
                       />
                       <div className="flex items-center gap-2">
                         <input
@@ -483,15 +767,41 @@ export default function AssessmentBuilder() {
                           onChange={e => updateSection(sec.id, 'time_limit_minutes', e.target.value ? Number(e.target.value) : null)}
                           placeholder="Time (mins)"
                           min={1}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-purple-300 outline-none text-gray-900 placeholder:text-gray-400 bg-white"
                         />
-                        <button onClick={() => removeSection(sec.id)} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors flex-shrink-0">
+                        <button onClick={() => removeSection(sec.id)} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors flex-shrink-0" title="Delete section">
                           <Trash2 size={13} />
                         </button>
                       </div>
                     </div>
                   </div>
                 ))}
+
+                {/* Total Section Time Summary */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
+                  <div>
+                    <span>Total Sections Time: </span>
+                    <strong className="text-purple-700 font-bold">
+                      {sections.reduce((acc, s) => acc + (Number(s.time_limit_minutes) || 0), 0)} mins
+                    </strong>
+                    <span className="text-gray-400 ml-1.5">(Overall Assessment setting: {timeLimit} mins)</span>
+                  </div>
+                  {sections.reduce((acc, s) => acc + (Number(s.time_limit_minutes) || 0), 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const totalMins = sections.reduce((acc, s) => acc + (Number(s.time_limit_minutes) || 0), 0);
+                        if (totalMins > 0) {
+                          setTimeLimit(totalMins);
+                          toast.success(`Set assessment time limit to ${totalMins} mins`);
+                        }
+                      }}
+                      className="text-purple-600 hover:text-purple-800 text-[11px] font-medium underline"
+                    >
+                      Sync Overall Time Limit
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -720,7 +1030,7 @@ export default function AssessmentBuilder() {
       {showImportUrl && createPortal(
         
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...importUrlOverlayHandlers}>
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8" onClick={e => e.stopPropagation()}>
+          <div className="bg-white text-gray-900 rounded-2xl w-full max-w-lg p-6 sm:p-8 relative shadow-2xl border border-gray-200 my-8 light-theme-override" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowImportUrl(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
               <X size={18} />
             </button>
@@ -739,7 +1049,7 @@ export default function AssessmentBuilder() {
                   value={importUrl}
                   onChange={e => setImportUrl(e.target.value)}
                   placeholder="https://leetcode.com/problems/two-sum/ or any page with questions"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+                  className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
                 />
               </div>
               <button type="submit" disabled={importingUrl} className="w-full py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50">
@@ -756,37 +1066,180 @@ export default function AssessmentBuilder() {
       {showBankImport && createPortal(
         
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" {...bankImportOverlayHandlers}>
-          <div className="bg-white rounded-2xl w-full max-w-2xl p-8 relative shadow-2xl border border-gray-200 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowBankImport(false)} className="absolute top-5 right-5 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-              <X size={18} />
-            </button>
-            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-              <List className="text-indigo-600"/> Import from Bank
-            </h2>
-            <div className="flex-1 overflow-y-auto min-h-[300px]">
-              {loadingBank ? (
-                <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-600" /></div>
-              ) : bankQuestions.length === 0 ? (
-                <div className="text-center py-10 text-gray-500">No questions found in bank.</div>
-              ) : (
-                <div className="space-y-3">
-                  {bankQuestions.map(bq => (
-                    <div key={bq.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">{bq.question_text}</p>
-                        <span className="text-xs text-gray-500 mt-1 block uppercase">{bq.question_type} | {bq.marks} pts</span>
-                      </div>
-                      <button onClick={() => {
-                        setQuestions([...questions, { ...bq, id: `bank_${bq.id}_${Date.now()}` }]);
-                        toast.success('Question added');
-                      }} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-semibold hover:bg-indigo-100">
-                        Add
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div className="bg-white text-gray-900 rounded-2xl w-full max-w-4xl p-6 sm:p-8 relative shadow-2xl border border-gray-200 max-h-[85vh] flex flex-col light-theme-override" onClick={e => e.stopPropagation()}>
+            
+            {/* Top Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2.5">
+                  <List className="text-purple-600" size={22} /> Import from Question Bank
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Browse by folders, search questions, and add them to your assessment without duplicates.
+                </p>
+              </div>
+              <button onClick={() => setShowBankImport(false)} className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
+                <X size={18} />
+              </button>
             </div>
+
+            {/* Search & Bulk Action Toolbar */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative flex-1">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                  <Search size={15} />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Search bank questions by keyword, topic, or #tag..."
+                  value={bankSearch}
+                  onChange={e => setBankSearch(e.target.value)}
+                  className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleAddAllFromCurrentFolder}
+                  disabled={unaddedInCurrentView.length === 0}
+                  className="px-3.5 py-2 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1.5 shadow-sm"
+                  title={`Add all unadded questions in ${selectedBankFolder === 'All' ? 'all folders' : selectedBankFolder}`}
+                >
+                  <Plus size={14} />
+                  {selectedBankFolder === 'All' ? `Add All (${unaddedInCurrentView.length})` : `Add Folder (${unaddedInCurrentView.length})`}
+                </button>
+                
+                {selectedBankFolder !== 'All' && (
+                  <button
+                    type="button"
+                    onClick={handleAddAllFromEntireBank}
+                    disabled={bankQuestions.filter(bq => !isQuestionAdded(bq)).length === 0}
+                    className="px-3 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1.5"
+                  >
+                    Add All Bank ({bankQuestions.filter(bq => !isQuestionAdded(bq)).length})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Main Body: Folders Sidebar + Question List */}
+            <div className="flex-1 min-h-[380px] overflow-hidden flex gap-4">
+              
+              {/* Folders Sidebar */}
+              <div className="w-56 border-r border-gray-200 pr-3 overflow-y-auto flex-shrink-0 flex flex-col gap-1">
+                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1 mb-1">
+                  Folders / Topics
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedBankFolder('All')}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition text-left ${selectedBankFolder === 'All' ? 'bg-purple-100 text-purple-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  <FolderOpen size={15} className={selectedBankFolder === 'All' ? 'text-purple-600' : 'text-gray-400'} />
+                  <span className="truncate flex-1">All Folders</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${selectedBankFolder === 'All' ? 'bg-white border-purple-200 text-purple-700' : 'bg-gray-100 border-gray-200 text-gray-500'}`}>
+                    {bankQuestions.length}
+                  </span>
+                </button>
+
+                {uniqueBankTopics.map(topic => {
+                  const count = topic === 'Uncategorized'
+                    ? bankQuestions.filter(q => !q.topic || !q.topic.trim()).length
+                    : bankQuestions.filter(q => (q.topic || '').trim() === topic).length;
+                  const isSelected = selectedBankFolder === topic;
+
+                  return (
+                    <button
+                      key={topic}
+                      type="button"
+                      onClick={() => setSelectedBankFolder(topic)}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition text-left ${isSelected ? 'bg-purple-100 text-purple-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                      <Folder size={15} className={isSelected ? 'text-purple-600' : 'text-gray-400'} />
+                      <span className="truncate flex-1">{topic}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${isSelected ? 'bg-white border-purple-200 text-purple-700' : 'bg-gray-100 border-gray-200 text-gray-500'}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Questions List */}
+              <div className="flex-1 overflow-y-auto pr-1">
+                {loadingBank ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                    <Loader2 className="animate-spin text-purple-600 mb-2" size={24} />
+                    <span className="text-xs">Loading question bank...</span>
+                  </div>
+                ) : filteredBankQuestions.length === 0 ? (
+                  <div className="text-center py-16 text-gray-400 text-sm">
+                    No questions found in this folder.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {filteredBankQuestions.map(bq => {
+                      const added = isQuestionAdded(bq);
+                      const bqTags = (Array.isArray(bq.tags) ? bq.tags : (typeof bq.tags === 'string' ? (() => { try { return JSON.parse(bq.tags); } catch { return []; } })() : [])).filter(t => t && String(t).toLowerCase() !== 'extracted' && String(t).toLowerCase() !== 'extracted_tag');
+
+                      return (
+                        <div key={bq.id} className={`flex items-start justify-between p-3.5 rounded-xl border transition ${added ? 'bg-gray-50/70 border-gray-200 opacity-90' : 'bg-white border-gray-200 hover:border-purple-200 hover:shadow-sm'}`}>
+                          <div className="flex-1 pr-3">
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              {bq.topic && <span className="text-[10px] font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-md flex items-center gap-1"><Folder size={10} /> {bq.topic}</span>}
+                              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md uppercase">{bq.question_type}</span>
+                              <span className="text-[10px] text-gray-400">{bq.marks} pt{bq.marks !== 1 ? 's' : ''}</span>
+                            </div>
+                            <p className="text-xs font-medium text-gray-800 line-clamp-2">{bq.question_text}</p>
+                            {bqTags.length > 0 && (
+                              <div className="flex gap-1 mt-1.5 flex-wrap">
+                                {bqTags.map((t, ti) => (
+                                  <span key={ti} className="text-[9px] font-semibold text-purple-600 bg-purple-50/60 border border-purple-100 px-1.5 py-0.5 rounded-full">#{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="shrink-0 mt-0.5">
+                            {added ? (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <Check size={13} /> Added
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAddBankQuestion(bq)}
+                                className="px-3.5 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700 transition shadow-sm flex items-center gap-1"
+                              >
+                                <Plus size={13} /> Add
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-3 text-xs text-gray-500">
+              <div>
+                <span>Assessment currently has <strong className="text-gray-800">{questions.length}</strong> question{questions.length !== 1 ? 's' : ''}</span>
+                {totalAddedFromBank > 0 && <span className="ml-2 text-purple-600 font-medium">({totalAddedFromBank} from bank)</span>}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBankImport(false)}
+                className="px-5 py-2 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition"
+              >
+                Done
+              </button>
+            </div>
+
           </div>
         </div>
       ,
