@@ -728,7 +728,11 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
         method: 'POST',
         credentials: 'include',
       });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d.success === false) {
+        toast.error(d.detail || d.message || 'Failed to start session');
+        return;
+      }
       if (d.success && d.data) {
         // Restore server-side state (strikes, time) on every start/resume
         if (d.data.strike_count !== undefined) {
@@ -736,7 +740,7 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
           setStrikeCount(d.data.strike_count);
         }
         if (d.data.time_remaining_seconds !== null && d.data.time_remaining_seconds !== undefined) {
-          setTimeLeft(d.data.time_remaining_seconds);
+          setSectionTimeLeft(d.data.time_remaining_seconds);
         }
         if (d.data.proctoring_config) setSavedProctoringConfig(d.data.proctoring_config);
         if (d.data.terminated_by_proctor) {
@@ -1138,41 +1142,86 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
               {renderError(q.id)}
             </div>
 
-            {/* MCQ Answer Input */}
-            {q.question_type === 'mcq' && (
-              <div className="space-y-3">
-                {(q.options || []).map((opt, i) => (
-                  <label 
-                    key={i} 
-                    onClick={() => {
-                      setAnswers({ ...answers, [q.id]: opt });
-                      if (errors[q.id]) {
-                        const newErrors = { ...errors };
-                        delete newErrors[q.id];
-                        setErrors(newErrors);
-                      }
-                    }}
-                    className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${answers[q.id] === opt ? 'bg-purple-50 border-purple-300 text-gray-900 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'}`}
-                  >
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${answers[q.id] === opt ? 'border-purple-600' : 'border-gray-300'}`}>
-                      {answers[q.id] === opt && <div className="w-2.5 h-2.5 rounded-full bg-purple-600" />}
+            {/* MCQ Answer Input (Single Choice) */}
+            {q.question_type === 'mcq' && (() => {
+              const opts = Array.isArray(q.options) ? q.options : (typeof q.options === 'string' ? (() => { try { return JSON.parse(q.options); } catch { return []; } })() : []);
+              const currentAns = answers[q.id] !== undefined ? answers[q.id] : answers[String(q.id)];
+              return (
+                <div className="space-y-3">
+                  {opts.map((opt, i) => (
+                    <div 
+                      key={i} 
+                      onClick={() => {
+                        setAnswers(prev => ({ ...prev, [q.id]: opt }));
+                        if (errors[q.id]) {
+                          setErrors(prev => {
+                            const next = { ...prev };
+                            delete next[q.id];
+                            return next;
+                          });
+                        }
+                      }}
+                      className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${currentAns === opt ? 'bg-purple-50 border-purple-300 text-gray-900 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${currentAns === opt ? 'border-purple-600' : 'border-gray-300'}`}>
+                        {currentAns === opt && <div className="w-2.5 h-2.5 rounded-full bg-purple-600" />}
+                      </div>
+                      <span className="text-sm font-medium">{opt}</span>
                     </div>
-                    <span className="text-sm font-medium">{opt}</span>
-                  </label>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* MCQ Multi Answer Input (Multiple Choice) */}
+            {q.question_type === 'mcq_multi' && (() => {
+              const opts = Array.isArray(q.options) ? q.options : (typeof q.options === 'string' ? (() => { try { return JSON.parse(q.options); } catch { return []; } })() : []);
+              const currentList = Array.isArray(answers[q.id]) ? answers[q.id] : (answers[q.id] ? [answers[q.id]] : []);
+              return (
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-400 font-medium italic">Select all options that apply:</p>
+                  {opts.map((opt, i) => {
+                    const isSelected = currentList.includes(opt);
+                    return (
+                      <div 
+                        key={i} 
+                        onClick={() => {
+                          const nextList = isSelected ? currentList.filter(x => x !== opt) : [...currentList, opt];
+                          setAnswers(prev => ({ ...prev, [q.id]: nextList }));
+                          if (errors[q.id]) {
+                            setErrors(prev => {
+                              const next = { ...prev };
+                              delete next[q.id];
+                              return next;
+                            });
+                          }
+                        }}
+                        className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'bg-purple-50 border-purple-300 text-gray-900 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 bg-white'}`}>
+                          {isSelected && <span className="text-xs font-bold">✓</span>}
+                        </div>
+                        <span className="text-sm font-medium">{opt}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Written Answer Input */}
             {q.question_type === 'written' && (
               <textarea
                 value={answers[q.id] || ''}
                 onChange={e => {
-                  setAnswers({ ...answers, [q.id]: e.target.value });
+                  const val = e.target.value;
+                  setAnswers(prev => ({ ...prev, [q.id]: val }));
                   if (errors[q.id]) {
-                    const newErrors = { ...errors };
-                    delete newErrors[q.id];
-                    setErrors(newErrors);
+                    setErrors(prev => {
+                      const next = { ...prev };
+                      delete next[q.id];
+                      return next;
+                    });
                   }
                 }}
                 placeholder="Type your answer here..."
@@ -1193,11 +1242,13 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
                     theme="vs-dark"
                     value={answers[q.id] !== undefined ? answers[q.id] : (q.starter_code || '')}
                     onChange={(val) => {
-                      setAnswers({ ...answers, [q.id]: val });
+                      setAnswers(prev => ({ ...prev, [q.id]: val }));
                       if (errors[q.id]) {
-                        const newErrors = { ...errors };
-                        delete newErrors[q.id];
-                        setErrors(newErrors);
+                        setErrors(prev => {
+                          const next = { ...prev };
+                          delete next[q.id];
+                          return next;
+                        });
                       }
                     }}
                     options={{

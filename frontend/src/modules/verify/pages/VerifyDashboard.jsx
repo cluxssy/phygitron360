@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Activity, CheckCircle, LayoutDashboard, User } from 'lucide-react';
+import { Shield, Activity, CheckCircle, LayoutDashboard, User, FileText, TrendingUp, Award } from 'lucide-react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -53,7 +53,7 @@ export default function VerifyDashboard() {
 
   // Role label for display only — uses user.role string, not PBAC (intentional)
   const getRoleDisplay = () => {
-    if (verifyView === 'personal') return 'My Assessments';
+    if (verifyView === 'personal') return 'Candidate';
     const r = user?.role?.toLowerCase();
     if (r === 'super_admin' || r === 'superadmin') return 'Super Admin';
     if (r === 'org_admin') return 'Organization Admin';
@@ -65,7 +65,10 @@ export default function VerifyDashboard() {
     if (verifyView === 'personal') {
       if (tab === 'take') return <AssessmentTaker />;
       if (tab === 'result') return <ResultScreen />;
-      return <CandidateDashboard />;
+      if (tab === 'my-assessments') return <CandidateDashboard activeTab="assessments" />;
+      if (tab === 'history') return <CandidateDashboard activeTab="history" />;
+      if (tab === 'performance' || tab === 'analytics') return <CandidateDashboard activeTab="analytics" />;
+      return <CandidateDashboard activeTab="overview" />;
     }
 
     switch (tab) {
@@ -77,14 +80,16 @@ export default function VerifyDashboard() {
       case 'analytics': return <AssessmentAnalytics assessmentId={params.get('id')} />;
       case 'bank': return <QuestionBank />;
       case 'live': return <LiveMonitor />;
-      case 'candidate': return <CandidateDashboard />;
+      case 'candidate': return <CandidateDashboard activeTab="overview" />;
+      case 'my-assessments': return <CandidateDashboard activeTab="assessments" />;
+      case 'history': return <CandidateDashboard activeTab="history" />;
       case 'proctoring': return <ProctoringSettings />;
-      default: return isManagementAvailable ? <ManageAssessments /> : <CandidateDashboard />;
+      default: return isManagementAvailable ? <ManageAssessments /> : <CandidateDashboard activeTab="overview" />;
     }
   };
 
-  // Show header for dashboard, manage, and candidate tabs
-  const showHeader = (verifyView === 'management' && (tab === 'dashboard' || tab === 'manage')) || verifyView === 'personal';
+  // Show header only for management dashboard/manage tabs — personal view has its own built-in header
+  const showHeader = verifyView === 'management' && (tab === 'dashboard' || tab === 'manage');
 
   // ── KPI Cards for Header (Admin) ──
   const [headerStats, setHeaderStats] = React.useState({ total: 0, active: 0, submissions: 0 });
@@ -96,17 +101,15 @@ export default function VerifyDashboard() {
         try {
           const promises = [];
           if (canViewAssessments || canManageAssessments) {
-              promises.push(fetch('/api/verify/builder/assessments', { credentials: 'include' }).then(r => r.json()));
+            promises.push(fetch('/api/verify/builder/assessments', { credentials: 'include' }).then(r => r.json()));
           } else {
-              promises.push(Promise.resolve({ data: [] }));
+            promises.push(Promise.resolve({ data: [] }));
           }
-          
           if (canManageAssessments) {
-              promises.push(fetch('/api/verify/submissions/recent', { credentials: 'include' }).then(r => r.json()));
+            promises.push(fetch('/api/verify/submissions/recent', { credentials: 'include' }).then(r => r.json()));
           } else {
-              promises.push(Promise.resolve({ data: [] }));
+            promises.push(Promise.resolve({ data: [] }));
           }
-
           const [assessments, submissions] = await Promise.all(promises);
           setHeaderStats({
             total: (assessments.data || []).length,
@@ -239,10 +242,24 @@ export default function VerifyDashboard() {
 
           {verifyView === 'personal' && (
             <>
-              <button className={tab === 'candidate' ? 'active' : ''} onClick={() => setTab('candidate')}>
-                <LayoutDashboard size={14} className="inline mr-2" /> Dashboard
+              <button
+                className={tab === 'candidate' || tab === 'dashboard' ? 'active' : ''}
+                onClick={() => setTab('candidate')}
+              >
+                <LayoutDashboard size={14} className="inline mr-2" /> Overview
               </button>
-              <button className={tab === 'candidate' ? 'active' : ''} onClick={() => setTab('candidate')}>My Assessments</button>
+              <button
+                className={tab === 'my-assessments' ? 'active' : ''}
+                onClick={() => setTab('my-assessments')}
+              >
+                <FileText size={14} className="inline mr-2" /> My Assessments
+              </button>
+              <button
+                className={tab === 'history' ? 'active' : ''}
+                onClick={() => setTab('history')}
+              >
+                <TrendingUp size={14} className="inline mr-2" /> History & Results
+              </button>
             </>
           )}
           <div className="sidebar-brand">
@@ -264,14 +281,18 @@ export default function VerifyDashboard() {
                     <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
                       {verifyView === 'management' 
                         ? (tab === 'dashboard' ? 'Dashboard' : 'Skills Assessment') 
-                        : 'My Assessments'}
+                        : (tab === 'history' ? 'Assessment History & Results' : tab === 'my-assessments' ? 'My Assessments' : 'Candidate Portal')}
                     </h1>
                     <p className="text-sm text-gray-500 mt-1">
                       {verifyView === 'management'
                         ? (tab === 'dashboard' 
                             ? 'Overview of all assessment activities and performance metrics'
                             : 'Create, manage, and evaluate skills assessments for candidates and employees.')
-                        : 'View and take your assigned skills assessments.'
+                        : (tab === 'history'
+                            ? 'Review past scores, completion dates, and detailed analysis.'
+                            : tab === 'my-assessments'
+                              ? 'Start, resume, or view your assigned skill assessments.'
+                              : 'Welcome to your assessment hub. Track assignments, deadlines, and results.')
                       }
                     </p>
                   </div>

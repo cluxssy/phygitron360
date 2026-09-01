@@ -190,14 +190,39 @@ class SubmissionRepository:
                     'questions': []
                 }
 
-                # Fetch the questions so the frontend can render the detailed answer review
-                cur.execute('''
-                    SELECT id, question_text, question_type, options, correct_answer, marks, difficulty, section_id, parent_id
-                    FROM assessment_questions
-                    WHERE assessment_id = %s
-                    ORDER BY id ASC
-                ''', (result['assessment_id'],))
-                result['assessment']['questions'] = [dict(q) for q in cur.fetchall()]
+                # Try loading candidate-specific custom questions (variants/shuffled) if present
+                cur.execute(
+                    "SELECT custom_questions FROM assessment_assignments WHERE assessment_id = %s AND user_id = %s LIMIT 1",
+                    (result['assessment_id'], result['user_id'])
+                )
+                assign_row = cur.fetchone()
+                if assign_row and assign_row.get("custom_questions"):
+                    cq = assign_row["custom_questions"]
+                    if isinstance(cq, str):
+                        try: cq = json.loads(cq)
+                        except Exception: cq = None
+                    if isinstance(cq, list) and len(cq) > 0:
+                        result['assessment']['questions'] = cq
+
+                # Fallback to standard assessment questions
+                if not result['assessment']['questions']:
+                    cur.execute('''
+                        SELECT id, question_text, question_type, options, correct_answer, marks, difficulty, section_id, parent_id
+                        FROM assessment_questions
+                        WHERE assessment_id = %s
+                        ORDER BY id ASC
+                    ''', (result['assessment_id'],))
+                    result['assessment']['questions'] = [dict(q) for q in cur.fetchall()]
+
+                # Sanitize questions options & marks
+                for q in result['assessment']['questions']:
+                    if isinstance(q.get("options"), str):
+                        try: q["options"] = json.loads(q["options"])
+                        except Exception: q["options"] = []
+                    elif q.get("options") is None:
+                        q["options"] = []
+                    if hasattr(q.get("marks"), '__float__'):
+                        q["marks"] = float(q["marks"])
                 
                 cur.execute("SELECT * FROM proctoring_flags WHERE assessment_result_id = %s", (result_id,))
                 result['flags'] = [dict(r) for r in cur.fetchall()]

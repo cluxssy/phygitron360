@@ -77,9 +77,12 @@ export const PROCTORING_FEATURES = [
 // Features where strictness does NOT apply — binary on/off controls.
 export const NOT_APPLICABLE_STRICTNESS = new Set(['full_screen', 'tab_switch', 'block_paste']);
 
-export function buildProctoringConfig(strictness = 'balanced', toggles = {}, current = null) {
+export function buildProctoringConfig(strictness = 'balanced', toggles = {}, current = null, customThresholds = null) {
   const level = STRICTNESS_LEVELS[strictness] ? strictness : 'balanced';
-  const base = STRICTNESS_LEVELS[level];
+  const base = {
+    ...STRICTNESS_LEVELS[level],
+    ...(customThresholds?.[level] || (customThresholds && typeof customThresholds === 'object' && !customThresholds.lenient ? customThresholds : {})),
+  };
   const features = {};
   PROCTORING_FEATURES.forEach(f => {
     features[f.key] = toggles[f.key] !== undefined
@@ -116,5 +119,5 @@ export function buildProctoringConfig(strictness = 'balanced', toggles = {}, cur
 export function normalizeProctoringConfig(saved) {
   if (!saved) return buildProctoringConfig('balanced', {});
   const strictness = saved.strictness && STRICTNESS_LEVELS[saved.strictness] ? saved.strictness : 'balanced';
-  return buildProctoringConfig(strictness, saved, saved);
+  return buildProctoringConfig(strictness, saved, saved, saved);
 }

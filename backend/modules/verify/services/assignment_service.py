@@ -25,19 +25,91 @@ class AssignmentService:
     def get_recent_assignments(self, limit: int = 10) -> List[Dict[str, Any]]:
         return self.repo.get_recent_assignments(limit)
 
-    def get_assignable_users(self) -> List[Dict[str, Any]]:
-        return self.repo.get_assignable_users()
+    def get_assignable_users(self, assessment_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self.repo.get_assignable_users(assessment_id=assessment_id)
+
+    def _shuffle_questions_for_user(self, questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Shuffles questions and MCQ options per candidate.
+        Preserves section grouping if sections exist, while randomizing question order within sections.
+        """
+        import copy
+        import random
+
+        if not questions:
+            return []
+
+        user_questions = copy.deepcopy(questions)
+
+        # 1. Shuffle options inside each MCQ question
+        for q in user_questions:
+            options = q.get("options")
+            if isinstance(options, str):
+                try:
+                    options = json.loads(options)
+                except Exception:
+                    options = []
+            if isinstance(options, list) and len(options) > 1:
+                shuffled_opts = list(options)
+                random.shuffle(shuffled_opts)
+                q["options"] = shuffled_opts
+
+        # 2. Shuffle questions within each section, or globally if no sections
+        has_sections = any(q.get("section_id") is not None for q in user_questions)
+        if has_sections:
+            section_map = {}
+            for q in user_questions:
+                sec_id = q.get("section_id")
+                section_map.setdefault(sec_id, []).append(q)
+
+            final_list = []
+            curr_idx = 0
+            for sec_id, s_questions in section_map.items():
+                random.shuffle(s_questions)
+                for q in s_questions:
+                    q["order_index"] = curr_idx
+                    curr_idx += 1
+                    final_list.append(q)
+            return final_list
+        else:
+            random.shuffle(user_questions)
+            for idx, q in enumerate(user_questions):
+                q["order_index"] = idx
+            return user_questions
 
     async def assign_assessment(
         self, asm_id: int, user_ids: List[int], assigned_by: int, 
         deadline: Optional[str] = None, generate_variants: bool = False,
-        question_ids: Optional[List[int]] = None, shuffle_questions: bool = False
+        question_ids: Optional[List[int]] = None, shuffle_questions: bool = False,
+        proctoring_strictness: Optional[str] = None, proctoring_config: Optional[Dict[str, Any]] = None
     ) -> int:
-        """Assign users to an assessment, optionally triggering AI variant generation."""
+        """Assign users to an assessment, blocking already-assigned candidates from re-assignment."""
         # Check if assessment exists
         asm = self.assessment_repo.get_assessment_by_id(asm_id)
         if not asm:
             raise ValueError("Assessment not found")
+
+        # Block re-assignment: partition into new vs already assigned (exempt cluxssy25@gmail.com)
+        already_assigned = []
+        new_uids = []
+        for uid in user_ids:
+            u_info = self.repo.get_user_info(uid)
+            email = (u_info.get("email") or "").lower() if u_info else ""
+            is_exempt = email == "cluxssy25@gmail.com"
+
+            existing = self.repo.get_assignment(asm_id, uid)
+            if existing and not is_exempt:
+                already_assigned.append(uid)
+            else:
+                new_uids.append(uid)
+
+        if not new_uids:
+            raise ValueError("All selected candidate(s) are already assigned to this assessment and cannot be re-assigned.")
+
+        # Determine effective proctoring config
+        final_proctoring_config = proctoring_config
+        if not final_proctoring_config and proctoring_strictness:
+            final_proctoring_config = {"strictness": proctoring_strictness}
 
         assigned_count = 0
         base_questions = asm.get('questions', [])
@@ -46,24 +118,32 @@ class AssignmentService:
         if question_ids:
             base_questions = [q for q in base_questions if q.get('id') in question_ids]
 
-        for uid in user_ids:
+        for uid in new_uids:
             existing = self.repo.get_assignment(asm_id, uid)
             if existing:
-                self.repo.update_assignment_status(asm_id, uid, 'pending', deadline)
+                self.repo.update_assignment_status(
+                    asm_id, uid, "pending", deadline=deadline, proctoring_config=final_proctoring_config
+                )
             else:
-                self.repo.create_assignment(asm_id, uid, assigned_by, deadline)
-                assigned_count += 1
+                self.repo.create_assignment(
+                    asm_id, uid, assigned_by, deadline, proctoring_config=final_proctoring_config
+                )
+            assigned_count += 1
 
-            # If shuffling is requested without generating AI variants, shuffle locally
-            if shuffle_questions and not generate_variants and base_questions:
-                import random
-                shuffled = base_questions.copy()
-                random.shuffle(shuffled)
+            # Determine initial custom questions
+            if generate_variants and base_questions:
+                # Set an initial shuffled version immediately so the test is playable right away
+                initial_qs = self._shuffle_questions_for_user(base_questions)
+                self.repo.update_custom_questions(asm_id, uid, initial_qs)
+            elif shuffle_questions and base_questions:
+                # Local randomized shuffle per user
+                shuffled = self._shuffle_questions_for_user(base_questions)
                 self.repo.update_custom_questions(asm_id, uid, shuffled)
-            elif question_ids and not generate_variants:
+            elif question_ids:
+                # Custom question subset without shuffling
                 self.repo.update_custom_questions(asm_id, uid, base_questions)
 
-        # Best-effort email + in-app notification
+        # Best-effort email + in-app notification for new assignments
         try:
             from backend.core.email_service_extended import send_assessment_notification_email
             from backend.modules.deploy.services.notification_service import add_notification
@@ -73,7 +153,7 @@ class AssignmentService:
             question_count = len(base_questions) if base_questions else None
             company_name = os.getenv("COMPANY_NAME", "Phygitron 360")
             
-            for uid in user_ids:
+            for uid in new_uids:
                 u_info = self.repo.get_user_info(uid)
                 if u_info and u_info.get("email"):
                     c_name = u_info.get("name") or u_info.get("email", "").split("@")[0]
@@ -100,7 +180,7 @@ class AssignmentService:
         # Generate AI variants in background
         if generate_variants and base_questions:
             asyncio.create_task(
-                self._generate_variants_background(asm_id, user_ids, base_questions)
+                self._generate_variants_background(asm_id, new_uids, base_questions)
             )
 
         return assigned_count
@@ -108,19 +188,52 @@ class AssignmentService:
     async def _generate_variants_background(
         self, asm_id: int, user_ids: List[int], questions: List[Dict[str, Any]]
     ):
-        system_prompt = """You are an assessment anti-cheating AI.
-Rewrite each question with different wording (same concept and difficulty).
-For MCQ questions, shuffle the options but keep correct_answer pointing to the correct content.
-Respond ONLY with valid JSON: {"questions": [ ...reworded questions... ]}"""
+        """Generates AI reworded questions and shuffled options for anti-cheating."""
+        system_prompt = """You are an expert assessment anti-cheating AI.
+For the given list of assessment questions:
+1. Reword each question text with clear, distinct phrasing while maintaining the exact same concept, meaning, and difficulty.
+2. For MCQ and MCQ Multi questions, preserve all valid option texts and randomize/shuffle the options list. Ensure correct_answer strictly matches the text of the correct option.
+3. For coding questions, keep test cases and starter code functionally identical, but adjust problem context/description variables if appropriate.
+4. Maintain all metadata fields for each question: id, question_type, marks, section_id, difficulty, programming_language, test_cases.
+5. Respond ONLY with valid JSON in this exact structure:
+{"questions": [ ...reworded questions with identical structure... ]}"""
 
         for user_id in user_ids:
             try:
-                prompt = f"Randomize these questions for user {user_id}:\n{json.dumps(questions, default=str)}"
+                # Prepare a sanitized version of questions for the prompt
+                prompt = (
+                    f"Generate unique AI variants for user {user_id}. Base questions:\n"
+                    f"{json.dumps(questions, default=str)}"
+                )
                 result = await self.ai.ai.generate_json(prompt, system_prompt)
-                variant_questions = result.get("questions", questions)
-                self.repo.update_custom_questions(asm_id, user_id, variant_questions)
+                variant_questions = result.get("questions")
+
+                if isinstance(variant_questions, list) and len(variant_questions) == len(questions):
+                    # Ensure question IDs, section IDs, and critical metadata are strictly preserved
+                    for i, vq in enumerate(variant_questions):
+                        orig_q = questions[i]
+                        vq["id"] = orig_q.get("id", vq.get("id"))
+                        vq["marks"] = orig_q.get("marks", vq.get("marks", 1.0))
+                        vq["section_id"] = orig_q.get("section_id", vq.get("section_id"))
+                        vq["question_type"] = orig_q.get("question_type", vq.get("question_type"))
+                        if orig_q.get("test_cases") and not vq.get("test_cases"):
+                            vq["test_cases"] = orig_q["test_cases"]
+                        if orig_q.get("programming_language") and not vq.get("programming_language"):
+                            vq["programming_language"] = orig_q["programming_language"]
+
+                    self.repo.update_custom_questions(asm_id, user_id, variant_questions)
+                    logger.info(f"Successfully generated AI variants for asm {asm_id}, user {user_id}")
+                else:
+                    logger.warning(f"AI variant result format unexpected for user {user_id}, using local shuffle")
+                    fallback_shuffled = self._shuffle_questions_for_user(questions)
+                    self.repo.update_custom_questions(asm_id, user_id, fallback_shuffled)
             except Exception as e:
-                logger.error(f"Variant generation failed for user {user_id}: {e}")
+                logger.error(f"Variant generation failed for user {user_id}: {e}, using local shuffle")
+                try:
+                    fallback_shuffled = self._shuffle_questions_for_user(questions)
+                    self.repo.update_custom_questions(asm_id, user_id, fallback_shuffled)
+                except Exception as ex2:
+                    logger.error(f"Fallback shuffle also failed for user {user_id}: {ex2}")
 
     def start_session(self, asm_id: int, user_id: int) -> Optional[Dict[str, Any]]:
         """

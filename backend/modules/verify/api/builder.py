@@ -327,7 +327,7 @@ def get_assessment(
             cur.execute(
                 """
                 SELECT aa.id AS assignment_id, aa.strike_count, aa.terminated_by_proctor,
-                       aa.proctoring_config, aa.started_at, aa.status
+                       aa.proctoring_config, aa.started_at, aa.status, aa.custom_questions
                 FROM assessment_assignments aa
                 WHERE aa.assessment_id = %s AND aa.user_id = %s
                 LIMIT 1
@@ -342,12 +342,24 @@ def get_assessment(
             session_already_started = started_at is not None
 
             time_remaining = None
-            if session_already_started and asm.get('time_limit_minutes'):
+            limit_mins = int(asm['time_limit_minutes']) if asm.get('time_limit_minutes') else None
+            if session_already_started and limit_mins and started_at:
                 now = datetime.now(timezone.utc)
                 if started_at.tzinfo is None:
                     started_at = started_at.replace(tzinfo=timezone.utc)
                 elapsed = (now - started_at).total_seconds()
-                time_remaining = max(0, int(asm['time_limit_minutes'] * 60 - elapsed))
+                time_remaining = max(0, int(limit_mins * 60 - elapsed))
+
+            # Apply candidate-specific custom questions (variants / shuffle / subset) if present
+            custom_qs = row.get('custom_questions')
+            if custom_qs:
+                if isinstance(custom_qs, str):
+                    try:
+                        custom_qs = json.loads(custom_qs)
+                    except Exception:
+                        custom_qs = None
+                if isinstance(custom_qs, list) and len(custom_qs) > 0:
+                    asm['questions'] = custom_qs
 
             asm.update({
                 "assignment_id": row['assignment_id'],

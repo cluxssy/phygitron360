@@ -1,7 +1,18 @@
 import json
+import decimal
+import datetime
 from typing import Optional, List, Dict, Any
 from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
+
+def _json_dumps(obj: Any) -> str:
+    def _default(o):
+        if isinstance(o, decimal.Decimal):
+            return int(o) if o % 1 == 0 else float(o)
+        if isinstance(o, (datetime.datetime, datetime.date)):
+            return o.isoformat()
+        return str(o)
+    return json.dumps(obj, default=_default)
 
 class AssignmentRepository:
     def __init__(self, tenant_id: str = 'public'):
@@ -10,17 +21,33 @@ class AssignmentRepository:
     def _set_search_path(self, cur):
         cur.execute(f'SET search_path TO "{self.tenant_id}"')
 
-    def get_assignable_users(self) -> List[Dict[str, Any]]:
+    def get_assignable_users(self, assessment_id: Optional[int] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                cur.execute('''
-                    SELECT id, username, role, is_active 
-                    FROM users 
-                    WHERE role != 'candidate' AND is_active = 1
-                    ORDER BY username ASC
-                ''')
+                if assessment_id is not None:
+                    cur.execute('''
+                        SELECT u.id, u.username, u.role, u.is_active,
+                               aa.id AS assignment_id, aa.status AS assignment_status,
+                               CASE 
+                                   WHEN LOWER(u.username) = 'cluxssy25@gmail.com' THEN FALSE
+                                   WHEN aa.id IS NOT NULL THEN TRUE 
+                                   ELSE FALSE 
+                               END AS is_assigned
+                        FROM users u
+                        LEFT JOIN assessment_assignments aa ON aa.user_id = u.id AND aa.assessment_id = %s
+                        WHERE u.role != 'candidate' AND u.is_active = 1
+                        ORDER BY (CASE WHEN LOWER(u.username) = 'cluxssy25@gmail.com' THEN FALSE ELSE (aa.id IS NOT NULL) END) ASC, u.username ASC
+                    ''', (assessment_id,))
+                else:
+                    cur.execute('''
+                        SELECT id, username, role, is_active,
+                               FALSE AS is_assigned, NULL AS assignment_status
+                        FROM users 
+                        WHERE role != 'candidate' AND is_active = 1
+                        ORDER BY username ASC
+                    ''')
                 return [dict(r) for r in cur.fetchall()]
         finally:
             conn.close()
@@ -49,25 +76,44 @@ class AssignmentRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                cur.execute('''
+                cur.execute(
+                    """
                     SELECT
                         aa.id              AS assignment_id,
-                        aa.assessment_id,
+                        a.id               AS assessment_id,
                         a.title,
                         a.description,
                         a.time_limit_minutes,
-                        aa.deadline,
+                        a.pass_score,
+                        aa.proctoring_config,
+                        a.sections,
                         aa.status,
-                        a.show_result_immediately,
+                        aa.deadline,
                         aa.started_at,
-                        aa.created_at      AS assigned_at
+                        aa.strike_count,
+                        aa.resume_count,
+                        aa.terminated_by_proctor,
+                        aa.created_at      AS assigned_at,
+                        ar.id              AS result_id,
+                        ar.score           AS score_percentage,
+                        ar.pass_status     AS passed,
+                        ar.submitted_at    AS graded_at
                     FROM assessment_assignments aa
                     JOIN assessments a ON a.id = aa.assessment_id
-                    WHERE aa.user_id = %s
-                      AND a.is_deleted = FALSE
+                    LEFT JOIN assessment_results ar ON ar.assessment_id = a.id AND ar.user_id = aa.user_id
+                    WHERE aa.user_id = %s AND a.is_deleted = FALSE
                     ORDER BY aa.created_at DESC
-                ''', (user_id,))
-                return [dict(r) for r in cur.fetchall()]
+                    """,
+                    (user_id,),
+                )
+                rows = []
+                for r in cur.fetchall():
+                    row = dict(r)
+                    for k, v in list(row.items()):
+                        if isinstance(v, decimal.Decimal):
+                            row[k] = int(v) if v % 1 == 0 else float(v)
+                    rows.append(row)
+                return rows
         finally:
             conn.close()
 
@@ -85,7 +131,10 @@ class AssignmentRepository:
         finally:
             conn.close()
 
-    def update_assignment_status(self, asm_id: int, user_id: int, status: str, deadline: Optional[str] = None) -> None:
+    def update_assignment_status(
+        self, asm_id: int, user_id: int, status: str, 
+        deadline: Optional[str] = None, proctoring_config: Optional[Dict[str, Any]] = None
+    ) -> None:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
@@ -95,6 +144,7 @@ class AssignmentRepository:
                     UPDATE assessment_assignments
                     SET status = %s, 
                         deadline = COALESCE(%s, deadline),
+                        proctoring_config = COALESCE(%s, proctoring_config),
                         started_at = CASE WHEN %s = 'pending' THEN NULL ELSE started_at END,
                         strike_count = CASE WHEN %s = 'pending' THEN 0 ELSE strike_count END,
                         resume_count = CASE WHEN %s = 'pending' THEN 0 ELSE resume_count END,
@@ -102,13 +152,16 @@ class AssignmentRepository:
                         updated_at = CURRENT_TIMESTAMP
                     WHERE assessment_id = %s AND user_id = %s
                     """,
-                    (status, deadline, status, status, status, status, asm_id, user_id),
+                    (status, deadline, _json_dumps(proctoring_config) if proctoring_config else None, status, status, status, status, asm_id, user_id),
                 )
                 conn.commit()
         finally:
             conn.close()
 
-    def create_assignment(self, asm_id: int, user_id: int, assigned_by: int, deadline: Optional[str] = None) -> None:
+    def create_assignment(
+        self, asm_id: int, user_id: int, assigned_by: int, 
+        deadline: Optional[str] = None, proctoring_config: Optional[Dict[str, Any]] = None
+    ) -> None:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
@@ -116,10 +169,10 @@ class AssignmentRepository:
                 cur.execute(
                     """
                     INSERT INTO assessment_assignments
-                        (assessment_id, user_id, assigned_by, deadline, status)
-                    VALUES (%s, %s, %s, %s, 'pending')
+                        (assessment_id, user_id, assigned_by, deadline, proctoring_config, status)
+                    VALUES (%s, %s, %s, %s, %s, 'pending')
                     """,
-                    (asm_id, user_id, assigned_by, deadline),
+                    (asm_id, user_id, assigned_by, deadline, _json_dumps(proctoring_config) if proctoring_config else None),
                 )
                 conn.commit()
         finally:
@@ -190,7 +243,7 @@ class AssignmentRepository:
                     SET custom_questions = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE assessment_id = %s AND user_id = %s
                     """,
-                    (json.dumps(custom_questions), asm_id, user_id),
+                    (_json_dumps(custom_questions), asm_id, user_id),
                 )
                 conn.commit()
         finally:
@@ -201,7 +254,7 @@ class AssignmentRepository:
         Start or resume a session.
         - Fresh start: sets started_at, status='in_progress'. Returns session meta.
         - Resume (already started): increments resume_count. Returns session meta.
-        - Not assigned: returns None.
+        - Not assigned: auto-creates assignment on the fly if assessment exists.
         """
         conn = get_db_connection()
         try:
@@ -220,8 +273,35 @@ class AssignmentRepository:
                 )
                 row = cur.fetchone()
                 if not row:
-                    return None
+                    cur.execute(
+                        "SELECT id, time_limit_minutes FROM assessments WHERE id = %s AND is_deleted = FALSE",
+                        (asm_id,)
+                    )
+                    asm_row = cur.fetchone()
+                    if not asm_row:
+                        return None
+                    
+                    cur.execute(
+                        """
+                        INSERT INTO assessment_assignments (assessment_id, user_id, assigned_by, status, started_at)
+                        VALUES (%s, %s, %s, 'in_progress', CURRENT_TIMESTAMP)
+                        RETURNING id, started_at, strike_count, resume_count, terminated_by_proctor, proctoring_config, status
+                        """,
+                        (asm_id, user_id, user_id)
+                    )
+                    new_aa = cur.fetchone()
+                    conn.commit()
+                    limit_mins = int(asm_row['time_limit_minutes']) if asm_row.get('time_limit_minutes') else None
+                    return {
+                        "assignment_id": new_aa['id'],
+                        "session_already_started": False,
+                        "strike_count": 0,
+                        "terminated_by_proctor": False,
+                        "proctoring_config": None,
+                        "time_remaining_seconds": (limit_mins * 60) if limit_mins else None,
+                    }
 
+                limit_mins = int(row['time_limit_minutes']) if row.get('time_limit_minutes') else None
                 if row['started_at'] is None:
                     # Fresh start
                     cur.execute(
@@ -236,7 +316,7 @@ class AssignmentRepository:
                     )
                     new_row = cur.fetchone()
                     started_at = new_row['started_at'] if new_row else None
-                    time_remaining = row['time_limit_minutes'] * 60 if row['time_limit_minutes'] else None
+                    time_remaining = (limit_mins * 60) if limit_mins else None
                 else:
                     # Resume — bump resume_count, do NOT reset started_at
                     cur.execute(
@@ -249,14 +329,14 @@ class AssignmentRepository:
                         (asm_id, user_id)
                     )
                     started_at = row['started_at']
-                    if row['time_limit_minutes'] and started_at:
+                    if limit_mins and started_at:
                         from datetime import datetime, timezone
                         now = datetime.now(timezone.utc)
                         if started_at.tzinfo is None:
                             from datetime import timezone as tz
                             started_at = started_at.replace(tzinfo=tz.utc)
                         elapsed = (now - started_at).total_seconds()
-                        time_remaining = max(0, int(row['time_limit_minutes'] * 60 - elapsed))
+                        time_remaining = max(0, int(limit_mins * 60 - elapsed))
                     else:
                         time_remaining = None
 
