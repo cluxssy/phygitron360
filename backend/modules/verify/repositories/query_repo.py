@@ -9,7 +9,7 @@ class QueryRepository:
         self.tenant_id = tenant_id
 
     def _set_search_path(self, cur):
-        cur.execute(f'SET search_path TO "{self.tenant_id}"')
+        cur.execute(f'SET search_path TO "{self.tenant_id}", public')
 
     def get_queries(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()

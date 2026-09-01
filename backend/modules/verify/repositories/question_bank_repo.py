@@ -26,7 +26,7 @@ class QuestionBankRepository:
         self.tenant_id = tenant_id
 
     def _set_search_path(self, cur):
-        cur.execute(f'SET search_path TO "{self.tenant_id}"')
+        cur.execute(f'SET search_path TO "{self.tenant_id}", public')
 
     def create_question(self, data: Dict[str, Any]) -> int:
         conn = get_db_connection()

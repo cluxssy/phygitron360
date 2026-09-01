@@ -9,6 +9,7 @@ All layouts adhere strictly to the Phygitron 360 White-Label Email Design standa
 import smtplib
 import logging
 import os
+from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -16,6 +17,15 @@ from email import encoders
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent / '.env'
+    load_dotenv(env_path)
+    root_env_path = Path(__file__).parent.parent.parent / '.env'
+    load_dotenv(root_env_path)
+except ImportError:
+    pass
 
 try:
     from common.services.email_template_builder import (
@@ -35,16 +45,16 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 def _get_smtp_config():
-    host = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER")
+    host = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER") or "smtp.gmail.com"
     port = int(os.getenv("SMTP_PORT", 587))
-    user = os.getenv("SMTP_USER") or os.getenv("SENDER_EMAIL")
-    password = os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD") or os.getenv("SENDER_PASSWORD")
+    user = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME") or os.getenv("SENDER_EMAIL") or os.getenv("SMTP_SENDER") or ""
+    password = os.getenv("SMTP_PASS") or os.getenv("SMTP_PASSWORD") or os.getenv("SENDER_PASSWORD") or ""
     return host, port, user, password
 
 
 def _send_via_smtp(msg: MIMEMultipart) -> bool:
     host, port, user, password = _get_smtp_config()
-    if not all([host, user, password]):
+    if not user or not password:
         return False
     try:
         with smtplib.SMTP(host, port) as server:
@@ -276,8 +286,8 @@ We wish you the very best!"""
         fallback_url=link
     )
 
-    host, _, user, _ = _get_smtp_config()
-    if not all([host, user]):
+    host, port, user, password = _get_smtp_config()
+    if not user or not password:
         _mock_log(to_email, subject, text_content)
         return True
 
