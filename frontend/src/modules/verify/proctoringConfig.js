@@ -17,10 +17,10 @@ export const STRICTNESS_LEVELS = {
     multiple_people_min_samples: 3,
     gaze_averted_sustain_ms: 9000,
     head_turn_sustain_ms: 9000,
-    gaze_bs_horiz_threshold: 0.10,
-    gaze_bs_vert_threshold: 0.16,
-    gaze_iris_x_threshold: 0.10,
-    gaze_iris_y_threshold: 0.14,
+    gaze_bs_horiz_threshold: 0.65,
+    gaze_bs_vert_threshold: 0.70,
+    gaze_iris_x_threshold: 0.26,
+    gaze_iris_y_threshold: 0.16,
     voice_sustain_ms: 4500,
     audio_cooldown_ms: 60000,
     tab_switch_cooldown_ms: 20000,
@@ -35,10 +35,10 @@ export const STRICTNESS_LEVELS = {
     multiple_people_min_samples: 3,
     gaze_averted_sustain_ms: 4000,
     head_turn_sustain_ms: 6000,
-    gaze_bs_horiz_threshold: 0.08,
-    gaze_bs_vert_threshold: 0.14,
-    gaze_iris_x_threshold: 0.08,
-    gaze_iris_y_threshold: 0.12,
+    gaze_bs_horiz_threshold: 0.55,
+    gaze_bs_vert_threshold: 0.60,
+    gaze_iris_x_threshold: 0.22,
+    gaze_iris_y_threshold: 0.20,
     voice_sustain_ms: 3200,
     audio_cooldown_ms: 45000,
     tab_switch_cooldown_ms: 15000,
@@ -53,10 +53,10 @@ export const STRICTNESS_LEVELS = {
     multiple_people_min_samples: 3,
     gaze_averted_sustain_ms: 3500,
     head_turn_sustain_ms: 3500,
-    gaze_bs_horiz_threshold: 0.06,
-    gaze_bs_vert_threshold: 0.11,
-    gaze_iris_x_threshold: 0.06,
-    gaze_iris_y_threshold: 0.10,
+    gaze_bs_horiz_threshold: 0.45,
+    gaze_bs_vert_threshold: 0.50,
+    gaze_iris_x_threshold: 0.18,
+    gaze_iris_y_threshold: 0.24,
     voice_sustain_ms: 2000,
     audio_cooldown_ms: 30000,
     tab_switch_cooldown_ms: 10000,
@@ -71,7 +71,7 @@ export const PROCTORING_FEATURES = [
   { key: 'eye_tracking', label: 'Detect Candidate Looking Away (Gaze)', description: 'Uses MediaPipe blendshapes to detect if the candidate looks off-screen.' },
   { key: 'head_turn', label: 'Detect Excessive Head Turning', description: 'Flags excessive head movement suggesting the candidate is reading from off-screen material.' },
   { key: 'audio_detect', label: 'Detect Speaking / Background Audio', description: 'Uses web audio FFT to detect murmuring or outside voices.' },
-  { key: 'block_paste', label: 'Block Copy / Paste into Answers', description: 'Prevents candidates from pasting pre-written content into text answers.' },
+  { key: 'block_paste', label: 'Block Copy / Paste into Answers', description: 'Prevents candidates from copying or pasting pre-written content into answers.' },
 ];
 
 // Features where strictness does NOT apply — binary on/off controls.
@@ -79,10 +79,18 @@ export const NOT_APPLICABLE_STRICTNESS = new Set(['full_screen', 'tab_switch', '
 
 export function buildProctoringConfig(strictness = 'balanced', toggles = {}, current = null, customThresholds = null) {
   const level = STRICTNESS_LEVELS[strictness] ? strictness : 'balanced';
+  const rawCustom = customThresholds?.[level] || (customThresholds && typeof customThresholds === 'object' && !customThresholds.lenient ? customThresholds : {}) || {};
+  
   const base = {
     ...STRICTNESS_LEVELS[level],
-    ...(customThresholds?.[level] || (customThresholds && typeof customThresholds === 'object' && !customThresholds.lenient ? customThresholds : {})),
+    ...rawCustom,
   };
+
+  // Map threshold aliases seamlessly
+  if (rawCustom.gaze_out_sustain_ms !== undefined) base.gaze_averted_sustain_ms = rawCustom.gaze_out_sustain_ms;
+  if (rawCustom.multi_face_samples !== undefined) base.multiple_people_min_samples = rawCustom.multi_face_samples;
+  if (rawCustom.audio_voice_sustain_ms !== undefined) base.voice_sustain_ms = rawCustom.audio_voice_sustain_ms;
+
   const features = {};
   PROCTORING_FEATURES.forEach(f => {
     features[f.key] = toggles[f.key] !== undefined

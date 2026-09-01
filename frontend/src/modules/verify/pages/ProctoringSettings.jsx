@@ -75,13 +75,13 @@ const DEFAULT_FEATURE_TOGGLES = {
 };
 
 const THRESHOLD_LABELS = {
-  max_strikes:             { label: 'Max Strikes before Termination', unit: 'strikes', desc: 'Number of violations before test is automatically terminated.' },
-  gaze_out_sustain_ms:     { label: 'Gaze Away Sustain', unit: 'ms', desc: 'Duration off-screen looking is tolerated before triggering a strike.' },
-  head_turn_sustain_ms:    { label: 'Head Turn Sustain', unit: 'ms', desc: 'Duration of excessive head turn tolerated before flagging.' },
-  face_missing_sustain_ms: { label: 'Face Missing Sustain', unit: 'ms', desc: 'Duration candidate face can be missing from webcam.' },
-  multi_face_samples:      { label: 'Multi-Face Sample Threshold', unit: 'samples', desc: 'Consecutive detection frames required to flag extra people.' },
-  audio_voice_sustain_ms:  { label: 'Voice / Murmur Sustain', unit: 'ms', desc: 'Duration of detected voice audio needed to issue a strike.' },
-  tab_switch_cooldown_ms:  { label: 'Tab Switch Cooldown', unit: 'ms', desc: 'Cooldown window between consecutive tab switch strikes.' },
+  max_strikes:                 { label: 'Max Strikes before Termination', unit: 'strikes', desc: 'Number of violations before test is automatically terminated.' },
+  gaze_averted_sustain_ms:     { label: 'Gaze Away Sustain', unit: 'ms', desc: 'Duration off-screen looking is tolerated before triggering a strike.' },
+  head_turn_sustain_ms:        { label: 'Head Turn Sustain', unit: 'ms', desc: 'Duration of excessive head turn tolerated before flagging.' },
+  face_missing_sustain_ms:     { label: 'Face Missing Sustain', unit: 'ms', desc: 'Duration candidate face can be missing from webcam.' },
+  multiple_people_min_samples: { label: 'Multi-Face Sample Threshold', unit: 'samples', desc: 'Consecutive detection frames required to flag extra people.' },
+  voice_sustain_ms:            { label: 'Voice / Murmur Sustain', unit: 'ms', desc: 'Duration of detected voice audio needed to issue a strike.' },
+  tab_switch_cooldown_ms:      { label: 'Tab Switch Cooldown', unit: 'ms', desc: 'Cooldown window between consecutive tab switch strikes.' },
 };
 
 export default function ProctoringSettings() {
