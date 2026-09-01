@@ -360,13 +360,40 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     };
   }, [hasStarted, proctoringConfig, handleProctoringViolation]);
 
+  // Copy / Paste / Context Menu blocking when block_paste is enabled
+  useEffect(() => {
+    if (!hasStarted || proctoringConfig.block_paste === false) return;
+
+    const handleCopyCutPaste = (e) => {
+      e.preventDefault();
+      toast.error('Copy/Paste is disabled during this proctored assessment.');
+      handleCheatAttemptRef.current?.(`Clipboard Access (${e.type}) Attempted`, 'proctoring_violation', 5000);
+    };
+
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener('copy', handleCopyCutPaste);
+    document.addEventListener('cut', handleCopyCutPaste);
+    document.addEventListener('paste', handleCopyCutPaste);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('copy', handleCopyCutPaste);
+      document.removeEventListener('cut', handleCopyCutPaste);
+      document.removeEventListener('paste', handleCopyCutPaste);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [hasStarted, proctoringConfig.block_paste]);
+
   // ── MediaPipe FaceLandmarker + Audio proctoring loop ──────────────────────────
   useEffect(() => {
     if (!hasStarted) return;
 
     // ── LAYER 1: SpeechRecognition ─────────────────────────────────────────────
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition && proctoringConfig.audio_detect) {
+    if (SpeechRecognition && proctoringConfig.audio_detect !== false) {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -392,9 +419,9 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     }
 
     // ── LAYER 2: Web Audio FFT (murmur detection, every 500ms) ────────────────
-    const VOICE_SUSTAIN_MS = proctoringConfig.voice_sustain_ms || 3200;
+    const VOICE_SUSTAIN_MS = proctoringConfig.voice_sustain_ms || proctoringConfig.audio_voice_sustain_ms || 3200;
     const audioInterval = setInterval(() => {
-      if (!analyserRef.current || !audioCtxRef.current) return;
+      if (proctoringConfig.audio_detect === false || !analyserRef.current || !audioCtxRef.current) return;
       const fftSize = analyserRef.current.fftSize;
       const sampleRate = audioCtxRef.current?.sampleRate || 44100;
       const binHz = sampleRate / fftSize;
@@ -437,19 +464,25 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     }, 500);
 
     // ── LAYER 3: Camera track health check (every 2s) ─────────────────────────
+    const hasCamFeatures = proctoringConfig.multiple_people !== false ||
+                           proctoringConfig.face_not_visible !== false ||
+                           proctoringConfig.eye_tracking !== false ||
+                           proctoringConfig.head_turn !== false;
+
     const trackHealthInterval = setInterval(() => {
-        const videoTrack = streamRef.current?.getVideoTracks?.()[0];
-        const trackDead = !videoTrack || videoTrack.readyState !== 'live' || videoTrack.muted || !videoTrack.enabled;
-        if (trackDead) {
-          if (!cameraTrackViolationTimer.current) cameraTrackViolationTimer.current = Date.now();
-          if (Date.now() - cameraTrackViolationTimer.current > 2000) {
-            handleCheatAttemptRef.current?.('Camera Disabled or Unavailable', 'camera_disabled', 15000);
-            cameraTrackViolationTimer.current = null;
-          }
-        } else {
+      if (!hasCamFeatures) return;
+      const videoTrack = streamRef.current?.getVideoTracks?.()[0];
+      const trackDead = !videoTrack || videoTrack.readyState !== 'live' || videoTrack.muted || !videoTrack.enabled;
+      if (trackDead) {
+        if (!cameraTrackViolationTimer.current) cameraTrackViolationTimer.current = Date.now();
+        if (Date.now() - cameraTrackViolationTimer.current > 2000) {
+          handleCheatAttemptRef.current?.('Camera Disabled or Unavailable', 'camera_disabled', 15000);
           cameraTrackViolationTimer.current = null;
         }
-      }, 2000);
+      } else {
+        cameraTrackViolationTimer.current = null;
+      }
+    }, 2000);
 
     // ── LAYER 4: MediaPipe FaceLandmarker CV detection (every 250ms) ──────────
     let rafId = null;
@@ -557,13 +590,14 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
         // MediaPipe: precise blendshape-based gaze + 3D matrix head pose
         const bs = blendshapes[0]?.categories || [];
         const get = (name) => bs.find(c => c.categoryName === name)?.score ?? 0;
-        const GAZE_H = 0.55, GAZE_V = 0.60;
-        gazeAverted = proctoringConfig.eye_tracking && (
+        const GAZE_H = proctoringConfig.gaze_bs_horiz_threshold || 0.55;
+        const GAZE_V = proctoringConfig.gaze_bs_vert_threshold || 0.60;
+        gazeAverted = proctoringConfig.eye_tracking !== false && (
           get('eyeLookOutLeft') > GAZE_H || get('eyeLookInLeft') > GAZE_H ||
           get('eyeLookOutRight') > GAZE_H || get('eyeLookInRight') > GAZE_H ||
           get('eyeLookUpRight') > GAZE_V  || get('eyeLookDownRight') > GAZE_V
         );
-        if (proctoringConfig.head_turn && matrices.length > 0) {
+        if (proctoringConfig.head_turn !== false && matrices.length > 0) {
           const m = matrices[0].data;
           if (m && m.length >= 16) {
             const yawDeg = Math.abs(Math.asin(Math.max(-1, Math.min(1, -m[2]))) * 180 / Math.PI);
@@ -578,12 +612,14 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
           const rightEye = lms[0], leftEye = lms[1];
           const eyeMidX = (rightEye.x + leftEye.x) / 2;
           const bboxCenterX = box.x + box.width / 2;
-          headTurnDetected = proctoringConfig.head_turn &&
+          headTurnDetected = proctoringConfig.head_turn !== false &&
             Math.abs(eyeMidX - bboxCenterX) / (box.width || 1) > 0.18;
           const eyeSpanX = Math.abs(leftEye.x - rightEye.x);
           const eyeOffsetNorm = Math.abs(eyeMidX - bboxCenterX) / (box.width || 1);
-          gazeAverted = proctoringConfig.eye_tracking &&
-            (eyeOffsetNorm > 0.22 || eyeSpanX / (box.width || 1) < 0.20);
+          const IRIS_X = proctoringConfig.gaze_iris_x_threshold || 0.22;
+          const IRIS_Y = proctoringConfig.gaze_iris_y_threshold || 0.20;
+          gazeAverted = proctoringConfig.eye_tracking !== false &&
+            (eyeOffsetNorm > IRIS_X || eyeSpanX / (box.width || 1) < IRIS_Y);
         }
       }
 
@@ -818,7 +854,8 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
     stopCamera();
 
     const timeTaken = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
-    const isMalpractice = strikes.current > 5 || autoSubmit === true && strikes.current > 0;
+    const maxStrikesAllowed = proctoringConfig.max_strikes || 5;
+    const isMalpractice = strikes.current >= maxStrikesAllowed || (autoSubmit === true && strikes.current > 0);
 
     try {
       const r = await fetch('/api/verify/submissions/submit', {
