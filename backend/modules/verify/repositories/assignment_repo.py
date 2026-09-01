@@ -59,7 +59,11 @@ class AssignmentRepository:
                 self._set_search_path(cur)
                 cur.execute(
                     """
-                    SELECT u.id AS user_id, u.username AS email, e.name
+                    SELECT u.id AS user_id, u.username AS email,
+                           COALESCE(
+                               NULLIF(e.name, ''),
+                               NULLIF((SELECT full_name FROM candidates c WHERE c.user_id = u.id OR c.email = u.username ORDER BY c.id DESC LIMIT 1), '')
+                           ) AS name
                     FROM users u
                     LEFT JOIN employees e ON e.employee_code = u.employee_code
                     WHERE u.id = %s

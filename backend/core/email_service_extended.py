@@ -204,31 +204,77 @@ def send_assessment_notification_email(
     pass_score: Optional[float] = None,
     assessment_link: Optional[str] = None
 ) -> bool:
-    """Assessment Assigned Email (Template Library #6)"""
-    subject = f"Next Step in Your Application — Assessment Assignment"
-    link = assessment_link or os.getenv("APP_BASE_URL", "https://app.phygitron.com/assessments")
+    """Universal Assessment Assigned Email for candidates and employees (Template Library #6)"""
+    safe_company = (company_name or "").strip() or os.getenv("COMPANY_NAME") or "Phygitron 360"
+    safe_title = (assessment_title or "Assessment").strip()
+    subject = f"Assessment Invitation — {safe_title} | {safe_company}"
     
+    env_base = os.getenv("APP_BASE_URL", "https://app.phygitron.com").rstrip("/")
+    link = assessment_link or f"{env_base}/verify"
+
+    # Clean display name
+    clean_name = (candidate_name or "").strip()
+    if clean_name:
+        clean_name = clean_name.title()
+    else:
+        clean_name = to_email.split("@")[0].replace(".", " ").replace("_", " ").title() if to_email else "Team Member"
+
+    # Format deadline
+    deadline_str = deadline.strip() if deadline and str(deadline).strip() else "Within 48 hours"
+
     body_html = f"""
-    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{candidate_name}</strong>,</p>
-    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">Thank you for your interest in career opportunities with <strong>{company_name}</strong>. After reviewing your profile, we are pleased to advance your application to the next evaluation phase.</p>
-    <p style="font-size: 15px; color: #334155; margin: 0 0 24px 0;">To help us better evaluate your core competencies and domain experience, you have been assigned an interactive talent assessment:</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0;">Hello <strong>{clean_name}</strong>,</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 20px 0;">You have been invited to complete an assessment on <strong>{safe_company} Assessment Central</strong>.</p>
+    <p style="font-size: 15px; color: #334155; margin: 0 0 24px 0;">Please review the assessment parameters below and access your portal to get started:</p>
     """
-    
-    details = [("Assessment Module", assessment_title), ("Completion Deadline", deadline or "ASAP")]
-    if duration_mins:
-        details.append(("Time Limit", f"{duration_mins} minutes"))
-    if question_count:
-        details.append(("Total Questions", str(question_count)))
-    if pass_score is not None:
+
+    duration_label = f"{duration_mins} Minutes" if (duration_mins and int(duration_mins) > 0) else "Untimed"
+    details = [
+        ("Assessment", safe_title),
+        ("Time Limit", duration_label),
+    ]
+    if question_count and int(question_count) > 0:
+        details.append(("Total Questions", f"{question_count} Questions"))
+    if pass_score is not None and float(pass_score) > 0:
         details.append(("Qualifying Score", f"{pass_score}%"))
-        
+    details.append(("Completion Deadline", deadline_str))
+
     body_html += build_key_value_table_html(details)
     body_html += build_cta_button_html(link, "Start Assessment &rarr;")
-    body_html += build_info_box_html("<strong>Recommendation:</strong> We recommend starting your assessment well ahead of the deadline to avoid any last-minute connectivity or scheduling conflicts. Ensure you have a quiet environment before commencing.")
+    body_html += build_info_box_html("<strong>Important Note:</strong> Please ensure you have a stable internet connection and an uninterrupted environment before commencing. We recommend starting well in advance of the deadline.", border_color="#7000FF")
 
-    html_content = build_white_label_html("Assessment Assigned", "Next Step: Candidate Assessment", body_html, f"{company_name} Talent Acquisition Team", link)
-    body_text = f"Hello {candidate_name},\n\nYou have been assigned an assessment: {assessment_title}.\nDeadline: {deadline}\n\nPlease access your portal to complete it: {link}\n\nWe appreciate your time and wish you the very best."
-    text_content = build_white_label_text("Assessment Assigned", "Next Step: Candidate Assessment", body_text, f"{company_name} Talent Acquisition Team", link)
+    html_content = build_white_label_html(
+        title="Assessment Assigned",
+        headline="You Have Been Assigned an Assessment",
+        body_html=body_html,
+        company_name=f"{safe_company} Assessment Team",
+        fallback_url=link
+    )
+
+    questions_line = f"\n- Total Questions: {question_count}" if question_count else ""
+    pass_score_line = f"\n- Qualifying Score: {pass_score}%" if (pass_score is not None and float(pass_score) > 0) else ""
+    body_text = f"""Hello {clean_name},
+
+You have been invited to complete an assessment on {safe_company} Assessment Central.
+
+Assessment Details:
+- Assessment: {safe_title}
+- Time Limit: {duration_label}{questions_line}{pass_score_line}
+- Completion Deadline: {deadline_str}
+
+Please access your portal to get started: {link}
+
+We recommend starting well in advance of the deadline in an uninterrupted environment.
+
+We wish you the very best!"""
+
+    text_content = build_white_label_text(
+        title="Assessment Assigned",
+        headline="You Have Been Assigned an Assessment",
+        body_text=body_text,
+        company_name=f"{safe_company} Assessment Team",
+        fallback_url=link
+    )
 
     host, _, user, _ = _get_smtp_config()
     if not all([host, user]):
@@ -237,7 +283,7 @@ def send_assessment_notification_email(
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["From"] = user
+        msg["From"] = f"{safe_company} Assessment Central <{user}>"
         msg["To"] = to_email
         msg["Subject"] = subject
         msg.attach(MIMEText(text_content, "plain"))
