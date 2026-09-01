@@ -14,12 +14,20 @@ Design Standards:
 import os
 
 def get_default_logo_url() -> str:
-    """Returns the HTTPS logo URL, falling back to BACKEND_URL/static/logo.png."""
+    """
+    Returns a publicly reachable HTTPS logo URL for emails.
+    - Uses LOGO_URL env var if explicitly configured.
+    - Builds https://{domain}/api/static/logo.png from APP_BASE_URL or BACKEND_URL.
+    - If base URL is localhost/http (dev mode), defaults to https://phygitron.com/api/static/logo.png
+      so email clients (e.g. Gmail) can load the logo over public HTTPS without broken image placeholders.
+    """
     custom_logo = os.getenv("LOGO_URL")
     if custom_logo:
         return custom_logo
-    backend_url = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
-    return f"{backend_url}/static/logo.png"
+    base_url = (os.getenv("APP_BASE_URL") or os.getenv("BACKEND_URL") or "https://phygitron.com").rstrip("/")
+    if "localhost" in base_url or base_url.startswith("http://"):
+        return "https://phygitron.com/api/static/logo.png"
+    return f"{base_url}/api/static/logo.png"
 
 
 def get_tenant_portal_url(subdomain: str = None, path: str = "") -> str:
