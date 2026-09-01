@@ -27,6 +27,8 @@ class AssignRequest(BaseModel):
     generate_variants: bool = False
     question_ids: Optional[List[int]] = None # Optional subset of questions to assign
     shuffle_questions: bool = False         # Whether to shuffle per user
+    proctoring_strictness: Optional[str] = None # 'lenient', 'balanced', 'strict'
+    proctoring_config: Optional[Dict[str, Any]] = None # Custom proctoring config dict
 
 class RecordStrikeRequest(BaseModel):
     violation_name: str = "proctoring_violation"
@@ -58,11 +60,12 @@ def list_my_tests(
 
 @router.get("/assignable-users")
 def list_assignable_users(
+    assessment_id: Optional[int] = None,
     current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssignmentService = Depends(get_assignment_service),
 ):
-    """List all active non-candidate users in the tenant."""
-    rows = service.get_assignable_users()
+    """List all active non-candidate users in the tenant, optionally annotated with assignment status for assessment_id."""
+    rows = service.get_assignable_users(assessment_id=assessment_id)
     return {"success": True, "data": rows}
 
 @router.get("/recent")
@@ -86,7 +89,7 @@ async def assign_assessment(
     current_user: dict = Depends(require_permission("verify.assessments.manage")),
     service: AssignmentService = Depends(get_assignment_service),
 ):
-    """Bulk-assign users to an assessment. Optionally generates AI variants."""
+    """Bulk-assign users to an assessment. Optionally generates AI variants and customizes proctoring."""
     try:
         assigned_count = await service.assign_assessment(
             asm_id=asm_id,
@@ -96,6 +99,8 @@ async def assign_assessment(
             generate_variants=body.generate_variants,
             question_ids=body.question_ids,
             shuffle_questions=body.shuffle_questions,
+            proctoring_strictness=body.proctoring_strictness,
+            proctoring_config=body.proctoring_config,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

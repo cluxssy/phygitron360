@@ -41,24 +41,37 @@ export default function ResultScreen() {
           }
           res.ai_summary = res.feedback?._ai_summary;
           
+          // Parse answers JSON if it's a string
+          let answersObj = res.answers || {};
+          if (typeof answersObj === 'string') {
+            try { answersObj = JSON.parse(answersObj); } catch(e) { answersObj = {}; }
+          }
+          res.answers = answersObj;
+
           // Parse scores_per_question into details array
           if (typeof res.scores_per_question === 'string') {
             try { res.scores_per_question = JSON.parse(res.scores_per_question); } catch(e) { res.scores_per_question = {}; }
           }
+          const scoresPerQ = res.scores_per_question || {};
           
           // Match details to questions array
           const details = [];
           if (res.assessment?.questions) {
-             res.assessment.questions.forEach(q => {
-               const scoreObj = (res.scores_per_question || {})[q.id];
-               if (scoreObj) {
-                 details.push({
-                   question_id: q.id,
-                   score_awarded: scoreObj.score,
-                   feedback: scoreObj.feedback,
-                   answer_provided: scoreObj.answer_provided
-                 });
+             res.assessment.questions.forEach((q, idx) => {
+               const qKey = q.id !== undefined && q.id !== null ? String(q.id) : String(idx);
+               const scoreObj = scoresPerQ[qKey] || scoresPerQ[q.id] || scoresPerQ[idx] || {};
+               
+               let ansProvided = scoreObj.answer_provided;
+               if (ansProvided === undefined || ansProvided === null || ansProvided === '') {
+                 ansProvided = answersObj[qKey] ?? answersObj[q.id] ?? answersObj[idx] ?? '';
                }
+
+               details.push({
+                 question_id: q.id,
+                 score_awarded: scoreObj.score !== undefined && scoreObj.score !== null ? scoreObj.score : 0,
+                 feedback: scoreObj.feedback || '',
+                 answer_provided: typeof ansProvided === 'object' ? JSON.stringify(ansProvided) : String(ansProvided || '')
+               });
              });
           }
           res.details = details;

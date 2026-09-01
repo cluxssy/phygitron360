@@ -1,4 +1,5 @@
 import json
+import decimal
 from typing import Optional, List, Dict, Any
 from backend.core.database import get_db_connection
 from psycopg2.extras import RealDictCursor
@@ -82,6 +83,10 @@ class AssessmentRepository:
                     return None
                 
                 result = dict(row)
+                for k, v in list(result.items()):
+                    if isinstance(v, decimal.Decimal):
+                        result[k] = int(v) if v % 1 == 0 else float(v)
+
                 if isinstance(result.get("sections"), str):
                     try:
                         result["sections"] = json.loads(result["sections"])
@@ -95,6 +100,9 @@ class AssessmentRepository:
                 questions = []
                 for r in raw_qs:
                     qd = dict(r)
+                    for k, v in list(qd.items()):
+                        if isinstance(v, decimal.Decimal):
+                            qd[k] = int(v) if v % 1 == 0 else float(v)
                     for col in ("options", "test_cases", "tags", "images"):
                         if isinstance(qd.get(col), str):
                             try:
