@@ -19,7 +19,7 @@ class AssignmentRepository:
         self.tenant_id = tenant_id
 
     def _set_search_path(self, cur):
-        cur.execute(f'SET search_path TO "{self.tenant_id}"')
+        cur.execute(f'SET search_path TO "{self.tenant_id}", public')
 
     def get_assignable_users(self, assessment_id: Optional[int] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
