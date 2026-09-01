@@ -131,6 +131,23 @@ async def start_background_workers():
                     print(f"[Migration] Renamed roles to templates for {t_id}", flush=True)
                 except Exception as e:
                     conn.rollback()
+
+                # Migrate legacy holiday types if present
+                try:
+                    cur.execute(f'SET search_path TO "{t_id}", public')
+                    cur.execute('''
+                        UPDATE company_holidays 
+                        SET holiday_type = 'regular_holiday' 
+                        WHERE holiday_type IN ('company_holiday', 'festival')
+                    ''')
+                    cur.execute('''
+                        UPDATE company_holidays 
+                        SET holiday_type = 'restricted_holiday' 
+                        WHERE holiday_type = 'optional_holiday'
+                    ''')
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
     finally:
         conn.close()
 

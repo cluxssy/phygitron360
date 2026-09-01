@@ -668,7 +668,7 @@ class AttendanceService:
         WEEKS_BACK = 12
         start_monday = this_monday - timedelta(weeks=WEEKS_BACK)
 
-        # Fetch attendance records and holidays for the window
+        # Fetch attendance records, holidays, and approved leaves for the window
         window_start_str = start_monday.strftime('%Y-%m-%d')
         window_end_str = (this_monday + timedelta(days=6)).strftime('%Y-%m-%d')  # next Sunday
         att_records = self.repo.get_attendance_in_range(employee_code, window_start_str, window_end_str, self.tenant_id)
@@ -676,6 +676,21 @@ class AttendanceService:
         
         holidays_in_window = self.holiday_repo.get_holidays_in_range(window_start_str, window_end_str, self.tenant_id)
         holidays_map = {h['date']: h for h in holidays_in_window}
+
+        # Fetch approved leaves for the employee
+        leaves = self.repo.get_employee_leaves(employee_code, self.tenant_id)
+        approved_leaves = {}
+        for l in leaves:
+            if l.get('status') == 'Approved':
+                try:
+                    ld1 = datetime.strptime(l['start_date'], '%Y-%m-%d').date()
+                    ld2 = datetime.strptime(l['end_date'], '%Y-%m-%d').date()
+                    curr_l = ld1
+                    while curr_l <= ld2:
+                        approved_leaves[curr_l.strftime('%Y-%m-%d')] = l
+                        curr_l += timedelta(days=1)
+                except Exception:
+                    continue
 
         # Fetch pending correction requests in this range
         pending_corrections = self.repo.get_my_corrections(employee_code, self.tenant_id)
@@ -699,6 +714,10 @@ class AttendanceService:
             holiday_type = h_info.get('holiday_type') if h_info else None
             is_half_day = bool(h_info.get('is_half_day')) if h_info else False
 
+            l_info = approved_leaves.get(d_str)
+            is_leave = bool(l_info)
+            leave_type = l_info.get('leave_type') if l_info else None
+
             if doj and d < doj:
                 track = 'before_join'
             elif d > today:
@@ -708,8 +727,8 @@ class AttendanceService:
             else:
                 track = 'requested'
 
-            # Compute effective status from attendance record
-            status = 'Holiday' if is_holiday else 'No Record'
+            # Compute effective status from attendance record & leaves & holidays
+            status = 'Holiday' if is_holiday else ('Leave' if is_leave else 'No Record')
             clock_in = None
             clock_out = None
             work_log = None
@@ -736,7 +755,23 @@ class AttendanceService:
                 elif clock_in:
                     status = 'Active' if d_str == today_str else 'Missing Clock-Out'
                 else:
-                    status = 'Holiday' if is_holiday else 'Absent'
+                    if is_leave:
+                        status = 'Leave'
+                    elif is_holiday:
+                        status = 'Holiday'
+                    else:
+                        status = 'Absent'
+            else:
+                if is_leave:
+                    status = 'Leave'
+                elif is_holiday:
+                    status = 'Holiday'
+                elif d.weekday() >= 5:
+                    status = 'Weekend'
+                elif d < today:
+                    status = 'Absent'
+                else:
+                    status = 'No Record'
 
             days_out.append({
                 'date': d_str,
@@ -750,7 +785,9 @@ class AttendanceService:
                 'is_holiday': is_holiday,
                 'holiday_name': holiday_name,
                 'holiday_type': holiday_type,
-                'is_half_day': is_half_day
+                'is_half_day': is_half_day,
+                'is_leave': is_leave,
+                'leave_type': leave_type
             })
 
         return {

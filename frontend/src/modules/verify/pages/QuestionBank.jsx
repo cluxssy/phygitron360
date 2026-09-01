@@ -20,7 +20,7 @@ function Modal({ onClose, title, children, maxWidth = "max-w-lg" }) {
   const overlayHandlers = useOverlayClose(onClose);
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" {...overlayHandlers}>
-      <div className={`bg-white rounded-2xl w-full ${maxWidth} p-8 relative shadow-2xl border border-gray-200 my-8`} onClick={e => e.stopPropagation()}>
+      <div className={`bg-white text-gray-900 rounded-2xl w-full ${maxWidth} p-8 relative shadow-2xl border border-gray-200 my-8 light-theme-override`} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">{title}</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={18} /></button>
@@ -174,7 +174,7 @@ function ImportModal({ onClose, onImport, uniqueTopics }) {
               value={topic}
               onChange={e => setTopic(e.target.value)}
               list="topic-list"
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
+              className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
               placeholder="e.g. Java Basics"
             />
             <datalist id="topic-list">
@@ -187,7 +187,7 @@ function ImportModal({ onClose, onImport, uniqueTopics }) {
               type="text"
               value={tags}
               onChange={e => setTags(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
+              className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
               placeholder="Comma separated"
             />
           </div>
@@ -327,7 +327,7 @@ function ImportUrlModal({ onClose, onImport, uniqueTopics }) {
             type="url" 
             value={url} 
             onChange={e=>setUrl(e.target.value)} 
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
+            className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
             placeholder="https://leetcode.com/problems/..."
           />
         </div>
@@ -340,7 +340,7 @@ function ImportUrlModal({ onClose, onImport, uniqueTopics }) {
               value={topic} 
               onChange={e=>setTopic(e.target.value)} 
               list="topic-list-url"
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
+              className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
               placeholder="e.g. DSA"
             />
             <datalist id="topic-list-url">
@@ -353,7 +353,7 @@ function ImportUrlModal({ onClose, onImport, uniqueTopics }) {
               type="text" 
               value={tagsInput} 
               onChange={e=>setTagsInput(e.target.value)} 
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
+              className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
               placeholder="Comma separated"
             />
           </div>
@@ -371,30 +371,81 @@ function ImportUrlModal({ onClose, onImport, uniqueTopics }) {
 }
 
 function ManualEntryModal({ onClose, onSaved, uniqueTopics, initialData = null }) {
+  const parseTags = (t) => {
+    if (Array.isArray(t)) return t.filter(x => x && String(x).toLowerCase() !== 'extracted' && String(x).toLowerCase() !== 'extracted_tag');
+    if (typeof t === 'string') {
+      try {
+        const p = JSON.parse(t);
+        if (Array.isArray(p)) return p.filter(x => x && String(x).toLowerCase() !== 'extracted' && String(x).toLowerCase() !== 'extracted_tag');
+      } catch {}
+      return t.split(',').map(s => s.trim()).filter(x => x && x.toLowerCase() !== 'extracted' && x.toLowerCase() !== 'extracted_tag');
+    }
+    return [];
+  };
+
+  const parseOptions = (opts) => {
+    if (Array.isArray(opts)) return opts;
+    if (typeof opts === 'string') {
+      try {
+        const p = JSON.parse(opts);
+        if (Array.isArray(p)) return p;
+      } catch {}
+    }
+    return ['', '', '', ''];
+  };
+
+  const parseTestCases = (tc) => {
+    if (Array.isArray(tc)) return tc;
+    if (typeof tc === 'string') {
+      try {
+        const p = JSON.parse(tc);
+        if (Array.isArray(p)) return p;
+      } catch {}
+    }
+    return [];
+  };
+
   const [form, setForm] = useState({
     question_text: initialData?.question_text || '',
     question_type: initialData?.question_type || 'mcq',
-    options: initialData?.options || ['', '', '', ''],
+    options: parseOptions(initialData?.options),
     correct_answer: initialData?.correct_answer || '',
     model_answer: initialData?.model_answer || '',
     marks: initialData?.marks || 1,
     topic: initialData?.topic || '',
-    tags: initialData?.tags || [],
+    tags: parseTags(initialData?.tags),
     starter_code: initialData?.starter_code || '',
     programming_language: initialData?.programming_language || 'python',
-    test_cases: initialData?.test_cases || []
+    test_cases: parseTestCases(initialData?.test_cases)
   });
   
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({...f, [k]:v}));
 
+  const addTagsFromString = (str) => {
+    if (!str || !str.trim()) return;
+    const incoming = str.split(',').map(s => s.trim()).filter(s => s && s.toLowerCase() !== 'extracted' && s.toLowerCase() !== 'extracted_tag');
+    if (!incoming.length) return;
+    const merged = [...(form.tags || [])];
+    incoming.forEach(tag => {
+      if (!merged.includes(tag)) {
+        merged.push(tag);
+      }
+    });
+    set('tags', merged);
+    setTagInput('');
+  };
+
   const save = async () => {
     if(!form.question_text.trim()) { toast.error('Question text required'); return; }
     
-    const currentTags = [...form.tags];
-    if (tagInput.trim() && !currentTags.includes(tagInput.trim())) {
-      currentTags.push(tagInput.trim());
+    let currentTags = [...(form.tags || [])];
+    if (tagInput.trim()) {
+      const incoming = tagInput.split(',').map(s => s.trim()).filter(s => s && s.toLowerCase() !== 'extracted' && s.toLowerCase() !== 'extracted_tag');
+      incoming.forEach(tag => {
+        if (!currentTags.includes(tag)) currentTags.push(tag);
+      });
     }
 
     setSaving(true);
@@ -430,26 +481,26 @@ function ManualEntryModal({ onClose, onSaved, uniqueTopics, initialData = null }
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Question Type</label>
-            <select className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" value={form.question_type} onChange={e=>set('question_type',e.target.value)}>
-              {QTYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+            <select className="w-full bg-gray-50 text-gray-900 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" value={form.question_type} onChange={e=>set('question_type',e.target.value)}>
+              {QTYPES.map(t=><option key={t.value} value={t.value} className="bg-white text-gray-900">{t.label}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Topic Folder</label>
-            <input type="text" list="topic-list-manual" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" value={form.topic} onChange={e=>set('topic',e.target.value)} placeholder="e.g. React" />
+            <input type="text" list="topic-list-manual" className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" value={form.topic} onChange={e=>set('topic',e.target.value)} placeholder="e.g. React" />
             <datalist id="topic-list-manual">
               {uniqueTopics.map(t => <option key={t} value={t} />)}
             </datalist>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Marks</label>
-            <input type="number" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" min={0.5} step={0.5} value={form.marks} onChange={e=>set('marks',parseFloat(e.target.value))} />
+            <input type="number" className="w-full bg-gray-50 text-gray-900 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" min={0.5} step={0.5} value={form.marks} onChange={e=>set('marks',parseFloat(e.target.value))} />
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Question Text <span className="text-red-500">*</span></label>
-          <textarea className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" rows={4} value={form.question_text} onChange={e=>set('question_text',e.target.value)} placeholder="Enter question..." />
+          <textarea className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" rows={4} value={form.question_text} onChange={e=>set('question_text',e.target.value)} placeholder="Enter question..." />
         </div>
 
         {(form.question_type==='mcq'||form.question_type==='mcq_multi') && (
@@ -474,7 +525,7 @@ function ManualEntryModal({ onClose, onSaved, uniqueTopics, initialData = null }
                     }
                   }} 
                 />
-                <input className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-purple-400" value={opt} onChange={e=>{const o=[...form.options];o[oi]=e.target.value;set('options',o);}} placeholder={`Option ${String.fromCharCode(65+oi)}`}/>
+                <input className="flex-1 bg-white text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-purple-400" value={opt} onChange={e=>{const o=[...form.options];o[oi]=e.target.value;set('options',o);}} placeholder={`Option ${String.fromCharCode(65+oi)}`}/>
                 <button type="button" className="p-2 text-gray-400 hover:text-rose-500" onClick={()=>set('options',form.options.filter((_,i)=>i!==oi))}><Trash2 size={16}/></button>
               </div>
             ))}
@@ -485,7 +536,7 @@ function ManualEntryModal({ onClose, onSaved, uniqueTopics, initialData = null }
         {form.question_type==='written' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Model Answer</label>
-            <textarea className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" rows={3} value={form.model_answer} onChange={e=>set('model_answer',e.target.value)} placeholder="Ideal answer to guide grading..." />
+            <textarea className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" rows={3} value={form.model_answer} onChange={e=>set('model_answer',e.target.value)} placeholder="Ideal answer to guide grading..." />
           </div>
         )}
 
@@ -506,20 +557,32 @@ function ManualEntryModal({ onClose, onSaved, uniqueTopics, initialData = null }
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Tag size={14} /> Tags</label>
           <div className="flex flex-wrap gap-2 mb-2">
-            {form.tags.map((tag,ti)=>(
+            {(form.tags || []).map((tag,ti)=>(
               <span key={ti} className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-                {tag}
+                #{tag}
                 <button type="button" onClick={()=>set('tags',form.tags.filter((_,i)=>i!==ti))} className="hover:text-purple-900"><X size={12}/></button>
               </span>
             ))}
           </div>
           <input 
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" 
+            className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-purple-400 outline-none" 
             value={tagInput} 
-            onChange={e=>setTagInput(e.target.value)} 
-            placeholder="Type tag and press Enter"
-            onKeyDown={e=>{if(e.key==='Enter'&&tagInput.trim()){e.preventDefault();if(!form.tags.includes(tagInput.trim()))set('tags',[...form.tags,tagInput.trim()]);setTagInput('');}}}
-            onBlur={()=>{if(tagInput.trim()&&!form.tags.includes(tagInput.trim())){set('tags',[...form.tags,tagInput.trim()]);setTagInput('');}}}
+            onChange={e => {
+              const val = e.target.value;
+              if (val.includes(',')) {
+                addTagsFromString(val);
+              } else {
+                setTagInput(val);
+              }
+            }} 
+            placeholder="Type tag and press Enter (or separate by commas)"
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addTagsFromString(tagInput);
+              }
+            }}
+            onBlur={() => addTagsFromString(tagInput)}
           />
         </div>
 
@@ -543,6 +606,7 @@ export default function QuestionBank() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTopic, setSelectedTopic] = useState('All');
   const [selectedType, setSelectedType] = useState('All');
+  const [selectedTag, setSelectedTag] = useState(null);
 
   // Modals
   const [showImport, setShowImport] = useState(false);
@@ -555,7 +619,32 @@ export default function QuestionBank() {
     try {
       const r = await fetch('/api/verify/question-bank', { credentials: 'include' });
       const d = await r.json();
-      setQuestions(d.data || []);
+      const raw = d.data || [];
+      const formatted = raw.map(q => {
+        let tags = q.tags;
+        if (typeof tags === 'string') {
+          try { tags = JSON.parse(tags); } catch { tags = tags.split(',').map(s=>s.trim()).filter(Boolean); }
+        }
+        if (!Array.isArray(tags)) tags = [];
+
+        let options = q.options;
+        if (typeof options === 'string') {
+          try { options = JSON.parse(options); } catch { options = []; }
+        }
+
+        let test_cases = q.test_cases;
+        if (typeof test_cases === 'string') {
+          try { test_cases = JSON.parse(test_cases); } catch { test_cases = []; }
+        }
+
+        return {
+          ...q,
+          tags: tags.filter(t => t && String(t).toLowerCase() !== 'extracted' && String(t).toLowerCase() !== 'extracted_tag'),
+          options,
+          test_cases
+        };
+      });
+      setQuestions(formatted);
     } catch {
       toast.error('Failed to load question bank');
     } finally {
@@ -588,16 +677,17 @@ export default function QuestionBank() {
       const r = await fetch(`/api/verify/question-bank/${q.id}`, { credentials: 'include' });
       const d = await r.json();
       if (r.ok) {
-        if (typeof d.data.test_cases === 'string') {
-           try { d.data.test_cases = JSON.parse(d.data.test_cases); } catch {}
+        const item = d.data;
+        if (typeof item.test_cases === 'string') {
+           try { item.test_cases = JSON.parse(item.test_cases); } catch {}
         }
-        if (typeof d.data.options === 'string') {
-           try { d.data.options = JSON.parse(d.data.options); } catch {}
+        if (typeof item.options === 'string') {
+           try { item.options = JSON.parse(item.options); } catch {}
         }
-        if (typeof d.data.tags === 'string') {
-           try { d.data.tags = JSON.parse(d.data.tags); } catch {}
+        if (typeof item.tags === 'string') {
+           try { item.tags = JSON.parse(item.tags); } catch {}
         }
-        setEditQuestion(d.data);
+        setEditQuestion(item);
       }
     } catch {
       toast.error('Failed to load question details');
@@ -609,45 +699,111 @@ export default function QuestionBank() {
     return [...new Set(topics)].sort();
   }, [questions]);
 
+  const uniqueTags = useMemo(() => {
+    const tagSet = new Set();
+    questions.forEach(q => {
+      if (Array.isArray(q.tags)) {
+        q.tags.forEach(t => {
+          if (t && String(t).trim()) tagSet.add(String(t).trim());
+        });
+      }
+    });
+    return [...tagSet].sort();
+  }, [questions]);
+
   const filtered = questions.filter(q => {
-    const matchSearch = q.question_text?.toLowerCase().includes(searchTerm.toLowerCase());
+    const qText = (q.question_text || '').toLowerCase();
+    const qTopic = (q.topic || '').toLowerCase();
+    const qTags = (Array.isArray(q.tags) ? q.tags : []).map(t => String(t).toLowerCase());
+
+    const term = searchTerm.toLowerCase().trim();
+    const cleanTerm = term.startsWith('#') ? term.slice(1) : term;
+
+    const matchSearch = !term ||
+      qText.includes(term) ||
+      qTopic.includes(term) ||
+      qTags.some(t => t.includes(cleanTerm) || t.includes(term));
+
     const matchTopic = selectedTopic === 'All' || q.topic === selectedTopic;
     const matchType = selectedType === 'All' || q.question_type === selectedType;
-    return matchSearch && matchTopic && matchType;
+    const matchTag = !selectedTag || (Array.isArray(q.tags) && q.tags.includes(selectedTag));
+
+    return matchSearch && matchTopic && matchType && matchTag;
   });
 
   return (
     <div className="flex h-[calc(100vh-8rem)]">
-      {/* Sidebar Folders */}
-      <div className="w-64 border-r border-gray-200 pr-6 overflow-y-auto flex-shrink-0 flex flex-col gap-2">
-        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Topics / Folders</h3>
-        
-        <button 
-          onClick={() => setSelectedTopic('All')}
-          className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition ${selectedTopic === 'All' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'}`}
-        >
-          <FolderOpen size={16} className={selectedTopic === 'All' ? 'text-purple-600' : 'text-gray-400'} />
-          All Questions
-          <span className="ml-auto bg-white border border-gray-200 text-gray-500 text-[10px] px-2 py-0.5 rounded-full">{questions.length}</span>
-        </button>
-
-        {uniqueTopics.map(topic => {
-          const count = questions.filter(q => q.topic === topic).length;
-          const isSelected = selectedTopic === topic;
-          return (
+      {/* Sidebar Folders & Tags */}
+      <div className="w-64 border-r border-gray-200 pr-6 overflow-y-auto flex-shrink-0 flex flex-col gap-6">
+        <div>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Topics / Folders</h3>
+          
+          <div className="flex flex-col gap-1">
             <button 
-              key={topic}
-              onClick={() => setSelectedTopic(topic)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition ${isSelected ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              onClick={() => setSelectedTopic('All')}
+              className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition ${selectedTopic === 'All' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
-              <Folder size={16} className={isSelected ? 'text-purple-600' : 'text-gray-400'} />
-              {topic}
-              <span className={`ml-auto border text-[10px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white border-purple-200 text-purple-600' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>{count}</span>
+              <FolderOpen size={16} className={selectedTopic === 'All' ? 'text-purple-600' : 'text-gray-400'} />
+              All Questions
+              <span className="ml-auto bg-white border border-gray-200 text-gray-500 text-[10px] px-2 py-0.5 rounded-full">{questions.length}</span>
             </button>
-          );
-        })}
-        {uniqueTopics.length === 0 && (
-          <div className="text-sm text-gray-400 italic px-3 mt-4">No topics created yet.</div>
+
+            {uniqueTopics.map(topic => {
+              const count = questions.filter(q => q.topic === topic).length;
+              const isSelected = selectedTopic === topic;
+              return (
+                <button 
+                  key={topic}
+                  onClick={() => setSelectedTopic(topic)}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition ${isSelected ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  <Folder size={16} className={isSelected ? 'text-purple-600' : 'text-gray-400'} />
+                  <span className="truncate">{topic}</span>
+                  <span className={`ml-auto border text-[10px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white border-purple-200 text-purple-600' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>{count}</span>
+                </button>
+              );
+            })}
+            {uniqueTopics.length === 0 && (
+              <div className="text-xs text-gray-400 italic px-3 py-1">No topics created yet.</div>
+            )}
+          </div>
+        </div>
+
+        {/* Tags List in Sidebar */}
+        {uniqueTags.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-2 ml-2">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h3>
+              {selectedTag && (
+                <button 
+                  onClick={() => setSelectedTag(null)}
+                  className="text-[10px] text-purple-600 hover:underline font-semibold"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5 px-2">
+              {uniqueTags.map(t => {
+                const count = questions.filter(q => Array.isArray(q.tags) && q.tags.includes(t)).length;
+                const isSelected = selectedTag === t;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setSelectedTag(isSelected ? null : t)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                      isSelected
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-700'
+                    }`}
+                  >
+                    <span>#{t}</span>
+                    <span className={`text-[10px] ${isSelected ? 'text-purple-200' : 'text-gray-400'}`}>({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 
@@ -661,7 +817,7 @@ export default function QuestionBank() {
               </span>
               <input
                 type="text"
-                placeholder="Search questions..."
+                placeholder="Search questions by keyword, topic, or #tag..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
@@ -676,6 +832,20 @@ export default function QuestionBank() {
               <option value="All">All Types</option>
               {QTYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
+
+            {selectedTag && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-xl border border-purple-200 shrink-0">
+                <Tag size={12} />
+                <span>#{selectedTag}</span>
+                <button 
+                  onClick={() => setSelectedTag(null)} 
+                  className="hover:bg-purple-200 p-0.5 rounded-full text-purple-700 transition"
+                  title="Remove tag filter"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
           </div>
           
           <div className="flex items-center gap-2 shrink-0 ml-4">
@@ -705,7 +875,17 @@ export default function QuestionBank() {
           <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
             <Library size={48} className="text-gray-300 mb-4" />
             <h3 className="text-lg font-bold text-gray-800">No Questions Found</h3>
-            <p className="text-sm text-gray-500 mt-1">Adjust your filters or add new questions to the bank.</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {selectedTag ? `No questions matching tag #${selectedTag}.` : 'Adjust your filters or add new questions to the bank.'}
+            </p>
+            {selectedTag && (
+              <button 
+                onClick={() => setSelectedTag(null)}
+                className="mt-3 px-3 py-1.5 text-xs font-semibold text-purple-600 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100"
+              >
+                Clear Tag Filter
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto pr-2 pb-10 space-y-3">
@@ -720,15 +900,12 @@ export default function QuestionBank() {
               };
               const style = TYPE_STYLES[q.question_type] || { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' };
 
-              // Parse options if they're stored as a JSON string
-              let options = q.options;
-              if (typeof options === 'string') {
-                try { options = JSON.parse(options); } catch { options = null; }
-              }
+              // Options
+              const options = Array.isArray(q.options) ? q.options : [];
 
-              // Clean tags — filter out noise like "extracted", "EXTRACTED"
+              // Clean tags
               const displayTags = (Array.isArray(q.tags) ? q.tags : [])
-                .filter(t => t && t.toLowerCase() !== 'extracted');
+                .filter(t => t && String(t).toLowerCase() !== 'extracted' && String(t).toLowerCase() !== 'extracted_tag');
 
               return (
                 <div key={q.id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden shrink-0">
@@ -753,7 +930,7 @@ export default function QuestionBank() {
                       <p className="text-sm font-medium text-gray-800 leading-relaxed whitespace-pre-wrap">{q.question_text}</p>
 
                       {/* MCQ options preview */}
-                      {(q.question_type === 'mcq' || q.question_type === 'mcq_multi') && options && Array.isArray(options) && options.length > 0 && (
+                      {(q.question_type === 'mcq' || q.question_type === 'mcq_multi') && options.length > 0 && (
                         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                           {options.map((opt, i) => {
                             const isCorrect = q.correct_answer === opt ||
@@ -762,7 +939,7 @@ export default function QuestionBank() {
                             return (
                               <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
                                 isCorrect
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                   ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                                   : 'bg-gray-50 border-gray-100 text-gray-600'
                               }`}>
                                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
@@ -780,11 +957,27 @@ export default function QuestionBank() {
                       {/* Tags */}
                       {displayTags.length > 0 && (
                         <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                          {displayTags.map((t, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-purple-50 text-purple-600 text-[10px] font-semibold rounded-full border border-purple-100">
-                              #{t}
-                            </span>
-                          ))}
+                          {displayTags.map((t, idx) => {
+                            const isTagSelected = selectedTag === t;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedTag(isTagSelected ? null : t);
+                                }}
+                                className={`px-2 py-0.5 text-[10px] font-semibold rounded-full border transition cursor-pointer ${
+                                  isTagSelected
+                                    ? 'bg-purple-600 text-white border-purple-600'
+                                    : 'bg-purple-50 text-purple-600 border-purple-100 hover:bg-purple-100 hover:border-purple-200'
+                                }`}
+                                title={`Filter by #${t}`}
+                              >
+                                #{t}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

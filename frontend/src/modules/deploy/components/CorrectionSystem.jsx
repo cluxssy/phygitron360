@@ -51,6 +51,10 @@ export default function CorrectionSystem({ isManager }) {
             toast(`${day.holiday_name ? `"${day.holiday_name}" is a` : 'This is a'} declared Company Holiday. Attendance logging is not required.`);
             return;
         }
+        if (day.is_leave || day.status === 'Leave') {
+            toast(`This date is recorded as an approved ${day.leave_type || 'Leave'}.`);
+            return;
+        }
         if (day.pending_correction) {
             toast.error("You already have a pending request for this date.");
             return;
@@ -130,16 +134,20 @@ export default function CorrectionSystem({ isManager }) {
         // Reverse so the current week is at the top
         const reversedWeeks = [...weeks].reverse();
 
-        const getStatusColor = (status, track, pending, isToday, isHoliday) => {
-            if (pending) return 'bg-amber-100 border-amber-300 text-amber-700';
+        const getStatusColor = (status, track, pending, isToday, isHoliday, isLeave) => {
+            if (pending) return 'bg-amber-50 border-amber-300 text-amber-800 shadow-sm';
             if (isHoliday || status === 'Holiday' || (status && status.startsWith('Holiday'))) {
-                return 'bg-red-50 border-red-300 text-red-700 shadow-sm';
+                return 'bg-purple-50 border-purple-300 text-purple-800 shadow-sm';
             }
+            if (isLeave || status === 'Leave' || (status && status.startsWith('Leave'))) {
+                return 'bg-blue-50 border-blue-300 text-blue-800 shadow-sm';
+            }
+            if (status === 'Present') return 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-sm';
+            if (status === 'Absent' || status === 'Missing Clock-Out') return 'bg-red-50 border-red-300 text-red-800 shadow-sm';
+            if (status && status.includes('Half Day')) return 'bg-orange-50 border-orange-300 text-orange-800 shadow-sm';
             if (track === 'future' || track === 'before_join') return 'bg-gray-50 border-gray-200 text-gray-400 opacity-60';
-            if (status === 'Present') return 'bg-emerald-50 border-emerald-200 text-emerald-700';
-            if (status === 'Absent' || status === 'Missing Clock-Out') return 'bg-red-50 border-red-200 text-red-700';
-            if (status && status.includes('Half Day')) return 'bg-orange-50 border-orange-200 text-orange-700';
-            if (isToday && (status === 'Active' || status === 'No Record')) return 'bg-purple-50/50 border-purple-200 text-purple-900';
+            if (isToday && (status === 'Active' || status === 'No Record')) return 'bg-purple-50/40 border-purple-200 text-purple-900';
+            if (status === 'Weekend') return 'bg-slate-50 border-slate-200 text-slate-500';
             return 'bg-white border-gray-200 text-gray-700';
         };
 
@@ -151,7 +159,8 @@ export default function CorrectionSystem({ isManager }) {
                         if (d.track === 'before_join') return <div key={d.date} className="p-3"></div>;
                         const isToday = d.date === windowData.today;
                         const isHoliday = d.is_holiday || d.status === 'Holiday';
-                        const isClickable = d.track !== 'future' && d.track !== 'before_join' && !d.pending_correction && !isHoliday;
+                        const isLeave = d.is_leave || d.status === 'Leave';
+                        const isClickable = d.track !== 'future' && d.track !== 'before_join' && !d.pending_correction && !isHoliday && !isLeave;
                         return (
                         <div 
                             key={d.date} 
@@ -160,21 +169,30 @@ export default function CorrectionSystem({ isManager }) {
                                     toast(`${d.holiday_name ? `"${d.holiday_name}" is a` : 'This is a'} declared Company Holiday. Attendance logging is not required.`);
                                     return;
                                 }
+                                if (isLeave) {
+                                    toast(`This date is recorded as an approved ${d.leave_type || 'Leave'}.`);
+                                    return;
+                                }
                                 if (d.track !== 'future' && d.track !== 'before_join') openDrawer(d);
                             }}
-                            className={`p-3 rounded-2xl border transition-all relative group ${getStatusColor(d.status, d.track, !!d.pending_correction, isToday, isHoliday)} ${isClickable ? 'cursor-pointer hover:shadow-md hover:scale-105' : 'cursor-not-allowed'} ${isToday ? 'ring-2 ring-[#8b5cf6] shadow-md' : ''}`}
+                            className={`p-3 rounded-2xl border transition-all relative group ${getStatusColor(d.status, d.track, !!d.pending_correction, isToday, isHoliday, isLeave)} ${isClickable ? 'cursor-pointer hover:shadow-md hover:scale-105' : 'cursor-not-allowed'} ${isToday ? 'ring-2 ring-[#8b5cf6] shadow-md' : ''}`}
                         >
                             {isHoliday && (
-                                <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-md z-10">
+                                <div className="absolute -top-2 -right-2 bg-purple-600 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-md z-10">
                                     Holiday
                                 </div>
                             )}
-                            {d.track === 'self_service' && !d.pending_correction && !isHoliday && (
+                            {isLeave && !isHoliday && (
+                                <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-md z-10">
+                                    Leave
+                                </div>
+                            )}
+                            {d.track === 'self_service' && !d.pending_correction && !isHoliday && !isLeave && (
                                 <div className="absolute -top-2 -right-2 bg-[#8b5cf6] text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
                                     <Edit2 size={10} />
                                 </div>
                             )}
-                            {d.track === 'requested' && !d.pending_correction && !isHoliday && (
+                            {d.track === 'requested' && !d.pending_correction && !isHoliday && !isLeave && (
                                 <div className="absolute -top-2 -right-2 bg-gray-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
                                     <AlertCircle size={10} />
                                 </div>
@@ -186,8 +204,13 @@ export default function CorrectionSystem({ isManager }) {
                             <div className="flex items-center justify-between mb-2">
                                 <p className="text-xs font-bold">{d.date.split('-')[2]}</p>
                                 {isHoliday && (
-                                    <span className="text-[8px] font-extrabold text-red-600 uppercase truncate max-w-[70px]" title={d.holiday_name}>
+                                    <span className="text-[8px] font-extrabold text-purple-600 uppercase truncate max-w-[70px]" title={d.holiday_name}>
                                         {d.holiday_name}
+                                    </span>
+                                )}
+                                {isLeave && !isHoliday && (
+                                    <span className="text-[8px] font-extrabold text-blue-600 uppercase truncate max-w-[70px]" title={d.leave_type || 'Leave'}>
+                                        {d.leave_type || 'Leave'}
                                     </span>
                                 )}
                             </div>
@@ -198,11 +221,27 @@ export default function CorrectionSystem({ isManager }) {
                             </div>
                             
                             <div className={`mt-3 text-[8px] font-black uppercase tracking-widest text-center py-1 rounded truncate px-1 ${
-                                isHoliday
+                                d.pending_correction
+                                    ? 'bg-amber-500 text-white shadow-sm'
+                                    : isHoliday
+                                    ? 'bg-purple-600 text-white shadow-sm'
+                                    : isLeave
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : d.status === 'Present'
+                                    ? 'bg-emerald-600 text-white shadow-sm'
+                                    : d.status === 'Absent' || d.status === 'Missing Clock-Out'
                                     ? 'bg-red-600 text-white shadow-sm'
-                                    : 'bg-black/5'
+                                    : d.status && d.status.includes('Half Day')
+                                    ? 'bg-orange-500 text-white shadow-sm'
+                                    : 'bg-black/5 text-gray-700'
                             }`}>
-                                {d.pending_correction ? 'Pending' : (isHoliday ? (d.holiday_name ? `Holiday: ${d.holiday_name}` : 'Holiday') : d.status)}
+                                {d.pending_correction 
+                                    ? 'Pending' 
+                                    : isHoliday 
+                                    ? (d.holiday_name ? `Holiday: ${d.holiday_name}` : 'Holiday') 
+                                    : isLeave 
+                                    ? (d.leave_type || 'Leave') 
+                                    : d.status}
                             </div>
                         </div>
                         );
@@ -218,15 +257,21 @@ export default function CorrectionSystem({ isManager }) {
                         <h3 className="text-sm font-black uppercase tracking-[0.2em] text-black">Daily Attendance Grid</h3>
                         <p className="text-[10px] text-[#8b8ba3] uppercase font-bold mt-1">Click any active day to log attendance or update record</p>
                     </div>
-                    <div className="flex flex-wrap gap-4">
-                        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
-                            <div className="w-2 h-2 rounded-full bg-red-500"></div> Company Holiday
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-700">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div> Present
                         </div>
-                        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
-                            <div className="w-2 h-2 rounded-full bg-[#8b5cf6]"></div> Self-Service Window
+                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-red-700">
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div> Absent
                         </div>
-                        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
-                            <div className="w-2 h-2 rounded-full bg-gray-600"></div> Manager Approval
+                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-purple-700">
+                            <div className="w-2.5 h-2.5 rounded-full bg-purple-600"></div> Holiday
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-blue-700">
+                            <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div> Approved Leave
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-[#6b7280]">
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#8b5cf6]"></div> Self-Service Window
                         </div>
                     </div>
                 </div>

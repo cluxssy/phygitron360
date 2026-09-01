@@ -5,7 +5,7 @@ from datetime import datetime
 class HolidayCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     date: str = Field(..., pattern=r'^\d{4}-\d{2}-\d{2}$')
-    holiday_type: str = Field(default='company_holiday')  # 'national_holiday', 'festival', 'company_holiday', 'optional_holiday'
+    holiday_type: str = Field(default='regular_holiday')  # 'national_holiday', 'regular_holiday', 'restricted_holiday'
     description: Optional[str] = None
     is_half_day: bool = False
 

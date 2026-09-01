@@ -41,7 +41,7 @@ class HolidayService:
         return self.repo.create_holiday(
             name=data.name.strip(),
             date=data.date,
-            holiday_type=data.holiday_type or 'company_holiday',
+            holiday_type=data.holiday_type or 'regular_holiday',
             description=data.description.strip() if data.description else None,
             is_half_day=data.is_half_day,
             created_by=created_by,

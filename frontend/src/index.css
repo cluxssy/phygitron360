@@ -270,3 +270,48 @@ textarea:not(.rounded-full):not([class*="rounded-full"]),
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+
+/* ──────────────────────────────────────────────────
+   LIGHT THEME & MODAL INPUT CONTRAST FIX
+────────────────────────────────────────────────── */
+.light-theme-override,
+.bg-white,
+.bg-gray-50,
+.bg-gray-100 {
+  color: #111827;
+}
+
+.light-theme-override input,
+.light-theme-override select,
+.light-theme-override textarea,
+.bg-white input:not([type="checkbox"]):not([type="radio"]),
+.bg-white select,
+.bg-white textarea,
+.bg-gray-50 input:not([type="checkbox"]):not([type="radio"]),
+.bg-gray-50 select,
+.bg-gray-50 textarea,
+.bg-gray-100 input:not([type="checkbox"]):not([type="radio"]),
+.bg-gray-100 select,
+.bg-gray-100 textarea {
+  color: #111827 !important;
+}
+
+.light-theme-override input::placeholder,
+.light-theme-override textarea::placeholder,
+.bg-white input::placeholder,
+.bg-white textarea::placeholder,
+.bg-gray-50 input::placeholder,
+.bg-gray-50 textarea::placeholder,
+.bg-gray-100 input::placeholder,
+.bg-gray-100 textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+.light-theme-override select option,
+.bg-white select option,
+.bg-gray-50 select option,
+.bg-gray-100 select option {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}

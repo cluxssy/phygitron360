@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from backend.core.database import DATA_DIR
 from backend.core.dependencies import get_current_user, require_permission
@@ -68,12 +68,15 @@ async def _fetch_leetcode(title_slug: str) -> dict:
 
 def get_assessment_service(current_user: dict = Depends(get_current_user)) -> AssessmentService:
     return AssessmentService(tenant_id=current_user.get("tenant_id", "public"))
+
+# ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
 
 class QuestionIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     question_text: str
-    question_type: str  # mcq | mcq_multi | coding | written | file_upload | fill_in
+    question_type: str = "mcq"  # mcq | mcq_multi | coding | written | file_upload | fill_in
     options: List[Any] = []
     correct_answer: Optional[str] = None
     model_answer: Optional[str] = None
@@ -89,15 +92,46 @@ class QuestionIn(BaseModel):
     section_id: Optional[str] = None
     difficulty: Optional[str] = "medium"
 
+    @field_validator("options", "test_cases", "tags", "images", mode="before")
+    def parse_json_lists(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        if v is None:
+            return []
+        return v
+
+    @field_validator("skill_id", mode="before")
+    def parse_skill_id(cls, v):
+        if v == "" or v is None:
+            return None
+        return int(v)
+
+    @field_validator("marks", mode="before")
+    def parse_marks(cls, v):
+        if v == "" or v is None:
+            return 1.0
+        return float(v)
+
 
 class SectionIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str           # client-generated e.g. "sec_1"
     title: str
     instructions: Optional[str] = None
     time_limit_minutes: Optional[int] = None
 
+    @field_validator("time_limit_minutes", mode="before")
+    def parse_section_time_limit(cls, v):
+        if v == "" or v is None:
+            return None
+        return int(v)
+
 
 class AssessmentCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     title: str
     description: Optional[str] = None
     type: str = "mcq"  # mcq | coding | written | mixed
@@ -108,8 +142,21 @@ class AssessmentCreate(BaseModel):
     questions: List[QuestionIn] = []
     sections: List[SectionIn] = []
 
+    @field_validator("time_limit_minutes", mode="before")
+    def parse_time_limit(cls, v):
+        if v == "" or v is None:
+            return None
+        return int(v)
+
+    @field_validator("pass_score", mode="before")
+    def parse_pass_score(cls, v):
+        if v == "" or v is None:
+            return 70.0
+        return float(v)
+
 
 class AssessmentUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     title: Optional[str] = None
     description: Optional[str] = None
     type: Optional[str] = None
@@ -119,6 +166,18 @@ class AssessmentUpdate(BaseModel):
     show_result_immediately: Optional[bool] = None
     sections: Optional[List[SectionIn]] = None
     questions: Optional[List[QuestionIn]] = None
+
+    @field_validator("time_limit_minutes", mode="before")
+    def parse_time_limit(cls, v):
+        if v == "" or v is None:
+            return None
+        return int(v)
+
+    @field_validator("pass_score", mode="before")
+    def parse_pass_score(cls, v):
+        if v == "" or v is None:
+            return None
+        return float(v)
 
 
 class StatusUpdate(BaseModel):
