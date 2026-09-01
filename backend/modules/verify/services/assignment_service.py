@@ -148,23 +148,54 @@ class AssignmentService:
             from backend.core.email_service_extended import send_assessment_notification_email
             from backend.modules.deploy.services.notification_service import add_notification
             import os
-            asm_title = asm.get('title', 'a new assessment')
-            duration = asm.get('time_limit_minutes', 60)
+            asm_title = asm.get('title') or 'Assessment'
+            duration = asm.get('time_limit_minutes')
+            pass_score = asm.get('pass_score')
             question_count = len(base_questions) if base_questions else None
-            company_name = os.getenv("COMPANY_NAME", "Phygitron 360")
-            
+
+            # Resolve tenant company name and subdomain
+            company_name = os.getenv("COMPANY_NAME") or "Phygitron 360"
+            subdomain = None
+            if self.tenant_id and self.tenant_id != 'public':
+                try:
+                    from backend.core.database import get_db_connection
+                    conn = get_db_connection()
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT company_name, subdomain FROM public.tenants WHERE id = %s", (self.tenant_id,))
+                        row = cur.fetchone()
+                        if row:
+                            if row[0]:
+                                company_name = row[0]
+                            subdomain = row[1]
+                    conn.close()
+                except Exception as ex:
+                    logger.warning(f"Could not load tenant info for assignment notification: {ex}")
+
+            # Construct direct portal URL for Verify / Candidate assessment view
+            if subdomain:
+                portal_link = f"https://{subdomain}.phygitron.com/verify"
+            else:
+                env_base = os.getenv("APP_BASE_URL")
+                portal_link = f"{env_base.rstrip('/')}/verify" if env_base else "https://app.phygitron.com/verify"
+
             for uid in new_uids:
                 u_info = self.repo.get_user_info(uid)
                 if u_info and u_info.get("email"):
-                    c_name = u_info.get("name") or u_info.get("email", "").split("@")[0]
+                    c_name = u_info.get("name")
+                    if not c_name and u_info.get("email"):
+                        raw_handle = u_info["email"].split("@")[0]
+                        c_name = raw_handle.replace(".", " ").replace("_", " ").replace("-", " ").title()
+
                     send_assessment_notification_email(
                         to_email=u_info["email"],
-                        candidate_name=c_name,
+                        candidate_name=c_name or "Team Member",
                         assessment_title=asm_title,
                         company_name=company_name,
                         deadline=deadline or "Within 48 hours",
                         duration_mins=duration,
-                        question_count=question_count
+                        question_count=question_count,
+                        pass_score=pass_score,
+                        assessment_link=portal_link
                     )
 
                 add_notification(
