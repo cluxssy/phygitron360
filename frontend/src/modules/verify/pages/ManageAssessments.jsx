@@ -64,6 +64,7 @@ function AssignModal({ assessment, onClose }) {
   const [questionSearch, setQuestionSearch] = useState('');
 
   // Proctoring strictness state
+  const [proctoringEnabled, setProctoringEnabled] = useState(true);
   const [proctoringStrictness, setProctoringStrictness] = useState('balanced');
   const [customTemplates, setCustomTemplates] = useState(null);
 
@@ -106,8 +107,15 @@ function AssignModal({ assessment, onClose }) {
           setQuestions(qs);
           setSections(d.data.sections || []);
           setSelectedQuestionIds(qs.map(q => q.id));
-          if (d.data.proctoring_config?.strictness) {
-            setProctoringStrictness(d.data.proctoring_config.strictness);
+          if (d.data.proctoring_config) {
+            const pc = d.data.proctoring_config;
+            if (pc.disabled === true || pc.strictness === 'none') {
+              setProctoringEnabled(false);
+              setProctoringStrictness('none');
+            } else if (pc.strictness) {
+              setProctoringEnabled(true);
+              setProctoringStrictness(pc.strictness);
+            }
           }
         }
       } catch (err) {
@@ -162,11 +170,12 @@ function AssignModal({ assessment, onClose }) {
       : (useQuestionSubset && selectedQuestionIds.length === questions.length ? null : (useQuestionSubset ? selectedQuestionIds : null));
     
     const activeTpl = customTemplates?.[proctoringStrictness];
+    const effectiveStrictness = proctoringEnabled ? proctoringStrictness : 'none';
     const config = buildProctoringConfig(
-      proctoringStrictness,
-      activeTpl?.toggles || {},
+      effectiveStrictness,
+      proctoringEnabled ? (activeTpl?.toggles || {}) : { disabled: true },
       null,
-      activeTpl?.thresholds || null
+      proctoringEnabled ? (activeTpl?.thresholds || null) : null
     );
 
     setSubmitting(true);
@@ -181,7 +190,7 @@ function AssignModal({ assessment, onClose }) {
           generate_variants: generateVariants,
           question_ids: qIds,
           shuffle_questions: shuffleQuestions,
-          proctoring_strictness: proctoringStrictness,
+          proctoring_strictness: effectiveStrictness,
           proctoring_config: config
         }),
       });
@@ -421,17 +430,54 @@ function AssignModal({ assessment, onClose }) {
               <p className="text-[10px] text-gray-400">If set, candidates will see a countdown to this deadline.</p>
             </div>
 
-            {/* Global Strictness Level Card */}
+            {/* Global Proctoring & Security Card */}
             <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex flex-col gap-3">
-              <div>
-                <p className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                  <Shield size={14} className="text-purple-600" />
-                  Global Strictness Level
-                </p>
+              <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg ${proctoringEnabled ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-400'}`}>
+                    <Shield size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                      Proctoring & Security
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {proctoringEnabled ? 'Webcam & AI monitoring active' : 'No camera or microphone required'}
+                    </p>
+                  </div>
+                </div>
 
+                <div className="flex items-center gap-2">
+                  <span className={`text-[11px] font-bold ${proctoringEnabled ? 'text-purple-700' : 'text-gray-400'}`}>
+                    {proctoringEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Toggle Proctoring"
+                    onClick={() => {
+                      const next = !proctoringEnabled;
+                      setProctoringEnabled(next);
+                      if (!next) setProctoringStrictness('none');
+                      else if (proctoringStrictness === 'none') setProctoringStrictness('balanced');
+                    }}
+                    className={`relative w-11 h-6 rounded-full border transition-colors duration-200 ${proctoringEnabled ? 'bg-purple-600 border-purple-600' : 'bg-gray-200 border-gray-300'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${proctoringEnabled ? 'translate-x-5' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {!proctoringEnabled ? (
+                <div className="p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 text-emerald-900 text-[11px] leading-relaxed flex items-start gap-2.5">
+                  <CheckCircle size={15} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-emerald-950">Zero Proctoring (No Camera/Mic):</span> Candidates will be able to start and take this assessment immediately without turning on their webcam or microphone. No tab switch locks or violation limits will be enforced.
+                  </div>
+                </div>
+              ) : (
                 <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-200 flex flex-col gap-2.5">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-semibold text-gray-700">Proctoring Strictness</span>
+                    <span className="text-xs font-semibold text-gray-700">Strictness Level</span>
                     <span 
                       className="text-xs font-bold capitalize"
                       style={{
@@ -448,7 +494,7 @@ function AssignModal({ assessment, onClose }) {
                       { key: 'lenient', label: 'Lenient', color: '#22c55e' },
                       { key: 'balanced', label: 'Balanced', color: '#eab308' },
                       { key: 'strict', label: 'Strict', color: '#ef4444' },
-                    ].map((lvl, i) => {
+                    ].map((lvl) => {
                       const selected = proctoringStrictness === lvl.key;
                       return (
                         <button
@@ -491,12 +537,14 @@ function AssignModal({ assessment, onClose }) {
                         : 'Recommended default. Reasonable sensitivity with anti-false-positive guards.'}
                   </p>
                 </div>
-              </div>
+              )}
 
-              <div className="flex items-start gap-1.5 text-[10px] text-gray-400">
-                <Info size={12} className="shrink-0 mt-0.5 text-gray-400" />
-                <span>Controls how quickly strikes are issued and the maximum allowed before termination for this assignment.</span>
-              </div>
+              {proctoringEnabled && (
+                <div className="flex items-start gap-1.5 text-[10px] text-gray-400">
+                  <Info size={12} className="shrink-0 mt-0.5 text-gray-400" />
+                  <span>Controls how quickly strikes are issued and the maximum allowed before termination for this assignment.</span>
+                </div>
+              )}
             </div>
 
             {/* Anti-Cheating & Randomization Controls */}

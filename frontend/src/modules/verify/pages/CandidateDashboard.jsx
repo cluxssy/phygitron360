@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Loader2, Clock, CheckCircle, AlertTriangle, Play,
   BarChart2, RefreshCw, Calendar, FileText, TrendingUp, Award,
-  Search, Shield, ChevronRight, Sparkles, ArrowUpRight, Target, Flame
+  Search, Shield, ChevronRight, Sparkles, ArrowUpRight, Target, Flame,
+  MessageSquare, ExternalLink
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -51,11 +52,11 @@ export default function CandidateDashboard({ activeTab: propTab }) {
   const params = new URLSearchParams(location.search);
   const { user } = useAuth();
 
-  // Determine active view tab: overview, assessments, history, analytics
+  // Determine active view tab: overview, assessments, history, queries, analytics
   const urlTab = params.get('tab');
   const [currentTab, setCurrentTab] = useState(
     propTab ||
-    (urlTab === 'history' ? 'history' : urlTab === 'my-assessments' ? 'assessments' : 'overview')
+    (urlTab === 'history' ? 'history' : urlTab === 'my-assessments' ? 'assessments' : urlTab === 'queries' ? 'queries' : 'overview')
   );
 
   useEffect(() => {
@@ -65,6 +66,8 @@ export default function CandidateDashboard({ activeTab: propTab }) {
       setCurrentTab('history');
     } else if (urlTab === 'my-assessments') {
       setCurrentTab('assessments');
+    } else if (urlTab === 'queries') {
+      setCurrentTab('queries');
     } else if (urlTab === 'candidate') {
       setCurrentTab('overview');
     }
@@ -72,14 +75,16 @@ export default function CandidateDashboard({ activeTab: propTab }) {
 
   const handleTabSwitch = (t) => {
     setCurrentTab(t);
-    const targetUrlTab = t === 'history' ? 'history' : t === 'assessments' ? 'my-assessments' : 'candidate';
+    const targetUrlTab = t === 'history' ? 'history' : t === 'assessments' ? 'my-assessments' : t === 'queries' ? 'queries' : 'candidate';
     navigate(`/verify?tab=${targetUrlTab}`);
   };
 
   const [assignments, setAssignments] = useState([]);
   const [results, setResults] = useState([]);
+  const [myQueries, setMyQueries] = useState([]);
   const [loadingAssignments, setLoadingAssignments] = useState(true);
   const [loadingResults, setLoadingResults] = useState(true);
+  const [loadingQueries, setLoadingQueries] = useState(true);
 
   // Filters for My Assessments tab
   const [assessmentFilter, setAssessmentFilter] = useState('all'); // all, pending, in_progress, completed, expired
@@ -115,10 +120,24 @@ export default function CandidateDashboard({ activeTab: propTab }) {
     }
   }, []);
 
+  const fetchMyQueries = useCallback(async () => {
+    setLoadingQueries(true);
+    try {
+      const r = await fetch('/api/verify/queries/my', { credentials: 'include' });
+      const d = await r.json();
+      setMyQueries(d.data || []);
+    } catch {
+      // silent
+    } finally {
+      setLoadingQueries(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchAssignments();
     fetchResults();
-  }, [fetchAssignments, fetchResults]);
+    fetchMyQueries();
+  }, [fetchAssignments, fetchResults, fetchMyQueries]);
 
   // Derived statistics
   const pendingAssignments = useMemo(() => {
@@ -849,6 +868,136 @@ export default function CandidateDashboard({ activeTab: propTab }) {
                     );
                   })}
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* TAB 4: MY QUERIES & APPEALS                                        */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {currentTab === 'queries' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-gray-200 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <MessageSquare className="text-purple-600" size={20} /> My Submitted Queries & Appeals
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Track the status and review HR responses for your submitted assessment queries.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchMyQueries}
+                disabled={loadingQueries}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-500 hover:text-purple-600 hover:bg-purple-50 transition border border-gray-200"
+              >
+                <RefreshCw size={13} className={loadingQueries ? 'animate-spin text-purple-600' : ''} />
+                Refresh Queries
+              </button>
+            </div>
+
+            {loadingQueries ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                <Loader2 className="animate-spin text-purple-600 mb-2" size={24} />
+                <span className="text-xs">Loading your queries...</span>
+              </div>
+            ) : myQueries.length === 0 ? (
+              <div className="py-16 text-center text-gray-400 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto mb-2">
+                  <CheckCircle size={24} />
+                </div>
+                <p className="text-sm font-semibold text-gray-700">No Queries Raised</p>
+                <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                  You haven't submitted any disputes or appeals. You can raise a query directly from any assessment scorecard in your History tab.
+                </p>
+                <button
+                  onClick={() => handleTabSwitch('history')}
+                  className="px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-xs font-semibold hover:bg-purple-100 transition"
+                >
+                  View Scorecards in History
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {myQueries.map((q) => {
+                  const isResolved = q.status === 'resolved';
+                  const isClosed = q.status === 'closed';
+
+                  return (
+                    <div
+                      key={q.id}
+                      className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:border-purple-200 transition-all space-y-4"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">
+                            {q.assessment_title || 'Skill Assessment'}
+                          </span>
+                          <h3 className="text-sm font-bold text-gray-900 mt-0.5">
+                            {q.subject || 'Evaluation Dispute'}
+                          </h3>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                            isResolved
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : isClosed
+                                ? 'bg-gray-100 text-gray-600 border-gray-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            {isResolved ? 'Resolved' : isClosed ? 'Closed' : 'Pending HR Review'}
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            {q.created_at ? new Date(q.created_at).toLocaleDateString() : ''}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Candidate Message */}
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Your Message</p>
+                        <p className="text-xs text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100 leading-relaxed font-sans">
+                          {q.message}
+                        </p>
+                      </div>
+
+                      {/* HR Response if present */}
+                      {q.response ? (
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
+                            <CheckCircle size={13} /> HR Resolution Response
+                          </p>
+                          <p className="text-xs text-emerald-950 bg-emerald-50/90 p-3.5 rounded-xl border border-emerald-200 leading-relaxed font-sans">
+                            {q.response}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-gray-400 italic">
+                          Awaiting response from the HR evaluation team.
+                        </p>
+                      )}
+
+                      {/* Scorecard link */}
+                      {q.assessment_result_id && (
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/verify?tab=result&result_id=${q.assessment_result_id}`)}
+                            className="inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 font-semibold"
+                          >
+                            <span>View Linked Result Scorecard</span>
+                            <ExternalLink size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

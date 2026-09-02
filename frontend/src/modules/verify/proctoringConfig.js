@@ -7,6 +7,26 @@
 // detection code behaves "harder" or "softer" without HR touching raw numbers.
 
 export const STRICTNESS_LEVELS = {
+  none: {
+    label: 'None (Disabled)',
+    badge: 'No Camera / Mic',
+    description: 'Completely unmonitored. Candidates take the test with zero proctoring checks and no webcam or microphone required.',
+    disabled: true,
+    max_strikes: 999,
+    grace_ms: 999999,
+    face_missing_sustain_ms: 999999,
+    multiple_people_sustain_ms: 999999,
+    multiple_people_min_samples: 999,
+    gaze_averted_sustain_ms: 999999,
+    head_turn_sustain_ms: 999999,
+    gaze_bs_horiz_threshold: 1.0,
+    gaze_bs_vert_threshold: 1.0,
+    gaze_iris_x_threshold: 1.0,
+    gaze_iris_y_threshold: 1.0,
+    voice_sustain_ms: 999999,
+    audio_cooldown_ms: 999999,
+    tab_switch_cooldown_ms: 999999,
+  },
   lenient: {
     label: 'Lenient',
     description: 'Relaxed monitoring. Only clear, sustained violations are flagged. Good for low-stakes practice.',
@@ -77,7 +97,67 @@ export const PROCTORING_FEATURES = [
 // Features where strictness does NOT apply — binary on/off controls.
 export const NOT_APPLICABLE_STRICTNESS = new Set(['full_screen', 'tab_switch', 'block_paste']);
 
+export function isProctoringEnabled(config) {
+  if (!config) return true;
+  if (config.disabled === true || config.strictness === 'none' || config.strictness === 'disabled') {
+    return false;
+  }
+  // Check if any feature is enabled
+  return !!(
+    config.full_screen ||
+    config.tab_switch ||
+    config.multiple_people ||
+    config.face_not_visible ||
+    config.eye_tracking ||
+    config.head_turn ||
+    config.audio_detect ||
+    config.block_paste
+  );
+}
+
+export function isCameraRequired(config) {
+  if (!isProctoringEnabled(config)) return false;
+  return !!(config.multiple_people || config.face_not_visible || config.eye_tracking || config.head_turn);
+}
+
+export function isMicrophoneRequired(config) {
+  if (!isProctoringEnabled(config)) return false;
+  return !!config.audio_detect;
+}
+
 export function buildProctoringConfig(strictness = 'balanced', toggles = {}, current = null, customThresholds = null) {
+  const isNone = strictness === 'none' || strictness === 'disabled' || toggles?.disabled === true;
+  if (isNone) {
+    return {
+      strictness: 'none',
+      disabled: true,
+      requires_camera: false,
+      requires_microphone: false,
+      full_screen: false,
+      tab_switch: false,
+      multiple_people: false,
+      face_not_visible: false,
+      eye_tracking: false,
+      head_turn: false,
+      audio_detect: false,
+      block_paste: false,
+      max_strikes: 999,
+      grace_ms: 999999,
+      face_missing_sustain_ms: 999999,
+      multiple_people_sustain_ms: 999999,
+      multiple_people_min_samples: 999,
+      gaze_averted_sustain_ms: 999999,
+      gaze_bs_horiz_threshold: 1.0,
+      gaze_bs_vert_threshold: 1.0,
+      gaze_iris_x_threshold: 1.0,
+      gaze_iris_y_threshold: 1.0,
+      head_turn_sustain_ms: 999999,
+      voice_sustain_ms: 999999,
+      audio_cooldown_ms: 999999,
+      tab_switch_cooldown_ms: 999999,
+    };
+  }
+
   const level = STRICTNESS_LEVELS[strictness] ? strictness : 'balanced';
   const rawCustom = customThresholds?.[level] || (customThresholds && typeof customThresholds === 'object' && !customThresholds.lenient ? customThresholds : {}) || {};
   
@@ -99,6 +179,9 @@ export function buildProctoringConfig(strictness = 'balanced', toggles = {}, cur
   });
   return {
     strictness: level,
+    disabled: false,
+    requires_camera: !!(features.multiple_people || features.face_not_visible || features.eye_tracking || features.head_turn),
+    requires_microphone: !!features.audio_detect,
     full_screen: features.full_screen,
     tab_switch: features.tab_switch,
     multiple_people: features.multiple_people,
@@ -126,6 +209,9 @@ export function buildProctoringConfig(strictness = 'balanced', toggles = {}, cur
 
 export function normalizeProctoringConfig(saved) {
   if (!saved) return buildProctoringConfig('balanced', {});
+  if (saved.disabled === true || saved.strictness === 'none' || saved.strictness === 'disabled') {
+    return buildProctoringConfig('none', {});
+  }
   const strictness = saved.strictness && STRICTNESS_LEVELS[saved.strictness] ? saved.strictness : 'balanced';
   return buildProctoringConfig(strictness, saved, saved, saved);
 }

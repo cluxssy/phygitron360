@@ -19,14 +19,19 @@ class QueryRepository:
                 query = """
                     SELECT q.*,
                            a.title AS assessment_title,
-                           u.name AS candidate_name,
-                           u.email AS candidate_email
+                           COALESCE(e.name, u.username) AS candidate_name,
+                           COALESCE(e.email_id, u.username) AS candidate_email,
+                           ar.score AS candidate_score,
+                           ar.pass_status,
+                           ar.submitted_at AS result_submitted_at
                     FROM assessment_queries q
                     LEFT JOIN assessments a ON a.id = q.assessment_id
                     LEFT JOIN users u ON u.id = q.user_id
+                    LEFT JOIN employees e ON e.employee_code = u.employee_code
+                    LEFT JOIN assessment_results ar ON ar.id = q.assessment_result_id
                 """
                 params = []
-                if status:
+                if status and status != 'all':
                     query += " WHERE q.status = %s"
                     params.append(status)
                 query += " ORDER BY q.created_at DESC"
@@ -100,14 +105,44 @@ class QueryRepository:
                 self._set_search_path(cur)
                 cur.execute(
                     """
-                    SELECT q.*, a.title AS assessment_title
+                    SELECT q.*,
+                           a.title AS assessment_title,
+                           ar.score AS candidate_score,
+                           ar.pass_status
                     FROM assessment_queries q
                     LEFT JOIN assessments a ON a.id = q.assessment_id
+                    LEFT JOIN assessment_results ar ON ar.id = q.assessment_result_id
                     WHERE q.user_id = %s
                     ORDER BY q.created_at DESC
                     """,
                     (user_id,),
                 )
                 return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def get_query_by_result(self, result_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                query = """
+                    SELECT q.*,
+                           a.title AS assessment_title,
+                           ar.score AS candidate_score,
+                           ar.pass_status
+                    FROM assessment_queries q
+                    LEFT JOIN assessments a ON a.id = q.assessment_id
+                    LEFT JOIN assessment_results ar ON ar.id = q.assessment_result_id
+                    WHERE q.assessment_result_id = %s
+                """
+                params = [result_id]
+                if user_id:
+                    query += " AND q.user_id = %s"
+                    params.append(user_id)
+                query += " ORDER BY q.created_at DESC LIMIT 1"
+                cur.execute(query, params)
+                row = cur.fetchone()
+                return dict(row) if row else None
         finally:
             conn.close()

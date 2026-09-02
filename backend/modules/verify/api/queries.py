@@ -39,7 +39,7 @@ class QueryUpdate(BaseModel):
 async def list_queries(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_permission("verify.assessments.manage")),
+    _: None = Depends(require_permission(["verify.assessments.manage", "verify.queries.manage", "verify.results.manage", "verify.assessments.view", "verify.results.view"])),
     service: QueryService = Depends(get_query_service),
 ):
     """HR view: list all candidate queries for the tenant."""
@@ -73,7 +73,7 @@ async def respond_to_query(
     query_id: int,
     body: QueryUpdate,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_permission("verify.assessments.manage")),
+    _: None = Depends(require_permission(["verify.assessments.manage", "verify.queries.manage", "verify.results.manage"])),
     service: QueryService = Depends(get_query_service),
 ):
     """HR responds to or closes a candidate query."""
@@ -100,3 +100,19 @@ async def my_queries(
     except Exception as exc:
         logger.exception("Failed to fetch queries for user %s: %s", current_user["id"], exc)
         raise HTTPException(status_code=500, detail="Something went wrong while fetching your queries. Please try again.")
+
+@router.get("/result/{result_id}")
+async def get_query_for_result(
+    result_id: int,
+    current_user: dict = Depends(get_current_user),
+    service: QueryService = Depends(get_query_service),
+):
+    """Candidate/HR: fetch query status for a specific assessment result."""
+    try:
+        # If user has manage permissions, can view without user_id restriction
+        user_id = None if current_user.get("role") in ["org_admin", "super_admin", "manager"] else current_user["id"]
+        row = service.get_query_by_result(result_id, user_id)
+        return {"success": True, "data": row}
+    except Exception as exc:
+        logger.exception("Failed to fetch query for result %s: %s", result_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to fetch query status for this result.")
