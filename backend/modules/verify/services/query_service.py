@@ -26,3 +26,6 @@ class QueryService:
 
     def get_my_queries(self, user_id: int) -> List[Dict[str, Any]]:
         return self.repo.get_my_queries(user_id)
+
+    def get_query_by_result(self, result_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        return self.repo.get_query_by_result(result_id, user_id)

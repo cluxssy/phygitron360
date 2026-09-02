@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Activity, CheckCircle, LayoutDashboard, User, FileText, TrendingUp, Award } from 'lucide-react';
+import { Shield, Activity, CheckCircle, LayoutDashboard, User, FileText, TrendingUp, Award, MessageSquare } from 'lucide-react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -13,6 +13,7 @@ import QuestionBank from './QuestionBank';
 import LiveMonitor from './LiveMonitor';
 import AssessmentDashboard from './AssessmentDashboard';
 import ProctoringSettings from './ProctoringSettings';
+import AssessmentQueries from './AssessmentQueries';
 
 import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
@@ -37,9 +38,10 @@ export default function VerifyDashboard() {
   const canViewQuestions     = hasPermission(P.VERIFY_QUESTIONS_VIEW);
   const canViewResults       = hasPermission(P.VERIFY_RESULTS_VIEW);
   const canViewMonitoring    = hasPermission(P.VERIFY_MONITORING_VIEW);
+  const canManageQueries     = hasPermission(P.VERIFY_QUERIES_MANAGE) || canManageAssessments || canViewAssessments || canViewResults;
 
   // Management view is available to any user with at least one verify permission
-  const isManagementAvailable = canViewAssessments || canManageAssessments || canViewQuestions || canViewResults || canViewMonitoring;
+  const isManagementAvailable = canViewAssessments || canManageAssessments || canViewQuestions || canViewResults || canViewMonitoring || canManageQueries;
 
   // Default to candidate if management view is not available
   const tab = params.get('tab') || (isManagementAvailable ? 'dashboard' : 'candidate');
@@ -67,6 +69,7 @@ export default function VerifyDashboard() {
       if (tab === 'result') return <ResultScreen />;
       if (tab === 'my-assessments') return <CandidateDashboard activeTab="assessments" />;
       if (tab === 'history') return <CandidateDashboard activeTab="history" />;
+      if (tab === 'queries') return <CandidateDashboard activeTab="queries" />;
       if (tab === 'performance' || tab === 'analytics') return <CandidateDashboard activeTab="analytics" />;
       return <CandidateDashboard activeTab="overview" />;
     }
@@ -84,6 +87,7 @@ export default function VerifyDashboard() {
       case 'my-assessments': return <CandidateDashboard activeTab="assessments" />;
       case 'history': return <CandidateDashboard activeTab="history" />;
       case 'proctoring': return <ProctoringSettings />;
+      case 'queries': return <AssessmentQueries />;
       default: return isManagementAvailable ? <ManageAssessments /> : <CandidateDashboard activeTab="overview" />;
     }
   };
@@ -237,6 +241,11 @@ export default function VerifyDashboard() {
                   <Shield size={13} className="inline mr-1.5" />Proctoring
                 </button>
               )}
+              {canManageQueries && (
+                <button className={tab === 'queries' ? 'active' : ''} onClick={() => setTab('queries')}>
+                  <MessageSquare size={13} className="inline mr-1.5" />Queries
+                </button>
+              )}
             </>
           )}
 
@@ -259,6 +268,12 @@ export default function VerifyDashboard() {
                 onClick={() => setTab('history')}
               >
                 <TrendingUp size={14} className="inline mr-2" /> History & Results
+              </button>
+              <button
+                className={tab === 'queries' ? 'active' : ''}
+                onClick={() => setTab('queries')}
+              >
+                <MessageSquare size={14} className="inline mr-2" /> My Queries
               </button>
             </>
           )}

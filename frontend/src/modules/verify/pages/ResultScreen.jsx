@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Award, XCircle, Clock, Calendar, MessageSquare, Send, CheckCircle, ShieldAlert,
   Loader2, ChevronDown, ChevronUp, Bot, FileText
@@ -25,11 +25,31 @@ export default function ResultScreen() {
 
   // Expanded questions
   const [expandedQ, setExpandedQ] = useState({});
+  const [existingQuery, setExistingQuery] = useState(null);
+  const [loadingQuery, setLoadingQuery] = useState(false);
+
+  const fetchExistingQuery = useCallback(async () => {
+    if (!resultId) return;
+    setLoadingQuery(true);
+    try {
+      const r = await fetch(`/api/verify/queries/result/${resultId}`, { credentials: 'include' });
+      const d = await r.json();
+      if (r.ok && d.success && d.data) {
+        setExistingQuery(d.data);
+      } else {
+        setExistingQuery(null);
+      }
+    } catch {
+      setExistingQuery(null);
+    } finally {
+      setLoadingQuery(false);
+    }
+  }, [resultId]);
 
   useEffect(() => {
     if (!resultId) return;
     setLoading(true);
-    fetch(`/api/verify/submissions/results/${resultId}`)
+    fetch(`/api/verify/submissions/results/${resultId}`, { credentials: 'include' })
       .then(r => r.json())
       .then(d => {
         if (d.success) {
@@ -81,7 +101,9 @@ export default function ResultScreen() {
       })
       .catch(() => toast.error('Error loading result'))
       .finally(() => setLoading(false));
-  }, [resultId]);
+
+    fetchExistingQuery();
+  }, [resultId, fetchExistingQuery]);
 
   const submitQuery = async (e) => {
     e.preventDefault();
@@ -91,9 +113,10 @@ export default function ResultScreen() {
       const r = await fetch('/api/verify/queries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           assessment_result_id: parseInt(resultId),
-          subject: querySubject || 'Result Dispute',
+          subject: querySubject || 'Result Evaluation Dispute',
           message: queryMessage
         })
       });
@@ -103,6 +126,7 @@ export default function ResultScreen() {
         setShowQuery(false);
         setQueryMessage('');
         setQuerySubject('');
+        fetchExistingQuery();
       } else {
         toast.error(d.detail || 'Submission failed');
       }
@@ -193,39 +217,91 @@ export default function ResultScreen() {
             <p className="text-sm text-gray-400 italic">No summary generated.</p>
           )}
           
-          {user?.id === result.user_id && (
-            <div className="mt-auto pt-4 border-t border-gray-200">
-              <button onClick={() => setShowQuery(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors text-xs font-medium">
-                <MessageSquare size={14} /> Raise Query
+          {/* Query / Dispute Section */}
+          <div className="mt-auto pt-4 border-t border-gray-200">
+            {existingQuery ? (
+              <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                    <MessageSquare size={12} className="text-purple-600" /> Query Status
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    existingQuery.status === 'resolved'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : existingQuery.status === 'closed'
+                        ? 'bg-gray-100 text-gray-600 border-gray-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {existingQuery.status === 'resolved' ? 'Resolved' : existingQuery.status === 'closed' ? 'Closed' : 'Pending Review'}
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-gray-800 line-clamp-1">{existingQuery.subject || 'Evaluation Dispute'}</p>
+                  <p className="text-[11px] text-gray-500 italic bg-white p-2 rounded-lg border border-gray-100 line-clamp-2">
+                    "{existingQuery.message}"
+                  </p>
+                </div>
+
+                {existingQuery.response && (
+                  <div className="pt-2 border-t border-gray-200 space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-purple-700">HR Resolution Note</p>
+                    <p className="text-xs text-gray-700 bg-purple-50/80 p-2.5 rounded-lg border border-purple-100 font-sans leading-relaxed">
+                      {existingQuery.response}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button onClick={() => setShowQuery(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 transition-colors text-xs font-semibold">
+                <MessageSquare size={14} /> Raise Query / Appeal
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* Query Form */}
-      {showQuery && (
-        <div className="bg-white rounded-2xl p-6 border-2 border-purple-200 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-4">Raise a Query / Appeal</h3>
+      {showQuery && !existingQuery && (
+        <div className="bg-white rounded-2xl p-6 border-2 border-purple-200 shadow-sm space-y-4 animate-fade-in">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+              <MessageSquare size={16} className="text-purple-600" />
+              Raise a Score Dispute / Appeal
+            </h3>
+            <span className="text-[11px] text-gray-400">Our HR review team will evaluate your request</span>
+          </div>
+
           <form onSubmit={submitQuery} className="space-y-4">
-            <input
-              type="text"
-              placeholder="Subject (Optional)"
-              value={querySubject}
-              onChange={e => setQuerySubject(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
-            />
-            <textarea
-              required
-              placeholder="Explain your concern regarding the evaluation..."
-              value={queryMessage}
-              onChange={e => setQueryMessage(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all min-h-[100px]"
-            />
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowQuery(false)} className="px-4 py-2 rounded-xl text-gray-500 hover:text-gray-700 text-sm font-medium">Cancel</button>
-              <button type="submit" disabled={submittingQuery} className="px-6 py-2 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm">
-                {submittingQuery ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Submit
+            <div>
+              <label className="text-xs font-semibold text-gray-700 mb-1 block">Subject (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. Question 3 evaluation clarification"
+                value={querySubject}
+                onChange={e => setQuerySubject(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-xs text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                Detailed Concern / Explanation <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                required
+                rows={4}
+                placeholder="Explain why you are requesting a score re-evaluation or clarify any technical issue..."
+                value={queryMessage}
+                onChange={e => setQueryMessage(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all resize-none min-h-[100px]"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setShowQuery(false)} className="px-4 py-2 rounded-xl text-gray-500 hover:text-gray-700 text-xs font-semibold transition-colors">Cancel</button>
+              <button type="submit" disabled={submittingQuery} className="px-6 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50">
+                {submittingQuery ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Submit Query
               </button>
             </div>
           </form>

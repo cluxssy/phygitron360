@@ -16,7 +16,12 @@ import {
   isPositiveNumber
 } from '../../../core/utils/validators';
 import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
-import { normalizeProctoringConfig } from '../proctoringConfig';
+import { 
+  normalizeProctoringConfig, 
+  isProctoringEnabled, 
+  isCameraRequired, 
+  isMicrophoneRequired 
+} from '../proctoringConfig';
 
 export default function AssessmentTaker({ assessmentId: propAsmId }) {
   const navigate = useNavigate();
@@ -58,6 +63,9 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
   // Proctoring config — derived from assignment's saved config (strictness + toggles)
   const [savedProctoringConfig, setSavedProctoringConfig] = useState(null);
   const proctoringConfig = useMemo(() => normalizeProctoringConfig(savedProctoringConfig), [savedProctoringConfig]);
+  const proctoringActive = useMemo(() => isProctoringEnabled(proctoringConfig), [proctoringConfig]);
+  const cameraRequired = useMemo(() => isCameraRequired(proctoringConfig), [proctoringConfig]);
+  const micRequired = useMemo(() => isMicrophoneRequired(proctoringConfig), [proctoringConfig]);
 
   // Proctoring Refs
   const strikes = useRef(0);
@@ -320,17 +328,17 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
   useEffect(() => { submitRef.current = handleSubmit; }, [answers, proctoringEvents]);
   useEffect(() => { handleCheatAttemptRef.current = handleProctoringViolation; }, [handleProctoringViolation]);
 
-  // Periodic screenshots
+  // Periodic screenshots (only if camera is required)
   useEffect(() => {
-    if (!hasStarted) return;
+    if (!hasStarted || !cameraRequired) return;
     const t0 = setTimeout(() => captureScreenshot('Initial Snapshot'), 5000);
     const t1 = setInterval(() => captureScreenshot('Periodic Screenshot'), 60000);
     return () => { clearTimeout(t0); clearInterval(t1); };
-  }, [hasStarted, captureScreenshot]);
+  }, [hasStarted, cameraRequired, captureScreenshot]);
 
   // Tab & Fullscreen monitors — respect proctoringConfig feature toggles
   useEffect(() => {
-    if (!hasStarted) return;
+    if (!hasStarted || !proctoringActive) return;
     const handleVisibility = () => {
       if (document.hidden && proctoringConfig.tab_switch !== false) {
         handleProctoringViolation('Tab Switching / Window Change', 'tab_switch',
@@ -358,11 +366,11 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
     };
-  }, [hasStarted, proctoringConfig, handleProctoringViolation]);
+  }, [hasStarted, proctoringActive, proctoringConfig, handleProctoringViolation]);
 
   // Copy / Paste / Context Menu blocking when block_paste is enabled
   useEffect(() => {
-    if (!hasStarted || proctoringConfig.block_paste === false) return;
+    if (!hasStarted || !proctoringActive || proctoringConfig.block_paste === false) return;
 
     const handleCopyCutPaste = (e) => {
       e.preventDefault();
@@ -385,11 +393,11 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       document.removeEventListener('paste', handleCopyCutPaste);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [hasStarted, proctoringConfig.block_paste]);
+  }, [hasStarted, proctoringActive, proctoringConfig.block_paste]);
 
   // ── MediaPipe FaceLandmarker + Audio proctoring loop ──────────────────────────
   useEffect(() => {
-    if (!hasStarted) return;
+    if (!hasStarted || !proctoringActive || (!cameraRequired && !micRequired)) return;
 
     // ── LAYER 1: SpeechRecognition ─────────────────────────────────────────────
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -737,25 +745,27 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
   }, [step, stream]);
 
   const startAssessment = async () => {
-    if (!stream) {
-      toast.error('Camera & Mic access required to start');
-      return;
-    }
+    if (cameraRequired || micRequired) {
+      if (!stream) {
+        toast.error('Camera & Mic access required to start this proctored assessment');
+        return;
+      }
 
-    // Initialize Web Audio Context requiring user gesture
-    if (!audioCtxRef.current) {
-      try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioContext();
-        await ctx.resume();
-        const source = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 1024;
-        source.connect(analyser);
-        audioCtxRef.current = ctx;
-        analyserRef.current = analyser;
-      } catch (e) {
-        console.warn('Audio Context failed to start', e);
+      // Initialize Web Audio Context requiring user gesture if microphone is required
+      if (micRequired && stream && !audioCtxRef.current) {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          const ctx = new AudioContext();
+          await ctx.resume();
+          const source = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 1024;
+          source.connect(analyser);
+          audioCtxRef.current = ctx;
+          analyserRef.current = analyser;
+        } catch (e) {
+          console.warn('Audio Context failed to start', e);
+        }
       }
     }
 
@@ -785,8 +795,8 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
         }
       }
 
-      // Fullscreen (only if configured)
-      if (proctoringConfig.full_screen !== false) {
+      // Fullscreen (only if proctoring active and configured)
+      if (proctoringActive && proctoringConfig.full_screen !== false) {
         if (document.documentElement.requestFullscreen) {
           document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen rejected', e));
         }
@@ -855,7 +865,7 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
 
     const timeTaken = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
     const maxStrikesAllowed = proctoringConfig.max_strikes || 5;
-    const isMalpractice = strikes.current >= maxStrikesAllowed || (autoSubmit === true && strikes.current > 0);
+    const isMalpractice = proctoringActive && (strikes.current >= maxStrikesAllowed || (autoSubmit === true && strikes.current > 0));
 
     try {
       const r = await fetch('/api/verify/submissions/submit', {
@@ -917,85 +927,117 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
         
         {browserSupported ? (
         <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-purple-600 border-b border-purple-200 pb-4">Proctoring Setup</h2>
-          
-          <div className="bg-gray-50 border border-gray-200 rounded-xl aspect-video relative overflow-hidden flex items-center justify-center">
-            {stream ? (
-              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
-            ) : (
-              <div className="text-center">
-                <Camera size={32} className="text-gray-300 mx-auto mb-3" />
-                <p className="text-xs font-medium text-gray-400">Camera Preview</p>
-              </div>
-            )}
-            {!stream && (
-              <button onClick={requestCamera} className="absolute bottom-6 px-6 py-3 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-xs font-medium">
-                Enable Camera
-              </button>
+          <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-purple-600">Assessment Setup</h2>
+            {!cameraRequired && (
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
+                Unmonitored / No Camera
+              </span>
             )}
           </div>
           
-          {cameraError && (
-            <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex gap-3 text-rose-600">
-              <AlertTriangle size={18} className="shrink-0" />
-              <p className="text-xs font-medium leading-relaxed">{cameraError}</p>
+          {cameraRequired ? (
+            <>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl aspect-video relative overflow-hidden flex items-center justify-center">
+                {stream ? (
+                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
+                ) : (
+                  <div className="text-center">
+                    <Camera size={32} className="text-gray-300 mx-auto mb-3" />
+                    <p className="text-xs font-medium text-gray-400">Camera Preview</p>
+                  </div>
+                )}
+                {!stream && (
+                  <button onClick={requestCamera} className="absolute bottom-6 px-6 py-3 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-xs font-medium">
+                    Enable Camera
+                  </button>
+                )}
+              </div>
+              
+              {cameraError && (
+                <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex gap-3 text-rose-600">
+                  <AlertTriangle size={18} className="shrink-0" />
+                  <p className="text-xs font-medium leading-relaxed">{cameraError}</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-6 text-emerald-950 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-emerald-100 text-emerald-700">
+                  <CheckCircle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-emerald-950">Standard Assessment Mode</h3>
+                  <p className="text-xs text-emerald-700 mt-0.5">Zero proctoring restrictions • No webcam or microphone required</p>
+                </div>
+              </div>
+              <p className="text-xs text-emerald-800 leading-relaxed">
+                This assessment is configured without proctoring. You do not need to grant camera or microphone permissions. Click below whenever you are ready to begin.
+              </p>
             </div>
           )}
 
           <ul className="space-y-3 text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-xl">
-            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Ensure you are in a well-lit room.</li>
-            <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0"/> Do not switch tabs or minimize the window.</li>
+            {cameraRequired && <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5"/> Ensure you are in a well-lit room.</li>}
+            {proctoringActive && <li className="flex gap-2"><CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5"/> Do not switch tabs or minimize the window.</li>}
             <li className="flex gap-2">
-              <CheckCircle size={14} className="text-emerald-500 shrink-0"/>
+              <CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5"/>
               {resolvedSections.length > 1
                 ? `${resolvedSections.length} Sections — Each section has its own dedicated time limit.`
                 : `Time limit: ${assessment.time_limit_minutes || 60} minutes.`}
             </li>
+            <li className="flex gap-2">
+              <CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5"/>
+              Ensure you have a stable internet connection before beginning.
+            </li>
           </ul>
 
-          {/* Proctoring capability status — always show what's active */}
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Active Proctoring Checks</p>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {[
-                { label: 'Tab Switch & Window Focus', active: true, note: '' },
-                { label: 'Fullscreen Exit Detection', active: true, note: '' },
-                { label: 'Audio / Speech Detection', active: true, note: '' },
-                { label: 'Camera Obstruction (Brightness)', active: !!stream, note: stream ? '' : 'Requires camera' },
-                { label: 'Face Not Visible', active: !!stream, note: stream ? '' : 'Requires camera' },
-                { label: 'Multiple People Detected', active: !!stream, note: stream ? '' : 'Requires camera' },
-                { label: 'Gaze & Eye Tracking', active: !!stream, note: stream ? (webGlSupported === false ? '(Geometry mode — limited accuracy)' : '') : 'Requires camera' },
-                { label: 'Head Turn Detection', active: !!stream, note: stream ? (webGlSupported === false ? '(Geometry mode — limited accuracy)' : '') : 'Requires camera' },
-              ].map(({ label, active, note }) => (
-                <div key={label} className="flex items-center justify-between px-4 py-2.5">
-                  <div className="flex items-center gap-2.5">
-                    {active
-                      ? <CheckCircle size={14} className="text-emerald-500 shrink-0" />
-                      : <AlertTriangle size={14} className="text-amber-400 shrink-0" />
-                    }
-                    <span className={`text-xs font-medium ${active ? 'text-gray-700' : 'text-gray-400'}`}>{label}</span>
+          {/* Proctoring capability status — show only when proctoring is enabled */}
+          {proctoringActive && (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Active Proctoring Checks</p>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {[
+                  { label: 'Tab Switch & Window Focus', active: proctoringConfig.tab_switch !== false, note: '' },
+                  { label: 'Fullscreen Exit Detection', active: proctoringConfig.full_screen !== false, note: '' },
+                  { label: 'Audio / Speech Detection', active: proctoringConfig.audio_detect !== false, note: '' },
+                  { label: 'Camera Obstruction (Brightness)', active: !!stream && cameraRequired, note: stream ? '' : 'Requires camera' },
+                  { label: 'Face Not Visible', active: !!stream && proctoringConfig.face_not_visible !== false, note: stream ? '' : 'Requires camera' },
+                  { label: 'Multiple People Detected', active: !!stream && proctoringConfig.multiple_people !== false, note: stream ? '' : 'Requires camera' },
+                  { label: 'Gaze & Eye Tracking', active: !!stream && proctoringConfig.eye_tracking !== false, note: stream ? (webGlSupported === false ? '(Geometry mode — limited accuracy)' : '') : 'Requires camera' },
+                  { label: 'Head Turn Detection', active: !!stream && proctoringConfig.head_turn !== false, note: stream ? (webGlSupported === false ? '(Geometry mode — limited accuracy)' : '') : 'Requires camera' },
+                ].filter(item => item.active || cameraRequired).map(({ label, active, note }) => (
+                  <div key={label} className="flex items-center justify-between px-4 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      {active
+                        ? <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                        : <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                      }
+                      <span className={`text-xs font-medium ${active ? 'text-gray-700' : 'text-gray-400'}`}>{label}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {!active && note && (
+                        <span className="text-xs text-amber-500 font-medium">{note}</span>
+                      )}
+                      {active && note && (
+                        <span className="text-xs text-gray-400">{note}</span>
+                      )}
+                      {active && (
+                        <span className="text-xs text-emerald-500 font-semibold">Active</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    {!active && note && (
-                      <span className="text-xs text-amber-500 font-medium">{note}</span>
-                    )}
-                    {active && note && (
-                      <span className="text-xs text-gray-400">{note}</span>
-                    )}
-                    {active && (
-                      <span className="text-xs text-emerald-500 font-semibold">Active</span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <button 
             onClick={startAssessment}
-            disabled={!stream} 
+            disabled={cameraRequired && !stream} 
             className="w-full py-4 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-purple-600"
           >
             Start Assessment
@@ -1028,10 +1070,16 @@ export default function AssessmentTaker({ assessmentId: propAsmId }) {
       {/* Top Bar */}
       <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-8 rounded border border-gray-200 overflow-hidden relative bg-gray-100">
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1] opacity-50" />
-            <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          </div>
+          {cameraRequired && stream ? (
+            <div className="w-12 h-8 rounded border border-gray-200 overflow-hidden relative bg-gray-100">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1] opacity-50" />
+              <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center font-bold text-xs shrink-0">
+              <Shield size={16} />
+            </div>
+          )}
           <div>
             <h2 className="text-sm font-semibold text-gray-800 truncate max-w-sm">{assessment.title}</h2>
             {resolvedSections.length > 1 && (
