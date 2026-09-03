@@ -14,15 +14,21 @@ except ImportError:
     pass
 
 try:
-    from common.services.email_template_builder import (
+    from backend.common.services.email_template_builder import (
         build_white_label_html, build_white_label_text, build_cta_button_html,
         build_info_box_html, build_key_value_table_html
     )
 except ImportError:
-    from email_template_builder import (
-        build_white_label_html, build_white_label_text, build_cta_button_html,
-        build_info_box_html, build_key_value_table_html
-    )
+    try:
+        from common.services.email_template_builder import (
+            build_white_label_html, build_white_label_text, build_cta_button_html,
+            build_info_box_html, build_key_value_table_html
+        )
+    except ImportError:
+        from email_template_builder import (
+            build_white_label_html, build_white_label_text, build_cta_button_html,
+            build_info_box_html, build_key_value_table_html
+        )
 
 
 import logging
