@@ -480,7 +480,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             if (!res.ok) throw new Error(data.detail || data.message || 'Action failed');
             
             if (type === 'temp_password') {
-                toast.success(`Temporary Password: ${data.temporary_password}`, { duration: 10000 });
+                const tempPass = data.temporary_password || data.temp_password;
+                toast.success(`Temporary Password: ${tempPass}`, { duration: 10000 });
             } else {
                 toast.success('Reset link sent to employee email');
             }
@@ -1288,7 +1289,7 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
 
                     {/* Security & Access */}
                     {!isExited && (
-                        <HasPermission permission="deploy.employees.edit_basic">
+                        <HasPermission permission={['deploy.employees.edit_basic', 'admin.users.manage']}>
                             <div className="bg-white border border-[#e9ddff] shadow-lg shadow-primary/5 p-8 rounded-2xl">
                                 <SectionHeader icon={Key} title="Security & Access" />
                                 <div className="mt-6 space-y-3">

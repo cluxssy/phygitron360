@@ -198,6 +198,7 @@ class PasswordService:
                 "success": True,
                 "reset_type": "temp_password",
                 "temp_password": temp_password,
+                "temporary_password": temp_password,
                 "email_sent": email_result['success'],
                 "message": "Temporary password generated"
             }

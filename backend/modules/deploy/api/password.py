@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Body
 from backend.modules.deploy.services.password_service import PasswordService
-from backend.core.dependencies import get_current_user, require_permission
+from backend.core.dependencies import get_current_user, require_permission, P
 from pydantic import BaseModel, EmailStr
 import logging
 
@@ -121,7 +121,7 @@ def reset_password(
         raise HTTPException(status_code=500, detail="Something went wrong while resetting your password. Please try again.")
 
 
-@router.post("/admin-reset-password", dependencies=[Depends(require_permission("deploy.employees.edit"))])
+@router.post("/admin-reset-password", dependencies=[Depends(require_permission([P.DEPLOY_EMP_EDIT_BASIC, P.ADMIN_USERS_MANAGE]))])
 def admin_reset_password(
     request: AdminResetRequest,
     current_user: dict = Depends(get_current_user),
