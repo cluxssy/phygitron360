@@ -112,7 +112,7 @@ class CandidateRepository:
                 if not email:
                     dict_cur.execute("SELECT * FROM candidates WHERE email IS NULL OR email = ''")
                 else:
-                    dict_cur.execute("SELECT * FROM candidates WHERE email = %s", (email,))
+                    dict_cur.execute("SELECT * FROM candidates WHERE LOWER(email) = LOWER(%s)", (str(email).strip(),))
                 row = dict_cur.fetchone()
                 return dict(row) if row else None
         finally:

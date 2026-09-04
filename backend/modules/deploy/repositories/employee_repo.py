@@ -147,8 +147,8 @@ class EmployeeRepository:
                 SELECT e.*, u.role
                 FROM employees e
                 LEFT JOIN users u ON e.employee_code = u.employee_code
-                WHERE e.email_id = %s
-            """, (email_id,))
+                WHERE LOWER(e.email_id) = LOWER(%s)
+            """, (str(email_id or "").strip(),))
             row = cur.fetchone()
             return dict(row) if row else None
         finally:

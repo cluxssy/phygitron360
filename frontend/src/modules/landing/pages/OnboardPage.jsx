@@ -95,7 +95,8 @@ export default function OnboardPage() {
   };
 
   useEffect(() => {
-    if (!token) {
+    const cleanToken = token ? token.trim() : '';
+    if (!cleanToken) {
         setError('Missing secure onboarding token.');
         setLoading(false);
         return;
@@ -103,9 +104,15 @@ export default function OnboardPage() {
     fetch('/api/onboarding/verify-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
+        body: JSON.stringify({ token: cleanToken })
     })
-    .then(res => res.json())
+    .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data.detail || 'Token invalid or expired.');
+        }
+        return data;
+    })
     .then(data => {
         if (data.valid || data.email) {
             setTokenInfo(data);
@@ -113,7 +120,7 @@ export default function OnboardPage() {
             setError(data.detail || 'Token invalid or expired.');
         }
     })
-    .catch(() => setError('Connection failed.'))
+    .catch((err) => setError(err.message || 'Connection failed.'))
     .finally(() => setLoading(false));
   }, [token]);
 

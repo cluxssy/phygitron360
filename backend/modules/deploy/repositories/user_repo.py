@@ -15,8 +15,8 @@ class UserRepository:
                     FROM users u
                     LEFT JOIN employees e ON u.employee_code = e.employee_code
                     LEFT JOIN candidates c ON c.user_id = u.id
-                    WHERE u.username = %s
-                """, (username,))
+                    WHERE LOWER(u.username) = LOWER(%s)
+                """, (str(username or "").strip(),))
                 row = cur.fetchone()
                 if row:
                     res = dict(row)
@@ -47,6 +47,7 @@ class UserRepository:
 
     def create_user(self, username: str, password_hash: str, role: str, employee_code: Optional[str] = None, tenant_id: str = 'public', is_active: int = 1, templates: List[str] = None):
         conn = get_db_connection()
+        normalized_username = str(username or "").strip().lower()
         try:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
@@ -63,7 +64,7 @@ class UserRepository:
                         password_must_change = EXCLUDED.password_must_change,
                         is_active = EXCLUDED.is_active
                     """,
-                    (username, password_hash, role, templates or [], employee_code, is_active)
+                    (normalized_username, password_hash, role, templates or [], employee_code, is_active)
                 )
                 conn.commit()
         finally:
@@ -74,7 +75,7 @@ class UserRepository:
         try:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
-                cur.execute("UPDATE users SET password_hash = %s WHERE username = %s", (new_hash, username))
+                cur.execute("UPDATE users SET password_hash = %s WHERE LOWER(username) = LOWER(%s)", (new_hash, str(username or "").strip()))
                 conn.commit()
         finally:
             conn.close()
@@ -84,7 +85,7 @@ class UserRepository:
         try:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
-                cur.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE username = %s", (username,))
+                cur.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE LOWER(username) = LOWER(%s)", (str(username or "").strip(),))
                 conn.commit()
         finally:
             conn.close()
@@ -105,7 +106,7 @@ class UserRepository:
         try:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
-                cur.execute("DELETE FROM users WHERE username = %s", (username,))
+                cur.execute("DELETE FROM users WHERE LOWER(username) = LOWER(%s)", (str(username or "").strip(),))
                 conn.commit()
         finally:
             conn.close()
@@ -200,7 +201,7 @@ class UserRepository:
         try:
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}"')
-                cur.execute("UPDATE users SET username = %s WHERE id = %s", (new_username, user_id))
+                cur.execute("UPDATE users SET username = %s WHERE id = %s", (str(new_username or "").strip().lower(), user_id))
                 conn.commit()
         finally:
             conn.close()

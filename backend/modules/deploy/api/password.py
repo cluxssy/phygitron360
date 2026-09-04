@@ -49,9 +49,9 @@ def forgot_password(
     Always returns success to prevent email enumeration.
     """
     try:
-        # Sanitize workspace_id: fallback to public if empty or invalid
-        workspace_id = request.workspace_id or "public"
-        if workspace_id in ["localhost", "127.0.0.1"] or workspace_id.replace(".", "").isdigit():
+        # Sanitize workspace_id: fallback to public if empty, invalid, or technical subdomain
+        workspace_id = (request.workspace_id or "public").strip().lower()
+        if workspace_id in ["localhost", "127.0.0.1", "app", "api", "admin", "www", "null", "undefined"] or workspace_id.replace(".", "").isdigit():
             workspace_id = "public"
             
         # Resolve subdomain to actual tenant schema ID
@@ -67,14 +67,13 @@ def forgot_password(
                     if row:
                         tenant_context = row[0]
                     else:
-                        # If invalid workspace, pretend success to prevent enum
-                        return {"success": True, "message": "If an account exists with this email, a password reset link has been sent."}
+                        tenant_context = "public"
             finally:
                 conn.close()
 
         # Instantiate service with the resolved tenant so portal_url is correct
         service = get_service(tenant_id=tenant_context)
-        result = service.request_password_reset(request.email, tenant_context)
+        result = service.request_password_reset(str(request.email).strip().lower(), tenant_context)
         return result
     except Exception as e:
         logger.exception("Failed to process forgot-password request: %s", e)

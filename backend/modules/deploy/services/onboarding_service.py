@@ -96,17 +96,23 @@ class OnboardingService:
             raise ValueError("Invalid or expired token")
             
         # Parse expiry
-        expires_at = invite['expires_at']
-        if isinstance(expires_at, str):
-            for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S'):
-                try:
-                    expires_at = datetime.strptime(expires_at, fmt)
-                    break
-                except ValueError:
-                    continue
-             
-        if datetime.now() > expires_at:
-             raise ValueError("Token expired")
+        expires_at = invite.get('expires_at')
+        if expires_at:
+            if isinstance(expires_at, str):
+                for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d'):
+                    try:
+                        expires_at = datetime.strptime(expires_at, fmt)
+                        break
+                    except ValueError:
+                        continue
+            if isinstance(expires_at, datetime):
+                if expires_at.tzinfo is not None:
+                    from datetime import timezone
+                    now = datetime.now(timezone.utc)
+                else:
+                    now = datetime.now()
+                if now > expires_at:
+                    raise ValueError("Token expired")
              
         return {
             "valid": True,

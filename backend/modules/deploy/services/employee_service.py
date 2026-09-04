@@ -92,6 +92,7 @@ class EmployeeService:
             raise ValueError("Employee first name and last name are required.")
             
         if data.get('email') and str(data['email']).strip():
+            data['email'] = str(data['email']).strip().lower()
             try:
                 existing_emp_by_email = self.repo.get_employee_by_email(data['email'], self.tenant_id)
                 if existing_emp_by_email and existing_emp_by_email.get('employment_status') != 'Exited':
@@ -258,7 +259,10 @@ class EmployeeService:
         # Capture old email to update user username if changed; also used to
         # fill in any name parts the caller didn't send so `name` stays in sync
         old_employee = self.repo.get_employee_by_code(employee_code, self.tenant_id)
-        old_email = old_employee.get('email_id') if old_employee else None
+        old_email = str(old_employee.get('email_id') or "").strip().lower() if old_employee and old_employee.get('email_id') else None
+
+        if 'email_id' in data and data['email_id'] is not None:
+            data['email_id'] = str(data['email_id']).strip().lower()
 
         if any(k in data for k in ('first_name', 'middle_name', 'last_name')):
             old_first = (old_employee or {}).get('first_name')

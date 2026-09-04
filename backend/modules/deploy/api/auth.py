@@ -52,7 +52,9 @@ def register_company(data: RegisterCompanyRequest, service: AuthService = Depend
 @router.post("/login")
 def login(credentials: LoginRequest, response: Response, service: AuthService = Depends(get_service)):
     try:
-        tenant_context = credentials.workspace_id or 'public'
+        tenant_context = (credentials.workspace_id or 'public').strip().lower()
+        if tenant_context in ["localhost", "127.0.0.1", "app", "api", "admin", "www", "null", "undefined"] or tenant_context.replace(".", "").isdigit():
+            tenant_context = "public"
         
         if tenant_context != 'public' and not tenant_context.startswith('tenant_'):
             # resolve from subdomain
@@ -65,7 +67,7 @@ def login(credentials: LoginRequest, response: Response, service: AuthService = 
                     if row:
                         tenant_context = row[0]
                     else:
-                        raise ValueError("Invalid workspace/subdomain")
+                        tenant_context = 'public'
             finally:
                 conn.close()
 

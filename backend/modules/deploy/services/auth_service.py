@@ -40,7 +40,27 @@ class AuthService:
         return secrets.token_urlsafe(32)
 
     def login(self, username: str, password: str, tenant_id: str = 'public') -> Optional[dict]:
+        username = str(username or "").strip().lower()
         user = self.repo.get_user_by_username(username, tenant_id=tenant_id)
+        
+        # If user not found in public schema, search active tenant schemas
+        if not user and tenant_id == 'public':
+            from backend.core.database import get_db_connection
+            conn = get_db_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SET search_path TO public")
+                    cur.execute("SELECT id FROM tenants")
+                    tenants = cur.fetchall()
+                    for (t_id,) in tenants:
+                        candidate_user = self.repo.get_user_by_username(username, tenant_id=t_id)
+                        if candidate_user:
+                            user = candidate_user
+                            tenant_id = t_id
+                            break
+            finally:
+                conn.close()
+
         if not user:
             return None
         

@@ -42,15 +42,19 @@ def delete_invite(invite_id: int, service: OnboardingService = Depends(get_servi
     return service.delete_invite(invite_id)
 
 @router.post("/verify-token")
-def verify_token(data: dict = Body(...), service: OnboardingService = Depends(get_service)):
+def verify_token(data: dict = Body(...)):
     token = data.get("token")
     if not token:
         raise HTTPException(status_code=400, detail="Token required")
         
     try:
+        service = OnboardingService(tenant_id="public")
         return service.verify_token(token)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to verify onboarding token: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while verifying this link. Please try again.")
 
 @router.post("/complete")
 def complete_onboarding(
@@ -73,8 +77,7 @@ def complete_onboarding(
     photo_file: UploadFile = File(None),
     cv_file: UploadFile = File(None),
     id_proof_file: UploadFile = File(None),
-    passbook_file: UploadFile = File(None),
-    service: OnboardingService = Depends(get_service)
+    passbook_file: UploadFile = File(None)
 ):
     temp_id = token
 
@@ -109,6 +112,7 @@ def complete_onboarding(
     }
     
     try:
+        service = OnboardingService(tenant_id="public")
         return service.complete_onboarding(token, password, emp_data, file_metadata)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

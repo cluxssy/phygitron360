@@ -25,6 +25,7 @@ def send_welcome_email(to_email: str, company_name: str, temp_password: str, sub
     Sends the Org Admin Workspace Welcome email with login credentials and portal URL.
     Falls back to structured mock logging if SMTP credentials are not configured.
     """
+    to_email = str(to_email or "").strip().lower()
     workspace_url = f"https://{subdomain}.phygitron.com" if subdomain else os.getenv("APP_BASE_URL", "https://app.phygitron.com")
     subject = f"Welcome to Phygitron 360 — Your Workspace is Ready"
     

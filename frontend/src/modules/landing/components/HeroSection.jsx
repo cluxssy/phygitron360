@@ -66,15 +66,16 @@ export default function HeroSection() {
     }
 
     const parts = hostname.split('.');
+    const nonTenantSubdomains = ['www', 'app', 'api', 'admin'];
 
     if (hostname.includes('localhost')) {
-      if (parts.length >= 2 && parts[0] !== 'www') {
+      if (parts.length >= 2 && !nonTenantSubdomains.includes(parts[0])) {
         return parts[0];
       }
       return 'public';
     }
 
-    if (parts.length > 2 && parts[0] !== 'www') return parts[0];
+    if (parts.length > 2 && !nonTenantSubdomains.includes(parts[0])) return parts[0];
     return 'public';
   };
 
