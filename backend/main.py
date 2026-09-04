@@ -14,7 +14,7 @@ from backend.modules.deploy.api.attendance import router as attendance_router
 from backend.modules.deploy.api.holidays import router as holidays_router
 from backend.modules.deploy.api.assessments import router as assessments_router
 from backend.modules.deploy.api.training import router as training_router
-from backend.modules.deploy.api.onboarding import router as onboarding_router
+from backend.modules.deploy.api.onboarding import router as onboarding_router, onboard_alias_router
 from backend.modules.deploy.api.notifications import router as notifications_router
 from backend.modules.deploy.api.password import router as password_router
 from backend.modules.deploy.api.payroll import router as payroll_router
@@ -177,6 +177,7 @@ app.include_router(holidays_router, dependencies=[Depends(require_module("deploy
 app.include_router(assessments_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(training_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(onboarding_router)
+app.include_router(onboard_alias_router)
 app.include_router(notifications_router, dependencies=[Depends(require_module("deploy"))])
 app.include_router(password_router)
 app.include_router(payroll_router, dependencies=[Depends(require_module("deploy"))])

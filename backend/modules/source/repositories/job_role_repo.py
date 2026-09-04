@@ -205,7 +205,7 @@ class JobRoleRepository:
                 
                 if user_id:
                     # Candidate is already linked to a user account
-                    cur.execute("SELECT employment_status FROM employees WHERE email_id = %s", (email,))
+                    cur.execute("SELECT employment_status FROM employees WHERE LOWER(email_id) = LOWER(%s)", (str(email or "").strip(),))
                     emp_row = cur.fetchone()
                     
                     is_exited = emp_row and emp_row[0] == 'Exited'
@@ -230,12 +230,12 @@ class JobRoleRepository:
                     return {"is_internal": False, "user_id": user_id, "success": True}
                 else:
                     # Candidate is not linked. Check if an account exists with this email.
-                    cur.execute("SELECT id FROM users WHERE username = %s", (email,))
+                    cur.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s)", (str(email or "").strip(),))
                     existing_user = cur.fetchone()
                     if existing_user:
                         existing_user_id = existing_user[0]
                         
-                        cur.execute("SELECT employment_status FROM employees WHERE email_id = %s", (email,))
+                        cur.execute("SELECT employment_status FROM employees WHERE LOWER(email_id) = LOWER(%s)", (str(email or "").strip(),))
                         emp_row = cur.fetchone()
                         
                         is_exited = emp_row and emp_row[0] == 'Exited'

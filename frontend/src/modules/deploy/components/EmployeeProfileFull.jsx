@@ -481,9 +481,17 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             
             if (type === 'temp_password') {
                 const tempPass = data.temporary_password || data.temp_password;
-                toast.success(`Temporary Password: ${tempPass}`, { duration: 10000 });
+                if (data.email_sent === false) {
+                    toast.error(`Temporary Password: ${tempPass} (Email delivery failed: check SMTP configuration)`, { duration: 15000 });
+                } else {
+                    toast.success(`Temporary Password: ${tempPass} (Emailed to employee)`, { duration: 10000 });
+                }
             } else {
-                toast.success('Reset link sent to employee email');
+                if (data.email_sent === false) {
+                    toast.error(data.message || 'Failed to send reset link email');
+                } else {
+                    toast.success('Reset link sent to employee email');
+                }
             }
         } catch (e) {
             toast.error(e.message);

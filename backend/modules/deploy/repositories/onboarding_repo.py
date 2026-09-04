@@ -11,7 +11,7 @@ class OnboardingRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur, tenant_id)
-                cur.execute("SELECT * FROM users WHERE username = %s", (email,))
+                cur.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(%s)", (str(email or "").strip(),))
                 row = cur.fetchone()
                 return dict(row) if row else None
         finally:
@@ -22,7 +22,7 @@ class OnboardingRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur, 'public')
-                cur.execute("SELECT 1 FROM onboarding_invites WHERE email = %s AND status = 'Pending'", (email,))
+                cur.execute("SELECT 1 FROM onboarding_invites WHERE LOWER(email) = LOWER(%s) AND status = 'Pending'", (str(email or "").strip(),))
                 row = cur.fetchone()
                 return dict(row) if row else None
         finally:
@@ -38,7 +38,7 @@ class OnboardingRepository:
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 ''', (
-                    invite_data['token'], tenant_id, invite_data['email'], invite_data['name'],
+                    invite_data['token'], tenant_id, str(invite_data['email']).strip().lower(), invite_data['name'],
                     invite_data.get('first_name'), invite_data.get('middle_name'), invite_data.get('last_name'),
                     invite_data.get('employee_code'), invite_data.get('guardian_name'),
                     invite_data['role'], invite_data['department'], invite_data['designation'],
@@ -87,7 +87,8 @@ class OnboardingRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur, 'public')
-                cur.execute("SELECT * FROM onboarding_invites WHERE token = %s AND status = 'Pending'", (token,))
+                clean_token = str(token or "").strip()
+                cur.execute("SELECT * FROM onboarding_invites WHERE TRIM(token) = %s", (clean_token,))
                 row = cur.fetchone()
                 return dict(row) if row else None
         finally:
@@ -98,7 +99,7 @@ class OnboardingRepository:
         try:
             with conn.cursor() as cur:
                 self._set_path(cur, 'public')
-                cur.execute("UPDATE onboarding_invites SET status = %s WHERE token = %s", (status, token))
+                cur.execute("UPDATE onboarding_invites SET status = %s WHERE TRIM(token) = %s", (status, str(token or "").strip()))
                 conn.commit()
         finally:
             conn.close()
@@ -145,8 +146,8 @@ class OnboardingRepository:
                 # Invites always live in the public schema, keyed by email + tenant_id
                 cur.execute('SET search_path TO public')
                 cur.execute(
-                    "UPDATE onboarding_invites SET status = 'Revoked' WHERE email = %s AND tenant_id = %s",
-                    (email, tenant_id)
+                    "UPDATE onboarding_invites SET status = 'Revoked' WHERE LOWER(email) = LOWER(%s) AND tenant_id = %s",
+                    (str(email or "").strip(), tenant_id)
                 )
                 conn.commit()
                 return email
@@ -314,12 +315,13 @@ class OnboardingRepository:
                         employee_data['code']
                     ))
 
+                    norm_user_email = str(user_data['email']).strip().lower()
                     # 2. User UPDATE or INSERT
-                    cur.execute("UPDATE users SET password_hash = %s, role = %s, roles = ARRAY[%s]::varchar[], templates = ARRAY[%s]::varchar[], is_active = 0, employee_code = %s, password_must_change = 0 WHERE username = %s", 
-                            (user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code'], user_data['email']))
+                    cur.execute("UPDATE users SET password_hash = %s, role = %s, roles = ARRAY[%s]::varchar[], templates = ARRAY[%s]::varchar[], is_active = 0, employee_code = %s, password_must_change = 0 WHERE LOWER(username) = LOWER(%s)", 
+                            (user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code'], norm_user_email))
                     if cur.rowcount == 0:
                         cur.execute("INSERT INTO users (username, password_hash, role, roles, templates, employee_code, is_active, password_must_change) VALUES (%s, %s, %s, ARRAY[%s]::varchar[], ARRAY[%s]::varchar[], %s, 0, 0)", 
-                            (user_data['email'], user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code']))
+                            (norm_user_email, user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code']))
                     
                     # 3. Skills UPDATE or INSERT
                     cur.execute('''
@@ -335,6 +337,7 @@ class OnboardingRepository:
                             VALUES (%s, %s, %s, %s)
                         ''', (skill_data['code'], skill_data['primary'], skill_data['secondary'], skill_data['cv_path']))
                 else:
+                    norm_emp_email = str(employee_data['email']).strip().lower() if employee_data.get('email') else None
                     # 1. Employee INSERT
                     cur.execute('''
                         INSERT INTO employees (
@@ -344,7 +347,7 @@ class OnboardingRepository:
                             photo_path, cv_path, id_proofs, passbook_path, bank_name, bank_account_no, pan_no, ifsc_code
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ''', (
-                        employee_data['code'], employee_data['name'], employee_data.get('first_name'), employee_data.get('middle_name'), employee_data.get('last_name'), employee_data.get('guardian_name'), employee_data['email'],
+                        employee_data['code'], employee_data['name'], employee_data.get('first_name'), employee_data.get('middle_name'), employee_data.get('last_name'), employee_data.get('guardian_name'), norm_emp_email,
                         employee_data['phone'], employee_data['emergency'], employee_data['dob'],
                         employee_data['current_address'], employee_data['permanent_address'], employee_data['education'],
                         employee_data['team'], employee_data['designation'], 'Pending Approval',
@@ -353,6 +356,7 @@ class OnboardingRepository:
                         employee_data.get('bank_name'), employee_data.get('bank_account_no'), employee_data.get('pan_no'), employee_data.get('ifsc_code')
                     ))
 
+                    norm_user_email = str(user_data['email']).strip().lower()
                     # 2. User INSERT or UPDATE
                     cur.execute('''
                         INSERT INTO users (username, password_hash, role, roles, templates, employee_code, is_active, password_must_change) 
@@ -365,7 +369,7 @@ class OnboardingRepository:
                                       employee_code = EXCLUDED.employee_code, 
                                       is_active = EXCLUDED.is_active, 
                                       password_must_change = EXCLUDED.password_must_change
-                    ''', (user_data['email'], user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code']))
+                    ''', (norm_user_email, user_data['password_hash'], user_data['role'], user_data['role'], user_data['role'], user_data['employee_code']))
                     
                     # 3. Skills INSERT
                     cur.execute('''

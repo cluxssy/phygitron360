@@ -93,20 +93,34 @@ class OnboardingService:
     def verify_token(self, token: str):
         invite = self.repo.get_invite_by_token(token)
         if not invite:
-            raise ValueError("Invalid or expired token")
+            raise ValueError("Invalid onboarding token. The link may be incorrect or removed.")
+        
+        status = str(invite.get('status') or '').strip().lower()
+        if status == 'completed':
+            raise ValueError("This onboarding link has already been completed.")
+        elif status == 'revoked':
+            raise ValueError("This onboarding invite has been revoked by HR.")
+        elif status != 'pending':
+            raise ValueError(f"This onboarding link is no longer active (status: {invite.get('status')}).")
             
         # Parse expiry
-        expires_at = invite['expires_at']
-        if isinstance(expires_at, str):
-            for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S'):
-                try:
-                    expires_at = datetime.strptime(expires_at, fmt)
-                    break
-                except ValueError:
-                    continue
-             
-        if datetime.now() > expires_at:
-             raise ValueError("Token expired")
+        expires_at = invite.get('expires_at')
+        if expires_at:
+            if isinstance(expires_at, str):
+                for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d'):
+                    try:
+                        expires_at = datetime.strptime(expires_at, fmt)
+                        break
+                    except ValueError:
+                        continue
+            if isinstance(expires_at, datetime):
+                if expires_at.tzinfo is not None:
+                    from datetime import timezone
+                    now = datetime.now(timezone.utc)
+                else:
+                    now = datetime.now()
+                if now > expires_at:
+                    raise ValueError("This onboarding link has expired. Please contact HR for a new link.")
              
         return {
             "valid": True,
@@ -123,7 +137,15 @@ class OnboardingService:
     def complete_onboarding(self, token: str, password: str, employee_data: dict, file_metadata: dict):
         invite = self.repo.get_invite_by_token(token)
         if not invite:
-            raise ValueError("Invalid token")
+            raise ValueError("Invalid onboarding token. The link may be incorrect or removed.")
+        
+        status = str(invite.get('status') or '').strip().lower()
+        if status == 'completed':
+            raise ValueError("This onboarding link has already been completed.")
+        elif status == 'revoked':
+            raise ValueError("This onboarding invite has been revoked by HR.")
+        elif status != 'pending':
+            raise ValueError(f"This onboarding link is no longer active (status: {invite.get('status')}).")
         
         tenant_id = invite.get('tenant_id', 'public')
 

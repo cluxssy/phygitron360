@@ -90,6 +90,8 @@ class EmailService:
         if not self.smtp_user or not self.smtp_password:
             return {"success": False, "message": "Email not configured. Please set SMTP_USER and SMTP_PASS."}
         try:
+            if message.get("To"):
+                message.replace_header("To", str(message["To"]).strip().lower())
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
                 server.login(self.smtp_user, self.smtp_password)
@@ -108,6 +110,7 @@ class EmailService:
         expires_days: int = 7
     ) -> dict:
         """1. Onboarding Invitation (Template Library #1)"""
+        recipient_email = str(recipient_email or "").strip().lower()
         subject = "Get Started: Complete Your Profile on Phygitron - Employee Central"
 
         body_html = f"""
@@ -146,6 +149,7 @@ class EmailService:
         expires_hours: int = 1
     ) -> dict:
         """2 & 12. Forgot Password / Admin Password Reset Link"""
+        recipient_email = str(recipient_email or "").strip().lower()
         subject = "Reset Your Password — Phygitron 360"
 
         body_html = f"""
@@ -183,6 +187,7 @@ class EmailService:
         expires_hours: int = 24
     ) -> dict:
         """11. Temporary Password Sent by Admin"""
+        recipient_email = str(recipient_email or "").strip().lower()
         subject = "Temporary Login Credentials — Phygitron 360"
         login_url = self.portal_url
 
@@ -224,6 +229,7 @@ class EmailService:
         changed_by: str = "You"
     ) -> dict:
         """10. Password Changed Confirmation / Profile Password Updated"""
+        recipient_email = str(recipient_email or "").strip().lower()
         subject = "Password Successfully Changed — Phygitron 360"
 
         body_html = f"""
@@ -263,6 +269,7 @@ class EmailService:
         login_url: str = ""
     ) -> dict:
         """8. Employee Welcome Email (Direct HR login account provisioning)"""
+        recipient_email = str(recipient_email or "").strip().lower()
         if not login_url:
             login_url = self.portal_url
         subject = "Welcome to Phygitron 360 — Your Account is Ready"

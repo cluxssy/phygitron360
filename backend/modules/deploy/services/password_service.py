@@ -31,40 +31,63 @@ class PasswordService:
     def request_password_reset(self, email: str, tenant_id: str = "public") -> Dict[str, Any]:
         """
         User requests password reset (forgot password).
-        Returns success even if email doesn't exist (security).
+        Always returns success to prevent email enumeration.
         """
-        # Always return success message to prevent email enumeration
+        email = str(email or "").strip().lower()
         success_message = "If an account exists with this email, a password reset link has been sent."
         
         try:
-            # Check if user exists
+            # Check if user exists in the specified tenant
             user = self.repo.get_user_by_email(email, tenant_id=tenant_id)
+            target_tenant = tenant_id
+
+            # If not found in public, search active tenant schemas
+            if not user and tenant_id == 'public':
+                from backend.core.database import get_db_connection
+                conn = get_db_connection()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("SET search_path TO public")
+                        cur.execute("SELECT id FROM tenants")
+                        tenants = cur.fetchall()
+                        for (t_id,) in tenants:
+                            t_user = self.repo.get_user_by_email(email, tenant_id=t_id)
+                            if t_user:
+                                user = t_user
+                                target_tenant = t_id
+                                break
+                finally:
+                    conn.close()
+
             if not user:
                 return {"success": True, "message": success_message}
             
             # Generate reset token
             raw_token = str(uuid.uuid4())
-            token = f"{tenant_id}:{raw_token}"
+            token = f"{target_tenant}:{raw_token}"
             expires_at = datetime.now() + timedelta(hours=1)
             
-            # Invalidate any existing tokens for this email
-            self.repo.invalidate_existing_tokens(email, tenant_id=tenant_id)
+            # Invalidate any existing tokens for this email in target tenant
+            self.repo.invalidate_existing_tokens(email, tenant_id=target_tenant)
             
-            # Create new token
+            # Create new token in target tenant
             self.repo.create_reset_token({
                 "email": email,
                 "token": raw_token,
                 "expires_at": expires_at,
                 "reset_type": "self"
-            }, tenant_id=tenant_id)
+            }, tenant_id=target_tenant)
             
-            # Send email — use tenant's portal URL so the link points to {subdomain}.phygitron.com
-            reset_link = f"{self.email_service.portal_url}/reset-password?token={token}"
+            # Instantiate email service for the target tenant to get correct tenant portal_url
+            email_svc = self.email_service if target_tenant == self.email_service.tenant_id else EmailService(tenant_id=target_tenant)
+            
+            # Send email — use target tenant's portal URL so the link points to {subdomain}.phygitron.com
+            reset_link = f"{email_svc.portal_url}/reset-password?token={token}"
             
             # Get user name, fallback to email if not available
             user_name = user.get('name', email.split('@')[0])
             
-            self.email_service.send_password_reset_link(
+            email_svc.send_password_reset_link(
                 recipient_email=email,
                 recipient_name=user_name,
                 reset_link=reset_link,
@@ -101,18 +124,18 @@ class PasswordService:
         if datetime.now() > expires_at:
             return {"valid": False, "message": "This reset link has expired"}
 
-        
+        raw_email = str(reset_token.get('email') or "").strip().lower()
         # Get user info
-        user = self.repo.get_user_by_email(reset_token['email'], tenant_id=tenant_id)
+        user = self.repo.get_user_by_email(raw_email, tenant_id=tenant_id)
         if not user:
             return {"valid": False, "message": "User not found"}
         
         # Get user name, fallback to email if not available
-        user_name = user.get('name', reset_token['email'].split('@')[0])
+        user_name = user.get('name', raw_email.split('@')[0])
         
         return {
             "valid": True,
-            "email": reset_token['email'],
+            "email": raw_email,
             "name": user_name,
             "tenant_id": tenant_id,
             "raw_token": raw_token
@@ -125,7 +148,7 @@ class PasswordService:
         if not verification['valid']:
             return {"success": False, "message": verification['message']}
         
-        email = verification['email']
+        email = str(verification['email']).strip().lower()
         tenant_id = verification['tenant_id']
         raw_token = verification['raw_token']
         
@@ -168,7 +191,7 @@ class PasswordService:
         if not employee:
             return {"success": False, "message": "Employee not found"}
         
-        email = employee['email_id']
+        email = str(employee.get('email_id') or "").strip().lower()
         if not email:
             return {"success": False, "message": "Employee has no email address"}
         
@@ -183,7 +206,8 @@ class PasswordService:
                 password_hash, 
                 changed_by=admin_email,
                 must_change=True,
-                tenant_id=tenant_id
+                tenant_id=tenant_id,
+                employee_code=employee_code
             )
             
             # Send email with temporary password
@@ -194,13 +218,16 @@ class PasswordService:
                 expires_hours=24
             )
             
+            email_ok = bool(email_result.get('success'))
+            msg = "Temporary password generated and emailed" if email_ok else f"Temporary password generated, but email delivery failed: {email_result.get('message', 'SMTP error')}"
+            
             return {
                 "success": True,
                 "reset_type": "temp_password",
                 "temp_password": temp_password,
                 "temporary_password": temp_password,
-                "email_sent": email_result['success'],
-                "message": "Temporary password generated"
+                "email_sent": email_ok,
+                "message": msg
             }
         
         elif reset_type == 'reset_link':
@@ -231,10 +258,18 @@ class PasswordService:
                 expires_hours=1
             )
             
+            if not email_result.get('success'):
+                return {
+                    "success": False,
+                    "reset_type": "reset_link",
+                    "email_sent": False,
+                    "message": f"Failed to send reset link to {email}: {email_result.get('message', 'SMTP error')}"
+                }
+            
             return {
                 "success": True,
                 "reset_type": "reset_link",
-                "email_sent": email_result['success'],
+                "email_sent": True,
                 "message": "Reset link sent to employee"
             }
         
@@ -243,6 +278,7 @@ class PasswordService:
     
     def check_must_change_password(self, email: str, tenant_id: str = "public") -> bool:
         """Check if user must change password on login"""
+        email = str(email or "").strip().lower()
         user = self.repo.get_user_by_email(email, tenant_id=tenant_id)
         if not user:
             return False
@@ -256,6 +292,7 @@ class PasswordService:
         tenant_id: str = 'public'
     ) -> Dict[str, Any]:
         """Change password for logged-in user"""
+        email = str(email or "").strip().lower()
         user = self.repo.get_user_by_email(email, tenant_id)
         if not user:
             return {"success": False, "message": "User not found"}
