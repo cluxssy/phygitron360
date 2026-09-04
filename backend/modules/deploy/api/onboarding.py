@@ -41,9 +41,8 @@ def revoke_invite(invite_id: int, service: OnboardingService = Depends(get_servi
 def delete_invite(invite_id: int, service: OnboardingService = Depends(get_service)):
     return service.delete_invite(invite_id)
 
-@router.post("/verify-token")
-def verify_token(data: dict = Body(...)):
-    token = data.get("token")
+def _handle_verify_token(token: str = None):
+    token = str(token or "").strip()
     if not token:
         raise HTTPException(status_code=400, detail="Token required")
         
@@ -55,6 +54,24 @@ def verify_token(data: dict = Body(...)):
     except Exception as e:
         logger.exception("Failed to verify onboarding token: %s", e)
         raise HTTPException(status_code=500, detail="Something went wrong while verifying this link. Please try again.")
+
+@router.post("/verify-token")
+@router.post("/verify")
+def verify_token_post(data: dict = Body(default={})):
+    token = data.get("token") if isinstance(data, dict) else None
+    return _handle_verify_token(token)
+
+@router.get("/verify-token")
+@router.get("/verify")
+def verify_token_get(token: str = None):
+    return _handle_verify_token(token)
+
+@router.get("/verify-token/{token}")
+@router.post("/verify-token/{token}")
+@router.get("/verify/{token}")
+@router.post("/verify/{token}")
+def verify_token_path(token: str):
+    return _handle_verify_token(token)
 
 @router.post("/complete")
 def complete_onboarding(
@@ -288,3 +305,72 @@ def approve_onboarding_section(
 
     tenant_id = current_user.get("tenant_id", "public")
     return service.approve_section(employee_code, section, tenant_id=tenant_id)
+
+
+# ── Alias Router for /api/onboard (singular alias) ─────────────────────────
+onboard_alias_router = APIRouter(prefix="/api/onboard", tags=["onboarding-alias"])
+
+@onboard_alias_router.post("/verify-token")
+@onboard_alias_router.post("/verify")
+def alias_verify_token_post(data: dict = Body(default={})):
+    token = data.get("token") if isinstance(data, dict) else None
+    return _handle_verify_token(token)
+
+@onboard_alias_router.get("/verify-token")
+@onboard_alias_router.get("/verify")
+def alias_verify_token_get(token: str = None):
+    return _handle_verify_token(token)
+
+@onboard_alias_router.get("/verify-token/{token}")
+@onboard_alias_router.post("/verify-token/{token}")
+@onboard_alias_router.get("/verify/{token}")
+@onboard_alias_router.post("/verify/{token}")
+def alias_verify_token_path(token: str):
+    return _handle_verify_token(token)
+
+@onboard_alias_router.post("/complete")
+def alias_complete_onboarding(
+    token: str = Form(...),
+    password: str = Form(...),
+    contact_number: str = Form(...),
+    emergency_contact: str = Form(...),
+    dob: str = Form(...),
+    current_address: str = Form(...),
+    permanent_address: str = Form(...),
+    location: str = Form(None),
+    doj: str = Form(None),
+    education_details: str = Form(None),
+    primary_skills: str = Form(None),
+    secondary_skills: str = Form(None),
+    bank_name: str = Form(...),
+    bank_account_no: str = Form(...),
+    pan_no: str = Form(...),
+    ifsc_code: str = Form(...),
+    photo_file: UploadFile = File(None),
+    cv_file: UploadFile = File(None),
+    id_proof_file: UploadFile = File(None),
+    passbook_file: UploadFile = File(None)
+):
+    return complete_onboarding(
+        token=token,
+        password=password,
+        contact_number=contact_number,
+        emergency_contact=emergency_contact,
+        dob=dob,
+        current_address=current_address,
+        permanent_address=permanent_address,
+        location=location,
+        doj=doj,
+        education_details=education_details,
+        primary_skills=primary_skills,
+        secondary_skills=secondary_skills,
+        bank_name=bank_name,
+        bank_account_no=bank_account_no,
+        pan_no=pan_no,
+        ifsc_code=ifsc_code,
+        photo_file=photo_file,
+        cv_file=cv_file,
+        id_proof_file=id_proof_file,
+        passbook_file=passbook_file
+    )
+

@@ -93,12 +93,23 @@ def test_onboarding_service_verify_token_logic():
 
     # 1. Non-existent token
     svc.repo.get_invite_by_token = MagicMock(return_value=None)
-    with pytest.raises(ValueError, match="Invalid or expired token"):
+    with pytest.raises(ValueError, match="Invalid onboarding token"):
         svc.verify_token("non-existent")
 
-    # 2. Valid token with naive future datetime
+    # 2. Completed token
+    svc.repo.get_invite_by_token = MagicMock(return_value={"status": "Completed"})
+    with pytest.raises(ValueError, match="already been completed"):
+        svc.verify_token("completed-1")
+
+    # 3. Revoked token
+    svc.repo.get_invite_by_token = MagicMock(return_value={"status": "Revoked"})
+    with pytest.raises(ValueError, match="revoked by HR"):
+        svc.verify_token("revoked-1")
+
+    # 4. Valid token with naive future datetime
     svc.repo.get_invite_by_token = MagicMock(return_value={
         "token": "valid-1",
+        "status": "Pending",
         "email": "jane@example.com",
         "name": "Jane Doe",
         "first_name": "Jane",
@@ -113,9 +124,10 @@ def test_onboarding_service_verify_token_logic():
     assert res["valid"] is True
     assert res["email"] == "jane@example.com"
 
-    # 3. Expired token
+    # 5. Expired token
     svc.repo.get_invite_by_token = MagicMock(return_value={
         "token": "expired-1",
+        "status": "Pending",
         "email": "jane@example.com",
         "name": "Jane Doe",
         "first_name": "Jane",
@@ -126,5 +138,39 @@ def test_onboarding_service_verify_token_logic():
         "designation": "Engineer",
         "expires_at": datetime.now() - timedelta(days=1)
     })
-    with pytest.raises(ValueError, match="Token expired"):
+    with pytest.raises(ValueError, match="expired"):
         svc.verify_token("expired-1")
+
+def test_verify_token_route_aliases():
+    """Test all route aliases for verify-token."""
+    mock_data = {
+        "valid": True,
+        "email": "jane@example.com",
+        "name": "Jane Doe",
+        "first_name": "Jane",
+        "middle_name": "",
+        "last_name": "Doe",
+        "role": "employee",
+        "department": "Tech",
+        "designation": "Engineer"
+    }
+
+    with patch.object(OnboardingService, 'verify_token', return_value=mock_data):
+        # 1. /api/onboarding/verify-token (GET & POST)
+        r = client.post("/api/onboarding/verify-token", json={"token": "tok1"})
+        assert r.status_code == 200
+        r = client.get("/api/onboarding/verify-token?token=tok1")
+        assert r.status_code == 200
+
+        # 2. /api/onboard/verify-token (GET & POST)
+        r = client.post("/api/onboard/verify-token", json={"token": "tok1"})
+        assert r.status_code == 200
+        r = client.get("/api/onboard/verify-token?token=tok1")
+        assert r.status_code == 200
+
+        # 3. /api/auth/verify-token (GET & POST)
+        r = client.post("/api/auth/verify-token", json={"token": "tok1"})
+        assert r.status_code == 200
+        r = client.get("/api/auth/verify-token?token=tok1")
+        assert r.status_code == 200
+

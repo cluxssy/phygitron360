@@ -93,7 +93,15 @@ class OnboardingService:
     def verify_token(self, token: str):
         invite = self.repo.get_invite_by_token(token)
         if not invite:
-            raise ValueError("Invalid or expired token")
+            raise ValueError("Invalid onboarding token. The link may be incorrect or removed.")
+        
+        status = str(invite.get('status') or '').strip().lower()
+        if status == 'completed':
+            raise ValueError("This onboarding link has already been completed.")
+        elif status == 'revoked':
+            raise ValueError("This onboarding invite has been revoked by HR.")
+        elif status != 'pending':
+            raise ValueError(f"This onboarding link is no longer active (status: {invite.get('status')}).")
             
         # Parse expiry
         expires_at = invite.get('expires_at')
@@ -112,7 +120,7 @@ class OnboardingService:
                 else:
                     now = datetime.now()
                 if now > expires_at:
-                    raise ValueError("Token expired")
+                    raise ValueError("This onboarding link has expired. Please contact HR for a new link.")
              
         return {
             "valid": True,
@@ -129,7 +137,15 @@ class OnboardingService:
     def complete_onboarding(self, token: str, password: str, employee_data: dict, file_metadata: dict):
         invite = self.repo.get_invite_by_token(token)
         if not invite:
-            raise ValueError("Invalid token")
+            raise ValueError("Invalid onboarding token. The link may be incorrect or removed.")
+        
+        status = str(invite.get('status') or '').strip().lower()
+        if status == 'completed':
+            raise ValueError("This onboarding link has already been completed.")
+        elif status == 'revoked':
+            raise ValueError("This onboarding invite has been revoked by HR.")
+        elif status != 'pending':
+            raise ValueError(f"This onboarding link is no longer active (status: {invite.get('status')}).")
         
         tenant_id = invite.get('tenant_id', 'public')
 

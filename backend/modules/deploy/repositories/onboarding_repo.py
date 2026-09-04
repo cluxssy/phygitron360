@@ -87,7 +87,8 @@ class OnboardingRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur, 'public')
-                cur.execute("SELECT * FROM onboarding_invites WHERE token = %s AND status = 'Pending'", (token,))
+                clean_token = str(token or "").strip()
+                cur.execute("SELECT * FROM onboarding_invites WHERE TRIM(token) = %s", (clean_token,))
                 row = cur.fetchone()
                 return dict(row) if row else None
         finally:
@@ -98,7 +99,7 @@ class OnboardingRepository:
         try:
             with conn.cursor() as cur:
                 self._set_path(cur, 'public')
-                cur.execute("UPDATE onboarding_invites SET status = %s WHERE token = %s", (status, token))
+                cur.execute("UPDATE onboarding_invites SET status = %s WHERE TRIM(token) = %s", (status, str(token or "").strip()))
                 conn.commit()
         finally:
             conn.close()

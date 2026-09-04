@@ -81,13 +81,18 @@ def forgot_password(
 
 
 @router.post("/verify-reset-token")
+@router.get("/verify-reset-token")
 def verify_reset_token(
-    request: VerifyTokenRequest,
+    request: VerifyTokenRequest = None,
+    token: str = None,
     service: PasswordService = Depends(get_service)
 ):
     """Verify if password reset token is valid"""
+    raw_token = (request.token if request else None) or token
+    if not raw_token:
+        raise HTTPException(status_code=400, detail="Token required")
     try:
-        result = service.verify_reset_token(request.token)
+        result = service.verify_reset_token(raw_token)
         if not result['valid']:
             raise HTTPException(status_code=400, detail=result['message'])
         return result
@@ -95,6 +100,42 @@ def verify_reset_token(
         raise
     except Exception as e:
         logger.exception("Failed to verify password reset token: %s", e)
+        raise HTTPException(status_code=500, detail="Something went wrong while verifying this link. Please try again.")
+
+
+@router.post("/verify-token")
+@router.get("/verify-token")
+def generic_verify_token(
+    request_data: dict = Body(default={}),
+    token: str = None
+):
+    """Fallback handler for generic verify-token on /api/auth. Supports both password reset and onboarding tokens."""
+    raw_token = token or (request_data.get("token") if isinstance(request_data, dict) else None)
+    if not raw_token:
+        raise HTTPException(status_code=400, detail="Token required")
+    raw_token = str(raw_token).strip()
+
+    # 1. Try password reset token
+    try:
+        token_tenant = 'public'
+        if ':' in raw_token:
+            token_tenant = raw_token.split(':', 1)[0]
+        service = get_service(tenant_id=token_tenant)
+        result = service.verify_reset_token(raw_token)
+        if result.get('valid'):
+            return result
+    except Exception:
+        pass
+
+    # 2. Try onboarding invite token
+    try:
+        from backend.modules.deploy.services.onboarding_service import OnboardingService
+        onb_service = OnboardingService(tenant_id='public')
+        return onb_service.verify_token(raw_token)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to verify token: %s", e)
         raise HTTPException(status_code=500, detail="Something went wrong while verifying this link. Please try again.")
 
 
