@@ -868,6 +868,7 @@ def create_tables(schema_name='public'):
                 date TEXT NOT NULL,
                 clock_in TEXT,
                 clock_out TEXT,
+                clock_out_date TEXT,
                 work_log TEXT,
                 status TEXT DEFAULT 'Active',
                 ip_address TEXT,
@@ -897,6 +898,7 @@ def create_tables(schema_name='public'):
                 date TEXT NOT NULL,
                 clock_in TEXT,
                 clock_out TEXT,
+                clock_out_date TEXT,
                 reason TEXT NOT NULL,
                 status TEXT DEFAULT 'Pending',      -- 'Applied' (self-service) | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'
                 correction_track TEXT DEFAULT 'requested',  -- 'self_service' | 'requested'
@@ -910,6 +912,14 @@ def create_tables(schema_name='public'):
         cur.execute("""
             DO $$
             BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='attendance' AND column_name='clock_out_date' AND table_schema=current_schema()) THEN
+                    ALTER TABLE attendance ADD COLUMN clock_out_date TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='attendance_corrections' AND column_name='clock_out_date' AND table_schema=current_schema()) THEN
+                    ALTER TABLE attendance_corrections ADD COLUMN clock_out_date TEXT;
+                END IF;
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                                WHERE table_name='attendance_corrections' AND column_name='correction_track' AND table_schema=current_schema()) THEN
                     ALTER TABLE attendance_corrections ADD COLUMN correction_track TEXT DEFAULT 'requested';

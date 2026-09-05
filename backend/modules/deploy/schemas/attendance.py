@@ -25,6 +25,7 @@ class EditAttendanceRequest(BaseModel):
     date: str
     clock_in: Optional[str] = None
     clock_out: Optional[str] = None
+    clock_out_date: Optional[str] = None
     work_log: Optional[str] = None
 
 class LeaveActionRequest(BaseModel):
@@ -42,6 +43,7 @@ class SelfServiceCorrectionRequest(BaseModel):
     date: str
     clock_in: Optional[str] = None
     clock_out: Optional[str] = None
+    clock_out_date: Optional[str] = None
     reason: str
     client_date: Optional[str] = None  # Employee's local date (YYYY-MM-DD) for timezone-aware validation
 
@@ -53,6 +55,7 @@ class CorrectionRequestSchema(BaseModel):
     date: str
     clock_in: Optional[str] = None
     clock_out: Optional[str] = None
+    clock_out_date: Optional[str] = None
     reason: str
     client_date: Optional[str] = None  # Employee's local date (YYYY-MM-DD) for timezone-aware validation
 
@@ -67,11 +70,12 @@ class AttendanceRecord(BaseModel):
     id: int
     employee_code: str
     date: str
-    clock_in: Optional[str]
-    clock_out: Optional[str]
-    work_log: Optional[str]
-    status: str
-    ip_address: Optional[str]
+    clock_in: Optional[str] = None
+    clock_out: Optional[str] = None
+    clock_out_date: Optional[str] = None
+    work_log: Optional[str] = None
+    status: str = 'Active'
+    ip_address: Optional[str] = None
 
 class LeaveRecord(BaseModel):
     id: int
