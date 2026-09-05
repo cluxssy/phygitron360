@@ -20,6 +20,53 @@ def _today_ist():
     """Return today in IST timezone."""
     return datetime.now(_IST).date()
 
+def compute_shift_duration_and_status(clock_in: Optional[str], clock_out: Optional[str],
+                                      shift_date: Optional[str] = None,
+                                      clock_out_date: Optional[str] = None) -> tuple:
+    """
+    Computes duration in hours and attendance status, supporting cross-midnight/overnight shifts.
+    Returns (duration_hours, status).
+    """
+    if not clock_in or not clock_out:
+        if clock_in:
+            return 0.0, 'Active'
+        return 0.0, 'Absent'
+
+    try:
+        str_in = str(clock_in).strip()
+        str_out = str(clock_out).strip()
+        fmt_in = '%H:%M:%S' if len(str_in) == 8 else '%H:%M'
+        fmt_out = '%H:%M:%S' if len(str_out) == 8 else '%H:%M'
+        
+        t_in = datetime.strptime(str_in, fmt_in)
+        t_out = datetime.strptime(str_out, fmt_out)
+
+        if shift_date and clock_out_date:
+            d_in = datetime.strptime(str(shift_date).strip(), '%Y-%m-%d').date()
+            d_out = datetime.strptime(str(clock_out_date).strip(), '%Y-%m-%d').date()
+            dt_in = datetime.combine(d_in, t_in.time())
+            dt_out = datetime.combine(d_out, t_out.time())
+            duration_hours = (dt_out - dt_in).total_seconds() / 3600.0
+        else:
+            if t_out < t_in:
+                duration_hours = ((t_out + timedelta(days=1)) - t_in).total_seconds() / 3600.0
+            else:
+                duration_hours = (t_out - t_in).total_seconds() / 3600.0
+
+        if duration_hours >= 8.0:
+            status = 'Present'
+        elif duration_hours >= 4.0:
+            if t_in.hour < 13:
+                status = 'Half Day (First Half)'
+            else:
+                status = 'Half Day (Second Half)'
+        else:
+            status = 'Absent'
+
+        return max(0.0, duration_hours), status
+    except Exception:
+        return 0.0, 'Present'
+
 
 class AttendanceService:
     def __init__(self, tenant_id: str = 'public'):
@@ -29,13 +76,28 @@ class AttendanceService:
 
     def get_status(self, employee_code: str) -> AttendanceStatus:
         today = datetime.now(_IST).strftime('%Y-%m-%d')
+
+        # 1. Check if there's an ongoing active shift (could have started yesterday or today)
+        active_records = self.repo.get_history(employee_code, limit=1, tenant_id=self.tenant_id)
+        if active_records and active_records[0].get('status') == 'Active' and not active_records[0].get('clock_out'):
+            rec = active_records[0]
+            try:
+                rec_date = rec['date']
+                rec_in = rec.get('clock_in', '00:00:00')
+                fmt = '%Y-%m-%d %H:%M:%S' if len(rec_in) == 8 else '%Y-%m-%d %H:%M'
+                dt_in = datetime.strptime(f"{rec_date} {rec_in}", fmt)
+                now_dt = datetime.now(_IST).replace(tzinfo=None)
+                if (now_dt - dt_in).total_seconds() <= 20 * 3600:
+                    return AttendanceStatus(status="clocked_in", data=rec)
+            except Exception:
+                return AttendanceStatus(status="clocked_in", data=rec)
+
+        # 2. Check today's record
         record = self.repo.get_todays_attendance(employee_code, today, self.tenant_id)
         
         if not record:
             return AttendanceStatus(status="not_started", data=None)
         
-        # Convert dictionary to model-compatible dict if needed, 
-        # but generic dict is fine for Pydantic if keys match.
         if record.get('clock_out'):
              return AttendanceStatus(status="completed", data=record)
         else:
@@ -45,6 +107,22 @@ class AttendanceService:
         today = local_date if local_date else datetime.now(_IST).strftime('%Y-%m-%d')
         now = local_time if local_time else datetime.now(_IST).strftime('%H:%M:%S')
         
+        # Check if employee has an open active shift
+        active_records = self.repo.get_history(employee_code, limit=1, tenant_id=self.tenant_id)
+        if active_records and active_records[0].get('status') == 'Active' and not active_records[0].get('clock_out'):
+            rec = active_records[0]
+            try:
+                rec_in = rec.get('clock_in', '00:00:00')
+                fmt = '%Y-%m-%d %H:%M:%S' if len(rec_in) == 8 else '%Y-%m-%d %H:%M'
+                dt_in = datetime.strptime(f"{rec['date']} {rec_in}", fmt)
+                now_dt = datetime.now(_IST).replace(tzinfo=None)
+                if (now_dt - dt_in).total_seconds() <= 20 * 3600:
+                    raise ValueError(f"You already have an active shift clocked in on {rec['date']} at {rec['clock_in']}. Please clock out first.")
+            except ValueError:
+                raise
+            except Exception:
+                raise ValueError("You are already clocked in for an active shift. Please clock out first.")
+
         existing = self.repo.get_todays_attendance(employee_code, today, self.tenant_id)
         if existing:
             raise ValueError("Already clocked in for today")
@@ -62,17 +140,36 @@ class AttendanceService:
              
         record = active_records[0]
         
-        if record['date'] != today:
-             raise ValueError("Clock-out must be on the same calendar day as clock-in. Please contact your admin to fix this record.")
-        
         if record.get('clock_out'):
              raise ValueError("Already clocked out.")
 
-        if record.get('clock_in') and now < record['clock_in']:
-             raise ValueError("Clock-out time cannot be earlier than clock-in time.")
+        clock_in_str = record.get('clock_in', '00:00:00')
+        fmt_in = '%Y-%m-%d %H:%M:%S' if len(clock_in_str) == 8 else '%Y-%m-%d %H:%M'
+        fmt_out = '%Y-%m-%d %H:%M:%S' if len(now) == 8 else '%Y-%m-%d %H:%M'
+        
+        try:
+            dt_in = datetime.strptime(f"{record['date']} {clock_in_str}", fmt_in)
+            dt_out = datetime.strptime(f"{today} {now}", fmt_out)
+        except Exception:
+            raise ValueError("Invalid date or time format.")
 
-        self.repo.clock_out(employee_code, record['date'], now, data.work_log, self.tenant_id)
-        return {"success": True, "message": "Clocked out successfully"}
+        elapsed_seconds = (dt_out - dt_in).total_seconds()
+        
+        if elapsed_seconds < 0:
+            raise ValueError("Clock-out time cannot be earlier than clock-in time.")
+
+        if elapsed_seconds > 20 * 3600:
+            raise ValueError("Shift duration exceeds 20 hours. Please contact your administrator to regularize this record.")
+
+        duration_hours, status = compute_shift_duration_and_status(
+            clock_in=record['clock_in'],
+            clock_out=now,
+            shift_date=record['date'],
+            clock_out_date=today
+        )
+
+        self.repo.clock_out(employee_code, record['date'], now, data.work_log, self.tenant_id, clock_out_date=today, status=status)
+        return {"success": True, "message": "Clocked out successfully", "duration_hours": round(duration_hours, 2), "status": status}
 
     def get_history(self, employee_code: str):
         # 1. Fetch Attendance History
@@ -80,33 +177,30 @@ class AttendanceService:
         for log in history:
             clock_in = log.get('clock_in')
             clock_out = log.get('clock_out')
+            shift_date = log.get('date')
+            clock_out_date = log.get('clock_out_date')
             
             if clock_in and clock_out:
-                try:
-                    fmt = '%H:%M:%S'
-                    t_in = datetime.strptime(clock_in, fmt)
-                    t_out = datetime.strptime(clock_out, fmt)
-                    duration_hours = (t_out - t_in).total_seconds() / 3600.0
-                    
-                    if duration_hours >= 8.0:
-                        log['status'] = 'Present'
-                    elif duration_hours >= 4.0:
-                        if t_in.hour < 13:
-                            log['status'] = 'Half Day (First Half)'
-                        else:
-                            log['status'] = 'Half Day (Second Half)'
-                    else:
-                        log['status'] = 'Absent'
-                except:
-                    log['status'] = 'Present'
+                _, status = compute_shift_duration_and_status(clock_in, clock_out, shift_date, clock_out_date)
+                log['status'] = status
             elif clock_in:
-                 today_str = datetime.now(_IST).strftime('%Y-%m-%d')
-                 if log['date'] != today_str:
-                     log['status'] = 'Absent'
-                 else:
-                     log['status'] = 'Active'
+                today_str = datetime.now(_IST).strftime('%Y-%m-%d')
+                yesterday_str = (datetime.now(_IST) - timedelta(days=1)).strftime('%Y-%m-%d')
+                is_active = False
+                if log['date'] == today_str:
+                    is_active = True
+                elif log['date'] == yesterday_str:
+                    try:
+                        dt_in = datetime.strptime(f"{log['date']} {clock_in}", '%Y-%m-%d %H:%M:%S' if len(clock_in) == 8 else '%Y-%m-%d %H:%M')
+                        now_dt = datetime.now(_IST).replace(tzinfo=None)
+                        if (now_dt - dt_in).total_seconds() <= 16 * 3600:
+                            is_active = True
+                    except Exception:
+                        pass
+                
+                log['status'] = 'Active' if is_active else 'Absent'
             else:
-                 log['status'] = 'Absent'
+                log['status'] = 'Absent'
 
         # 2. Fetch and Merge Approved Leaves
         leaves = self.repo.get_employee_leaves(employee_code, self.tenant_id)
@@ -341,32 +435,25 @@ class AttendanceService:
             clock_out = row.get('clock_out')
             
             if clock_in and clock_out:
-                try:
-                    # Parse times to calculate duration
-                    t_in = datetime.strptime(str(clock_in), '%H:%M:%S') if isinstance(clock_in, str) else datetime.combine(datetime.min, clock_in)
-                    t_out = datetime.strptime(str(clock_out), '%H:%M:%S') if isinstance(clock_out, str) else datetime.combine(datetime.min, clock_out)
-                    
-                    duration_hours = (t_out - t_in).total_seconds() / 3600.0
-                    
-                    if duration_hours >= 8.0:
-                        att_map[e_code][d_str] = 'Present'
-                    elif duration_hours >= 4.0:
-                        if t_in.hour < 13:
-                            att_map[e_code][d_str] = 'Half Day (First Half)'
-                        else:
-                            att_map[e_code][d_str] = 'Half Day (Second Half)'
-                    else:
-                        att_map[e_code][d_str] = 'Absent'
-                except:
-                    att_map[e_code][d_str] = 'Present' # Fallback
+                _, status = compute_shift_duration_and_status(
+                    clock_in, clock_out, d_str, row.get('clock_out_date')
+                )
+                att_map[e_code][d_str] = status
             elif clock_in:
-                # Clocked in but not clocked out yet
                 today_str = datetime.now(_IST).strftime('%Y-%m-%d')
+                yesterday_str = (datetime.now(_IST) - timedelta(days=1)).strftime('%Y-%m-%d')
+                is_active = False
                 if d_str == today_str:
-                    att_map[e_code][d_str] = 'Active'
-                else:
-                    # Forgot to clock out on a previous day
-                    att_map[e_code][d_str] = 'Absent'
+                    is_active = True
+                elif d_str == yesterday_str:
+                    try:
+                        dt_in = datetime.strptime(f"{d_str} {clock_in}", '%Y-%m-%d %H:%M:%S' if len(str(clock_in)) == 8 else '%Y-%m-%d %H:%M')
+                        now_dt = datetime.now(_IST).replace(tzinfo=None)
+                        if (now_dt - dt_in).total_seconds() <= 16 * 3600:
+                            is_active = True
+                    except Exception:
+                        pass
+                att_map[e_code][d_str] = 'Active' if is_active else 'Absent'
             else:
                  att_map[e_code][d_str] = 'Absent'
         leave_map = {}
@@ -476,27 +563,20 @@ class AttendanceService:
 
     def edit_attendance(self, req: EditAttendanceRequest):
         # 1. Determine Status based on duration
-        status = 'Absent'
+        clock_out_date = req.clock_out_date
         if req.clock_in and req.clock_out:
-            try:
-                fmt = '%H:%M:%S'
-                t_in = datetime.strptime(req.clock_in, fmt)
-                t_out = datetime.strptime(req.clock_out, fmt)
-                duration_hours = (t_out - t_in).total_seconds() / 3600.0
-                
-                if duration_hours >= 8.0:
-                    status = 'Present'
-                elif duration_hours >= 4.0:
-                    if t_in.hour < 13:
-                        status = 'Half Day (First Half)'
-                    else:
-                        status = 'Half Day (Second Half)'
-                else:
-                    status = 'Absent'
-            except:
-                status = 'Present' # Fallback
+            if not clock_out_date and req.clock_out < req.clock_in:
+                try:
+                    d_obj = datetime.strptime(req.date, '%Y-%m-%d').date()
+                    clock_out_date = (d_obj + timedelta(days=1)).strftime('%Y-%m-%d')
+                except Exception:
+                    clock_out_date = req.date
+            _, status = compute_shift_duration_and_status(req.clock_in, req.clock_out, req.date, clock_out_date)
         elif req.clock_in:
-            status = 'Present' # Currently active or single entry
+            today_str = datetime.now(_IST).strftime('%Y-%m-%d')
+            status = 'Active' if req.date == today_str else 'Absent'
+        else:
+            status = 'Absent'
         
         # 2. Update via Repo
         self.repo.upsert_attendance(
@@ -506,7 +586,8 @@ class AttendanceService:
             req.clock_out, 
             req.work_log, 
             status, 
-            self.tenant_id
+            self.tenant_id,
+            clock_out_date=clock_out_date
         )
         # Notify the affected employee that their record was modified
         add_notification(
@@ -544,8 +625,11 @@ class AttendanceService:
         now_local = now_utc.astimezone(tz)
         current_date_str = now_local.strftime('%Y-%m-%d')
         
-        # 1. Update status to Absent for past missed clock-outs
-        self.repo.mark_past_missed_clockouts_as_absent(current_date_str, self.tenant_id)
+        # 1. Update status to Absent for past missed clock-outs older than 16 hours
+        cutoff_dt = now_local - timedelta(hours=16)
+        cutoff_date = cutoff_dt.strftime('%Y-%m-%d')
+        cutoff_time = cutoff_dt.strftime('%H:%M:%S')
+        self.repo.mark_past_missed_clockouts_as_absent(cutoff_date, self.tenant_id, cutoff_time=cutoff_time)
         
         # 2. Retrieve unclosed records
         unclosed = self.repo.get_unclosed_attendance_records(self.tenant_id)
@@ -567,7 +651,7 @@ class AttendanceService:
                 
             elapsed_hours = (now_local - clockin_dt).total_seconds() / 3600.0
             
-            if elapsed_hours >= 8.0:
+            if elapsed_hours >= 12.0:
                 reminder_log = self.repo.get_attendance_reminder(record['id'], self.tenant_id)
                 should_send = False
                 
@@ -739,19 +823,9 @@ class AttendanceService:
                 work_log = att.get('work_log')
 
                 if clock_in and clock_out:
-                    try:
-                        fmt = '%H:%M:%S'
-                        t_in = datetime.strptime(str(clock_in), fmt)
-                        t_out = datetime.strptime(str(clock_out), fmt)
-                        hrs = (t_out - t_in).total_seconds() / 3600.0
-                        if hrs >= 8.0:
-                            status = 'Present'
-                        elif hrs >= 4.0:
-                            status = 'Half Day (First Half)' if t_in.hour < 13 else 'Half Day (Second Half)'
-                        else:
-                            status = 'Absent'
-                    except:
-                        status = 'Present'
+                    _, status = compute_shift_duration_and_status(
+                        clock_in, clock_out, d_str, att.get('clock_out_date')
+                    )
                 elif clock_in:
                     status = 'Active' if d_str == today_str else 'Missing Clock-Out'
                 else:
@@ -797,25 +871,12 @@ class AttendanceService:
             'days': days_out
         }
 
-    def _compute_attendance_status(self, clock_in: Optional[str], clock_out: Optional[str]) -> str:
+    def _compute_attendance_status(self, clock_in: Optional[str], clock_out: Optional[str],
+                                   shift_date: Optional[str] = None,
+                                   clock_out_date: Optional[str] = None) -> str:
         """Reusable helper to compute attendance status from clock times."""
-        if clock_in and clock_out:
-            try:
-                fmt = '%H:%M:%S'
-                t_in = datetime.strptime(str(clock_in), fmt)
-                t_out = datetime.strptime(str(clock_out), fmt)
-                hrs = (t_out - t_in).total_seconds() / 3600.0
-                if hrs >= 8.0:
-                    return 'Present'
-                elif hrs >= 4.0:
-                    return 'Half Day (First Half)' if t_in.hour < 13 else 'Half Day (Second Half)'
-                else:
-                    return 'Absent'
-            except:
-                return 'Present'
-        elif clock_in:
-            return 'Present'
-        return 'Absent'
+        _, status = compute_shift_duration_and_status(clock_in, clock_out, shift_date, clock_out_date)
+        return status
 
     def apply_self_service_correction(self, employee_code: str, date_str: str,
                                       clock_in: Optional[str], clock_out: Optional[str],
@@ -851,11 +912,17 @@ class AttendanceService:
         if holidays and not holidays[0].get('is_half_day'):
             raise ValueError(f"Attendance logging is disabled for {date_str} as it is a declared Company Holiday ({holidays[0]['name']}).")
 
-        if clock_out and clock_in and clock_out < clock_in:
-            raise ValueError("Clock-out time cannot be earlier than clock-in time.")
-
-        # Compute attendance status
-        status = self._compute_attendance_status(clock_in, clock_out)
+        # Determine clock_out_date and validate duration
+        clock_out_date = date_str
+        if clock_in and clock_out:
+            duration_hours, status = compute_shift_duration_and_status(clock_in, clock_out)
+            if clock_out < clock_in:
+                # Overnight shift ending the next day
+                clock_out_date = (target_date + timedelta(days=1)).strftime('%Y-%m-%d')
+            if duration_hours > 18.0:
+                raise ValueError("Shift duration cannot exceed 18 hours. Please check your clock-in and clock-out times.")
+        else:
+            status = self._compute_attendance_status(clock_in, clock_out)
 
         # Apply immediately to attendance table
         self.repo.upsert_attendance(
@@ -865,7 +932,8 @@ class AttendanceService:
             clock_out=clock_out,
             work_log=f"Self-service correction: {reason}",
             status=status,
-            tenant_id=self.tenant_id
+            tenant_id=self.tenant_id,
+            clock_out_date=clock_out_date
         )
 
         # Log the correction for audit trail
@@ -875,7 +943,8 @@ class AttendanceService:
             clock_in=clock_in,
             clock_out=clock_out,
             reason=reason,
-            tenant_id=self.tenant_id
+            tenant_id=self.tenant_id,
+            clock_out_date=clock_out_date
         )
 
         # Clear any stale reminders
@@ -927,8 +996,15 @@ class AttendanceService:
                 "Please use the self-service correction instead."
             )
 
-        if clock_out and clock_in and clock_out < clock_in:
-            raise ValueError("Clock-out time cannot be earlier than clock-in time.")
+        # Determine clock_out_date and validate duration
+        clock_out_date = date_str
+        if clock_in and clock_out:
+            duration_hours, _ = compute_shift_duration_and_status(clock_in, clock_out)
+            if clock_out < clock_in:
+                # Overnight shift ending the next day
+                clock_out_date = (target_date + timedelta(days=1)).strftime('%Y-%m-%d')
+            if duration_hours > 18.0:
+                raise ValueError("Shift duration cannot exceed 18 hours. Please check your clock-in and clock-out times.")
 
         # Create correction request (Pending, requires manager approval)
         self.repo.create_correction_request(
@@ -937,7 +1013,8 @@ class AttendanceService:
             clock_in=clock_in,
             clock_out=clock_out,
             reason=reason,
-            tenant_id=self.tenant_id
+            tenant_id=self.tenant_id,
+            clock_out_date=clock_out_date
         )
 
         # Notify manager
@@ -1030,8 +1107,19 @@ class AttendanceService:
             clock_out = correction['clock_out']
             date = correction['date']
             emp_code = correction['employee_code']
+            clock_out_date = correction.get('clock_out_date')
 
-            status = self._compute_attendance_status(clock_in, clock_out)
+            if not clock_out_date and clock_in and clock_out:
+                if clock_out < clock_in:
+                    try:
+                        d_obj = datetime.strptime(date, '%Y-%m-%d').date()
+                        clock_out_date = (d_obj + timedelta(days=1)).strftime('%Y-%m-%d')
+                    except Exception:
+                        clock_out_date = date
+                else:
+                    clock_out_date = date
+
+            _, status = compute_shift_duration_and_status(clock_in, clock_out, date, clock_out_date)
 
             self.repo.upsert_attendance(
                 employee_code=emp_code,
@@ -1040,7 +1128,8 @@ class AttendanceService:
                 clock_out=clock_out,
                 work_log="Correction approved by manager: " + (correction.get('reason') or ''),
                 status=status,
-                tenant_id=self.tenant_id
+                tenant_id=self.tenant_id,
+                clock_out_date=clock_out_date
             )
 
             # Clear any stale clock-out reminders
@@ -1096,28 +1185,25 @@ class AttendanceService:
             clock_out = row.get('clock_out')
             
             if clock_in and clock_out:
-                try:
-                    t_in = datetime.strptime(str(clock_in), '%H:%M:%S') if isinstance(clock_in, str) else datetime.combine(datetime.min, clock_in)
-                    t_out = datetime.strptime(str(clock_out), '%H:%M:%S') if isinstance(clock_out, str) else datetime.combine(datetime.min, clock_out)
-                    duration_hours = (t_out - t_in).total_seconds() / 3600.0
-                    
-                    if duration_hours >= 8.0:
-                        att_map[e_code][d_str] = 'Present'
-                    elif duration_hours >= 4.0:
-                        if t_in.hour < 13:
-                            att_map[e_code][d_str] = 'Half Day (First Half)'
-                        else:
-                            att_map[e_code][d_str] = 'Half Day (Second Half)'
-                    else:
-                        att_map[e_code][d_str] = 'Absent'
-                except:
-                    att_map[e_code][d_str] = 'Present'
+                _, status = compute_shift_duration_and_status(
+                    clock_in, clock_out, d_str, row.get('clock_out_date')
+                )
+                att_map[e_code][d_str] = status
             elif clock_in:
                 today_str = datetime.now(_IST).strftime('%Y-%m-%d')
+                yesterday_str = (datetime.now(_IST) - timedelta(days=1)).strftime('%Y-%m-%d')
+                is_active = False
                 if d_str == today_str:
-                    att_map[e_code][d_str] = 'Active'
-                else:
-                    att_map[e_code][d_str] = 'Absent'
+                    is_active = True
+                elif d_str == yesterday_str:
+                    try:
+                        dt_in = datetime.strptime(f"{d_str} {clock_in}", '%Y-%m-%d %H:%M:%S' if len(str(clock_in)) == 8 else '%Y-%m-%d %H:%M')
+                        now_dt = datetime.now(_IST).replace(tzinfo=None)
+                        if (now_dt - dt_in).total_seconds() <= 16 * 3600:
+                            is_active = True
+                    except Exception:
+                        pass
+                att_map[e_code][d_str] = 'Active' if is_active else 'Absent'
             else:
                  att_map[e_code][d_str] = 'Absent'
                  

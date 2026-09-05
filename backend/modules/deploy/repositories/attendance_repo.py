@@ -63,34 +63,35 @@ class AttendanceRepository:
         finally:
             conn.close()
 
-    def clock_out(self, employee_code: str, date: str, time: str, work_log: str, tenant_id: str = 'public'):
+    def clock_out(self, employee_code: str, date: str, time: str, work_log: str, tenant_id: str = 'public', clock_out_date: Optional[str] = None):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
             cur.execute('''
                 UPDATE attendance 
-                SET clock_out = %s, work_log = %s, status = 'Present'
+                SET clock_out = %s, clock_out_date = %s, work_log = %s, status = 'Present'
                 WHERE employee_code = %s AND date = %s
-            ''', (time, work_log, employee_code, date))
+            ''', (time, clock_out_date or date, work_log, employee_code, date))
             conn.commit()
         finally:
             conn.close()
 
-    def upsert_attendance(self, employee_code: str, date: str, clock_in: Optional[str], clock_out: Optional[str], work_log: Optional[str], status: str, tenant_id: str = 'public'):
+    def upsert_attendance(self, employee_code: str, date: str, clock_in: Optional[str], clock_out: Optional[str], work_log: Optional[str], status: str, tenant_id: str = 'public', clock_out_date: Optional[str] = None):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
             cur.execute('''
-                INSERT INTO attendance (employee_code, date, clock_in, clock_out, work_log, status)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO attendance (employee_code, date, clock_in, clock_out, clock_out_date, work_log, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (employee_code, date) DO UPDATE 
                 SET clock_in = EXCLUDED.clock_in,
                     clock_out = EXCLUDED.clock_out,
+                    clock_out_date = EXCLUDED.clock_out_date,
                     work_log = EXCLUDED.work_log,
                     status = EXCLUDED.status
-            ''', (employee_code, date, clock_in, clock_out, work_log, status))
+            ''', (employee_code, date, clock_in, clock_out, clock_out_date, work_log, status))
             conn.commit()
         finally:
             conn.close()
@@ -342,17 +343,25 @@ class AttendanceRepository:
         finally:
             conn.close()
 
-    def mark_past_missed_clockouts_as_absent(self, current_date: str, tenant_id: str = 'public'):
-        """Bulk update past-day records with missing clock-outs to 'Absent' status."""
+    def mark_past_missed_clockouts_as_absent(self, cutoff_date: str, tenant_id: str = 'public', cutoff_time: Optional[str] = None):
+        """Bulk update past records with missing clock-outs older than cutoff to 'Absent' status."""
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
-            cur.execute('''
-                UPDATE attendance 
-                SET status = 'Absent' 
-                WHERE date < %s AND clock_in IS NOT NULL AND clock_out IS NULL AND status = 'Active'
-            ''', (current_date,))
+            if cutoff_time:
+                cur.execute('''
+                    UPDATE attendance 
+                    SET status = 'Absent' 
+                    WHERE clock_in IS NOT NULL AND clock_out IS NULL AND status = 'Active'
+                      AND (date < %s OR (date = %s AND clock_in <= %s))
+                ''', (cutoff_date, cutoff_date, cutoff_time))
+            else:
+                cur.execute('''
+                    UPDATE attendance 
+                    SET status = 'Absent' 
+                    WHERE date < %s AND clock_in IS NOT NULL AND clock_out IS NULL AND status = 'Active'
+                ''', (cutoff_date,))
             conn.commit()
         finally:
             conn.close()
@@ -430,7 +439,8 @@ class AttendanceRepository:
 
     def create_self_service_correction(self, employee_code: str, date: str,
                                        clock_in: Optional[str], clock_out: Optional[str],
-                                       reason: str, tenant_id: str = 'public') -> int:
+                                       reason: str, tenant_id: str = 'public',
+                                       clock_out_date: Optional[str] = None) -> int:
         """Log a self-service correction (no approval needed). Returns the correction ID."""
         conn = get_db_connection()
         try:
@@ -443,18 +453,19 @@ class AttendanceRepository:
             attendance_id = att_row[0] if att_row else None
             cur.execute('''
                 INSERT INTO attendance_corrections
-                    (attendance_id, employee_code, date, clock_in, clock_out, reason, status, correction_track)
-                VALUES (%s, %s, %s, %s, %s, %s, 'Applied', 'self_service')
+                    (attendance_id, employee_code, date, clock_in, clock_out, clock_out_date, reason, status, correction_track)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'Applied', 'self_service')
                 ON CONFLICT (employee_code, date) 
                 DO UPDATE SET
                     clock_in = EXCLUDED.clock_in,
                     clock_out = EXCLUDED.clock_out,
+                    clock_out_date = EXCLUDED.clock_out_date,
                     reason = EXCLUDED.reason,
                     status = 'Applied',
                     correction_track = 'self_service',
                     applied_at = CURRENT_TIMESTAMP
                 RETURNING id
-            ''', (attendance_id, employee_code, date, clock_in, clock_out, reason))
+            ''', (attendance_id, employee_code, date, clock_in, clock_out, clock_out_date, reason))
             row = cur.fetchone()
             conn.commit()
             return row[0] if row else -1
@@ -463,7 +474,8 @@ class AttendanceRepository:
 
     def create_correction_request(self, employee_code: str, date: str,
                                   clock_in: Optional[str], clock_out: Optional[str],
-                                  reason: str, tenant_id: str = 'public') -> int:
+                                  reason: str, tenant_id: str = 'public',
+                                  clock_out_date: Optional[str] = None) -> int:
         """Create a manager-approval correction request. Returns the correction ID."""
         conn = get_db_connection()
         try:
@@ -475,18 +487,19 @@ class AttendanceRepository:
             attendance_id = att_row[0] if att_row else None
             cur.execute('''
                 INSERT INTO attendance_corrections
-                    (attendance_id, employee_code, date, clock_in, clock_out, reason, status, correction_track)
-                VALUES (%s, %s, %s, %s, %s, %s, 'Pending', 'requested')
+                    (attendance_id, employee_code, date, clock_in, clock_out, clock_out_date, reason, status, correction_track)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pending', 'requested')
                 ON CONFLICT (employee_code, date) 
                 DO UPDATE SET
                     clock_in = EXCLUDED.clock_in,
                     clock_out = EXCLUDED.clock_out,
+                    clock_out_date = EXCLUDED.clock_out_date,
                     reason = EXCLUDED.reason,
                     status = 'Pending',
                     correction_track = 'requested',
                     applied_at = NULL
                 RETURNING id
-            ''', (attendance_id, employee_code, date, clock_in, clock_out, reason))
+            ''', (attendance_id, employee_code, date, clock_in, clock_out, clock_out_date, reason))
             row = cur.fetchone()
             conn.commit()
             return row[0] if row else -1

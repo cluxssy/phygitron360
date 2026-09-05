@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { Edit2, CheckCircle, XCircle, Clock, Calendar, Search, AlertCircle, RefreshCcw, ChevronRight } from 'lucide-react';
+import { Edit2, CheckCircle, XCircle, Clock, Calendar, Search, AlertCircle, RefreshCcw, ChevronRight, Moon } from 'lucide-react';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 export default function CorrectionSystem({ isManager }) {
@@ -217,7 +217,14 @@ export default function CorrectionSystem({ isManager }) {
                             
                             <div className="text-[9px] font-mono leading-tight opacity-80 h-6">
                                 {d.clock_in && d.clock_in !== 'None' ? <span>In: {d.clock_in.substring(0,5)}</span> : <span>--:--</span>}<br/>
-                                {d.clock_out && d.clock_out !== 'None' ? <span>Out: {d.clock_out.substring(0,5)}</span> : <span>--:--</span>}
+                                {d.clock_out && d.clock_out !== 'None' ? (
+                                    <span>
+                                        Out: {d.clock_out.substring(0,5)}
+                                        {d.clock_in && d.clock_out < d.clock_in && (
+                                            <span className="ml-1 text-[8px] font-black text-purple-600 font-sans">(+1d)</span>
+                                        )}
+                                    </span>
+                                ) : <span>--:--</span>}
                             </div>
                             
                             <div className={`mt-3 text-[8px] font-black uppercase tracking-widest text-center py-1 rounded truncate px-1 ${
@@ -310,7 +317,12 @@ export default function CorrectionSystem({ isManager }) {
                                 h.status === 'Applied' || h.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
                                 h.status === 'Rejected' || h.status === 'Cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
                              }`}>{h.status}</span>
-                             <span className="text-[9px] font-mono text-[#8b8ba3]">{h.clock_in || '--'} → {h.clock_out || '--'}</span>
+                             <span className="text-[9px] font-mono text-[#8b8ba3]">
+                                 {h.clock_in || '--'} → {h.clock_out || '--'}
+                                 {h.clock_in && h.clock_out && h.clock_out < h.clock_in && (
+                                     <span className="ml-1 text-[8px] font-black text-purple-600 font-sans">(+1d)</span>
+                                 )}
+                             </span>
                         </div>
                     </div>
                 ))}
@@ -340,7 +352,12 @@ export default function CorrectionSystem({ isManager }) {
                                 <td className="px-6 py-4 font-bold text-xs uppercase italic">{req.employee_name} <br/><span className="text-[9px] font-mono text-[#8b8ba3] not-italic">{req.employee_code}</span></td>
                                 <td className="px-6 py-4 text-xs font-bold text-[#8b8ba3] uppercase italic">{req.manager_name || 'N/A'}</td>
                                 <td className="px-6 py-4 text-xs font-mono">{req.date}</td>
-                                <td className="px-6 py-4 text-xs font-mono">{req.clock_in || '--'} → {req.clock_out || '--'}</td>
+                                <td className="px-6 py-4 text-xs font-mono">
+                                    {req.clock_in || '--'} → {req.clock_out || '--'}
+                                    {req.clock_in && req.clock_out && req.clock_out < req.clock_in && (
+                                        <span className="ml-1 text-[8px] font-black text-purple-600 font-sans">(+1d)</span>
+                                    )}
+                                </td>
                                 <td className="px-6 py-4 text-[10px] text-[#6b7280] max-w-[200px] truncate">{req.reason}</td>
                                 <td className="px-6 py-4">
                                     <div className="flex gap-2">
@@ -420,6 +437,25 @@ export default function CorrectionSystem({ isManager }) {
                                 </div>
                             </div>
                             
+                            {form.clock_in && form.clock_out && form.clock_out < form.clock_in && (
+                                <div className="flex items-center gap-2 px-3.5 py-2.5 bg-[#f5efff] border border-[#e2d5fc] rounded-xl text-[#7c3aed]">
+                                    <Moon size={14} className="text-[#8b5cf6] shrink-0" />
+                                    <div className="text-[10px] font-bold flex items-center gap-1.5 flex-wrap">
+                                        <span>Overnight / Evening Shift (Ends Next Day)</span>
+                                        {(() => {
+                                            try {
+                                                const [h1, m1] = form.clock_in.split(':').map(Number);
+                                                const [h2, m2] = form.clock_out.split(':').map(Number);
+                                                const diff = ((h2 * 60 + m2 + 1440) - (h1 * 60 + m1)) / 60;
+                                                return <span className="bg-[#8b5cf6]/10 text-[#6d28d9] px-2 py-0.5 rounded-full font-extrabold font-mono text-[9px]">{diff.toFixed(1)} hrs</span>;
+                                            } catch {
+                                                return null;
+                                            }
+                                        })()}
+                                    </div>
+                                </div>
+                            )}
+
                             <div>
                                 <label className="text-[9px] font-black uppercase tracking-widest text-[#8b5cf6] mb-2 block ml-1">Notes</label>
                                 <textarea
