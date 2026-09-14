@@ -7,7 +7,7 @@ import {
   ChevronRight, Command, Briefcase,
   Rocket, Layers, Activity, User, Globe,
   Cpu, Star, Home, Upload, Users,
-  LayoutDashboard, BarChart3, Clock, Package
+  LayoutDashboard, BarChart3, Clock, Package, BookOpen
 } from 'lucide-react';
 
 import { useAuth } from '../core/auth/AuthContext';
@@ -124,6 +124,7 @@ function LayoutContent({ children }) {
     location.pathname.startsWith('/deploy') ||
     location.pathname.startsWith('/source') ||
     location.pathname.startsWith('/verify') ||
+    location.pathname.startsWith('/lexai') ||
     location.pathname.startsWith('/superadmin');
 
   // ✅ Check if we're on the Forge page - hide sidebar for Learning Central
@@ -208,6 +209,18 @@ function LayoutContent({ children }) {
             { label: 'Attendance', icon: Clock, search: '?tab=my-attendance' },
           ],
     },
+    {
+      id: 'lexai',
+      name: 'LexAI',
+      path: '/lexai',
+      icon: BookOpen,
+      perm: 'module.lexai.access',
+      options: [
+        { label: 'Home', icon: Home, search: '?tab=home', default: true },
+        { label: 'Projects', icon: Layers, search: '?tab=projects' },
+        { label: 'Files', icon: Package, search: '?tab=files' },
+      ],
+    },
   ];
 
   const modules = [
@@ -233,7 +246,9 @@ function LayoutContent({ children }) {
                 ? 'Assessment Central'
                 : m.id === 'deploy'
                   ? 'Employee Central'
-                  : m.name,
+                  : m.id === 'lexai'
+                    ? 'Learning Design AI'
+                    : m.name,
 
         path: m.path,
 

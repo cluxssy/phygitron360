@@ -33,6 +33,7 @@ class P:
     MODULE_FORGE_ACCESS   = "module.forge.access"
     MODULE_VERIFY_ACCESS  = "module.verify.access"
     MODULE_DEPLOY_ACCESS  = "module.deploy.access"
+    MODULE_LEXAI_ACCESS   = "module.lexai.access"
 
     # ── Platform / Admin ────────────────────────────────────────────────────
     MANAGE_SYSTEM         = "manage_system"
@@ -158,6 +159,15 @@ class P:
     FORGE_COURSES_MANAGE  = "forge.courses.manage"
     FORGE_ENROLL          = "forge.courses.enroll"
 
+    # ── LexAI ─────────────────────────────────────────────────────────────────
+    LEXAI_PROJECTS_VIEW    = "lexai.projects.view"
+    LEXAI_PROJECTS_MANAGE  = "lexai.projects.manage"
+    LEXAI_DESIGN_RUN       = "lexai.design.run"
+    LEXAI_STORYBOARD_RUN   = "lexai.storyboard.run"
+    LEXAI_EXPORT           = "lexai.export"
+    LEXAI_FILES_MANAGE     = "lexai.files.manage"
+    LEXAI_VOICE_USE        = "lexai.voice.use"
+
 
 # ---------------------------------------------------------------------------
 # Default Role → Permission Seed Matrix
@@ -171,6 +181,7 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         # Full platform access
         P.MODULE_SOURCE_ACCESS, P.MODULE_FORGE_ACCESS,
         P.MODULE_VERIFY_ACCESS, P.MODULE_DEPLOY_ACCESS,
+        P.MODULE_LEXAI_ACCESS,
         # Admin
         P.VIEW_REPORTS, P.MANAGE_OPS, P.ADMIN_USERS_MANAGE, P.ADMIN_ROLES_MANAGE,
         # Deploy: Employees
@@ -208,10 +219,15 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.VERIFY_QUERIES_MANAGE,
         # Forge
         P.FORGE_COURSES_VIEW, P.FORGE_COURSES_MANAGE, P.FORGE_ENROLL,
+        # LexAI
+        P.LEXAI_PROJECTS_VIEW, P.LEXAI_PROJECTS_MANAGE,
+        P.LEXAI_DESIGN_RUN, P.LEXAI_STORYBOARD_RUN,
+        P.LEXAI_EXPORT, P.LEXAI_FILES_MANAGE, P.LEXAI_VOICE_USE,
     ],
     "manager": [
         P.MODULE_SOURCE_ACCESS, P.MODULE_FORGE_ACCESS,
         P.MODULE_VERIFY_ACCESS, P.MODULE_DEPLOY_ACCESS,
+        P.MODULE_LEXAI_ACCESS,
         P.VIEW_REPORTS,
         # Deploy: Employees
         P.DEPLOY_EMP_VIEW_TEAM, P.DEPLOY_EMP_VIEW_PROFILE, P.DEPLOY_EMP_APPROVE_BASIC, P.DEPLOY_EMP_APPROVE_SENSITIVE,
@@ -243,9 +259,14 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.VERIFY_RESULTS_VIEW, P.VERIFY_QUERIES_MANAGE,
         # Forge
         P.FORGE_COURSES_VIEW, P.FORGE_ENROLL,
+        # LexAI
+        P.LEXAI_PROJECTS_VIEW, P.LEXAI_PROJECTS_MANAGE,
+        P.LEXAI_DESIGN_RUN, P.LEXAI_STORYBOARD_RUN,
+        P.LEXAI_EXPORT, P.LEXAI_FILES_MANAGE, P.LEXAI_VOICE_USE,
     ],
     "employee": [
         P.MODULE_FORGE_ACCESS, P.MODULE_DEPLOY_ACCESS,
+        P.MODULE_LEXAI_ACCESS,
         # Deploy: Employees
         P.DEPLOY_EMP_VIEW_TEAM, P.DEPLOY_EMP_VIEW_PERSONAL,
         # Deploy: Assets
@@ -264,6 +285,10 @@ DEFAULT_PERMISSIONS: Dict[str, List[str]] = {
         P.VERIFY_ASSESS_VIEW,
         # Forge: learn
         P.FORGE_COURSES_VIEW, P.FORGE_ENROLL,
+        # LexAI
+        P.LEXAI_PROJECTS_VIEW, P.LEXAI_PROJECTS_MANAGE,
+        P.LEXAI_DESIGN_RUN, P.LEXAI_STORYBOARD_RUN,
+        P.LEXAI_EXPORT, P.LEXAI_FILES_MANAGE, P.LEXAI_VOICE_USE,
     ],
     "trainee": [
         P.MODULE_VERIFY_ACCESS,

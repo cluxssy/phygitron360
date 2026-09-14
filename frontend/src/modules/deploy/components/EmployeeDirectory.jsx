@@ -319,13 +319,13 @@ setEmployees(employeeList);
 
       {/* TOOLBAR */}
 
-      <div className="flex flex-col xl:flex-row gap-4 justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
 
-        <div className="flex flex-col md:flex-row gap-4 flex-1">
+        <div className="flex flex-wrap items-center gap-4 flex-1 min-w-0">
 
           {/* SEARCH */}
 
-          <div className="relative flex-1 max-w-md">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
 
             <Search
               size={16}
@@ -361,6 +361,8 @@ setEmployees(employeeList);
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             className="
+              w-auto
+              shrink-0
               px-5
               py-4
               rounded-2xl
@@ -371,6 +373,7 @@ setEmployees(employeeList);
               text-sm
               font-bold
               outline-none
+              cursor-pointer
             "
           >
 
@@ -395,6 +398,8 @@ setEmployees(employeeList);
             value={filterTeam}
             onChange={(e) => setFilterTeam(e.target.value)}
             className="
+              w-auto
+              shrink-0
               px-5
               py-4
               rounded-2xl
@@ -405,6 +410,7 @@ setEmployees(employeeList);
               text-sm
               font-bold
               outline-none
+              cursor-pointer
             "
           >
 
@@ -429,7 +435,9 @@ setEmployees(employeeList);
             className="
               px-7
               py-4
-              bg-[#7c3aed] 
+              rounded-2xl
+              bg-[#7c3aed]
+              hover:bg-[#6d28d9]
               !text-white 
               text-sm
               font-black 
@@ -437,6 +445,9 @@ setEmployees(employeeList);
               flex items-center 
               gap-3 shadow-lg 
               shadow-[#7c3aed]/20
+              shrink-0
+              transition-all
+              cursor-pointer
             "
           >
 

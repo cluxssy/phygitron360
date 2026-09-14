@@ -129,6 +129,8 @@ class AdminService:
              cur = conn.cursor()
              cur.execute(f'SET search_path TO "{self.tenant_id}"')
              cur.execute("UPDATE users SET is_active = %s WHERE id = %s", (1 if is_active else 0, user_id))
+             if not is_active:
+                 cur.execute("DELETE FROM public.sessions WHERE user_id = %s", (user_id,))
              conn.commit()
              self.repo.log_action(actor, "TOGGLE_USER_ACTIVE", f"Set is_active={1 if is_active else 0} for user ID {user_id} in {self.tenant_id}")
         finally:

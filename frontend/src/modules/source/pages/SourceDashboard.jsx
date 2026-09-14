@@ -627,7 +627,27 @@ export default function SourceDashboard() {
       toast.success(`Queued ${validCount} file(s) for processing!`);
       setShowUpload(false);
     } catch (err) {
-      toast.error('Upload error: ' + (err.response?.data?.detail || err?.message || 'Unknown'));
+      const detail = err.response?.data?.detail || err?.message || 'Unknown';
+      // Auto-recover: if blocked by an active job, reconnect to its progress
+      if (err.response?.status === 400 && detail.includes('bulk upload')) {
+        try {
+          const res = await fetch('/api/source/candidates/bulk-upload/active', { credentials: 'include' });
+          const data = await res.json();
+          if (res.ok && data.success && data.data?.job) {
+            setBulkJobId(data.data.job.id);
+            setBulkJobProgress(data.data);
+            setBulkUploadTriggered(true);
+            toast('A previous upload is still processing. Reconnected to its progress.', { icon: 'ℹ️' });
+          } else {
+            // Active job was self-healed by backend — retry the upload
+            toast('Previous upload completed. Please try uploading again.', { icon: '✅' });
+          }
+        } catch (_) {
+          toast.error('Upload error: ' + detail);
+        }
+      } else {
+        toast.error('Upload error: ' + detail);
+      }
     } finally {
       setUploading(false);
       setUploadProgress(0);

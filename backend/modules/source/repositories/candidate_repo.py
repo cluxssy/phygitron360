@@ -709,7 +709,132 @@ class CandidateRepository:
                        LIMIT 1"""
                 )
                 row = cur.fetchone()
-                return dict(row) if row else None
+                if not row:
+                    return None
+
+                job = dict(row)
+
+                # Self-healing: if a 'processing' job has no remaining work, auto-complete it
+                if job['status'] == 'processing':
+                    cur.execute(
+                        "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
+                        (job['id'],)
+                    )
+                    remaining = cur.fetchone()[0]
+                    if remaining == 0:
+                        # Make sure the job actually had items (avoid completing an empty extraction race)
+                        cur.execute(
+                            "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s",
+                            (job['id'],)
+                        )
+                        total_items = cur.fetchone()[0]
+                        if total_items > 0:
+                            cur.execute(
+                                "UPDATE bulk_upload_jobs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                                (job['id'],)
+                            )
+                            conn.commit()
+                            logger.info(f"[SelfHeal] Auto-completed stale job {job['id']} ({total_items} items, 0 remaining)")
+                            return None
+
+                # Staleness timeout: extracting jobs stuck with 0 items for >30 minutes
+                if job['status'] == 'extracting':
+                    cur.execute(
+                        "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s",
+                        (job['id'],)
+                    )
+                    item_count = cur.fetchone()[0]
+                    from datetime import datetime
+                    age_minutes = (datetime.now() - job['created_at']).total_seconds() / 60
+                    if item_count == 0 and age_minutes > 30:
+                        cur.execute(
+                            """UPDATE bulk_upload_jobs 
+                               SET status = 'failed', 
+                                   error_message = 'Extraction timed out after 30 minutes with no files processed.',
+                                   updated_at = CURRENT_TIMESTAMP 
+                               WHERE id = %s""",
+                            (job['id'],)
+                        )
+                        conn.commit()
+                        logger.info(f"[SelfHeal] Timed out stuck extracting job {job['id']} (age={age_minutes:.0f}m)")
+                        return None
+
+                return job
+        finally:
+            conn.close()
+
+    def complete_job_if_done(self, job_id: int, conn=None, cur=None) -> bool:
+        """Check if all items for a job are in terminal states. If so, mark job as 'completed'.
+        Returns True if the job was completed. Can use an existing connection/cursor for transactional use."""
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            should_close = True
+        try:
+            self._set_search_path(cur)
+            cur.execute(
+                "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
+                (job_id,)
+            )
+            remaining = cur.fetchone()[0]
+            if remaining == 0:
+                cur.execute(
+                    "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s",
+                    (job_id,)
+                )
+                total_items = cur.fetchone()[0]
+                if total_items > 0:
+                    cur.execute(
+                        "UPDATE bulk_upload_jobs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = %s AND status IN ('processing', 'extracting')",
+                        (job_id,)
+                    )
+                    if should_close:
+                        conn.commit()
+                    logger.info(f"[BulkWorker] Job {job_id} completed ({total_items} items processed)")
+                    return True
+            return False
+        except Exception as e:
+            if should_close:
+                conn.rollback()
+            raise e
+        finally:
+            if should_close:
+                cur.close()
+                conn.close()
+
+    def cleanup_stale_processing_jobs(self):
+        """On startup, complete any 'processing' jobs that have no pending/processing items remaining.
+        These are jobs that finished processing but never transitioned to 'completed'."""
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute(
+                    "SELECT id FROM bulk_upload_jobs WHERE status IN ('processing', 'extracting')"
+                )
+                active_jobs = cur.fetchall()
+                completed_count = 0
+                for job in active_jobs:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
+                        (job['id'],)
+                    )
+                    remaining = cur.fetchone()[0]
+                    cur.execute(
+                        "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s",
+                        (job['id'],)
+                    )
+                    total = cur.fetchone()[0]
+                    if remaining == 0 and total > 0:
+                        cur.execute(
+                            "UPDATE bulk_upload_jobs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                            (job['id'],)
+                        )
+                        completed_count += 1
+                conn.commit()
+                if completed_count > 0:
+                    logger.info(f"[Startup] Auto-completed {completed_count} stale processing job(s)")
         finally:
             conn.close()
 

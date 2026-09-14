@@ -27,6 +27,7 @@ const hubNameMap = {
   forge: "Learning Central",
   verify: "Assessment Central",
   deploy: "Employee Central",
+  lexai: "LexAI",
 };
 
 // Standardized palette for the Funnel Chart

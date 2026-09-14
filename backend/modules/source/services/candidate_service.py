@@ -1021,6 +1021,14 @@ class CandidateService:
 
                                 # Commit all processed items in this sub-batch instantly so the frontend UI can see them!
                                 conn.commit()
+
+                                # Check if this job is now fully done (all items in terminal states)
+                                if sub_batch and sub_batch[0].get("job_id"):
+                                    try:
+                                        self.repo.complete_job_if_done(sub_batch[0]["job_id"], conn=conn, cur=cur)
+                                        conn.commit()
+                                    except Exception:
+                                        pass  # Non-critical — self-healing query will catch it later
                     finally:
                         conn.close()
 
@@ -1037,7 +1045,8 @@ class CandidateService:
         try:
             self.repo.reset_stuck_processing_items()
             self.repo.reset_stuck_extracting_jobs()
-            logger.info(f"[BulkWorker][{self.tenant_id}] Cleaned up and reset stuck processing items and extracting jobs.")
+            self.repo.cleanup_stale_processing_jobs()
+            logger.info(f"[BulkWorker][{self.tenant_id}] Cleaned up and reset stuck processing items, extracting jobs, and stale processing jobs.")
         except Exception as e:
             logger.error(f"[BulkWorker][{self.tenant_id}] Error resetting stuck jobs: {e}")
 

@@ -536,3 +536,37 @@ class EmployeeRepository:
             conn.commit()
         finally:
             conn.close()
+
+    def update_user_active_by_employee(self, employee_code: str, is_active: int, tenant_id: str = 'public', fallback_email: Optional[str] = None):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            if fallback_email and str(fallback_email).strip():
+                cur.execute(
+                    """
+                    SELECT id FROM users 
+                    WHERE employee_code = %s OR LOWER(username) = LOWER(%s)
+                    """,
+                    (employee_code, str(fallback_email).strip())
+                )
+            else:
+                cur.execute(
+                    "SELECT id FROM users WHERE employee_code = %s",
+                    (employee_code,)
+                )
+            rows = cur.fetchall()
+            user_ids = [r['id'] for r in rows if r.get('id')]
+            if user_ids:
+                cur.execute(
+                    "UPDATE users SET is_active = %s WHERE id = ANY(%s)",
+                    (is_active, user_ids)
+                )
+                if not is_active:
+                    cur.execute(
+                        "DELETE FROM public.sessions WHERE user_id = ANY(%s)",
+                        (user_ids,)
+                    )
+            conn.commit()
+        finally:
+            conn.close()

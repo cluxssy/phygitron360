@@ -54,13 +54,18 @@ export default function ModuleControl({ tenantOps, onUpdate }) {
       label: 'Employee Central',
       desc: 'Employees & organisation management'
     },
+    {
+      id: 'lexai',
+      label: 'LexAI',
+      desc: 'AI Instructional Design Automation'
+    },
   ];
 
   return (
     <div className="space-y-10 animate-fade-in-up">
 
       {/* MODULE GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-7">
 
         {MODULES.map(m => {
           const isActive = tenantOps.modules_enabled.includes(m.id);

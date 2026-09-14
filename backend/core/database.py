@@ -98,7 +98,7 @@ def create_tables(schema_name='public'):
                     admin_email TEXT NOT NULL,
                     subdomain TEXT UNIQUE, -- acmecorp
                     plan TEXT DEFAULT 'starter',
-                    modules_enabled TEXT[] DEFAULT ARRAY['source','forge','verify','deploy'],
+                    modules_enabled TEXT[] DEFAULT ARRAY['source','forge','verify','deploy','lexai'],
                     subscription_status TEXT DEFAULT 'trial',
                     timezone TEXT DEFAULT 'Asia/Kolkata',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1268,9 +1268,65 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS parent_id INTEGER")
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS tags JSONB")
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS images JSONB")
-
-
         cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS override_date TEXT")
+
+        # --- LexAI Module Tables ---
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS lexai_projects (
+                id TEXT PRIMARY KEY,
+                employee_code TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                business_unit TEXT,
+                intake_data TEXT,
+                extracted_content TEXT,
+                design_doc TEXT,
+                storyboard TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_lexai_projects_emp ON lexai_projects(employee_code)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_lexai_projects_tenant ON lexai_projects(tenant_id)")
+
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS lexai_chat_messages (
+                id SERIAL PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES lexai_projects(id) ON DELETE CASCADE,
+                type TEXT,
+                role TEXT,
+                content TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_lexai_chat_project ON lexai_chat_messages(project_id)")
+
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS lexai_folders (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                parent_id INTEGER REFERENCES lexai_folders(id) ON DELETE CASCADE,
+                employee_code TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_lexai_folders_emp ON lexai_folders(employee_code)")
+
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS lexai_files (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                folder_id INTEGER REFERENCES lexai_folders(id) ON DELETE SET NULL,
+                employee_code TEXT NOT NULL,
+                file_type TEXT,
+                file_path TEXT,
+                file_size INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_lexai_files_emp ON lexai_files(employee_code)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_lexai_files_folder ON lexai_files(folder_id)")
+
         conn.commit()
     except Exception as e:
         conn.rollback()

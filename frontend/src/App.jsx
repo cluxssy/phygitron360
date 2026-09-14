@@ -23,12 +23,14 @@ import DeployDashboard from './modules/deploy/pages/DeployDashboard';
 import VerifyDashboard from './modules/verify/pages/VerifyDashboard';
 import ForgeDashboard from './modules/forge/pages/ForgeDashboard';
 import TraineeDashboard from './modules/trainee/pages/TraineeDashboard';
+import LexAIDashboard from './modules/lexai/pages/LexAIDashboard';
 
 function getFirstAllowedRoute(hasPermission) {
   if (hasPermission?.('module.deploy.access')) return '/deploy';
   if (hasPermission?.('module.source.access')) return '/source';
   if (hasPermission?.('module.forge.access')) return '/forge';
   if (hasPermission?.('module.verify.access')) return '/verify';
+  if (hasPermission?.('module.lexai.access')) return '/lexai';
   return '/';
 }
 
@@ -165,6 +167,15 @@ export default function App() {
             element={
               <ProtectedRoute requiredModule="deploy">
                 <Layout><DeployDashboard /></Layout>
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/lexai" 
+            element={
+              <ProtectedRoute requiredModule="lexai">
+                <Layout><LexAIDashboard /></Layout>
               </ProtectedRoute>
             } 
           />

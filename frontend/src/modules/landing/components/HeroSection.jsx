@@ -54,6 +54,7 @@ export default function HeroSection() {
   const [error, setError] = useState('');
   const [isTransitioning, setIsTransitioning] = useState(false);
   const slideContainerRef = useRef(null);
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768);
 
   const currentSlide = ((slidePosition % slides.length) + slides.length) % slides.length;
 
@@ -106,6 +107,14 @@ export default function HeroSection() {
       goToNext();
     }, 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  // ── Track viewport for login card positioning ──
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const handler = (e) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   }, []);
 
   const goToNext = () => {
@@ -249,7 +258,7 @@ export default function HeroSection() {
 
                   {/* Text sits on top of its own image so both move together */}
                   <div className="absolute inset-0 z-10 flex items-center pl-6 sm:pl-10 md:pl-16 lg:pl-[90px] pr-6 sm:pr-8">
-                    <div className="w-full max-w-[560px] sm:max-w-[640px] lg:max-w-[720px] xl:max-w-[780px] text-white">
+                    <div className="w-full max-w-[560px] sm:max-w-[640px] md:max-w-[440px] lg:max-w-[520px] xl:max-w-[600px] text-white">
                       <h1 className="text-[26px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[52px] font-black leading-[1.1] tracking-tight">
                         {slide.title}
                       </h1>
@@ -300,7 +309,27 @@ export default function HeroSection() {
                Stacked below the banner in normal flow on mobile/tablet so it
                never overflows a narrow viewport; becomes a floating overlay,
                vertically centered on the banner, from lg upward. */}
-          <div className="relative lg:absolute mt-6 lg:mt-0 mx-auto lg:mx-0 right-0 lg:right-16 xl:right-49 lg:top-[50%] lg:-translate-y-1/2 z-30 w-[92%] sm:w-[420px] lg:w-[400px] xl:w-[420px] max-w-[420px] lg:min-h-[520px] flex items-center px-0">
+          <div
+            className="flex items-center px-0"
+            style={isDesktop ? {
+              position: 'absolute',
+              right: '16px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: '420px',
+              maxWidth: '420px',
+              zIndex: 30,
+              margin: 0,
+            } : {
+              position: 'relative',
+              width: '92%',
+              maxWidth: '420px',
+              marginTop: '24px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+              zIndex: 30,
+            }}
+          >
 
             {/* Depth shadow layer, offset downward, soft and low opacity */}
             <div

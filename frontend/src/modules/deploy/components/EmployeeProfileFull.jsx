@@ -103,14 +103,18 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
     const { user } = useAuth();
     const isSelf = user?.employee_code === employeeCode;
 
-    const canEditBasic     = hasPermission(P.DEPLOY_EMP_EDIT_BASIC) || isSelf;
-    const canEditJob       = hasPermission(P.DEPLOY_EMP_EDIT_JOB);
-    const canEditFinancial = hasPermission(P.DEPLOY_EMP_EDIT_FINANCIAL);
-    const canManageDocs    = hasPermission(P.DEPLOY_EMP_MANAGE_DOCS) || isSelf;
+    const isOrgAdmin = user?.role === 'org_admin' || (user?.roles || []).includes('org_admin');
+    const isSuperAdmin = user?.role === 'super_admin' || (user?.roles || []).includes('super_admin');
+    const isAdmin = isOrgAdmin || isSuperAdmin;
 
-    const canApproveBasic     = hasPermission(P.DEPLOY_EMP_APPROVE_BASIC);
-    const canApproveSensitive = hasPermission(P.DEPLOY_EMP_APPROVE_SENSITIVE);
-    const canApproveFinancial = hasPermission(P.DEPLOY_EMP_APPROVE_FINANCIAL);
+    const canEditBasic     = isAdmin || hasPermission(P.DEPLOY_EMP_EDIT_BASIC) || isSelf;
+    const canEditJob       = isAdmin || hasPermission(P.DEPLOY_EMP_EDIT_JOB) || hasPermission(P.DEPLOY_EMP_APPROVE_BASIC);
+    const canEditFinancial = isAdmin || hasPermission(P.DEPLOY_EMP_EDIT_FINANCIAL) || hasPermission(P.DEPLOY_EMP_APPROVE_FINANCIAL);
+    const canManageDocs    = isAdmin || hasPermission(P.DEPLOY_EMP_MANAGE_DOCS) || isSelf;
+
+    const canApproveBasic     = isAdmin || hasPermission(P.DEPLOY_EMP_APPROVE_BASIC);
+    const canApproveSensitive = isAdmin || hasPermission(P.DEPLOY_EMP_APPROVE_SENSITIVE);
+    const canApproveFinancial = isAdmin || hasPermission(P.DEPLOY_EMP_APPROVE_FINANCIAL);
 
     // Derived edit modes — only the relevant section becomes interactive
     const editBasic     = editMode && (canEditBasic || canApproveBasic);
@@ -329,8 +333,8 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
             education_details: formData.education_details,
             primary_skillset:  formData.primary_skillset,
             secondary_skillset: formData.secondary_skillset,
-            // Job fields — only included when user has edit_job
-            ...(canEditJob && {
+            // Job fields — only included when user has edit_job or approve_basic
+            ...((canEditJob || canApproveBasic) && {
                 designation:       formData.designation,
                 team:              formData.team,
                 employment_type:   formData.employment_type,
