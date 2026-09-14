@@ -17,6 +17,7 @@ export const P = {
   MODULE_FORGE_ACCESS:   'module.forge.access',
   MODULE_VERIFY_ACCESS:  'module.verify.access',
   MODULE_DEPLOY_ACCESS:  'module.deploy.access',
+  MODULE_LEXAI_ACCESS:   'module.lexai.access',
 
   // ── Platform / Admin ────────────────────────────────────────────────────
   MANAGE_SYSTEM:         'manage_system',
@@ -141,6 +142,15 @@ export const P = {
   FORGE_COURSES_VIEW:   'forge.courses.view',
   FORGE_COURSES_MANAGE: 'forge.courses.manage',
   FORGE_ENROLL:         'forge.courses.enroll',
+
+  // ── LexAI: Learning Design AI ──────────────────────────────────────────────
+  LEXAI_PROJECTS_VIEW:    'lexai.projects.view',
+  LEXAI_PROJECTS_MANAGE:  'lexai.projects.manage',
+  LEXAI_DESIGN_RUN:       'lexai.design.run',
+  LEXAI_STORYBOARD_RUN:   'lexai.storyboard.run',
+  LEXAI_EXPORT:           'lexai.export',
+  LEXAI_FILES_MANAGE:     'lexai.files.manage',
+  LEXAI_VOICE_USE:        'lexai.voice.use',
 };
 
 export default P;

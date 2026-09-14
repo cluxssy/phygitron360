@@ -82,7 +82,7 @@ def _resolve_permissions(user_id: int, roles: list, tenant_id: str, cur=None) ->
 def _resolve_tenant_modules(tenant_id: str, cur=None) -> list:
     """Returns the list of enabled modules for the given tenant."""
     if tenant_id == "public":
-        return ["source", "forge", "verify", "deploy"]
+        return ["source", "forge", "verify", "deploy", "lexai"]
         
     own_conn = False
     if cur is None:
@@ -96,9 +96,9 @@ def _resolve_tenant_modules(tenant_id: str, cur=None) -> list:
         row = cur.fetchone()
         if row and row.get("modules_enabled"):
             return row["modules_enabled"]
-        return ["source", "forge", "verify", "deploy"]
+        return ["source", "forge", "verify", "deploy", "lexai"]
     except Exception:
-        return ["source", "forge", "verify", "deploy"]
+        return ["source", "forge", "verify", "deploy", "lexai"]
     finally:
         if own_conn:
             cur.close()
@@ -209,6 +209,7 @@ def get_current_user(request: Request) -> dict:
         "name":           user_row.get("employee_name") or user_row.get("candidate_name") or user_row["username"],
         "first_name":     user_row.get("employee_first_name") or user_row.get("candidate_first_name") or user_row["username"],
         "role":           _normalize_role(user_row.get("role", "")),
+        "roles":          norm_roles,
         "templates":      user_row.get("templates") or [],
         "tenant_id":      tenant_id,
         "employee_code":  user_row.get("employee_code"),

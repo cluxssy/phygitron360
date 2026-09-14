@@ -13,6 +13,7 @@ export const MANAGEMENT_CATEGORIES = [
       { key: 'module.forge.access',   label: 'Learning Central Access' },
       { key: 'module.verify.access',  label: 'Assessment Central Access' },
       { key: 'module.deploy.access',  label: 'Employee Central Access' },
+      { key: 'module.lexai.access',   label: 'LexAI Access' },
     ]
   },
   {
@@ -149,6 +150,18 @@ export const MANAGEMENT_CATEGORIES = [
     group: 'Learning Central (Forge) — Management',
     perms: [
       { key: 'forge.courses.manage',  label: 'Build & Manage Courses' },
+    ]
+  },
+  {
+    group: 'LexAI (Learning Design AI) — Management',
+    perms: [
+      { key: 'lexai.projects.view',    label: 'View Projects' },
+      { key: 'lexai.projects.manage',  label: 'Create & Manage Projects' },
+      { key: 'lexai.design.run',       label: 'Run AI Design Document Generation' },
+      { key: 'lexai.storyboard.run',   label: 'Run AI Storyboard Generation' },
+      { key: 'lexai.export',           label: 'Export Documents (Word / Excel)' },
+      { key: 'lexai.files.manage',     label: 'Manage Files & Folders' },
+      { key: 'lexai.voice.use',        label: 'Use Voice Speech-to-Text' },
     ]
   },
 ];

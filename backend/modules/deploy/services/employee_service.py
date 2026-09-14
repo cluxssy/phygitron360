@@ -307,6 +307,28 @@ class EmployeeService:
         # Use NEW employee code for subsequent updates if it was changed
         current_emp_code = data.get('employee_code', employee_code)
 
+        # Synchronize user account active/locked state if employment status is updated
+        if 'employment_status' in data and data['employment_status']:
+            new_emp_status = data['employment_status']
+            old_emp_status = (old_employee or {}).get('employment_status')
+            fallback_mail = old_email or data.get('email_id')
+
+            if new_emp_status in ('Inactive', 'Exited', 'Terminated'):
+                self.repo.update_user_active_by_employee(
+                    employee_code=current_emp_code,
+                    is_active=0,
+                    tenant_id=self.tenant_id,
+                    fallback_email=fallback_mail
+                )
+            elif new_emp_status in ('Active', 'Notice Period', 'On Leave'):
+                if old_emp_status in ('Inactive', 'Exited', 'Terminated'):
+                    self.repo.update_user_active_by_employee(
+                        employee_code=current_emp_code,
+                        is_active=1,
+                        tenant_id=self.tenant_id,
+                        fallback_email=fallback_mail
+                    )
+
         # Update user role if changed
         if 'role' in data and data['role']:
             self.repo.update_user_role(current_emp_code, data['role'], self.tenant_id)

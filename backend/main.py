@@ -36,6 +36,18 @@ from backend.modules.verify.api.queries import router as verify_queries_router
 from backend.modules.verify.api.question_bank import router as verify_question_bank_router
 from backend.modules.verify.api.live_monitoring import router as verify_live_monitor_router
 
+# Set up LexAI module
+from backend.modules.lexai.api.projects import router as lexai_projects_router, alias_history_router
+from backend.modules.lexai.api.intake import router as lexai_intake_router, alias_intake_router
+from backend.modules.lexai.api.design import router as lexai_design_router, alias_design_router
+from backend.modules.lexai.api.storyboard import router as lexai_storyboard_router, alias_storyboard_router
+from backend.modules.lexai.api.edit import router as lexai_edit_router, alias_edit_router
+from backend.modules.lexai.api.extraction import router as lexai_extraction_router, alias_extraction_router
+from backend.modules.lexai.api.export import router as lexai_export_router, alias_export_router
+from backend.modules.lexai.api.folders import router as lexai_folders_router, alias_folders_router
+from backend.modules.lexai.api.files import router as lexai_files_router, alias_files_router
+from backend.modules.lexai.api.voice import router as lexai_voice_router, alias_voice_router
+
 app = FastAPI(
     title="PHYGITRON 360",
     description="Multi-tenant Modular Talent Intelligence Platform API",
@@ -195,6 +207,28 @@ app.include_router(verify_sandbox_router, dependencies=[Depends(require_module("
 app.include_router(verify_queries_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_question_bank_router, dependencies=[Depends(require_module("verify"))])
 app.include_router(verify_live_monitor_router)
+
+# LexAI Routers
+app.include_router(lexai_projects_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_history_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_intake_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_intake_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_design_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_design_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_storyboard_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_storyboard_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_edit_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_edit_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_extraction_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_extraction_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_export_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_export_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_folders_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_folders_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_files_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_files_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_voice_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(alias_voice_router, dependencies=[Depends(require_module("lexai"))])
 
 
 if __name__ == "__main__":

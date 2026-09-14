@@ -15,6 +15,7 @@ class UserResponse(BaseModel):
     role: str
     employee_code: Optional[str] = None
     templates: Optional[List[str]] = []
+    is_active: Optional[int] = 1
 
 class LogResponse(BaseModel):
     id: int

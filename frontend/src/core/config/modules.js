@@ -22,4 +22,10 @@ export const MODULE_CONFIG = {
     route: "/deploy",
     permission: "module.deploy.access",
   },
+
+  lexai: {
+    label: "LexAI",
+    route: "/lexai",
+    permission: "module.lexai.access",
+  },
 };

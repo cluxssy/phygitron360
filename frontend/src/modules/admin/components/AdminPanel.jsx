@@ -442,7 +442,9 @@ export default function AdminPanel() {
                         );
                       })
                       .sort((a, b) => (a.username || '').localeCompare(b.username || ''))
-                      .map(u => (
+                      .map(u => {
+                        const isUserActive = !(u.is_active === 0 || u.is_active === false);
+                        return (
 
                       <tr
                         key={u.id}
@@ -456,7 +458,7 @@ export default function AdminPanel() {
                           <div className="flex items-center gap-5">
 
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-normal uppercase tracking-tighter shadow-inner ${
-                              u.is_active !== 0
+                              isUserActive
                                 ? 'bg-gradient-to-br from-primary/20 to-primary/5 text-primary border border-primary/20 shadow-[0_0_20px_rgba(180,140,255,0.12)]'
                                 : 'bg-red-500/10 text-red-500 border border-red-500/10'
                             }`}>
@@ -465,9 +467,16 @@ export default function AdminPanel() {
 
                             <div>
 
-                              <p className="text-base font-medium text-black group-hover:text-violet-700 transition-colors">
-                                {u.username}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-base font-medium text-black group-hover:text-violet-700 transition-colors">
+                                  {u.username}
+                                </p>
+                                {!isUserActive && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-600 border border-red-200">
+                                    Locked
+                                  </span>
+                                )}
+                              </div>
 
                               <p className="text-[9px] text-black font-mono mt-1 tracking-widest uppercase">
                                 ID: USER_{u.id.toString().padStart(4, '0')}
@@ -537,15 +546,15 @@ export default function AdminPanel() {
                             </button>
 
                             <button
-                              onClick={() => toggleActive(u.id, u.is_active !== 0)}
+                              onClick={() => toggleActive(u.id, isUserActive)}
                               className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all border active:scale-95 ${
-                                u.is_active !== 0
+                                isUserActive
                                   ? 'bg-white border-primary/10 text-black hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5'
                                   : 'bg-red-500/10 text-red-500 border-red-500/20 hover:text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/30'
                               }`}
-                              title={u.is_active !== 0 ? "Disable User" : "Enable User"}
+                              title={isUserActive ? "Lock User Access" : "Unlock User Access"}
                             >
-                              {u.is_active !== 0 ? <Lock size={16} strokeWidth={2.5} /> : <Unlock size={16} strokeWidth={2.5} />}
+                              {isUserActive ? <Lock size={16} strokeWidth={2.5} /> : <Unlock size={16} strokeWidth={2.5} />}
                             </button>
 
                             <button
@@ -561,8 +570,8 @@ export default function AdminPanel() {
                         </td>
 
                       </tr>
-
-                    ))}
+                        );
+                      })}
 
                   </tbody>
 

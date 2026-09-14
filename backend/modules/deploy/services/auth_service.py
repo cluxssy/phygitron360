@@ -106,7 +106,7 @@ class AuthService:
     def _get_tenant_modules(self, tenant_id: str) -> list:
         """Resolve which modules this tenant has access to from public.tenants."""
         if tenant_id == 'public':
-            return ['source', 'forge', 'verify', 'deploy']
+            return ['source', 'forge', 'verify', 'deploy', 'lexai']
         
         from backend.core.database import get_db_connection
         conn = get_db_connection()
@@ -117,9 +117,9 @@ class AuthService:
                 row = cur.fetchone()
                 if row and row[0]:
                     return row[0]
-                return ['source', 'forge', 'verify', 'deploy']
+                return ['source', 'forge', 'verify', 'deploy', 'lexai']
         except:
-            return ['source', 'forge', 'verify', 'deploy']
+            return ['source', 'forge', 'verify', 'deploy', 'lexai']
         finally:
             conn.close()
 

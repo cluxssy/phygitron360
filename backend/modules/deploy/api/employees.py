@@ -261,24 +261,29 @@ def update_employee(employee_code: str, data: dict = Body(...), current_user: di
     - Basic fields are allowed for anyone with deploy.employees.edit_basic or if it's their own profile
     Super-admins bypass all field restrictions.
     """
-    roles = current_user.get('roles', [])
-    is_super = 'super_admin' in roles or 'superadmin' in roles
+    role = current_user.get('role', '')
+    roles = current_user.get('roles', []) or ([role] if role else [])
+    all_roles = set(roles + ([role] if role else []))
+    is_super = 'super_admin' in all_roles or 'superadmin' in all_roles
+    is_org_admin = 'org_admin' in all_roles or role == 'org_admin'
+    isAdmin = is_super or is_org_admin
+
     perms = current_user.get('permissions', {})
     is_self = current_user.get('employee_code') == employee_code
 
     if isinstance(perms, dict):
-        can_edit_basic = bool(perms.get('deploy.employees.edit_basic'))
-        can_edit_financial = bool(perms.get('deploy.employees.edit_financial'))
-        can_edit_job = bool(perms.get('deploy.employees.edit_job'))
+        can_edit_basic = isAdmin or bool(perms.get('deploy.employees.edit_basic'))
+        can_edit_financial = isAdmin or bool(perms.get('deploy.employees.edit_financial')) or bool(perms.get('deploy.employees.approve_financial'))
+        can_edit_job = isAdmin or bool(perms.get('deploy.employees.edit_job')) or bool(perms.get('deploy.employees.approve_basic'))
     else:
-        can_edit_basic = False
-        can_edit_financial = False
-        can_edit_job = False
+        can_edit_basic = isAdmin
+        can_edit_financial = isAdmin
+        can_edit_job = isAdmin
 
     if not (can_edit_basic or is_self):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    if not is_super:
+    if not isAdmin:
         # Strip fields the caller is not authorised to write
         if not can_edit_financial:
             for field in _FINANCIAL_FIELDS:
