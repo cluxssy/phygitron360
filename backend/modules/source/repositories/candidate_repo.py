@@ -714,20 +714,32 @@ class CandidateRepository:
 
                 job = dict(row)
 
+                # Helper to safely extract single count value from tuple or dict row
+                def _extract_count(r):
+                    if not r:
+                        return 0
+                    if isinstance(r, dict):
+                        if 'cnt' in r:
+                            return int(r['cnt'] or 0)
+                        if 'count' in r:
+                            return int(r['count'] or 0)
+                        return int(list(r.values())[0] or 0)
+                    return int(r[0] or 0)
+
                 # Self-healing: if a 'processing' job has no remaining work, auto-complete it
                 if job['status'] == 'processing':
                     cur.execute(
-                        "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
+                        "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
                         (job['id'],)
                     )
-                    remaining = cur.fetchone()[0]
+                    remaining = _extract_count(cur.fetchone())
                     if remaining == 0:
                         # Make sure the job actually had items (avoid completing an empty extraction race)
                         cur.execute(
-                            "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s",
+                            "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s",
                             (job['id'],)
                         )
-                        total_items = cur.fetchone()[0]
+                        total_items = _extract_count(cur.fetchone())
                         if total_items > 0:
                             cur.execute(
                                 "UPDATE bulk_upload_jobs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
@@ -740,24 +752,27 @@ class CandidateRepository:
                 # Staleness timeout: extracting jobs stuck with 0 items for >30 minutes
                 if job['status'] == 'extracting':
                     cur.execute(
-                        "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s",
+                        "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s",
                         (job['id'],)
                     )
-                    item_count = cur.fetchone()[0]
-                    from datetime import datetime
-                    age_minutes = (datetime.now() - job['created_at']).total_seconds() / 60
-                    if item_count == 0 and age_minutes > 30:
-                        cur.execute(
-                            """UPDATE bulk_upload_jobs 
-                               SET status = 'failed', 
-                                   error_message = 'Extraction timed out after 30 minutes with no files processed.',
-                                   updated_at = CURRENT_TIMESTAMP 
-                               WHERE id = %s""",
-                            (job['id'],)
-                        )
-                        conn.commit()
-                        logger.info(f"[SelfHeal] Timed out stuck extracting job {job['id']} (age={age_minutes:.0f}m)")
-                        return None
+                    item_count = _extract_count(cur.fetchone())
+                    created_at = job.get('created_at')
+                    if item_count == 0 and created_at:
+                        from datetime import datetime, timezone
+                        now = datetime.now(timezone.utc) if getattr(created_at, 'tzinfo', None) else datetime.now()
+                        age_minutes = (now - created_at).total_seconds() / 60
+                        if age_minutes > 30:
+                            cur.execute(
+                                """UPDATE bulk_upload_jobs 
+                                   SET status = 'failed', 
+                                       error_message = 'Extraction timed out after 30 minutes with no files processed.',
+                                       updated_at = CURRENT_TIMESTAMP 
+                                   WHERE id = %s""",
+                                (job['id'],)
+                            )
+                            conn.commit()
+                            logger.info(f"[SelfHeal] Timed out stuck extracting job {job['id']} (age={age_minutes:.0f}m)")
+                            return None
 
                 return job
         finally:
@@ -773,17 +788,28 @@ class CandidateRepository:
             should_close = True
         try:
             self._set_search_path(cur)
+            def _extract_count(r):
+                if not r:
+                    return 0
+                if isinstance(r, dict):
+                    if 'cnt' in r:
+                        return int(r['cnt'] or 0)
+                    if 'count' in r:
+                        return int(r['count'] or 0)
+                    return int(list(r.values())[0] or 0)
+                return int(r[0] or 0)
+
             cur.execute(
-                "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
+                "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
                 (job_id,)
             )
-            remaining = cur.fetchone()[0]
+            remaining = _extract_count(cur.fetchone())
             if remaining == 0:
                 cur.execute(
-                    "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s",
+                    "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s",
                     (job_id,)
                 )
-                total_items = cur.fetchone()[0]
+                total_items = _extract_count(cur.fetchone())
                 if total_items > 0:
                     cur.execute(
                         "UPDATE bulk_upload_jobs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = %s AND status IN ('processing', 'extracting')",
@@ -810,26 +836,38 @@ class CandidateRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
+                def _extract_count(r):
+                    if not r:
+                        return 0
+                    if isinstance(r, dict):
+                        if 'cnt' in r:
+                            return int(r['cnt'] or 0)
+                        if 'count' in r:
+                            return int(r['count'] or 0)
+                        return int(list(r.values())[0] or 0)
+                    return int(r[0] or 0)
+
                 cur.execute(
                     "SELECT id FROM bulk_upload_jobs WHERE status IN ('processing', 'extracting')"
                 )
                 active_jobs = cur.fetchall()
                 completed_count = 0
                 for job in active_jobs:
+                    job_id = job['id'] if isinstance(job, dict) else job[0]
                     cur.execute(
-                        "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
-                        (job['id'],)
+                        "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
+                        (job_id,)
                     )
-                    remaining = cur.fetchone()[0]
+                    remaining = _extract_count(cur.fetchone())
                     cur.execute(
-                        "SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s",
-                        (job['id'],)
+                        "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s",
+                        (job_id,)
                     )
-                    total = cur.fetchone()[0]
+                    total = _extract_count(cur.fetchone())
                     if remaining == 0 and total > 0:
                         cur.execute(
                             "UPDATE bulk_upload_jobs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                            (job['id'],)
+                            (job_id,)
                         )
                         completed_count += 1
                 conn.commit()
