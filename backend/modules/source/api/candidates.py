@@ -440,9 +440,36 @@ def get_candidate_resume(
 
     # Local disk fallback
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Resume file missing from storage")
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Resume file not found on disk for candidate {candidate_id}: {file_path}"
+        )
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Resume file is no longer available. "
+                "It may have been part of an older batch upload that was cleaned up. "
+                "Please re-upload the resume to view it."
+            )
+        )
 
-    return FileResponse(file_path, filename=os.path.basename(file_path))
+    media_type = None
+    lower_path = file_path.lower()
+    if lower_path.endswith(".pdf"):
+        media_type = "application/pdf"
+    elif lower_path.endswith(".docx"):
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif lower_path.endswith(".doc"):
+        media_type = "application/msword"
+    elif lower_path.endswith(".txt"):
+        media_type = "text/plain"
+
+    return FileResponse(
+        file_path, 
+        filename=os.path.basename(file_path),
+        media_type=media_type,
+        content_disposition_type="inline"
+    )
 
 
 @router.put("/{candidate_id}/status")
