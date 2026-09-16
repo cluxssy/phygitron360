@@ -5,13 +5,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../../core/api/axios';
 import { usePermission } from '../../../core/permissions/usePermission';
-import { Folder, File, ChevronRight, Search, Upload, Trash2, CalendarDays, Loader, Plus, X, LayoutGrid, List } from 'lucide-react';
+import { Folder, File, ChevronRight, Search, Upload, Trash2, CalendarDays, Loader, Plus, X, LayoutGrid, List, ExternalLink } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 const PDF_LIMIT_BYTES = 30 * 1024 * 1024;
 const ZIP_LIMIT_BYTES = 2 * 1024 * 1024 * 1024;
+
+const getCandidateName = (c) => {
+  if (c.full_name && c.full_name.trim() && c.full_name !== 'Unknown Candidate') return c.full_name.trim();
+  if (c.name && c.name.trim() && c.name !== 'Unknown Candidate') return c.name.trim();
+  if (c.resume_path) {
+    const raw = c.resume_path.split('/').pop() || '';
+    const clean = raw
+      .replace(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_/, '')
+      .replace(/^[0-9a-fA-F]{32}_/, '');
+    if (clean && !clean.startsWith('uuid_')) return clean;
+  }
+  if (c.email && !c.email.startsWith('unknown_')) {
+    return c.email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  }
+  return c.full_name || c.name || 'Unnamed Resume';
+};
 
 export default function ResumeRepo({ onBulkUpload }) {
   const hasManagePermission = usePermission('source.candidates.manage');
@@ -52,7 +68,12 @@ export default function ResumeRepo({ onBulkUpload }) {
     setLoadingCandidates(true);
     try {
       const res = await api.get('/source/candidates/search', { params: { upload_time: folderId, limit: 1000 } });
-      setCandidates(res.data.data || []);
+      const raw = res.data.data || [];
+      const normalized = raw.map(c => ({
+        ...c,
+        name: getCandidateName(c)
+      }));
+      setCandidates(normalized);
       setSelected(new Set());
     } catch (err) {
       toast.error('Failed to load resumes');
@@ -71,10 +92,17 @@ export default function ResumeRepo({ onBulkUpload }) {
 
   const filteredCandidates = React.useMemo(() => {
     return candidates
-      .filter(c => (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (c.email || '').toLowerCase().includes(searchQuery.toLowerCase()))
+      .filter(c => {
+        const name = (c.name || c.full_name || '').toLowerCase();
+        const email = (c.email || '').toLowerCase();
+        const search = searchQuery.toLowerCase();
+        return name.includes(search) || email.includes(search);
+      })
       .sort((a, b) => {
-        if (sortBy === 'name_asc') return (a.name || '').localeCompare(b.name || '');
-        if (sortBy === 'name_desc') return (b.name || '').localeCompare(a.name || '');
+        const nameA = a.name || a.full_name || '';
+        const nameB = b.name || b.full_name || '';
+        if (sortBy === 'name_asc') return nameA.localeCompare(nameB);
+        if (sortBy === 'name_desc') return nameB.localeCompare(nameA);
         if (sortBy === 'date_asc') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
         if (sortBy === 'date_desc') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         return 0;
@@ -445,8 +473,8 @@ export default function ResumeRepo({ onBulkUpload }) {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: viewMode === 'grid' ? 4 : 0 }}>
                             <File size={16} color="#9333EA" style={{ flexShrink: 0 }} />
-                            <span style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {c.name}
+                            <span style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.name || c.full_name}>
+                              {c.name || c.full_name || getCandidateName(c)}
                             </span>
                           </div>
                           {viewMode === 'grid' && (
@@ -469,14 +497,30 @@ export default function ResumeRepo({ onBulkUpload }) {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: viewMode === 'grid' ? 'auto' : 0, paddingTop: viewMode === 'grid' ? 12 : 0, borderTop: viewMode === 'grid' ? '1px solid #F3F4F6' : 'none' }}>
-                      <Link 
-                        to={`/source/candidates/${c.id}`} 
-                        className="text-gray-600 hover:bg-gray-100 font-medium py-1 px-3 rounded-lg text-sm transition-colors duration-200" 
-                        style={{ padding: '4px 12px', fontSize: '0.75rem', height: 'auto' }}
-                        onClick={(e) => e.stopPropagation()}
+                      <button
+                        className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 font-medium py-1 px-3 rounded-lg text-sm transition-colors duration-200 flex items-center gap-1.5"
+                        style={{ padding: '4px 12px', fontSize: '0.75rem', height: 'auto', background: 'none', border: 'none', cursor: 'pointer' }}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const url = `/api/source/candidates/${c.id}/resume`;
+                          try {
+                            const res = await fetch(url, { method: 'HEAD', credentials: 'include' });
+                            if (res.status === 404) {
+                              let msg = 'Resume file is no longer available.';
+                              try {
+                                const json = await (await fetch(url, { credentials: 'include' })).json();
+                                if (json?.detail) msg = json.detail;
+                              } catch (_) {}
+                              toast.error(msg, { duration: 5000 });
+                              return;
+                            }
+                          } catch (_) {}
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        }}
                       >
-                        View Profile
-                      </Link>
+                        <ExternalLink size={13} />
+                        View Resume
+                      </button>
                     </div>
                   </div>
                 ))}

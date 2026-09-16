@@ -499,6 +499,7 @@ class CandidateRepository:
                 for r in cur.fetchall():
                     row = dict(r)
                     row['status'] = row.get('job_status') or row['status']
+                    row['name'] = row.get('full_name') or ''
                     results.append(row)
                 return results, total_count
         finally:

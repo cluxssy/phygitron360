@@ -133,17 +133,16 @@ export const MANAGEMENT_CATEGORIES = [
     ]
   },
   {
-    group: 'Assessment Central (Verify)',
+    group: 'Assessment Central (Verify) — Management',
     perms: [
-      { key: 'verify.assessments.view',     label: 'View Assessments List' },
-      { key: 'verify.assessments.manage',   label: 'Build & Manage Assessments' },
-      { key: 'verify.assessments.assign',   label: 'Assign Tests to Candidates' },
-      { key: 'verify.questions.view',       label: 'View Question Bank' },
-      { key: 'verify.questions.manage',     label: 'Manage Question Bank & AI Import' },
-      { key: 'verify.monitoring.view',      label: 'Live Proctoring & Monitoring' },
-      { key: 'verify.results.view',         label: 'View Analytics & Results' },
-      { key: 'verify.results.manage',       label: 'Release Results & Regrade' },
-      { key: 'verify.queries.manage',       label: 'Manage Candidate Disputes' },
+      { key: 'verify.assessments.manage',    label: 'Build & Manage Assessments' },
+      { key: 'verify.assessments.assign',    label: 'Assign Tests to Candidates' },
+      { key: 'verify.questions.view',        label: 'View Question Bank' },
+      { key: 'verify.questions.manage',      label: 'Manage Question Bank & AI Import' },
+      { key: 'verify.monitoring.view',       label: 'Live Proctoring & Monitoring' },
+      { key: 'verify.results.view',          label: 'View Analytics & Results' },
+      { key: 'verify.results.manage',        label: 'Release Results & Regrade' },
+      { key: 'verify.queries.manage',        label: 'Manage Candidate Disputes' },
     ]
   },
   {
@@ -216,6 +215,24 @@ export const PERSONAL_CATEGORIES = [
     perms: [
       { key: 'forge.courses.view',    label: 'Browse Available Courses' },
       { key: 'forge.courses.enroll',  label: 'Enrol in Courses' },
+    ]
+  },
+  {
+    group: 'Assessment Central (Verify) — Personal',
+    perms: [
+      { key: 'verify.assessments.view',  label: 'Take Assigned Assessments' },
+    ]
+  },
+  {
+    group: 'LexAI (Learning Design AI) — Personal',
+    perms: [
+      { key: 'lexai.projects.view',    label: 'View My Projects' },
+      { key: 'lexai.projects.manage',  label: 'Create & Manage Projects' },
+      { key: 'lexai.design.run',       label: 'Run AI Design Document Generation' },
+      { key: 'lexai.storyboard.run',   label: 'Run AI Storyboard Generation' },
+      { key: 'lexai.export',           label: 'Export Documents (Word / Excel)' },
+      { key: 'lexai.files.manage',     label: 'Manage Files & Folders' },
+      { key: 'lexai.voice.use',        label: 'Use Voice Speech-to-Text' },
     ]
   },
 ];

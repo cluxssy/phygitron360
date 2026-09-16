@@ -67,6 +67,35 @@ async def live_monitor_endpoint(websocket: WebSocket, asm_id: int):
             if not sess:
                 await websocket.close(code=4001)
                 return
+
+            # ── Permission check: verify.monitoring.view ──────────────────
+            user_id  = sess["user_id"]
+            tenant_id = sess["tenant_id"] or "public"
+            cur.execute(f'SET search_path TO "{tenant_id}"')
+            cur.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+            user_row = cur.fetchone()
+            role = (user_row["role"] if user_row else "") or ""
+
+            # super_admin bypass
+            has_monitoring = role in ("super_admin", "superadmin")
+
+            if not has_monitoring:
+                cur.execute(
+                    "SELECT 1 FROM role_permissions WHERE role = %s AND permission = 'verify.monitoring.view'",
+                    (role,)
+                )
+                has_monitoring = cur.fetchone() is not None
+
+            if not has_monitoring:
+                cur.execute(
+                    "SELECT 1 FROM user_permissions WHERE user_id = %s AND permission = 'verify.monitoring.view' AND granted = TRUE",
+                    (user_id,)
+                )
+                has_monitoring = cur.fetchone() is not None
+
+            if not has_monitoring:
+                await websocket.close(code=4003)
+                return
     except Exception as e:
         logger.error(f"WebSocket auth error: {e}")
         await websocket.close(code=4000)
