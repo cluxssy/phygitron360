@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from backend.core.dependencies import get_current_user, require_permission, require_module
+from backend.core.permissions import P
 from backend.modules.verify.services.submission_service import SubmissionService
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ async def submit_assessment(
 @router.get("/recent")
 def list_recent_submissions(
     limit: int = 10,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_RESULTS_VIEW)),
     service: SubmissionService = Depends(get_submission_service),
 ):
     """List recent submissions across the org."""
@@ -81,7 +82,7 @@ def list_my_results(
 @router.get("/user/{user_id}/results")
 def list_user_results(
     user_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_RESULTS_VIEW)),
     service: SubmissionService = Depends(get_submission_service),
 ):
     """List all assessment results for a specific user."""
@@ -107,9 +108,15 @@ def get_result_details(
     is_owner = result["user_id"] == user_id
     
     if isinstance(user_permissions, dict):
-        has_manage = bool(user_permissions.get("verify.assessments.manage")) or bool(user_permissions.get("verify.results.view"))
+        has_manage = (
+            bool(user_permissions.get(P.VERIFY_RESULTS_VIEW))
+            or bool(user_permissions.get(P.VERIFY_RESULTS_MANAGE))
+        )
     else:
-        has_manage = "verify.assessments.manage" in user_permissions or "verify.results.view" in user_permissions
+        has_manage = (
+            P.VERIFY_RESULTS_VIEW in user_permissions
+            or P.VERIFY_RESULTS_MANAGE in user_permissions
+        )
 
     if not is_owner and not has_manage:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -138,7 +145,7 @@ def get_result_details(
 @router.get("/assessments/{asm_id}/results")
 def list_assessment_results(
     asm_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_RESULTS_VIEW)),
     service: SubmissionService = Depends(get_submission_service),
 ):
     rows = service.get_results_by_assessment(asm_id)
@@ -151,7 +158,7 @@ def list_assessment_results(
 @router.post("/results/{result_id}/release")
 def release_result(
     result_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_RESULTS_MANAGE)),
     service: SubmissionService = Depends(get_submission_service),
 ):
     """Release a result to the candidate (sets _is_released flag in feedback JSON)."""
@@ -199,7 +206,7 @@ def get_leaderboard(
 @router.get("/assessments/{asm_id}/analytics")
 def get_assessment_analytics(
     asm_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_RESULTS_VIEW)),
     service: SubmissionService = Depends(get_submission_service),
 ):
     """Basic analytics: average score, pass rate, total completions."""

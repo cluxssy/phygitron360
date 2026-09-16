@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from backend.core.dependencies import get_current_user, require_permission
+from backend.core.permissions import P
 from backend.modules.verify.services.assignment_service import AssignmentService
 from backend.modules.verify.api.live_monitoring import notify_live_monitor
 
@@ -61,7 +62,7 @@ def list_my_tests(
 @router.get("/assignable-users")
 def list_assignable_users(
     assessment_id: Optional[int] = None,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_ASSIGN)),
     service: AssignmentService = Depends(get_assignment_service),
 ):
     """List all active non-candidate users in the tenant, optionally annotated with assignment status for assessment_id."""
@@ -71,7 +72,7 @@ def list_assignable_users(
 @router.get("/recent")
 def list_recent_assignments(
     limit: int = 10,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_ASSIGN)),
     service: AssignmentService = Depends(get_assignment_service),
 ):
     """List recent assignments across the org."""
@@ -86,7 +87,7 @@ def list_recent_assignments(
 async def assign_assessment(
     asm_id: int,
     body: AssignRequest,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_ASSIGN)),
     service: AssignmentService = Depends(get_assignment_service),
 ):
     """Bulk-assign users to an assessment. Optionally generates AI variants and customizes proctoring."""
@@ -121,7 +122,7 @@ async def assign_assessment(
 @router.get("/{asm_id}/candidates")
 def list_candidates(
     asm_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_ASSIGN)),
     service: AssignmentService = Depends(get_assignment_service),
 ):
     """List all users assigned to an assessment along with their status."""

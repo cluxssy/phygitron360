@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from backend.core.database import DATA_DIR
 from backend.core.dependencies import get_current_user, require_permission
+from backend.core.permissions import P
 from backend.common.services.ai.agents import AIAgents
 from backend.modules.verify.services.assessment_service import AssessmentService
 from backend.modules.verify.services.submission_service import SubmissionService
@@ -203,7 +204,7 @@ class RandomizeBody(BaseModel):
 @router.post("/assessments")
 async def create_assessment(
     body: AssessmentCreate,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_MANAGE)),
     service: AssessmentService = Depends(get_assessment_service)
 ):
     """Create a new assessment template with questions."""
@@ -230,7 +231,7 @@ async def create_assessment(
 @router.get("/assessments/{asm_id}/stats")
 def get_assessment_stats(
     asm_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_MANAGE)),
     sub_service: SubmissionService = Depends(get_submission_service)
 ):
     """Get analytics for a specific assessment."""
@@ -246,7 +247,7 @@ class ProctoringDefaultsBody(BaseModel):
 
 @router.get("/proctoring-settings")
 def get_proctoring_settings(
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_MANAGE)),
 ):
     """Return the tenant's global proctoring defaults."""
     from backend.core.database import get_db_connection
@@ -265,7 +266,7 @@ def get_proctoring_settings(
 @router.put("/proctoring-settings")
 def update_proctoring_settings(
     body: ProctoringDefaultsBody,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_MANAGE)),
 ):
     """Persist the tenant's global proctoring defaults."""
     from backend.core.database import get_db_connection
@@ -382,7 +383,7 @@ def get_assessment(
 def update_assessment(
     asm_id: int,
     body: AssessmentUpdate,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_MANAGE)),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     import json as _json
@@ -468,7 +469,7 @@ def update_assessment(
 @router.delete("/assessments/{asm_id}")
 def delete_assessment(
     asm_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_MANAGE)),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     try:
@@ -490,7 +491,7 @@ def delete_assessment(
 def update_status(
     asm_id: int,
     body: StatusUpdate,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_MANAGE)),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     allowed = {"draft", "active", "inactive", "closed"}
@@ -515,7 +516,7 @@ def update_status(
 @router.post("/assessments/{asm_id}/publish")
 def publish_assessment(
     asm_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_ASSESS_MANAGE)),
     service: AssessmentService = Depends(get_assessment_service),
 ):
     try:
@@ -536,7 +537,7 @@ def publish_assessment(
 @router.post("/import-questions")
 async def import_questions(
     file: UploadFile = File(...),
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
 ):
     """Upload a file (PDF/DOCX/TXT) and AI-parse into structured questions."""
     content_type = file.content_type or ""
@@ -578,7 +579,7 @@ Respond ONLY with valid JSON: {"questions": [{"question_text": "", "question_typ
 @router.post("/import-url")
 async def import_from_url(
     body: ImportURLBody,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
 ):
     """Import question(s) from a URL. Supports LeetCode and general web pages."""
     import re
@@ -681,7 +682,7 @@ Respond ONLY with valid JSON: {"questions": [{"question_text": "", "question_typ
 @router.post("/questions/upload-image")
 async def upload_question_image(
     file: UploadFile = File(...),
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
 ):
     """Upload an image for a question. Tries S3 first, falls back to local."""
     raw = await file.read()
@@ -712,7 +713,7 @@ async def upload_question_image(
 @router.post("/ai-generate-code")
 async def ai_generate_code(
     body: AIGenerateCodeBody,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
 ):
     """Use AI to generate starter code, test cases, and language for a coding question."""
     ai = AIAgents()
@@ -745,7 +746,7 @@ Respond ONLY with valid JSON matching this exact structure:
 @router.post("/randomize-assessment")
 async def randomize_assessment(
     body: RandomizeBody,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
 ):
     """Use AI to reword questions and shuffle MCQ options to prevent cheating."""
     if not body.questions:

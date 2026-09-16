@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 from backend.core.dependencies import get_current_user, require_permission
+from backend.core.permissions import P
 from backend.modules.verify.services.question_bank_service import QuestionBankService
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class QuestionCreate(BaseModel):
 @router.post("")
 def create_question(
     body: QuestionCreate,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
     service: QuestionBankService = Depends(get_qb_service)
 ):
     try:
@@ -55,7 +56,7 @@ def list_questions(
     q_type: Optional[str] = None,
     topic: Optional[str] = None,
     search: Optional[str] = None,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_VIEW)),
     service: QuestionBankService = Depends(get_qb_service)
 ):
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
@@ -65,7 +66,7 @@ def list_questions(
 @router.get("/{q_id}")
 def get_question(
     q_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_VIEW)),
     service: QuestionBankService = Depends(get_qb_service)
 ):
     q = service.get_question_by_id(q_id)
@@ -77,7 +78,7 @@ def get_question(
 def update_question(
     q_id: int,
     body: QuestionCreate,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
     service: QuestionBankService = Depends(get_qb_service)
 ):
     success = service.update_question(q_id, body.dict())
@@ -88,7 +89,7 @@ def update_question(
 @router.delete("/{q_id}")
 def delete_question(
     q_id: int,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
     service: QuestionBankService = Depends(get_qb_service)
 ):
     success = service.delete_question(q_id)
@@ -104,7 +105,7 @@ class URLImportRequest(BaseModel):
 @router.post("/import-url")
 async def import_url(
     body: URLImportRequest,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
     service: QuestionBankService = Depends(get_qb_service)
 ):
     """Extract questions from a URL (supports LeetCode, HackerRank, and generic pages).
@@ -228,7 +229,7 @@ async def import_questions_from_file(
     file: UploadFile = File(...),
     topic: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
     service: QuestionBankService = Depends(get_qb_service)
 ):
     """Extract questions from a file (PDF, Word, Excel, CSV) and return them for review.
@@ -291,7 +292,7 @@ class BulkBankImport(BaseModel):
 @router.post("/bulk")
 def bulk_save_questions(
     body: BulkBankImport,
-    current_user: dict = Depends(require_permission("verify.assessments.manage")),
+    current_user: dict = Depends(require_permission(P.VERIFY_QUESTIONS_MANAGE)),
     service: QuestionBankService = Depends(get_qb_service),
 ):
     """Save a batch of human-reviewed AI-extracted questions to the bank."""
