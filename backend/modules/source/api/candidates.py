@@ -89,6 +89,18 @@ class ConvertRequest(BaseModel):
     start_date: Optional[str] = None
     offer_content: Optional[dict] = None
 
+
+class SubfolderCreate(BaseModel):
+    name: str
+    month_year: str
+    job_role_id: Optional[int] = None
+
+
+class CandidateMoveRequest(BaseModel):
+    candidate_ids: List[int]
+    target_month: Optional[str] = None
+    target_folder_id: Optional[int] = None
+
 class NotificationRequest(BaseModel):
     subject: str
     message: str
@@ -108,6 +120,7 @@ async def upload_and_parse_resume(
     file: UploadFile = File(...),
     tenant_id: str = Form("public"),
     override_date: Optional[str] = Form(None),
+    folder_id: Optional[int] = Form(None),
     current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
@@ -118,7 +131,7 @@ async def upload_and_parse_resume(
 
     try:
         content = await file.read()
-        result = await service.process_and_save_resume(content, file.filename, override_date=override_date)
+        result = await service.process_and_save_resume(content, file.filename, override_date=override_date, folder_id=folder_id)
         return {
             "success": True,
             "message": "Resume uploaded and parsed successfully",
@@ -132,7 +145,7 @@ async def upload_and_parse_resume(
 
 @router.get("/repository/folders", dependencies=[Depends(require_permission("source.candidates.view"))])
 async def get_repository_folders(service: CandidateService = Depends(get_candidate_service)):
-    """Get candidate count grouped by year and month for the repository view."""
+    """Get candidate count grouped by year and month for the repository view, including sub-folders."""
     try:
         folders = service.get_repository_folders()
         return {"success": True, "data": folders}
@@ -140,11 +153,78 @@ async def get_repository_folders(service: CandidateService = Depends(get_candida
         logger.exception(f"Failed to fetch repository folders: {exc}")
         raise HTTPException(status_code=500, detail="Failed to fetch folders.")
 
+@router.post("/repository/subfolders", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def create_repository_subfolder(
+    body: SubfolderCreate,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Create a sub-folder within a month folder by Job Role."""
+    if not body.name or not body.name.strip():
+        raise HTTPException(status_code=400, detail="Sub-folder name is required.")
+    if not body.month_year or len(body.month_year) != 7 or '-' not in body.month_year:
+        raise HTTPException(status_code=400, detail="Invalid month_year format. Expected YYYY-MM.")
+    try:
+        folder = service.create_subfolder(body.name.strip(), body.month_year, body.job_role_id)
+        return {"success": True, "message": "Sub-folder created successfully.", "data": folder}
+    except Exception as exc:
+        logger.exception(f"Failed to create subfolder: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to create sub-folder.")
+
+@router.get("/repository/all-subfolders", dependencies=[Depends(require_permission("source.candidates.view"))])
+async def get_all_subfolders(service: CandidateService = Depends(get_candidate_service)):
+    """Get all subfolders across all months (for dropdown selectors)."""
+    try:
+        subfolders = service.get_all_subfolders()
+        return {"success": True, "data": subfolders}
+    except Exception as exc:
+        logger.exception(f"Failed to fetch all subfolders: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to fetch sub-folders.")
+
+@router.delete("/repository/subfolders/{folder_id}", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def delete_repository_subfolder(
+    folder_id: int,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Delete a subfolder. Candidates in this subfolder will become unassigned."""
+    try:
+        success = service.delete_subfolder(folder_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Subfolder not found.")
+        return {"success": True, "message": "Sub-folder deleted successfully."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(f"Failed to delete subfolder: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to delete sub-folder.")
+
+@router.post("/move", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def move_candidates(
+    body: CandidateMoveRequest,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Move candidates to a different month and/or role sub-folder."""
+    if not body.candidate_ids:
+        raise HTTPException(status_code=400, detail="No candidates specified to move.")
+    try:
+        updated = service.move_candidates(
+            candidate_ids=body.candidate_ids,
+            target_month=body.target_month,
+            target_folder_id=body.target_folder_id
+        )
+        return {
+            "success": True,
+            "message": f"Successfully moved {updated} candidate(s).",
+            "data": {"moved_count": updated}
+        }
+    except Exception as exc:
+        logger.exception(f"Failed to move candidates: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to move candidates.")
 
 @router.post("/bulk-upload", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def bulk_upload_resumes(
     files: List[UploadFile] = File(...),
     override_date: Optional[str] = Form(None),
+    folder_id: Optional[int] = Form(None),
     user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
@@ -167,7 +247,7 @@ async def bulk_upload_resumes(
                 shutil.copyfileobj(f.file, buffer)
             files_data.append((f.filename, temp_path))
             
-        result = await service.bulk_upload_resumes(files_data, user.get("id"), temp_dir, override_date=override_date)
+        result = await service.bulk_upload_resumes(files_data, user.get("id"), temp_dir, override_date=override_date, folder_id=folder_id)
         return {
             "success": True,
             "data": result,
@@ -282,6 +362,7 @@ def search_candidates(
     sort_by: Optional[str] = Query("newest"),   # newest, experience
     role_id: Optional[int] = Query(None),
     upload_time: Optional[List[str]] = Query(None),   # Multiple YYYY-MM
+    folder_id: Optional[List[str]] = Query(None),     # Sub-folder ID(s) or 'unassigned'
     limit: int = Query(50, ge=1, le=5000),
     current_user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
@@ -290,7 +371,8 @@ def search_candidates(
     try:
         results, total_count = service.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
-            search=search, sort_by=sort_by, role_id=role_id, upload_time=upload_time, limit=limit
+            search=search, sort_by=sort_by, role_id=role_id, upload_time=upload_time,
+            folder_id=folder_id, limit=limit
         )
         return {"success": True, "data": results, "count": len(results), "total_count": total_count}
     except Exception as exc:

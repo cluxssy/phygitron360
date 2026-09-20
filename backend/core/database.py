@@ -371,6 +371,23 @@ def create_tables(schema_name='public'):
             )
         ''')
 
+        # 3.0.3.b) Resume Folders (Sub-folders organized by month and role)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS resume_folders (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                month_year VARCHAR(7) NOT NULL,
+                job_role_id INTEGER REFERENCES job_roles(id) ON DELETE SET NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(month_year, name)
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_resume_folders_month ON resume_folders(month_year)")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES resume_folders(id) ON DELETE SET NULL")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_folder_id ON candidates(folder_id)")
+        cur.execute("ALTER TABLE job_roles ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES resume_folders(id) ON DELETE SET NULL")
+
         # 3.0.3.a) Candidate Applications (Job-specific Tracking)
         cur.execute('''
             CREATE TABLE IF NOT EXISTS candidate_applications (
@@ -1269,6 +1286,7 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS tags JSONB")
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS images JSONB")
         cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS override_date TEXT")
+        cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES resume_folders(id) ON DELETE SET NULL")
 
         # --- LexAI Module Tables ---
         cur.execute('''

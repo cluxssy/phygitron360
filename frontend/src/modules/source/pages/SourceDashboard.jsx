@@ -69,7 +69,7 @@ const TAG_COLORS = [
   { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', dot: 'bg-violet-500' },
 ];
 
-const initFilters = { pool: 'all', location: '', min_exp: 0, exp_range: '', upload_time: [], sort_by: 'newest', role_id: '', limit: 20 };
+const initFilters = { pool: 'all', location: '', min_exp: 0, exp_range: '', upload_time: [], folder_id: '', sort_by: 'newest', role_id: '', limit: 20 };
 
 
 const InlineEmailEditor = ({ candidate, fetchCandidates }) => {
@@ -146,32 +146,40 @@ const MultiSelectDropdown = ({ options, selected, onChange, label }) => {
     <div className="relative" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors w-40 flex justify-between items-center text-left"
+        className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors w-44 flex justify-between items-center text-left"
       >
         <span className="truncate pr-2">
-          {selected.length === 0 ? "Any Date" : `${selected.length} Selected`}
+          {selected.length === 0 
+            ? "Any Date" 
+            : selected.length === 1 
+              ? (options.find(o => o.value === selected[0])?.label || "1 Selected") 
+              : `${selected.length} Selected`}
         </span>
         <ChevronDown size={14} className="text-gray-400 shrink-0" />
       </button>
       
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar p-2">
-          {options.map(opt => (
-            <label key={opt.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded transition-colors">
-              <input 
-                type="checkbox" 
-                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                checked={selected.includes(opt.value)}
-                onChange={(e) => {
-                  const newSelected = e.target.checked 
-                    ? [...selected, opt.value]
-                    : selected.filter(v => v !== opt.value);
-                  onChange(newSelected);
-                }}
-              />
-              <span className="text-sm text-gray-700 select-none">{opt.label}</span>
-            </label>
-          ))}
+        <div className="absolute z-50 mt-1 min-w-[200px] w-max max-w-xs bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar p-2">
+          {options.length === 0 ? (
+            <div className="text-xs text-gray-400 py-3 text-center">No folders found in repo</div>
+          ) : (
+            options.map(opt => (
+              <label key={opt.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded transition-colors">
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  checked={selected.includes(opt.value)}
+                  onChange={(e) => {
+                    const newSelected = e.target.checked 
+                      ? [...selected, opt.value]
+                      : selected.filter(v => v !== opt.value);
+                    onChange(newSelected);
+                  }}
+                />
+                <span className="text-sm text-gray-700 select-none truncate">{opt.label}</span>
+              </label>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -323,19 +331,25 @@ export default function SourceDashboard() {
   const [showInviteStatus, setShowInviteStatus] = useState(false);
 
   
-  // Filter helpers
-  const getRecentMonths = () => {
-    const months = [];
-    const d = new Date();
-    for (let i = 0; i < 12; i++) {
-      const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-      const label = d.toLocaleString('default', { month: 'short' }) + ' ' + d.getFullYear();
-      months.push({ value: ym, label });
-      d.setMonth(d.getMonth() - 1);
+  // Filter helpers - repository folders
+  const [repoFolders, setRepoFolders] = useState([]);
+
+  const fetchRepoFolders = useCallback(async () => {
+    try {
+      const r = await fetch('/api/source/candidates/repository/folders', { credentials: 'include' });
+      const d = await r.json();
+      if (r.ok && d.success && Array.isArray(d.data)) {
+        setRepoFolders(d.data);
+      }
+    } catch {
+      /* silent */
     }
-    return months;
-  };
-  const recentMonths = getRecentMonths();
+  }, []);
+
+  const uploadDateOptions = repoFolders.map(f => ({
+    value: f.id,
+    label: f.label || f.id
+  }));
 
   const handleTabKeyNav = useTabListKeyNav();
 
@@ -346,7 +360,8 @@ export default function SourceDashboard() {
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
   const [bulkUploadTriggered, setBulkUploadTriggered] = useState(false);
-  const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, required_skills: [] });
+  const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, folder_id: '', required_skills: [] });
+  const [repoSubfolders, setRepoSubfolders] = useState([]);
   const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'expert' });
   const [scoreStatus, setScoreStatus] = useState({});
   const [inviteForm, setInviteForm] = useState({
@@ -367,6 +382,14 @@ export default function SourceDashboard() {
     } catch { /* silent */ }
   }, []);
 
+  const fetchRepoSubfolders = useCallback(async () => {
+    try {
+      const r = await fetch('/api/source/candidates/repository/all-subfolders', { credentials: 'include' });
+      const d = await r.json();
+      if (d.success) setRepoSubfolders(d.data || []);
+    } catch { /* silent */ }
+  }, []);
+
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
     try {
@@ -376,6 +399,9 @@ export default function SourceDashboard() {
       if (filters.exp_range) params.set('exp_range', filters.exp_range);
       if (filters.upload_time && filters.upload_time.length > 0) {
         filters.upload_time.forEach(time => params.append('upload_time', time));
+      }
+      if (filters.folder_id) {
+        params.set('folder_id', filters.folder_id);
       }
       params.set('sort_by', filters.sort_by);
       if (filters.role_id) {
@@ -421,8 +447,18 @@ export default function SourceDashboard() {
       } catch { /* silent */ }
     }, []);
 
-  useEffect(() => { fetchJobRoles(); }, [fetchJobRoles]);
+  useEffect(() => { 
+    fetchJobRoles(); 
+    fetchRepoFolders();
+    fetchRepoSubfolders();
+  }, [fetchJobRoles, fetchRepoFolders, fetchRepoSubfolders]);
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
+
+  useEffect(() => {
+    if (currentTab === 'directory') {
+      fetchRepoFolders();
+    }
+  }, [currentTab, fetchRepoFolders]);
 
   // ── Prevent Accidental Tab Closure During Upload ───────────────────────────
   useEffect(() => {
@@ -556,7 +592,7 @@ export default function SourceDashboard() {
 
   // ── Upload ─────────────────────────────────────────────────────────────────
   
-  const handleBulkUploadDirect = async (filesArray, overrideDate = null) => {
+  const handleBulkUploadDirect = async (filesArray, overrideDate = null, folderId = null) => {
     if (!filesArray || filesArray.length === 0) return;
 
     setUploading(true);
@@ -587,6 +623,9 @@ export default function SourceDashboard() {
 
     if (overrideDate) {
       fd.append('override_date', overrideDate);
+    }
+    if (folderId) {
+      fd.append('folder_id', folderId);
     }
 
     if (invalidFiles.length > 0) {
@@ -759,27 +798,34 @@ export default function SourceDashboard() {
     const url = isEdit ? `/api/source/job-roles/${newRole.id}` : '/api/source/job-roles';
     const method = isEdit ? 'PUT' : 'POST';
     
+    const payload = {
+      ...newRole,
+      folder_id: newRole.folder_id ? parseInt(newRole.folder_id, 10) : null,
+    };
+
     try {
       const r = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newRole),
+        body: JSON.stringify(payload),
       });
       if (r.ok) {
         toast.success(isEdit ? 'Role updated' : 'Role created');
         setShowNewRole(false);
-        setNewRole({ title: '', description: '', min_experience: 0 });
+        setNewRole({ title: '', description: '', min_experience: 0, folder_id: '', required_skills: [] });
         fetchJobRoles();
       } else { toast.error(`Failed to ${isEdit ? 'update' : 'create'} role`); }
     } catch { toast.error('Error saving role'); }
   };
 
   const openEditRole = (r) => {
+    fetchRepoSubfolders();
     setNewRole({
       id: r.id,
       title: r.title,
       description: r.description || '',
       min_experience: r.min_experience || 0,
+      folder_id: r.folder_id ? String(r.folder_id) : '',
       required_skills: Array.isArray(r.required_skills) ? r.required_skills : [],
     });
     setNewSkillInput({ name: '', level: 'expert' });
@@ -918,17 +964,25 @@ export default function SourceDashboard() {
     }
   };
 
-  const handleAutoRank = async (roleId) => {
+  const handleAutoRank = async (roleId, folderId = null) => {
     if (!roleId) return;
     setAutoRanking(true);
-    const tid = toast.loading('Searching through resumes for matches...');
+    const targetFolder = repoSubfolders.find(sf => String(sf.id) === String(folderId));
+    const msg = targetFolder 
+      ? `Scoring candidates in folder "${targetFolder.name}"...` 
+      : 'Searching through resumes for matches...';
+    const tid = toast.loading(msg);
     try {
-      const r = await fetch(`/api/source/job-roles/${roleId}/auto-rank`, { method: 'POST' });
+      const url = folderId 
+        ? `/api/source/job-roles/${roleId}/auto-rank?folder_id=${folderId}` 
+        : `/api/source/job-roles/${roleId}/auto-rank`;
+      const r = await fetch(url, { method: 'POST' });
+      const d = await r.json();
       if (r.ok) {
-        toast.success('Auto-ranking complete!', { id: tid });
+        toast.success(d.message || 'Auto-ranking complete!', { id: tid });
         if (filters.role_id === roleId) fetchCandidates();
       } else {
-        toast.error('Auto-ranking failed', { id: tid });
+        toast.error(d.detail || 'Auto-ranking failed', { id: tid });
       }
     } catch {
       toast.error('Process interrupted', { id: tid });
@@ -1078,7 +1132,7 @@ export default function SourceDashboard() {
         <div className="flex items-center gap-3">
           {(currentTab === 'directory' || currentTab === 'home' || currentTab === 'jobs') && (
             <button
-              onClick={() => { fetchCandidates(); fetchJobRoles(); }}
+              onClick={() => { fetchCandidates(); fetchJobRoles(); fetchRepoFolders(); }}
               aria-label="Refresh"
               className="p-2.5 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors duration-150"
             >
@@ -1494,6 +1548,14 @@ export default function SourceDashboard() {
                         {candidateCount} {candidateCount === 1 ? 'candidate' : 'candidates'}
                       </span>
                     </div>
+
+                    {r.folder_name && (
+                      <div className="flex items-center gap-1.5 mb-2.5">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                          <Folder size={11} /> Folder: {r.folder_name} {r.folder_month_year ? `(${r.folder_month_year})` : ''}
+                        </span>
+                      </div>
+                    )}
                     
                     {/* Required Skills chips - all same color per role */}
                     {Array.isArray(r.required_skills) && r.required_skills.length > 0 && (
@@ -1523,12 +1585,13 @@ export default function SourceDashboard() {
                         </span>
                       </div>
                       <button
-                        onClick={() => { handleAutoRank(r.id); fetchScoreStatus(r.id); }}
+                        onClick={() => { handleAutoRank(r.id, r.folder_id); fetchScoreStatus(r.id); }}
                         disabled={autoRanking}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-xs font-medium hover:bg-purple-100 transition-colors disabled:opacity-50"
+                        title={r.folder_id ? `Score only CVs in "${r.folder_name}"` : 'Auto-rank all candidates'}
                       >
                         <Zap size={12} /> 
-                        {autoRanking ? 'Ranking...' : 'Re-rank'}
+                        {autoRanking ? 'Ranking...' : (r.folder_id ? 'Score Folder' : 'Re-rank')}
                       </button>
                     </div>
                     
@@ -1726,7 +1789,7 @@ export default function SourceDashboard() {
         </div>
       ) : currentTab === 'repo' ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <ResumeRepo onBulkUpload={handleBulkUploadDirect} />
+          <ResumeRepo onBulkUpload={handleBulkUploadDirect} onViewProfile={(c) => setDrawerCandidate(c)} />
         </div>
       ) : currentTab === 'invite-status' ? (
         <div className="flex-1 flex items-center justify-center">
@@ -1770,12 +1833,37 @@ export default function SourceDashboard() {
                   <select
                     className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
                     value={filters.role_id}
-                    onChange={e => setFilters(f => ({ ...f, role_id: e.target.value }))}
+                    onChange={e => {
+                      const newRoleId = e.target.value;
+                      const matchedRole = jobRoles.find(r => String(r.id) === String(newRoleId));
+                      setFilters(f => ({ 
+                        ...f, 
+                        role_id: newRoleId,
+                        folder_id: matchedRole?.folder_id ? String(matchedRole.folder_id) : f.folder_id 
+                      }));
+                    }}
                   >
                     <option value="">All Roles</option>
                     {jobRoles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
                   </select>
                 </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-500">Resume / Role Folder</label>
+                <select
+                  className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  value={filters.folder_id || ''}
+                  onChange={e => setFilters(f => ({ ...f, folder_id: e.target.value }))}
+                >
+                  <option value="">All Resumes (All Folders)</option>
+                  <option value="unassigned">Unassigned (Month Root Only)</option>
+                  {repoSubfolders.map(sf => (
+                    <option key={sf.id} value={sf.id}>
+                      📁 {sf.name} ({sf.month_year}) — {sf.count || 0} CVs
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -1796,7 +1884,7 @@ export default function SourceDashboard() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                
+                <label className="text-xs font-medium text-gray-500">Experience</label>
                 <select
                   className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
                   value={filters.exp_range}
@@ -1813,7 +1901,7 @@ export default function SourceDashboard() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-gray-500">Upload Date</label>
                 <MultiSelectDropdown 
-                  options={recentMonths} 
+                  options={uploadDateOptions} 
                   selected={filters.upload_time} 
                   onChange={(newSelected) => setFilters(f => ({ ...f, upload_time: newSelected }))} 
                 />
@@ -1867,16 +1955,34 @@ export default function SourceDashboard() {
               >
                 Reset
               </button>
-              {filters.role_id && (
-                <button
-                  onClick={() => handleAutoRank(filters.role_id)}
-                  disabled={autoRanking}
-                  className="px-6 py-2.5 ml-auto bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors duration-150 flex items-center gap-2 shadow-sm"
-                >
-                  {autoRanking ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-                  Auto Score All
-                </button>
-              )}
+              {(() => {
+                const selectedFolder = repoSubfolders.find(sf => String(sf.id) === String(filters.folder_id));
+                if (filters.role_id) {
+                  return (
+                    <button
+                      onClick={() => handleAutoRank(filters.role_id, filters.folder_id || null)}
+                      disabled={autoRanking}
+                      className="px-6 py-2.5 ml-auto bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors duration-150 flex items-center gap-2 shadow-sm disabled:opacity-50"
+                      title={selectedFolder ? `Score only CVs in "${selectedFolder.name}" against selected role` : 'Auto score all candidates in database'}
+                    >
+                      {autoRanking ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                      {selectedFolder ? `Score Folder: ${selectedFolder.name}` : `Auto Score All`}
+                    </button>
+                  );
+                }
+                if (filters.folder_id && filters.folder_id !== 'unassigned') {
+                  return (
+                    <button
+                      onClick={() => toast.error('Please select a Job Role in the filter above to score this folder against')}
+                      className="px-5 py-2.5 ml-auto bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-sm font-semibold hover:bg-purple-100 transition-colors duration-150 flex items-center gap-2 shadow-xs"
+                      title="Select a Job Role in the filter to score this folder"
+                    >
+                      <Zap size={14} /> Score Folder (Select Role First)
+                    </button>
+                  );
+                }
+                return null;
+              })()}
             </div>
           )}
 
@@ -1937,7 +2043,14 @@ export default function SourceDashboard() {
                       {(c.full_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm truncate">{c.full_name || '—'}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-gray-800 text-sm truncate m-0">{c.full_name || '—'}</p>
+                        {c.folder_name && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded font-medium" title={`Folder: ${c.folder_name}`}>
+                            <Folder size={10} /> {c.folder_name}
+                          </span>
+                        )}
+                      </div>
                       <InlineEmailEditor candidate={c} fetchCandidates={fetchCandidates} />
                     </div>
                   </div>
@@ -2082,6 +2195,24 @@ export default function SourceDashboard() {
               <input type="number" min={0} className="form-input" value={newRole.min_experience} onChange={e => setNewRole(r => ({ ...r, min_experience: parseInt(e.target.value) || 0 }))} />
             </Field>
 
+            <Field label="Linked Resume Sub-Folder (Optional)">
+              <select
+                className="form-input w-full"
+                value={newRole.folder_id || ''}
+                onChange={e => setNewRole(r => ({ ...r, folder_id: e.target.value }))}
+              >
+                <option value="">None (Evaluate against all resumes)</option>
+                {repoSubfolders.map(sf => (
+                  <option key={sf.id} value={sf.id}>
+                    📁 {sf.name} ({sf.month_year}) — {sf.count || 0} CVs
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Link to a role sub-folder to restrict auto-ranking and scoring only to CVs within that folder.
+              </p>
+            </Field>
+
             {/* Skills Builder - NEUTRAL TAGS INSIDE MODAL */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Required Skills</label>
@@ -2097,17 +2228,19 @@ export default function SourceDashboard() {
                 </div>
               )}
               {/* Add new skill row */}
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  className="form-input flex-1"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-purple-500 focus:bg-white transition-colors"
+                  style={{ flex: '1 1 0%', minWidth: '0' }}
                   placeholder="Skill name e.g. Python"
                   value={newSkillInput.name}
                   onChange={e => setNewSkillInput(s => ({ ...s, name: e.target.value }))}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSkillToRole(); } }}
                 />
                 <select
-                  className="form-input w-36"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-500 focus:bg-white transition-colors cursor-pointer shrink-0"
+                  style={{ width: '135px' }}
                   value={newSkillInput.level}
                   onChange={e => setNewSkillInput(s => ({ ...s, level: e.target.value }))}
                 >
@@ -2120,7 +2253,7 @@ export default function SourceDashboard() {
                 <button
                   type="button"
                   onClick={addSkillToRole}
-                  className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors whitespace-nowrap"
+                  className="px-4 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors whitespace-nowrap shrink-0 flex items-center justify-center gap-1 shadow-sm"
                 >
                   + Add
                 </button>

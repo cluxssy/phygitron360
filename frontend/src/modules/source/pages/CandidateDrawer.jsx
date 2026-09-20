@@ -380,15 +380,16 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
   return (
     <>
-      {/* Backdrop - only covers the content area, not the sidebars */}
+      {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[100] left-0 lg:left-[368px]"
+        className="fixed inset-0 z-[100] bg-black/30 backdrop-blur-[1px] transition-opacity"
         {...drawerOverlayHandlers}
       />
 
       {/* Drawer panel */}
       <div
-        className={`fixed top-0 right-0 h-full z-[110] bg-[#040812] border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-300 w-full sm:w-[520px] max-w-full ${candidate ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full z-[110] bg-[#040812] border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-300 w-full max-w-[520px] ${candidate ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ width: '100%', maxWidth: '520px' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

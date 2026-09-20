@@ -32,6 +32,7 @@ class JobRoleCreate(BaseModel):
     description: Optional[str] = None
     required_skills: Optional[list] = None
     min_experience: int = 0
+    folder_id: Optional[int] = None
 
 
 class JobRoleUpdate(BaseModel):
@@ -39,6 +40,11 @@ class JobRoleUpdate(BaseModel):
     description: Optional[str] = None
     required_skills: Optional[list] = None
     min_experience: Optional[int] = None
+    folder_id: Optional[int] = None
+
+
+class ScoreFolderRequest(BaseModel):
+    folder_id: int
 
 
 class ScoreRequest(BaseModel):
@@ -91,6 +97,7 @@ async def create_job_role(
         "description": body.description,
         "required_skills": body.required_skills or [],
         "min_experience": body.min_experience,
+        "folder_id": body.folder_id,
     })
     return {"success": True, "message": "Job role created", "data": {"id": role_id}}
 
@@ -113,6 +120,8 @@ async def update_job_role(
         updates["required_skills"] = body.required_skills
     if body.min_experience is not None:
         updates["min_experience"] = body.min_experience
+    if body.folder_id is not None:
+        updates["folder_id"] = body.folder_id
 
     updated = await service.update_job_role(role_id, updates)
     if not updated:
@@ -173,17 +182,51 @@ def get_score_status(
     }
 
 
+@router.post("/job-roles/{role_id}/score-folder")
+def score_folder_candidates(
+    role_id: int,
+    body: ScoreFolderRequest,
+    current_user: dict = Depends(require_permission("source.evaluations.manage")),
+    service: JobService = Depends(get_job_service)
+):
+    """Run ATS role-fit scoring for only the candidates in a specific role folder."""
+    try:
+        results = service.score_folder_candidates(role_id, body.folder_id)
+        return {
+            "success": True,
+            "message": f"Scored {len(results)} candidate(s) from folder.",
+            "data": results,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as exc:
+        logger.exception(f"score_folder(role={role_id}, folder={body.folder_id}) failed: {exc}")
+        raise HTTPException(status_code=500, detail="Something went wrong while scoring folder candidates. Please try again.")
+
+
 @router.post("/job-roles/{role_id}/auto-rank")
 async def auto_rank_candidates(
     role_id: int,
+    folder_id: Optional[int] = Query(None),
     current_user: dict = Depends(require_permission("source.jobs.manage")),
     service: JobService = Depends(get_job_service)
 ):
     """
-    Trigger bulk ATS scoring for ALL candidates against a specific role.
-    Fires a Celery background task — returns immediately.
+    Trigger ATS scoring for candidates against a specific role.
+    If folder_id is provided or linked to the role, scores only that folder.
+    Otherwise, fires Celery background task for all candidates.
     """
     try:
+        role = service.repo.get_job_role_by_id(role_id)
+        target_folder = folder_id or (role.get("folder_id") if role else None)
+        if target_folder:
+            results = service.score_folder_candidates(role_id, target_folder)
+            return {
+                "success": True,
+                "message": f"Scored {len(results)} candidate(s) from folder.",
+                "data": results,
+            }
+
         from backend.modules.source.services.ats_tasks import score_all_candidates_for_role
         score_all_candidates_for_role.delay(role_id, service.tenant_id)
         return {

@@ -170,10 +170,41 @@ class JobService:
             
         return {"candidate_id": cid, "score": fit["score"], "detail": fit}
 
-    def auto_rank_candidates(self, role_id: int) -> List[Dict[str, Any]]:
+    def score_folder_candidates(self, role_id: int, folder_id: int) -> List[Dict[str, Any]]:
         role = self.repo.get_job_role_by_id(role_id)
         if not role:
             raise ValueError("Job role not found")
+
+        req_skills = normalise_required_skills(
+            role["required_skills"],
+            title=role.get("title") or "",
+            description=role.get("description") or "",
+        )
+        min_exp = role.get("min_experience") or 0
+
+        candidates = self.candidate_repo.get_candidates_by_folder(folder_id)
+        results = []
+        for cand in candidates:
+            cid = cand["id"]
+            scoring_cand = self.repo.get_candidate_for_scoring(cid)
+            if not scoring_cand:
+                continue
+            try:
+                res = self._score_candidate(scoring_cand, req_skills, min_exp, role_id)
+                results.append(res)
+            except Exception as exc:
+                logger.error(f"Failed scoring candidate {cid} in folder {folder_id}: {exc}")
+                results.append({"candidate_id": cid, "error": str(exc)})
+        return results
+
+    def auto_rank_candidates(self, role_id: int, folder_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        role = self.repo.get_job_role_by_id(role_id)
+        if not role:
+            raise ValueError("Job role not found")
+
+        target_folder = folder_id or role.get("folder_id")
+        if target_folder:
+            return self.score_folder_candidates(role_id, target_folder)
 
         req_skills = normalise_required_skills(
             role["required_skills"],
