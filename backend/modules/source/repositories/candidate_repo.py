@@ -26,8 +26,8 @@ class CandidateRepository:
             cur.execute('''
                 INSERT INTO candidates
                 (full_name, first_name, middle_name, last_name, email, phone, location, total_experience_years,
-                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP))
+                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills, folder_id, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP))
                 RETURNING id
             ''', (
                 data.get("full_name"),
@@ -50,6 +50,7 @@ class CandidateRepository:
                 json.dumps(data.get("certifications", [])),
                 data.get("primary_skills", []),
                 data.get("secondary_skills", []),
+                data.get("folder_id"),
                 data.get("created_at")
             ))
             candidate_id = cur.fetchone()[0]
@@ -389,7 +390,7 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None) -> List[Dict[str, Any]]:
+    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -434,6 +435,28 @@ class CandidateRepository:
                         conditions.append("TO_CHAR(c.created_at, 'YYYY-MM') = ANY(%s)")
                         params.append(valid_times)
 
+                if folder_id is not None:
+                    if isinstance(folder_id, (int, str)):
+                        f_list = [folder_id]
+                    else:
+                        f_list = list(folder_id)
+                    
+                    sub_conds = []
+                    valid_ids = []
+                    for f in f_list:
+                        if str(f).lower() in ("unassigned", "null", "none", "0"):
+                            sub_conds.append("c.folder_id IS NULL")
+                        else:
+                            try:
+                                valid_ids.append(int(f))
+                            except (ValueError, TypeError):
+                                pass
+                    if valid_ids:
+                        sub_conds.append("c.folder_id = ANY(%s)")
+                        params.append(valid_ids)
+                    if sub_conds:
+                        conditions.append("(" + " OR ".join(sub_conds) + ")")
+
                 if search:
                     conditions.append("(c.full_name ILIKE %s OR c.email ILIKE %s OR c.current_designation ILIKE %s)")
                     params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
@@ -449,10 +472,10 @@ class CandidateRepository:
 
                 params.append(limit)
 
+                joins_rf = " LEFT JOIN resume_folders rf ON c.folder_id = rf.id"
                 if role_id:
-                    joins = "LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s"
-                    joins += " LEFT JOIN ai_scores a ON c.id = a.entity_id AND a.entity_type = 'candidate' AND a.job_role_id = %s AND a.score_type = 'role_fit'"
-                    select_fields = "c.*, ca.status as job_status, a.score as fit_score, a.reasoning as ats_detail_json"
+                    joins = f"LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s LEFT JOIN ai_scores a ON c.id = a.entity_id AND a.entity_type = 'candidate' AND a.job_role_id = %s AND a.score_type = 'role_fit'{joins_rf}"
+                    select_fields = "c.*, ca.status as job_status, a.score as fit_score, a.reasoning as ats_detail_json, rf.name as folder_name, rf.job_role_id as folder_job_role_id"
                     
                     count_sql = f"""
                         SELECT COUNT(*) as total
@@ -486,8 +509,9 @@ class CandidateRepository:
                     total_count = cur.fetchone()['total']
 
                     sql = f"""
-                        SELECT c.*, c.status as job_status
+                        SELECT c.*, c.status as job_status, rf.name as folder_name, rf.job_role_id as folder_job_role_id
                         FROM candidates c
+                        {joins_rf}
                         {where_clause}
                         {order_clause}
                         LIMIT %s
@@ -566,15 +590,15 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def create_bulk_upload_job(self, user_id: int, total_files: int, override_date: Optional[str] = None) -> int:
+    def create_bulk_upload_job(self, user_id: int, total_files: int, override_date: Optional[str] = None, folder_id: Optional[int] = None) -> int:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status, override_date)
-                       VALUES (%s, %s, 'processing', %s) RETURNING id""",
-                    (user_id, total_files, override_date)
+                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status, override_date, folder_id)
+                       VALUES (%s, %s, 'processing', %s, %s) RETURNING id""",
+                    (user_id, total_files, override_date, folder_id)
                 )
                 job_id = cur.fetchone()[0]
                 conn.commit()
@@ -677,7 +701,7 @@ class CandidateRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """SELECT i.*, j.override_date, j.created_by FROM bulk_upload_job_items i
+                    """SELECT i.*, j.override_date, j.folder_id, j.created_by FROM bulk_upload_job_items i
                        JOIN bulk_upload_jobs j ON i.job_id = j.id
                        WHERE i.status = 'pending' AND j.status IN ('processing', 'pending', 'extracting')
                        ORDER BY i.created_at ASC
@@ -1141,35 +1165,95 @@ class CandidateRepository:
             
         try:
             self._set_search_path(cur)
+            
+            # 1. Fetch all distinct YYYY-MM from candidates and resume_folders
+            cur.execute('''
+                SELECT DISTINCT ym FROM (
+                    SELECT TO_CHAR(created_at, 'YYYY-MM') AS ym FROM candidates WHERE created_at IS NOT NULL
+                    UNION
+                    SELECT month_year AS ym FROM resume_folders WHERE month_year IS NOT NULL
+                ) combined
+                WHERE ym ~ '^\d{4}-\d{2}$'
+                ORDER BY ym DESC
+            ''')
+            month_rows = cur.fetchall()
+            
+            # 2. Candidate counts per month & folder_id
             cur.execute('''
                 SELECT 
-                    CAST(EXTRACT(YEAR FROM created_at) AS INTEGER) AS year,
-                    CAST(EXTRACT(MONTH FROM created_at) AS INTEGER) AS month_num,
+                    TO_CHAR(created_at, 'YYYY-MM') AS ym,
+                    folder_id,
                     COUNT(id) AS count
                 FROM candidates
-                GROUP BY 
-                    EXTRACT(YEAR FROM created_at), 
-                    EXTRACT(MONTH FROM created_at)
-                ORDER BY 
-                    year DESC, 
-                    month_num DESC
+                WHERE created_at IS NOT NULL
+                GROUP BY TO_CHAR(created_at, 'YYYY-MM'), folder_id
             ''')
-            rows = cur.fetchall()
+            cand_count_rows = cur.fetchall()
+            counts_map = {}
+            unassigned_map = {}
+            for r in cand_count_rows:
+                ym = r['ym']
+                fid = r['folder_id']
+                cnt = r['count']
+                if fid is None:
+                    unassigned_map[ym] = unassigned_map.get(ym, 0) + cnt
+                else:
+                    counts_map[(ym, fid)] = counts_map.get((ym, fid), 0) + cnt
+
+            # 3. Fetch all subfolders with job role titles
+            cur.execute('''
+                SELECT 
+                    rf.id,
+                    rf.name,
+                    rf.month_year,
+                    rf.job_role_id,
+                    jr.title AS job_role_title,
+                    rf.created_at
+                FROM resume_folders rf
+                LEFT JOIN job_roles jr ON rf.job_role_id = jr.id
+                ORDER BY rf.created_at ASC, rf.name ASC
+            ''')
+            subfolder_rows = cur.fetchall()
+            subfolders_by_month = {}
+            for sf in subfolder_rows:
+                ym = sf['month_year']
+                if ym not in subfolders_by_month:
+                    subfolders_by_month[ym] = []
+                count = counts_map.get((ym, sf['id']), 0)
+                subfolders_by_month[ym].append({
+                    "id": sf['id'],
+                    "name": sf['name'],
+                    "month_year": sf['month_year'],
+                    "job_role_id": sf['job_role_id'],
+                    "job_role_title": sf['job_role_title'],
+                    "count": count,
+                    "created_at": sf['created_at'].isoformat() if sf['created_at'] else None
+                })
             
             import calendar
             folders = []
-            for row in rows:
-                y = row['year']
-                m = row['month_num']
-                count = row['count']
-                if not y or not m: continue
+            for row in month_rows:
+                ym = row['ym']
+                try:
+                    y_str, m_str = ym.split('-')
+                    y = int(y_str)
+                    m = int(m_str)
+                except Exception:
+                    continue
                 month_name = calendar.month_name[m] if 1 <= m <= 12 else str(m)
+                
+                sfs = subfolders_by_month.get(ym, [])
+                unassigned_cnt = unassigned_map.get(ym, 0)
+                total_cnt = sum(s['count'] for s in sfs) + unassigned_cnt
+                
                 folders.append({
-                    "id": f"{y}-{m:02d}",
+                    "id": ym,
                     "year": y,
                     "month_num": m,
                     "label": f"{month_name} {y}",
-                    "count": count
+                    "count": total_cnt,
+                    "unassigned_count": unassigned_cnt,
+                    "subfolders": sfs
                 })
                 
             return folders
@@ -1177,3 +1261,190 @@ class CandidateRepository:
             if should_close:
                 cur.close()
                 conn.close()
+
+    def create_subfolder(self, name: str, month_year: str, job_role_id: Optional[int] = None) -> Dict[str, Any]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                # Check if already exists in this month
+                cur.execute(
+                    "SELECT id, name, month_year, job_role_id FROM resume_folders WHERE month_year = %s AND LOWER(name) = LOWER(%s)",
+                    (month_year, name.strip())
+                )
+                existing = cur.fetchone()
+                if existing:
+                    if job_role_id and not existing.get('job_role_id'):
+                        cur.execute("UPDATE resume_folders SET job_role_id = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", (job_role_id, existing['id']))
+                        conn.commit()
+                        existing['job_role_id'] = job_role_id
+                    return dict(existing)
+                
+                cur.execute(
+                    """INSERT INTO resume_folders (name, month_year, job_role_id)
+                       VALUES (%s, %s, %s)
+                       RETURNING id, name, month_year, job_role_id, created_at""",
+                    (name.strip(), month_year, job_role_id)
+                )
+                row = cur.fetchone()
+                conn.commit()
+                res = dict(row)
+                if res.get("created_at"):
+                    res["created_at"] = res["created_at"].isoformat()
+                return res
+        finally:
+            conn.close()
+
+    def get_subfolders_for_month(self, month_year: str) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT 
+                        rf.id, rf.name, rf.month_year, rf.job_role_id,
+                        jr.title as job_role_title,
+                        rf.created_at,
+                        COUNT(c.id) as count
+                    FROM resume_folders rf
+                    LEFT JOIN job_roles jr ON rf.job_role_id = jr.id
+                    LEFT JOIN candidates c ON c.folder_id = rf.id
+                    WHERE rf.month_year = %s
+                    GROUP BY rf.id, rf.name, rf.month_year, rf.job_role_id, jr.title, rf.created_at
+                    ORDER BY rf.name ASC
+                ''', (month_year,))
+                rows = cur.fetchall()
+                results = []
+                for r in rows:
+                    d = dict(r)
+                    if d.get("created_at"):
+                        d["created_at"] = d["created_at"].isoformat()
+                    results.append(d)
+                return results
+        finally:
+            conn.close()
+
+    def get_all_subfolders(self) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT 
+                        rf.id, rf.name, rf.month_year, rf.job_role_id,
+                        jr.title as job_role_title,
+                        rf.created_at,
+                        COUNT(c.id) as count
+                    FROM resume_folders rf
+                    LEFT JOIN job_roles jr ON rf.job_role_id = jr.id
+                    LEFT JOIN candidates c ON c.folder_id = rf.id
+                    GROUP BY rf.id, rf.name, rf.month_year, rf.job_role_id, jr.title, rf.created_at
+                    ORDER BY rf.month_year DESC, rf.name ASC
+                ''')
+                rows = cur.fetchall()
+                results = []
+                for r in rows:
+                    d = dict(r)
+                    if d.get("created_at"):
+                        d["created_at"] = d["created_at"].isoformat()
+                    results.append(d)
+                return results
+        finally:
+            conn.close()
+
+    def get_subfolder_by_id(self, folder_id: int) -> Optional[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT 
+                        rf.id, rf.name, rf.month_year, rf.job_role_id,
+                        jr.title as job_role_title,
+                        rf.created_at,
+                        COUNT(c.id) as count
+                    FROM resume_folders rf
+                    LEFT JOIN job_roles jr ON rf.job_role_id = jr.id
+                    LEFT JOIN candidates c ON c.folder_id = rf.id
+                    WHERE rf.id = %s
+                    GROUP BY rf.id, rf.name, rf.month_year, rf.job_role_id, jr.title, rf.created_at
+                ''', (folder_id,))
+                row = cur.fetchone()
+                if not row:
+                    return None
+                d = dict(row)
+                if d.get("created_at"):
+                    d["created_at"] = d["created_at"].isoformat()
+                return d
+        finally:
+            conn.close()
+
+    def delete_subfolder(self, folder_id: int) -> bool:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute("UPDATE candidates SET folder_id = NULL WHERE folder_id = %s", (folder_id,))
+                cur.execute("UPDATE job_roles SET folder_id = NULL WHERE folder_id = %s", (folder_id,))
+                cur.execute("DELETE FROM resume_folders WHERE id = %s", (folder_id,))
+                deleted = cur.rowcount > 0
+                conn.commit()
+                return deleted
+        finally:
+            conn.close()
+
+    def move_candidates(self, candidate_ids: List[int], target_month: Optional[str] = None, target_folder_id: Optional[int] = None) -> int:
+        if not candidate_ids:
+            return 0
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                target_folder_name = "Unassigned"
+                resolved_month = target_month
+                if target_folder_id:
+                    cur.execute("SELECT id, name, month_year FROM resume_folders WHERE id = %s", (target_folder_id,))
+                    rf_row = cur.fetchone()
+                    if rf_row:
+                        target_folder_name = rf_row[1]
+                        if not resolved_month:
+                            resolved_month = rf_row[2]
+
+                updates = ["folder_id = %s"]
+                params = [target_folder_id]
+
+                if resolved_month and len(resolved_month) == 7 and '-' in resolved_month:
+                    y, m = resolved_month.split('-')
+                    updates.append("created_at = %s::timestamp")
+                    params.append(f"{y}-{m}-01 12:00:00")
+
+                params.append(candidate_ids)
+                cur.execute(f"UPDATE candidates SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE id = ANY(%s)", tuple(params))
+                updated = cur.rowcount
+                conn.commit()
+
+                for cid in candidate_ids:
+                    try:
+                        self.log_activity(cid, 'User', 'folder_moved', f"Moved to {target_folder_name}" + (f" ({resolved_month})" if resolved_month else ""))
+                    except Exception:
+                        pass
+                return updated
+        finally:
+            conn.close()
+
+    def get_candidates_by_folder(self, folder_id: int) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT c.*, rf.name as folder_name, rf.month_year as folder_month_year
+                    FROM candidates c
+                    JOIN resume_folders rf ON c.folder_id = rf.id
+                    WHERE c.folder_id = %s AND c.status NOT IN ('Archived', 'Rejected')
+                    ORDER BY c.created_at DESC
+                ''', (folder_id,))
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
+        finally:
+            conn.close()

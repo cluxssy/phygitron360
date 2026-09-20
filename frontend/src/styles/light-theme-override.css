@@ -58,6 +58,7 @@
   background-color: #f3f4f6 !important;
   border-color: #e5e7eb !important;
   color: #111827 !important;
+  border-radius: 12px !important;
 }
 
 .light-theme-override .form-input::placeholder {
