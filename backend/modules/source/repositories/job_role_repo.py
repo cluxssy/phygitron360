@@ -16,14 +16,15 @@ class JobRoleRepository:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 cur.execute('''
-                    INSERT INTO job_roles (title, description, required_skills, min_experience)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO job_roles (title, description, required_skills, min_experience, folder_id)
+                    VALUES (%s, %s, %s, %s, %s)
                     RETURNING id
                 ''', (
                     data.get("title"),
                     data.get("description"),
                     json.dumps(data.get("required_skills", [])),
-                    data.get("min_experience", 0)
+                    data.get("min_experience", 0),
+                    data.get("folder_id")
                 ))
                 role_id = cur.fetchone()[0]
                 conn.commit()
