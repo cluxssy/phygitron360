@@ -16,15 +16,14 @@ class JobRoleRepository:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 cur.execute('''
-                    INSERT INTO job_roles (title, description, required_skills, min_experience, folder_id)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO job_roles (title, description, required_skills, min_experience)
+                    VALUES (%s, %s, %s, %s)
                     RETURNING id
                 ''', (
                     data.get("title"),
                     data.get("description"),
                     json.dumps(data.get("required_skills", [])),
-                    data.get("min_experience", 0),
-                    data.get("folder_id")
+                    data.get("min_experience", 0)
                 ))
                 role_id = cur.fetchone()[0]
                 conn.commit()
@@ -38,10 +37,9 @@ class JobRoleRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute('''
-                    SELECT jr.*, rf.name as folder_name, rf.month_year as folder_month_year
-                    FROM job_roles jr
-                    LEFT JOIN resume_folders rf ON jr.folder_id = rf.id
-                    ORDER BY jr.created_at DESC
+                    SELECT *
+                    FROM job_roles
+                    ORDER BY created_at DESC
                 ''')
                 return [dict(r) for r in cur.fetchall()]
         finally:
@@ -53,10 +51,9 @@ class JobRoleRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute('''
-                    SELECT jr.*, rf.name as folder_name, rf.month_year as folder_month_year
-                    FROM job_roles jr
-                    LEFT JOIN resume_folders rf ON jr.folder_id = rf.id
-                    WHERE jr.id = %s
+                    SELECT *
+                    FROM job_roles
+                    WHERE id = %s
                 ''', (role_id,))
                 row = cur.fetchone()
                 return dict(row) if row else None
@@ -181,12 +178,37 @@ class JobRoleRepository:
         finally:
             conn.close()
 
-    def get_all_candidates_for_scoring(self) -> List[Dict[str, Any]]:
+    def get_all_candidates_for_scoring(self, tag: Optional[str] = None, tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                cur.execute("SELECT id, total_experience_years FROM candidates WHERE status NOT IN ('Archived', 'Rejected')")
+                all_tags = []
+                if tags:
+                    all_tags.extend(tags)
+                if tag and tag not in all_tags:
+                    all_tags.append(tag)
+
+                if all_tags:
+                    sub_conds = []
+                    params = []
+                    for t in all_tags:
+                        if not t:
+                            continue
+                        t_clean = t.strip().lower()
+                        if t_clean in ("untagged", "general_pool", "general pool", "unassigned", "null", "none", "__untagged__"):
+                            sub_conds.append("(tags IS NULL OR tags = '{}'::text[])")
+                        else:
+                            sub_conds.append("EXISTS (SELECT 1 FROM unnest(tags) _t WHERE LOWER(_t) = LOWER(%s))")
+                            params.append(t.strip())
+
+                    if sub_conds:
+                        sql = f"SELECT id, total_experience_years FROM candidates WHERE status NOT IN ('Archived', 'Rejected') AND ({' OR '.join(sub_conds)})"
+                        cur.execute(sql, tuple(params))
+                    else:
+                        cur.execute("SELECT id, total_experience_years FROM candidates WHERE status NOT IN ('Archived', 'Rejected')")
+                else:
+                    cur.execute("SELECT id, total_experience_years FROM candidates WHERE status NOT IN ('Archived', 'Rejected')")
                 return [dict(r) for r in cur.fetchall()]
         finally:
             conn.close()

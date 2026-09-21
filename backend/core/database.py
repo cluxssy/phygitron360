@@ -308,12 +308,15 @@ def create_tables(schema_name='public'):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 primary_skills TEXT[] DEFAULT '{}'::text[],
-                secondary_skills TEXT[] DEFAULT '{}'::text[]
+                secondary_skills TEXT[] DEFAULT '{}'::text[],
+                tags TEXT[] DEFAULT '{}'::text[]
             )
         ''')
         # Migrations to alter table for existing databases
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS primary_skills TEXT[] DEFAULT '{}'::text[]")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS secondary_skills TEXT[] DEFAULT '{}'::text[]")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'::text[]")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_tags ON candidates USING GIN(tags)")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS current_designation TEXT")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS first_name TEXT")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS middle_name TEXT")
@@ -1164,6 +1167,7 @@ def create_tables(schema_name='public'):
                 processed_files INTEGER DEFAULT 0,
                 processed_details JSONB DEFAULT '[]'::jsonb,
                 override_date TEXT,
+                tags TEXT[] DEFAULT '{}'::text[],
                 status TEXT DEFAULT 'pending',
                 error_message TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1287,6 +1291,7 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE assessment_questions ADD COLUMN IF NOT EXISTS images JSONB")
         cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS override_date TEXT")
         cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES resume_folders(id) ON DELETE SET NULL")
+        cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'::text[]")
 
         # --- LexAI Module Tables ---
         cur.execute('''

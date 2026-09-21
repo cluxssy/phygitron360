@@ -26,8 +26,8 @@ class CandidateRepository:
             cur.execute('''
                 INSERT INTO candidates
                 (full_name, first_name, middle_name, last_name, email, phone, location, total_experience_years,
-                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills, folder_id, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP))
+                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills, folder_id, created_at, tags)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP), %s)
                 RETURNING id
             ''', (
                 data.get("full_name"),
@@ -51,7 +51,8 @@ class CandidateRepository:
                 data.get("primary_skills", []),
                 data.get("secondary_skills", []),
                 data.get("folder_id"),
-                data.get("created_at")
+                data.get("created_at"),
+                data.get("tags") or []
             ))
             candidate_id = cur.fetchone()[0]
 
@@ -136,6 +137,7 @@ class CandidateRepository:
                     current_designation = %s,
                     ai_summary = %s, linkedin_url = %s, portfolio_url = %s,
                     certifications = %s, primary_skills = %s, secondary_skills = %s,
+                    tags = COALESCE(%s, tags),
                     resume_path = COALESCE(%s, resume_path),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
@@ -154,6 +156,7 @@ class CandidateRepository:
                 json.dumps(data.get("certifications", [])),
                 data.get("primary_skills", []),
                 data.get("secondary_skills", []),
+                data.get("tags"),
                 data.get("resume_path"),
                 candidate_id
             ))
@@ -390,7 +393,7 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None) -> List[Dict[str, Any]]:
+    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None, tag: Optional[str] = None, tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -434,6 +437,28 @@ class CandidateRepository:
                     if valid_times:
                         conditions.append("TO_CHAR(c.created_at, 'YYYY-MM') = ANY(%s)")
                         params.append(valid_times)
+
+                if tag:
+                    tag_clean = tag.strip().lower()
+                    if tag_clean in ("untagged", "general_pool", "general pool", "unassigned", "null", "none", "__untagged__"):
+                        conditions.append("(c.tags IS NULL OR c.tags = '{}'::text[])")
+                    else:
+                        conditions.append("EXISTS (SELECT 1 FROM unnest(c.tags) _t WHERE LOWER(_t) = LOWER(%s))")
+                        params.append(tag.strip())
+
+                if tags:
+                    tag_conds = []
+                    for t in tags:
+                        if not t:
+                            continue
+                        t_clean = t.strip().lower()
+                        if t_clean in ("untagged", "general_pool", "general pool", "unassigned", "null", "none", "__untagged__"):
+                            tag_conds.append("(c.tags IS NULL OR c.tags = '{}'::text[])")
+                        else:
+                            tag_conds.append("EXISTS (SELECT 1 FROM unnest(c.tags) _t WHERE LOWER(_t) = LOWER(%s))")
+                            params.append(t.strip())
+                    if tag_conds:
+                        conditions.append("(" + " OR ".join(tag_conds) + ")")
 
                 if folder_id is not None:
                     if isinstance(folder_id, (int, str)):
@@ -590,15 +615,15 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def create_bulk_upload_job(self, user_id: int, total_files: int, override_date: Optional[str] = None, folder_id: Optional[int] = None) -> int:
+    def create_bulk_upload_job(self, user_id: int, total_files: int, override_date: Optional[str] = None, folder_id: Optional[int] = None, tags: Optional[List[str]] = None) -> int:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status, override_date, folder_id)
-                       VALUES (%s, %s, 'processing', %s, %s) RETURNING id""",
-                    (user_id, total_files, override_date, folder_id)
+                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status, override_date, folder_id, tags)
+                       VALUES (%s, %s, 'processing', %s, %s, %s) RETURNING id""",
+                    (user_id, total_files, override_date, folder_id, tags or [])
                 )
                 job_id = cur.fetchone()[0]
                 conn.commit()
@@ -701,7 +726,7 @@ class CandidateRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """SELECT i.*, j.override_date, j.folder_id, j.created_by FROM bulk_upload_job_items i
+                    """SELECT i.*, j.override_date, j.folder_id, j.tags, j.created_by FROM bulk_upload_job_items i
                        JOIN bulk_upload_jobs j ON i.job_id = j.id
                        WHERE i.status = 'pending' AND j.status IN ('processing', 'pending', 'extracting')
                        ORDER BY i.created_at ASC
@@ -1166,68 +1191,48 @@ class CandidateRepository:
         try:
             self._set_search_path(cur)
             
-            # 1. Fetch all distinct YYYY-MM from candidates and resume_folders
+            # 1. Fetch all distinct YYYY-MM from candidates where created_at IS NOT NULL
             cur.execute('''
-                SELECT DISTINCT ym FROM (
-                    SELECT TO_CHAR(created_at, 'YYYY-MM') AS ym FROM candidates WHERE created_at IS NOT NULL
-                    UNION
-                    SELECT month_year AS ym FROM resume_folders WHERE month_year IS NOT NULL
-                ) combined
-                WHERE ym ~ '^\d{4}-\d{2}$'
+                SELECT DISTINCT TO_CHAR(created_at, 'YYYY-MM') AS ym 
+                FROM candidates 
+                WHERE created_at IS NOT NULL AND TO_CHAR(created_at, 'YYYY-MM') ~ '^\d{4}-\d{2}$'
                 ORDER BY ym DESC
             ''')
             month_rows = cur.fetchall()
             
-            # 2. Candidate counts per month & folder_id
+            # 2. Total count and untagged count per month
             cur.execute('''
                 SELECT 
                     TO_CHAR(created_at, 'YYYY-MM') AS ym,
-                    folder_id,
-                    COUNT(id) AS count
+                    COUNT(id) AS total_count,
+                    COUNT(id) FILTER (WHERE tags IS NULL OR tags = '{}'::text[]) AS untagged_count
                 FROM candidates
                 WHERE created_at IS NOT NULL
-                GROUP BY TO_CHAR(created_at, 'YYYY-MM'), folder_id
+                GROUP BY TO_CHAR(created_at, 'YYYY-MM')
             ''')
             cand_count_rows = cur.fetchall()
-            counts_map = {}
-            unassigned_map = {}
-            for r in cand_count_rows:
-                ym = r['ym']
-                fid = r['folder_id']
-                cnt = r['count']
-                if fid is None:
-                    unassigned_map[ym] = unassigned_map.get(ym, 0) + cnt
-                else:
-                    counts_map[(ym, fid)] = counts_map.get((ym, fid), 0) + cnt
+            month_counts = {r['ym']: {"total": r['total_count'], "untagged": r['untagged_count']} for r in cand_count_rows}
 
-            # 3. Fetch all subfolders with job role titles
+            # 3. Aggregated tags per month
             cur.execute('''
                 SELECT 
-                    rf.id,
-                    rf.name,
-                    rf.month_year,
-                    rf.job_role_id,
-                    jr.title AS job_role_title,
-                    rf.created_at
-                FROM resume_folders rf
-                LEFT JOIN job_roles jr ON rf.job_role_id = jr.id
-                ORDER BY rf.created_at ASC, rf.name ASC
+                    TO_CHAR(c.created_at, 'YYYY-MM') AS ym,
+                    t AS tag_name,
+                    COUNT(*) AS tag_count
+                FROM candidates c, unnest(c.tags) AS t
+                WHERE c.created_at IS NOT NULL AND t IS NOT NULL AND TRIM(t) <> ''
+                GROUP BY TO_CHAR(c.created_at, 'YYYY-MM'), t
+                ORDER BY tag_count DESC, tag_name ASC
             ''')
-            subfolder_rows = cur.fetchall()
-            subfolders_by_month = {}
-            for sf in subfolder_rows:
-                ym = sf['month_year']
-                if ym not in subfolders_by_month:
-                    subfolders_by_month[ym] = []
-                count = counts_map.get((ym, sf['id']), 0)
-                subfolders_by_month[ym].append({
-                    "id": sf['id'],
-                    "name": sf['name'],
-                    "month_year": sf['month_year'],
-                    "job_role_id": sf['job_role_id'],
-                    "job_role_title": sf['job_role_title'],
-                    "count": count,
-                    "created_at": sf['created_at'].isoformat() if sf['created_at'] else None
+            tag_rows = cur.fetchall()
+            tags_by_month = {}
+            for tr in tag_rows:
+                ym = tr['ym']
+                if ym not in tags_by_month:
+                    tags_by_month[ym] = []
+                tags_by_month[ym].append({
+                    "name": tr['tag_name'],
+                    "count": tr['tag_count']
                 })
             
             import calendar
@@ -1242,18 +1247,18 @@ class CandidateRepository:
                     continue
                 month_name = calendar.month_name[m] if 1 <= m <= 12 else str(m)
                 
-                sfs = subfolders_by_month.get(ym, [])
-                unassigned_cnt = unassigned_map.get(ym, 0)
-                total_cnt = sum(s['count'] for s in sfs) + unassigned_cnt
+                counts = month_counts.get(ym, {"total": 0, "untagged": 0})
+                month_tags = tags_by_month.get(ym, [])
                 
                 folders.append({
                     "id": ym,
                     "year": y,
                     "month_num": m,
                     "label": f"{month_name} {y}",
-                    "count": total_cnt,
-                    "unassigned_count": unassigned_cnt,
-                    "subfolders": sfs
+                    "count": counts["total"],
+                    "untagged_count": counts["untagged"],
+                    "tags": month_tags,
+                    "subfolders": []
                 })
                 
             return folders
@@ -1446,5 +1451,122 @@ class CandidateRepository:
                 ''', (folder_id,))
                 rows = cur.fetchall()
                 return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def add_candidate_tags(self, candidate_ids: List[int], tags: List[str]) -> int:
+        if not candidate_ids or not tags:
+            return 0
+        clean_tags = [t.strip() for t in tags if t and t.strip()]
+        if not clean_tags:
+            return 0
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    UPDATE candidates
+                    SET tags = ARRAY(
+                        SELECT DISTINCT elem
+                        FROM unnest(COALESCE(tags, '{}'::text[]) || %s::text[]) AS elem
+                        WHERE elem IS NOT NULL AND TRIM(elem) <> ''
+                    ), updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ANY(%s)
+                ''', (clean_tags, candidate_ids))
+                updated = cur.rowcount
+                conn.commit()
+                for cid in candidate_ids:
+                    try:
+                        self.log_activity(cid, 'User', 'tags_added', f"Added tags: {', '.join(clean_tags)}")
+                    except Exception:
+                        pass
+                return updated
+        finally:
+            conn.close()
+
+    def remove_candidate_tags(self, candidate_ids: List[int], tags: List[str]) -> int:
+        if not candidate_ids or not tags:
+            return 0
+        clean_tags = [t.strip() for t in tags if t and t.strip()]
+        if not clean_tags:
+            return 0
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    UPDATE candidates
+                    SET tags = ARRAY(
+                        SELECT elem
+                        FROM unnest(COALESCE(tags, '{}'::text[])) AS elem
+                        WHERE LOWER(TRIM(elem)) <> ALL(ARRAY(SELECT LOWER(TRIM(x)) FROM unnest(%s::text[]) x))
+                    ), updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ANY(%s)
+                ''', (clean_tags, candidate_ids))
+                updated = cur.rowcount
+                conn.commit()
+                for cid in candidate_ids:
+                    try:
+                        self.log_activity(cid, 'User', 'tags_removed', f"Removed tags: {', '.join(clean_tags)}")
+                    except Exception:
+                        pass
+                return updated
+        finally:
+            conn.close()
+
+    def set_candidate_tags(self, candidate_id: int, tags: List[str]) -> List[str]:
+        clean_tags = []
+        seen = set()
+        for t in tags:
+            if t and t.strip():
+                val = t.strip()
+                if val.lower() not in seen:
+                    seen.add(val.lower())
+                    clean_tags.append(val)
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    UPDATE candidates
+                    SET tags = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    RETURNING tags
+                ''', (clean_tags, candidate_id))
+                row = cur.fetchone()
+                conn.commit()
+                try:
+                    self.log_activity(candidate_id, 'User', 'tags_updated', f"Updated tags: {', '.join(clean_tags) if clean_tags else 'None'}")
+                except Exception:
+                    pass
+                return row[0] if row and row[0] else []
+        finally:
+            conn.close()
+
+    def get_all_tags(self) -> Dict[str, Any]:
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                cur.execute('''
+                    SELECT t AS name, t AS tag, COUNT(DISTINCT c.id) AS count
+                    FROM candidates c, unnest(c.tags) AS t
+                    WHERE t IS NOT NULL AND TRIM(t) <> ''
+                    GROUP BY t
+                    ORDER BY count DESC, name ASC
+                ''')
+                tag_rows = [dict(r) for r in cur.fetchall()]
+                
+                cur.execute("SELECT COUNT(id) AS untagged_count FROM candidates WHERE tags IS NULL OR tags = '{}'::text[]")
+                untagged_count = cur.fetchone()['untagged_count']
+                
+                cur.execute("SELECT COUNT(id) AS total_count FROM candidates")
+                total_count = cur.fetchone()['total_count']
+                
+                return {
+                    "tags": tag_rows,
+                    "untagged_count": untagged_count,
+                    "total_count": total_count
+                }
         finally:
             conn.close()

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Search, Upload, Trash2, MapPin, Zap, Database, Shield,
   CheckSquare, Loader2, Download, X, AlertTriangle, Mail,
@@ -9,7 +9,7 @@ import {
   Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
   ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
   Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
-  Archive, Pause, Play, Folder
+  Archive, Pause, Play, Folder, Tag, Check
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
@@ -69,7 +69,7 @@ const TAG_COLORS = [
   { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', dot: 'bg-violet-500' },
 ];
 
-const initFilters = { pool: 'all', location: '', min_exp: 0, exp_range: '', upload_time: [], folder_id: '', sort_by: 'newest', role_id: '', limit: 20 };
+const initFilters = { pool: 'all', location: '', min_exp: 0, exp_range: '', upload_time: [], tag: '', tags: [], sort_by: 'newest', role_id: '', limit: 20 };
 
 
 const InlineEmailEditor = ({ candidate, fetchCandidates }) => {
@@ -128,7 +128,7 @@ const InlineEmailEditor = ({ candidate, fetchCandidates }) => {
 };
 
 
-const MultiSelectDropdown = ({ options, selected, onChange, label }) => {
+const MultiSelectDropdown = ({ options, selected = [], onChange, label, placeholder = "Select...", emptyText = "No options found", widthClass = "w-44" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -145,12 +145,13 @@ const MultiSelectDropdown = ({ options, selected, onChange, label }) => {
   return (
     <div className="relative" ref={dropdownRef}>
       <button 
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors w-44 flex justify-between items-center text-left"
+        className={`bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors ${widthClass} flex justify-between items-center text-left`}
       >
         <span className="truncate pr-2">
           {selected.length === 0 
-            ? "Any Date" 
+            ? placeholder 
             : selected.length === 1 
               ? (options.find(o => o.value === selected[0])?.label || "1 Selected") 
               : `${selected.length} Selected`}
@@ -159,9 +160,9 @@ const MultiSelectDropdown = ({ options, selected, onChange, label }) => {
       </button>
       
       {isOpen && (
-        <div className="absolute z-50 mt-1 min-w-[200px] w-max max-w-xs bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar p-2">
+        <div className="absolute z-50 mt-1 min-w-[220px] w-max max-w-xs bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar p-2">
           {options.length === 0 ? (
-            <div className="text-xs text-gray-400 py-3 text-center">No folders found in repo</div>
+            <div className="text-xs text-gray-400 py-3 text-center">{emptyText}</div>
           ) : (
             options.map(opt => (
               <label key={opt.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded transition-colors">
@@ -346,10 +347,10 @@ export default function SourceDashboard() {
     }
   }, []);
 
-  const uploadDateOptions = repoFolders.map(f => ({
+  const uploadDateOptions = useMemo(() => repoFolders.map(f => ({
     value: f.id,
     label: f.label || f.id
-  }));
+  })), [repoFolders]);
 
   const handleTabKeyNav = useTabListKeyNav();
 
@@ -360,8 +361,61 @@ export default function SourceDashboard() {
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
   const [bulkUploadTriggered, setBulkUploadTriggered] = useState(false);
-  const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, folder_id: '', required_skills: [] });
-  const [repoSubfolders, setRepoSubfolders] = useState([]);
+  const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, required_skills: [] });
+  const [availableTags, setAvailableTags] = useState([]);
+  const tagOptions = useMemo(() => [
+    { value: '__untagged__', label: 'General Pool (Untagged)' },
+    ...(Array.isArray(availableTags) ? availableTags.map(t => {
+      const tagLabel = t?.name || t?.tag || (typeof t === 'string' ? t : '');
+      if (!tagLabel || tagLabel === '__untagged__' || tagLabel.toLowerCase() === 'general pool') return null;
+      return {
+        value: tagLabel,
+        label: `🏷️ ${tagLabel} (${t?.count ?? 0} CVs)`
+      };
+    }).filter(Boolean) : [])
+  ], [availableTags]);
+  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
+  const [bulkTagAction, setBulkTagAction] = useState('add');
+  const [bulkTagInput, setBulkTagInput] = useState('');
+  const [bulkTagging, setBulkTagging] = useState(false);
+
+  // ── Upload with Tag Prompt states (Upload tab & Quick Upload) ──
+  const quickUploadFileRef = useRef(null);
+  const [stagedUploadFiles, setStagedUploadFiles] = useState([]);
+  const [showUploadTagModal, setShowUploadTagModal] = useState(false);
+  const [uploadSelectedTags, setUploadSelectedTags] = useState([]);
+  const [uploadCustomTagInput, setUploadCustomTagInput] = useState('');
+  const [uploadTargetMonth, setUploadTargetMonth] = useState('');
+
+  const suggestedRoleTags = useMemo(() => {
+    const roleTitles = Array.isArray(jobRoles) ? jobRoles.map(r => r.title?.trim()).filter(Boolean) : [];
+    const existingTags = Array.isArray(availableTags) ? availableTags.map(t => {
+      const name = t?.name || t?.tag || (typeof t === 'string' ? t : '');
+      return name.trim();
+    }).filter(n => n && n !== '__untagged__' && n.toLowerCase() !== 'general pool') : [];
+    return Array.from(new Set([...roleTitles, ...existingTags]));
+  }, [jobRoles, availableTags]);
+
+  const handleAddUploadTag = (tagToAdd) => {
+    const clean = (tagToAdd || uploadCustomTagInput).trim();
+    if (!clean) return;
+    if (!uploadSelectedTags.some(t => t.toLowerCase() === clean.toLowerCase())) {
+      setUploadSelectedTags(prev => [...prev, clean]);
+    }
+    setUploadCustomTagInput('');
+  };
+
+  const handleRemoveUploadTag = (tagToRemove) => {
+    setUploadSelectedTags(prev => prev.filter(t => t.toLowerCase() !== tagToRemove.toLowerCase()));
+  };
+
+  const handleCancelUploadTagModal = () => {
+    setShowUploadTagModal(false);
+    setStagedUploadFiles([]);
+    setUploadSelectedTags([]);
+    setUploadCustomTagInput('');
+    setUploadTargetMonth('');
+  };
   const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'expert' });
   const [scoreStatus, setScoreStatus] = useState({});
   const [inviteForm, setInviteForm] = useState({
@@ -382,11 +436,15 @@ export default function SourceDashboard() {
     } catch { /* silent */ }
   }, []);
 
-  const fetchRepoSubfolders = useCallback(async () => {
+  const fetchAvailableTags = useCallback(async () => {
     try {
-      const r = await fetch('/api/source/candidates/repository/all-subfolders', { credentials: 'include' });
+      const r = await fetch('/api/source/candidates/tags', { credentials: 'include' });
+      if (!r.ok) return;
       const d = await r.json();
-      if (d.success) setRepoSubfolders(d.data || []);
+      const tagsList = Array.isArray(d.data?.tags) 
+        ? d.data.tags 
+        : (Array.isArray(d.data) ? d.data : []);
+      setAvailableTags(tagsList);
     } catch { /* silent */ }
   }, []);
 
@@ -400,8 +458,10 @@ export default function SourceDashboard() {
       if (filters.upload_time && filters.upload_time.length > 0) {
         filters.upload_time.forEach(time => params.append('upload_time', time));
       }
-      if (filters.folder_id) {
-        params.set('folder_id', filters.folder_id);
+      if (filters.tags && filters.tags.length > 0) {
+        filters.tags.forEach(t => params.append('tags', t));
+      } else if (filters.tag) {
+        params.set('tag', filters.tag);
       }
       params.set('sort_by', filters.sort_by);
       if (filters.role_id) {
@@ -450,8 +510,8 @@ export default function SourceDashboard() {
   useEffect(() => { 
     fetchJobRoles(); 
     fetchRepoFolders();
-    fetchRepoSubfolders();
-  }, [fetchJobRoles, fetchRepoFolders, fetchRepoSubfolders]);
+    fetchAvailableTags();
+  }, [fetchJobRoles, fetchRepoFolders, fetchAvailableTags]);
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 
   useEffect(() => {
@@ -499,10 +559,15 @@ export default function SourceDashboard() {
   }, []);
 
   const fetchActiveJob = useCallback(async () => {
-
     if (!bulkJobId) return;
     try {
       const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`);
+      if (r.status === 404) {
+        setBulkJobId(null);
+        setBulkJobProgress(null);
+        setBulkUploadTriggered(false);
+        return;
+      }
       const d = await r.json();
       if (r.ok && d.success) {
         setBulkJobProgress(d.data);
@@ -519,6 +584,12 @@ export default function SourceDashboard() {
     const fetchProgress = async () => {
       try {
         const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`);
+        if (r.status === 404) {
+          setBulkJobId(null);
+          setBulkJobProgress(null);
+          setBulkUploadTriggered(false);
+          return;
+        }
         const d = await r.json();
         if (r.ok && d.success) {
           setBulkJobProgress(d.data);
@@ -592,8 +663,15 @@ export default function SourceDashboard() {
 
   // ── Upload ─────────────────────────────────────────────────────────────────
   
-  const handleBulkUploadDirect = async (filesArray, overrideDate = null, folderId = null) => {
+  const handleBulkUploadDirect = async (filesArray, overrideDate = null, tagsOrLegacy = null, maybeTags = null) => {
     if (!filesArray || filesArray.length === 0) return;
+
+    let tags = null;
+    if (Array.isArray(maybeTags) || (typeof maybeTags === 'string' && maybeTags)) {
+      tags = maybeTags;
+    } else if (Array.isArray(tagsOrLegacy) || (typeof tagsOrLegacy === 'string' && tagsOrLegacy)) {
+      tags = tagsOrLegacy;
+    }
 
     setUploading(true);
     setUploadProgress(0);
@@ -616,7 +694,9 @@ export default function SourceDashboard() {
         continue;
       }
 
-      const cleanFile = new File([file], file.name, { type: file.type });
+      const cleanFile = (typeof window !== 'undefined' && typeof window.File === 'function')
+        ? new window.File([file], file.name, { type: file.type })
+        : file;
       fd.append('files', cleanFile);
       validCount++;
     }
@@ -624,8 +704,10 @@ export default function SourceDashboard() {
     if (overrideDate) {
       fd.append('override_date', overrideDate);
     }
-    if (folderId) {
-      fd.append('folder_id', folderId);
+    if (tags && Array.isArray(tags) && tags.length > 0) {
+      fd.append('tags', JSON.stringify(tags));
+    } else if (tags && typeof tags === 'string') {
+      fd.append('tags', tags);
     }
 
     if (invalidFiles.length > 0) {
@@ -693,13 +775,35 @@ export default function SourceDashboard() {
     }
   };
 
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
-    await handleBulkUploadDirect(files);
-    if (e.target) e.target.value = '';
+  const handleConfirmUploadWithTags = async () => {
+    if (!stagedUploadFiles || stagedUploadFiles.length === 0) return;
+    const filesToUpload = [...stagedUploadFiles];
+    const tagsToAssign = [...uploadSelectedTags];
+    const targetMonth = uploadTargetMonth || null;
+
+    setShowUploadTagModal(false);
+    setStagedUploadFiles([]);
+    setUploadSelectedTags([]);
+    setUploadCustomTagInput('');
+    setUploadTargetMonth('');
+
+    await handleBulkUploadDirect(filesToUpload, targetMonth, tagsToAssign);
   };
 
+  const handleUpload = (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
+    if (!files || files.length === 0) return;
+
+    setStagedUploadFiles(Array.from(files));
+    setUploadSelectedTags([]);
+    setUploadCustomTagInput('');
+    setUploadTargetMonth('');
+    setShowUpload(false);
+    setShowUploadTagModal(true);
+
+    if (e.target) e.target.value = '';
+  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -709,10 +813,10 @@ export default function SourceDashboard() {
     e.preventDefault();
     setIsDragging(false);
   };
-  const handleDrop = async (e) => {
+  const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    await handleUpload(e);
+    handleUpload(e);
   };
 
   const handleCancelQueue = async () => {
@@ -798,10 +902,7 @@ export default function SourceDashboard() {
     const url = isEdit ? `/api/source/job-roles/${newRole.id}` : '/api/source/job-roles';
     const method = isEdit ? 'PUT' : 'POST';
     
-    const payload = {
-      ...newRole,
-      folder_id: newRole.folder_id ? parseInt(newRole.folder_id, 10) : null,
-    };
+    const payload = { ...newRole };
 
     try {
       const r = await fetch(url, {
@@ -812,20 +913,18 @@ export default function SourceDashboard() {
       if (r.ok) {
         toast.success(isEdit ? 'Role updated' : 'Role created');
         setShowNewRole(false);
-        setNewRole({ title: '', description: '', min_experience: 0, folder_id: '', required_skills: [] });
+        setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] });
         fetchJobRoles();
       } else { toast.error(`Failed to ${isEdit ? 'update' : 'create'} role`); }
     } catch { toast.error('Error saving role'); }
   };
 
   const openEditRole = (r) => {
-    fetchRepoSubfolders();
     setNewRole({
       id: r.id,
       title: r.title,
       description: r.description || '',
       min_experience: r.min_experience || 0,
-      folder_id: r.folder_id ? String(r.folder_id) : '',
       required_skills: Array.isArray(r.required_skills) ? r.required_skills : [],
     });
     setNewSkillInput({ name: '', level: 'expert' });
@@ -964,17 +1063,29 @@ export default function SourceDashboard() {
     }
   };
 
-  const handleAutoRank = async (roleId, folderId = null) => {
+  const handleAutoRank = async (roleId, targetTags = null) => {
     if (!roleId) return;
     setAutoRanking(true);
-    const targetFolder = repoSubfolders.find(sf => String(sf.id) === String(folderId));
-    const msg = targetFolder 
-      ? `Scoring candidates in folder "${targetFolder.name}"...` 
-      : 'Searching through resumes for matches...';
+    let tagsArray = [];
+    if (Array.isArray(targetTags)) {
+      tagsArray = targetTags;
+    } else if (typeof targetTags === 'string' && targetTags.trim()) {
+      tagsArray = [targetTags.trim()];
+    }
+
+    let msg = 'Searching through all resumes for matches...';
+    if (tagsArray.length === 1) {
+      const label = tagsArray[0] === '__untagged__' ? 'General Pool' : tagsArray[0];
+      msg = `Scoring candidates in "${label}"...`;
+    } else if (tagsArray.length > 1) {
+      msg = `Scoring candidates matching ${tagsArray.length} selected tags...`;
+    }
     const tid = toast.loading(msg);
     try {
-      const url = folderId 
-        ? `/api/source/job-roles/${roleId}/auto-rank?folder_id=${folderId}` 
+      const params = new URLSearchParams();
+      tagsArray.forEach(t => params.append('tags', t));
+      const url = tagsArray.length > 0 
+        ? `/api/source/job-roles/${roleId}/auto-rank?${params.toString()}` 
         : `/api/source/job-roles/${roleId}/auto-rank`;
       const r = await fetch(url, { method: 'POST' });
       const d = await r.json();
@@ -988,6 +1099,43 @@ export default function SourceDashboard() {
       toast.error('Process interrupted', { id: tid });
     } finally {
       setAutoRanking(false);
+    }
+  };
+
+  const handleBulkTagSubmit = async (e) => {
+    e?.preventDefault?.();
+    const tagList = bulkTagInput.split(',').map(s => s.trim()).filter(Boolean);
+    if (tagList.length === 0) {
+      toast.error('Please enter at least one tag');
+      return;
+    }
+    setBulkTagging(true);
+    const tid = toast.loading('Updating tags on selected candidates...');
+    try {
+      const res = await fetch('/api/source/candidates/bulk-tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_ids: Array.from(selectedIds),
+          action: bulkTagAction,
+          tags: tagList
+        }),
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Tags updated successfully', { id: tid });
+        setShowBulkTagModal(false);
+        setBulkTagInput('');
+        fetchCandidates();
+        fetchAvailableTags();
+      } else {
+        toast.error(data.detail || 'Failed to update tags', { id: tid });
+      }
+    } catch {
+      toast.error('Network error updating tags', { id: tid });
+    } finally {
+      setBulkTagging(false);
     }
   };
 
@@ -1585,13 +1733,13 @@ export default function SourceDashboard() {
                         </span>
                       </div>
                       <button
-                        onClick={() => { handleAutoRank(r.id, r.folder_id); fetchScoreStatus(r.id); }}
+                        onClick={() => { handleAutoRank(r.id); fetchScoreStatus(r.id); }}
                         disabled={autoRanking}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-xs font-medium hover:bg-purple-100 transition-colors disabled:opacity-50"
-                        title={r.folder_id ? `Score only CVs in "${r.folder_name}"` : 'Auto-rank all candidates'}
+                        title="Auto-rank candidates against this role"
                       >
                         <Zap size={12} /> 
-                        {autoRanking ? 'Ranking...' : (r.folder_id ? 'Score Folder' : 'Re-rank')}
+                        {autoRanking ? 'Ranking...' : 'Re-rank'}
                       </button>
                     </div>
                     
@@ -1835,11 +1983,9 @@ export default function SourceDashboard() {
                     value={filters.role_id}
                     onChange={e => {
                       const newRoleId = e.target.value;
-                      const matchedRole = jobRoles.find(r => String(r.id) === String(newRoleId));
                       setFilters(f => ({ 
                         ...f, 
                         role_id: newRoleId,
-                        folder_id: matchedRole?.folder_id ? String(matchedRole.folder_id) : f.folder_id 
                       }));
                     }}
                   >
@@ -1850,20 +1996,15 @@ export default function SourceDashboard() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-gray-500">Resume / Role Folder</label>
-                <select
-                  className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors"
-                  value={filters.folder_id || ''}
-                  onChange={e => setFilters(f => ({ ...f, folder_id: e.target.value }))}
-                >
-                  <option value="">All Resumes (All Folders)</option>
-                  <option value="unassigned">Unassigned (Month Root Only)</option>
-                  {repoSubfolders.map(sf => (
-                    <option key={sf.id} value={sf.id}>
-                      📁 {sf.name} ({sf.month_year}) — {sf.count || 0} CVs
-                    </option>
-                  ))}
-                </select>
+                <label className="text-xs font-medium text-gray-500">Job Role Tags</label>
+                <MultiSelectDropdown
+                  options={tagOptions}
+                  selected={filters.tags || []}
+                  onChange={(newSelected) => setFilters(f => ({ ...f, tags: newSelected, tag: '' }))}
+                  placeholder="All Tags"
+                  emptyText="No tags found"
+                  widthClass="w-52"
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -1956,28 +2097,38 @@ export default function SourceDashboard() {
                 Reset
               </button>
               {(() => {
-                const selectedFolder = repoSubfolders.find(sf => String(sf.id) === String(filters.folder_id));
+                const selectedTags = (filters.tags && filters.tags.length > 0)
+                  ? filters.tags
+                  : (filters.tag ? [filters.tag] : []);
+                const count = selectedTags.length;
+                let tagLabel = '';
+                if (count === 1) {
+                  tagLabel = selectedTags[0] === '__untagged__' ? 'General Pool' : selectedTags[0];
+                } else if (count > 1) {
+                  tagLabel = `${count} Tags`;
+                }
+
                 if (filters.role_id) {
                   return (
                     <button
-                      onClick={() => handleAutoRank(filters.role_id, filters.folder_id || null)}
+                      onClick={() => handleAutoRank(filters.role_id, selectedTags)}
                       disabled={autoRanking}
                       className="px-6 py-2.5 ml-auto bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors duration-150 flex items-center gap-2 shadow-sm disabled:opacity-50"
-                      title={selectedFolder ? `Score only CVs in "${selectedFolder.name}" against selected role` : 'Auto score all candidates in database'}
+                      title={count > 0 ? `Score only CVs matching ${tagLabel} against selected role` : 'Auto score all candidates in database'}
                     >
                       {autoRanking ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-                      {selectedFolder ? `Score Folder: ${selectedFolder.name}` : `Auto Score All`}
+                      {count > 0 ? `Score: ${tagLabel}` : `Auto Score All`}
                     </button>
                   );
                 }
-                if (filters.folder_id && filters.folder_id !== 'unassigned') {
+                if (count > 0) {
                   return (
                     <button
-                      onClick={() => toast.error('Please select a Job Role in the filter above to score this folder against')}
+                      onClick={() => toast.error('Please select a Job Role in the filter above to score these candidates against')}
                       className="px-5 py-2.5 ml-auto bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-sm font-semibold hover:bg-purple-100 transition-colors duration-150 flex items-center gap-2 shadow-xs"
-                      title="Select a Job Role in the filter to score this folder"
+                      title="Select a Job Role in the filter to score these tags"
                     >
-                      <Zap size={14} /> Score Folder (Select Role First)
+                      <Zap size={14} /> Score Tags (Select Role First)
                     </button>
                   );
                 }
@@ -2045,10 +2196,19 @@ export default function SourceDashboard() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-gray-800 text-sm truncate m-0">{c.full_name || '—'}</p>
-                        {c.folder_name && (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded font-medium" title={`Folder: ${c.folder_name}`}>
-                            <Folder size={10} /> {c.folder_name}
+                        {c.tags && Array.isArray(c.tags) && c.tags.length > 0 ? (
+                          c.tags.slice(0, 3).map((t, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded font-medium">
+                              <Tag size={10} /> {t}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded font-medium">
+                            General Pool
                           </span>
+                        )}
+                        {c.tags && c.tags.length > 3 && (
+                          <span className="text-[10px] text-gray-400 font-medium">+{c.tags.length - 3}</span>
                         )}
                       </div>
                       <InlineEmailEditor candidate={c} fetchCandidates={fetchCandidates} />
@@ -2117,6 +2277,16 @@ export default function SourceDashboard() {
       <Star size={14} /> Score vs Role
     </button>
     <button
+      onClick={() => {
+        setBulkTagInput('');
+        setBulkTagAction('add');
+        setShowBulkTagModal(true);
+      }}
+      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors duration-150"
+    >
+      <Tag size={14} /> Manage Tags
+    </button>
+    <button
       onClick={() => setShowInvite(true)}
       className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors duration-150"
     >
@@ -2163,12 +2333,12 @@ export default function SourceDashboard() {
         onRefresh={fetchCandidates}
       />
 
-      {/* ── Upload Modal ── */}
+      {/* ── Quick Upload Modal ── */}
       {showUpload && (
         <Modal onClose={() => setShowUpload(false)} title="Upload Resume">
-          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip" className="hidden" onChange={handleUpload} multiple />
+          <input ref={quickUploadFileRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip" className="hidden" onChange={handleUpload} multiple />
           <button
-            onClick={() => fileRef.current?.click()}
+            onClick={() => quickUploadFileRef.current?.click()}
             disabled={uploading}
             className="flex flex-col items-center gap-6 w-full border-2 border-dashed border-gray-300 rounded-2xl p-16 hover:border-purple-400 hover:bg-purple-50/50 transition-colors duration-150 cursor-pointer"
           >
@@ -2178,6 +2348,177 @@ export default function SourceDashboard() {
               <><Upload size={40} className="text-purple-400" /><div><p className="text-base font-semibold text-gray-800 mb-1">Click to select file(s)</p><p className="text-sm text-gray-500">PDF, DOC, DOCX, TXT, ZIP</p></div></>
             )}
           </button>
+        </Modal>
+      )}
+
+      {/* ── Upload Tag Assignment Modal ── */}
+      {showUploadTagModal && (
+        <Modal onClose={handleCancelUploadTagModal} title="Upload Resumes">
+          <div className="flex flex-col gap-4">
+            {/* Staged Files Preview */}
+            <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200/80 max-h-36 overflow-y-auto">
+              <div className="text-xs font-semibold text-gray-700 mb-2 flex justify-between items-center">
+                <span className="flex items-center gap-1.5 font-bold">
+                  <FileText size={14} className="text-purple-600" />
+                  Selected Files ({stagedUploadFiles.length})
+                </span>
+                <span className="text-[11px] text-gray-400 font-medium">PDF, DOCX, TXT, ZIP</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {stagedUploadFiles.slice(0, 5).map((file, i) => (
+                  <div key={i} className="text-xs text-gray-600 flex items-center justify-between gap-2 py-0.5 px-1.5 rounded hover:bg-gray-100">
+                    <span className="truncate flex-1 font-medium">{file.name}</span>
+                    <span className="text-[11px] text-gray-400 shrink-0 font-mono">{(file.size / 1024).toFixed(0)} KB</span>
+                  </div>
+                ))}
+                {stagedUploadFiles.length > 5 && (
+                  <span className="text-[11px] text-purple-600 font-medium italic mt-0.5">
+                    +{stagedUploadFiles.length - 5} more files selected
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Target Month Folder (Optional) */}
+            {Array.isArray(repoFolders) && repoFolders.length > 0 && (
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Target Month Folder
+                </label>
+                <select
+                  className="form-input w-full text-xs"
+                  value={uploadTargetMonth}
+                  onChange={e => setUploadTargetMonth(e.target.value)}
+                >
+                  <option value="">Auto-Detect / Current Month Folder</option>
+                  {repoFolders.map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.label || f.id} ({f.count || 0} resumes)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* TAG ASSIGNMENT SECTION */}
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-800 mb-1">
+                  Assign Job Role Tag(s)
+                </label>
+                <p className="text-[11px] text-gray-500 mb-2">
+                  Select or type role tags to categorize these resumes. You can filter and score candidates by these tags.
+                </p>
+
+                {/* Selected Tags Display */}
+                <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-purple-50/50 border border-purple-100 rounded-xl mb-2.5 items-center">
+                  {uploadSelectedTags.length === 0 ? (
+                    <span className="text-xs text-purple-500 italic flex items-center gap-1">
+                      No tags selected → Will be stored in <strong>General Pool (Untagged)</strong>
+                    </span>
+                  ) : (
+                    uploadSelectedTags.map(tag => (
+                      <span 
+                        key={tag} 
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-600 text-white shadow-xs"
+                      >
+                        🏷️ {tag}
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveUploadTag(tag)}
+                          className="hover:text-red-200 ml-1 transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+
+                {/* Custom Tag Input */}
+                <div className="flex gap-2 mb-2.5">
+                  <input
+                    type="text"
+                    className="form-input flex-1 text-xs"
+                    placeholder="Type a custom tag name (e.g. Senior DevOps, Lead Designer)..."
+                    value={uploadCustomTagInput}
+                    onChange={e => setUploadCustomTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddUploadTag();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddUploadTag()}
+                    disabled={!uploadCustomTagInput.trim()}
+                    className="px-3.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {/* Suggested Job Role Chips */}
+                {suggestedRoleTags.length > 0 && (
+                  <div>
+                    <span className="text-[11px] font-semibold text-gray-500 block mb-1.5">
+                      Suggested Roles &amp; Tags:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-0.5">
+                      {suggestedRoleTags.map(roleTitle => {
+                        const isSelected = uploadSelectedTags.some(t => t.toLowerCase() === roleTitle.toLowerCase());
+                        return (
+                          <button
+                            key={roleTitle}
+                            type="button"
+                            onClick={() => isSelected ? handleRemoveUploadTag(roleTitle) : handleAddUploadTag(roleTitle)}
+                            className={`px-2.5 py-1 rounded-full text-xs transition-all flex items-center gap-1 border ${
+                              isSelected
+                                ? 'bg-purple-600 text-white border-purple-600 font-semibold shadow-xs'
+                                : 'bg-gray-50 hover:bg-purple-50 text-gray-700 hover:text-purple-700 border-gray-200 font-normal'
+                            }`}
+                          >
+                            {isSelected ? <Check size={11} /> : <Plus size={11} />}
+                            {roleTitle}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* General Pool Notice */}
+              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-800 leading-snug">
+                💡 <strong>Tip:</strong> Tagging is optional. Resumes without tags land in the <strong>General Pool</strong> and can be tagged, re-tagged, or filtered at any time.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100 mt-1">
+              <button 
+                type="button" 
+                className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                onClick={handleCancelUploadTagModal}
+                disabled={uploading}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={handleConfirmUploadWithTags}
+                disabled={uploading || stagedUploadFiles.length === 0}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-xl text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50 shadow-sm"
+              >
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                {uploadSelectedTags.length > 0 
+                  ? `Upload ${stagedUploadFiles.length} File(s) with ${uploadSelectedTags.length} Tag(s)` 
+                  : `Upload ${stagedUploadFiles.length} File(s) to General Pool`}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 
@@ -2195,23 +2536,7 @@ export default function SourceDashboard() {
               <input type="number" min={0} className="form-input" value={newRole.min_experience} onChange={e => setNewRole(r => ({ ...r, min_experience: parseInt(e.target.value) || 0 }))} />
             </Field>
 
-            <Field label="Linked Resume Sub-Folder (Optional)">
-              <select
-                className="form-input w-full"
-                value={newRole.folder_id || ''}
-                onChange={e => setNewRole(r => ({ ...r, folder_id: e.target.value }))}
-              >
-                <option value="">None (Evaluate against all resumes)</option>
-                {repoSubfolders.map(sf => (
-                  <option key={sf.id} value={sf.id}>
-                    📁 {sf.name} ({sf.month_year}) — {sf.count || 0} CVs
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-gray-400 mt-1">
-                Link to a role sub-folder to restrict auto-ranking and scoring only to CVs within that folder.
-              </p>
-            </Field>
+
 
             {/* Skills Builder - NEUTRAL TAGS INSIDE MODAL */}
             <div>
@@ -2289,6 +2614,89 @@ export default function SourceDashboard() {
               <button type="button" onClick={() => setShowScore(false)} className="flex-1 py-3 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">Cancel</button>
               <button type="submit" disabled={scoring} className="flex-1 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 shadow-sm">
                 {scoring ? 'Scoring...' : 'Run AI Score'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ── Bulk Tag Modal ── */}
+      {showBulkTagModal && (
+        <Modal onClose={() => setShowBulkTagModal(false)} title={`Manage Tags (${selectedIds.size} selected)`}>
+          <form onSubmit={handleBulkTagSubmit} className="flex flex-col gap-4">
+            <div className="flex gap-2">
+              {[
+                { id: 'add', label: 'Add Tags' },
+                { id: 'remove', label: 'Remove Tags' },
+                { id: 'set', label: 'Replace All Tags' }
+              ].map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setBulkTagAction(m.id)}
+                  className={`flex-1 py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${
+                    bulkTagAction === m.id
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            <Field label="Tags (comma-separated)">
+              <input
+                type="text"
+                className="form-input w-full"
+                placeholder="e.g. Frontend Developer, Senior Engineer, Python"
+                value={bulkTagInput}
+                onChange={e => setBulkTagInput(e.target.value)}
+                autoFocus
+              />
+            </Field>
+
+            {Array.isArray(availableTags) && availableTags.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-medium">Existing Tags (click to add):</p>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
+                  {availableTags.map(t => {
+                    const tagLabel = t?.name || t?.tag || (typeof t === 'string' ? t : '');
+                    if (!tagLabel) return null;
+                    return (
+                      <button
+                        key={tagLabel}
+                        type="button"
+                        onClick={() => {
+                          const current = bulkTagInput.split(',').map(s => s.trim()).filter(Boolean);
+                          if (!current.includes(tagLabel)) {
+                            setBulkTagInput([...current, tagLabel].join(', '));
+                          }
+                        }}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-purple-100 hover:text-purple-700 border border-gray-200 transition-colors"
+                      >
+                        🏷️ {tagLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowBulkTagModal(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={bulkTagging}
+                className="px-5 py-2 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-xl disabled:opacity-50 transition-colors"
+              >
+                {bulkTagging ? 'Applying...' : 'Apply Tags'}
               </button>
             </div>
           </form>
