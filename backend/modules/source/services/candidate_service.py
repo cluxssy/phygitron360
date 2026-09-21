@@ -544,14 +544,14 @@ class CandidateService:
             cand["skills"] = cand["primary_skills"] + cand["secondary_skills"]
             
             if role_id is not None:
-                if cand.get("fit_score") is not None:
-                    if cand.get("ats_detail_json"):
-                        import json
-                        try:
-                            cand["ats_detail"] = json.loads(cand["ats_detail_json"])
-                        except:
-                            pass
-                else:
+                if cand.get("fit_score") is not None and cand.get("ats_detail_json"):
+                    import json
+                    try:
+                        cand["ats_detail"] = json.loads(cand["ats_detail_json"])
+                    except Exception:
+                        cand["ats_detail"] = {}
+
+                if not cand.get("ats_detail") or "required_score" not in cand["ats_detail"]:
                     flat_skills = cand["structured_skills"]
                     fit = calculate_role_fit(
                         flat_skills,
@@ -561,11 +561,35 @@ class CandidateService:
                     )
                     cand["fit_score"] = fit["score"]
                     cand["ats_detail"] = fit
+
+                if cand.get("ats_detail"):
+                    req_tot = cand["ats_detail"].get("required_total") or 0
+                    req_mat = cand["ats_detail"].get("required_matched", 0)
+                    if req_tot > 0:
+                        cand["ats_detail"]["required_score"] = round((req_mat / req_tot) * 100.0, 1)
+
+                    pref_tot = cand["ats_detail"].get("preferred_total") or 0
+                    pref_mat = cand["ats_detail"].get("preferred_matched", 0)
+                    if pref_tot > 0:
+                        cand["ats_detail"]["preferred_score"] = round((pref_mat / pref_tot) * 100.0, 1)
+
+                cand["required_score"] = cand["ats_detail"].get("required_score")
+                cand["preferred_score"] = cand["ats_detail"].get("preferred_score")
+                cand["required_matched"] = cand["ats_detail"].get("required_matched", 0)
+                cand["required_total"] = cand["ats_detail"].get("required_total", 0)
+                cand["preferred_matched"] = cand["ats_detail"].get("preferred_matched", 0)
+                cand["preferred_total"] = cand["ats_detail"].get("preferred_total", 0)
             else:
                 cand["fit_score"] = compute_resume_ats_score(cand)
+                cand["required_score"] = None
+                cand["preferred_score"] = None
 
         if sort_by == "fit_score":
-            candidates.sort(key=lambda c: c.get("fit_score", 0), reverse=True)
+            candidates.sort(key=lambda c: c.get("fit_score") or 0, reverse=True)
+        elif sort_by == "required_score":
+            candidates.sort(key=lambda c: c.get("required_score") or 0, reverse=True)
+        elif sort_by == "preferred_score":
+            candidates.sort(key=lambda c: c.get("preferred_score") or 0, reverse=True)
 
         return candidates, total_count
 

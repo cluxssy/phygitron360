@@ -488,7 +488,15 @@ class CandidateRepository:
 
                 where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
                 
-                if sort_by == "fit_score" and role_id:
+                if sort_by == "required_score" and role_id:
+                    order_clause = """ORDER BY 
+                        COALESCE(NULLIF(SUBSTRING(a.reasoning FROM '"required_score":\\s*([0-9.]+)'), '')::numeric, a.score, 0) DESC NULLS LAST,
+                        c.created_at DESC"""
+                elif sort_by == "preferred_score" and role_id:
+                    order_clause = """ORDER BY 
+                        COALESCE(NULLIF(SUBSTRING(a.reasoning FROM '"preferred_score":\\s*([0-9.]+)'), '')::numeric, a.score, 0) DESC NULLS LAST,
+                        c.created_at DESC"""
+                elif sort_by == "fit_score" and role_id:
                     order_clause = "ORDER BY a.score DESC NULLS LAST, c.created_at DESC"
                 elif sort_by == "newest":
                     order_clause = "ORDER BY c.created_at DESC"

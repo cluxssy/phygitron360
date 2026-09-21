@@ -144,8 +144,15 @@ class JobService:
         fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp, min_exp=min_exp, cand_experience_text=cand_experience_text, resume_ats_score=resume_ats_score)
         
         reasoning = json.dumps({
-            "matched": fit["matched_skills"],
-            "missing": fit["missing_skills"],
+            "matched":           fit["matched_skills"],
+            "missing":           fit["missing_skills"],
+            "partial":           fit.get("partial_skills", []),
+            "required_score":    fit.get("required_score"),
+            "preferred_score":   fit.get("preferred_score"),
+            "required_matched":  fit.get("required_matched", 0),
+            "required_total":    fit.get("required_total", 0),
+            "preferred_matched": fit.get("preferred_matched", 0),
+            "preferred_total":   fit.get("preferred_total", 0),
         })
         
         try:
