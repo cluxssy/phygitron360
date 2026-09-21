@@ -5,7 +5,7 @@ import {
   AlertTriangle, ExternalLink, UserCheck, Send,
   Star, Loader2, ChevronRight,
   Globe, Calendar, DollarSign, Activity, FileText,
-  Award, Globe2, BookOpen, Plus, Trash2, Edit, Download
+  Award, Globe2, BookOpen, Plus, Trash2, Edit, Download, Tag
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
@@ -267,6 +267,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       ai_summary: data.ai_summary || '',
       primary_skills: Array.isArray(data.primary_skills) ? data.primary_skills.join(', ') : '',
       secondary_skills: Array.isArray(data.secondary_skills) ? data.secondary_skills.join(', ') : '',
+      tags: Array.isArray(data.tags) ? data.tags.join(', ') : '',
       certifications: Array.isArray(data.certifications) ? data.certifications : [],
       experience: Array.isArray(data.experience) ? data.experience : [],
       education: Array.isArray(data.education) ? data.education : [],
@@ -288,6 +289,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       ...editForm,
       primary_skills: editForm.primary_skills.split(',').map(s => s.trim()).filter(Boolean),
       secondary_skills: editForm.secondary_skills.split(',').map(s => s.trim()).filter(Boolean),
+      tags: editForm.tags ? editForm.tags.split(',').map(s => s.trim()).filter(Boolean) : [],
     };
     
     try {
@@ -582,6 +584,17 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Job Role Tags (comma separated)</label>
+                      <input
+                        type="text"
+                        value={editForm.tags}
+                        onChange={e => setEditForm({ ...editForm, tags: e.target.value })}
+                        placeholder="e.g. Frontend Developer, Senior Engineer (leave empty for General Pool)"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -708,6 +721,22 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     )}
                   </section>
                 )}
+
+                {/* Job Role Tags */}
+                <section>
+                  <SectionLabel icon={<Tag size={13} />} label="Job Role Tags" />
+                  {data?.tags && data.tags.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {data.tags.map((t, i) => (
+                        <div key={i} className="flex items-center px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                          <span className="text-[11px] font-bold text-purple-300">🏷️ {t}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="glass-panel p-3 text-xs text-white/40 italic">General Pool (Untagged)</div>
+                  )}
+                </section>
 
                 {/* Skills */}
                 <section>

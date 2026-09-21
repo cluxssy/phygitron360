@@ -208,15 +208,32 @@ def score_folder_candidates(
 async def auto_rank_candidates(
     role_id: int,
     folder_id: Optional[int] = Query(None),
+    tag: Optional[str] = Query(None),
+    tags: Optional[List[str]] = Query(None),
     current_user: dict = Depends(require_permission("source.jobs.manage")),
     service: JobService = Depends(get_job_service)
 ):
     """
     Trigger ATS scoring for candidates against a specific role.
-    If folder_id is provided or linked to the role, scores only that folder.
-    Otherwise, fires Celery background task for all candidates.
+    If tags or tag is provided, scores only candidates with those tags.
+    If folder_id is provided, scores only that folder.
+    Otherwise, fires background scoring task for all candidates.
     """
     try:
+        all_tags = []
+        if tags:
+            all_tags.extend(tags)
+        if tag and tag not in all_tags:
+            all_tags.append(tag)
+
+        if all_tags:
+            results = service.auto_rank_candidates(role_id, tags=all_tags)
+            return {
+                "success": True,
+                "message": f"Scored {len(results)} candidate(s) matching selected tag(s).",
+                "data": results,
+            }
+
         role = service.repo.get_job_role_by_id(role_id)
         target_folder = folder_id or (role.get("folder_id") if role else None)
         if target_folder:
@@ -333,3 +350,17 @@ def get_invite_status(
     except Exception as exc:
         logger.exception(f"get_invite_status({job_role_id}) failed: {exc}")
         raise HTTPException(status_code=500, detail="Something went wrong while loading invite status. Please try again.")
+
+
+@router.get("/tags", dependencies=[Depends(require_permission("source.candidates.view"))])
+def get_source_tags_alias(user=Depends(get_current_user)):
+    """Alias for /api/source/candidates/tags under /api/source/tags."""
+    try:
+        from backend.modules.source.services.candidate_service import CandidateService
+        tenant_id = user.get("tenant_id") if user else None
+        service = CandidateService(tenant_id=tenant_id)
+        data = service.get_all_tags()
+        return {"success": True, "data": data}
+    except Exception as exc:
+        logger.exception(f"get_source_tags_alias failed: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to fetch tags.")

@@ -62,6 +62,7 @@ class CandidateUpdate(BaseModel):
     education: Optional[List[dict]] = None
     primary_skills: Optional[List[str]] = None
     secondary_skills: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
 
 
 class StatusUpdate(BaseModel):
@@ -106,6 +107,16 @@ class NotificationRequest(BaseModel):
     message: str
 
 
+class BulkTagRequest(BaseModel):
+    candidate_ids: List[int]
+    tags: List[str]
+    action: str = "add"  # "add", "remove", or "set"
+
+
+class CandidateTagsUpdate(BaseModel):
+    tags: List[str]
+
+
 # ---------------------------------------------------------------------------
 def get_candidate_service(user=Depends(get_current_user)):
     return CandidateService(tenant_id=user.get('tenant_id', 'public'))
@@ -121,6 +132,7 @@ async def upload_and_parse_resume(
     tenant_id: str = Form("public"),
     override_date: Optional[str] = Form(None),
     folder_id: Optional[int] = Form(None),
+    tags: Optional[str] = Form(None),
     current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
@@ -129,9 +141,20 @@ async def upload_and_parse_resume(
     if not file.filename.lower().endswith(allowed_exts):
         raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(allowed_exts)}")
 
+    parsed_tags = []
+    if tags:
+        try:
+            loaded = json.loads(tags)
+            if isinstance(loaded, list):
+                parsed_tags = [str(t).strip() for t in loaded if str(t).strip()]
+            elif isinstance(loaded, str):
+                parsed_tags = [t.strip() for t in loaded.split(",") if t.strip()]
+        except Exception:
+            parsed_tags = [t.strip() for t in tags.split(",") if t.strip()]
+
     try:
         content = await file.read()
-        result = await service.process_and_save_resume(content, file.filename, override_date=override_date, folder_id=folder_id)
+        result = await service.process_and_save_resume(content, file.filename, override_date=override_date, folder_id=folder_id, tags=parsed_tags)
         return {
             "success": True,
             "message": "Resume uploaded and parsed successfully",
@@ -225,6 +248,7 @@ async def bulk_upload_resumes(
     files: List[UploadFile] = File(...),
     override_date: Optional[str] = Form(None),
     folder_id: Optional[int] = Form(None),
+    tags: Optional[str] = Form(None),
     user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
@@ -237,6 +261,17 @@ async def bulk_upload_resumes(
     import shutil
     import os
     
+    parsed_tags = []
+    if tags:
+        try:
+            loaded = json.loads(tags)
+            if isinstance(loaded, list):
+                parsed_tags = [str(t).strip() for t in loaded if str(t).strip()]
+            elif isinstance(loaded, str):
+                parsed_tags = [t.strip() for t in loaded.split(",") if t.strip()]
+        except Exception:
+            parsed_tags = [t.strip() for t in tags.split(",") if t.strip()]
+
     files_data = []
     temp_dir = tempfile.mkdtemp(prefix="bulk_upload_")
     
@@ -247,7 +282,7 @@ async def bulk_upload_resumes(
                 shutil.copyfileobj(f.file, buffer)
             files_data.append((f.filename, temp_path))
             
-        result = await service.bulk_upload_resumes(files_data, user.get("id"), temp_dir, override_date=override_date, folder_id=folder_id)
+        result = await service.bulk_upload_resumes(files_data, user.get("id"), temp_dir, override_date=override_date, folder_id=folder_id, tags=parsed_tags)
         return {
             "success": True,
             "data": result,
@@ -363,6 +398,8 @@ def search_candidates(
     role_id: Optional[int] = Query(None),
     upload_time: Optional[List[str]] = Query(None),   # Multiple YYYY-MM
     folder_id: Optional[List[str]] = Query(None),     # Sub-folder ID(s) or 'unassigned'
+    tag: Optional[str] = Query(None),                 # Tag name or 'untagged'
+    tags: Optional[List[str]] = Query(None),          # Multiple tags
     limit: int = Query(50, ge=1, le=5000),
     current_user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
@@ -372,12 +409,52 @@ def search_candidates(
         results, total_count = service.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
             search=search, sort_by=sort_by, role_id=role_id, upload_time=upload_time,
-            folder_id=folder_id, limit=limit
+            folder_id=folder_id, tag=tag, tags=tags, limit=limit
         )
         return {"success": True, "data": results, "count": len(results), "total_count": total_count}
     except Exception as exc:
         logger.exception(f"search_candidates failed: {exc}")
         raise HTTPException(status_code=500, detail="Something went wrong while searching candidates. Please try again.")
+
+
+@router.get("/tags", dependencies=[Depends(require_permission("source.candidates.view"))])
+def get_all_tags(service: CandidateService = Depends(get_candidate_service)):
+    """Get all distinct tags with counts across candidates."""
+    try:
+        data = service.get_all_tags()
+        return {"success": True, "data": data}
+    except Exception as exc:
+        logger.exception(f"Failed to fetch tags: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to fetch tags.")
+
+
+@router.post("/bulk-tag", dependencies=[Depends(require_permission("source.candidates.manage"))])
+def bulk_tag_candidates(
+    body: BulkTagRequest,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Bulk add, remove, or set tags on candidates."""
+    try:
+        updated = service.bulk_tag_candidates(body.candidate_ids, body.tags, action=body.action)
+        return {"success": True, "message": f"Updated tags for {updated} candidate(s).", "count": updated}
+    except Exception as exc:
+        logger.exception(f"Failed to bulk tag candidates: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to update tags.")
+
+
+@router.put("/{candidate_id}/tags", dependencies=[Depends(require_permission("source.candidates.manage"))])
+def update_candidate_tags(
+    candidate_id: int,
+    body: CandidateTagsUpdate,
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Update tags for a single candidate."""
+    try:
+        tags = service.update_candidate_tags(candidate_id, body.tags)
+        return {"success": True, "data": tags, "message": "Tags updated successfully."}
+    except Exception as exc:
+        logger.exception(f"Failed to update candidate tags: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to update tags.")
 
 
 @router.get("/active")
