@@ -12,13 +12,14 @@ from typing import List, Optional, Any
 from datetime import datetime
 
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 import os
 
 from backend.core.database import DATA_DIR
 from backend.core.dependencies import get_current_user, require_permission
 from backend.modules.source.services.candidate_service import CandidateService
+from backend.modules.source.services.candidate_report_service import generate_candidate_report_pdf
 from backend.core.email_service_extended import send_generic_notification_email
 from backend.modules.deploy.repositories.notification_repo import NotificationRepository
 from backend.modules.deploy.services.notification_service import add_notification
@@ -115,6 +116,13 @@ class BulkTagRequest(BaseModel):
 
 class CandidateTagsUpdate(BaseModel):
     tags: List[str]
+
+
+class CandidateReportExportRequest(BaseModel):
+    candidates: List[Dict[str, Any]]
+    job_role_title: Optional[str] = None
+    filters_summary: Optional[Dict[str, Any]] = None
+    company_name: Optional[str] = "Phygitron 360"
 
 
 # ---------------------------------------------------------------------------
@@ -877,3 +885,41 @@ def revert_employee_to_candidate(
     except Exception as exc:
         logger.exception(f"revert_employee_to_candidate({employee_id}) failed: {exc}")
         raise HTTPException(status_code=500, detail="Something went wrong while reverting this employee. Please try again.")
+
+
+# ---------------------------------------------------------------------------
+# Candidate Report Export (Executive PDF)
+# ---------------------------------------------------------------------------
+
+@router.post("/export-report-pdf", dependencies=[Depends(require_permission("source.candidates.view"))])
+def export_candidate_report_pdf(
+    payload: CandidateReportExportRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Generate and download an executive landscape PDF report for the given candidates.
+    """
+    try:
+        company_name = payload.company_name or current_user.get("company_name") or "Phygitron 360"
+        pdf_bytes = generate_candidate_report_pdf(
+            candidates=payload.candidates,
+            job_role_title=payload.job_role_title,
+            filters_summary=payload.filters_summary,
+            company_name=company_name
+        )
+        safe_role = (payload.job_role_title or "Shortlist").replace(" ", "_").replace("/", "_")
+        safe_date = datetime.utcnow().strftime("%Y%m%d")
+        filename = f"Candidate_Report_{safe_role}_{safe_date}.pdf"
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition"
+            }
+        )
+    except Exception as exc:
+        logger.exception(f"export_candidate_report_pdf failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF report: {str(exc)}")
+

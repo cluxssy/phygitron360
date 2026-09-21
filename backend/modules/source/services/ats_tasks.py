@@ -110,9 +110,15 @@ def _run_score_all_candidates_for_role(role_id: int, tenant_id: str):
                         fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp_years, min_exp=min_exp, cand_experience_text=cand_experience_text, resume_ats_score=resume_ats_score)
                         score = fit["score"]
                         reasoning = json.dumps({
-                            "matched": fit["matched_skills"],
-                            "missing": fit["missing_skills"],
-                            "partial": fit["partial_skills"],
+                            "matched":           fit["matched_skills"],
+                            "missing":           fit["missing_skills"],
+                            "partial":           fit["partial_skills"],
+                            "required_score":    fit.get("required_score"),
+                            "preferred_score":   fit.get("preferred_score"),
+                            "required_matched":  fit.get("required_matched", 0),
+                            "required_total":    fit.get("required_total", 0),
+                            "preferred_matched": fit.get("preferred_matched", 0),
+                            "preferred_total":   fit.get("preferred_total", 0),
                         })
 
                         # Upsert score
@@ -222,7 +228,17 @@ def _run_score_new_candidate_for_all_roles(candidate_id: int, tenant_id: str):
 
                     fit = calculate_role_fit(cand_skills, req_skills, exp_years=exp_years, min_exp=role.get("min_experience") or 0, cand_experience_text=cand_experience_text, resume_ats_score=resume_ats_score)
                     score = fit["score"]
-                    reasoning = json.dumps({"matched": fit["matched_skills"], "missing": fit["missing_skills"]})
+                    reasoning = json.dumps({
+                        "matched":           fit["matched_skills"],
+                        "missing":           fit["missing_skills"],
+                        "partial":           fit["partial_skills"],
+                        "required_score":    fit.get("required_score"),
+                        "preferred_score":   fit.get("preferred_score"),
+                        "required_matched":  fit.get("required_matched", 0),
+                        "required_total":    fit.get("required_total", 0),
+                        "preferred_matched": fit.get("preferred_matched", 0),
+                        "preferred_total":   fit.get("preferred_total", 0),
+                    })
 
                     cur.execute("""
                         SELECT id FROM ai_scores

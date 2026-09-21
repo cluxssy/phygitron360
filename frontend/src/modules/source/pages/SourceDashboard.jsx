@@ -9,7 +9,7 @@ import {
   Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
   ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
   Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
-  Archive, Pause, Play, Folder, Tag, Check
+  Archive, Pause, Play, Folder, Tag, Check, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
@@ -19,6 +19,7 @@ import OfferApprovals from './OfferApprovals';
 import ActiveCandidates from './ActiveCandidates';
 import InviteStatus from './InviteStatus';
 import ResumeRepo from './ResumeRepo';
+import CandidateReportModal from '../components/CandidateReportModal';
 
 import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
@@ -128,43 +129,101 @@ const InlineEmailEditor = ({ candidate, fetchCandidates }) => {
 };
 
 
-const MultiSelectDropdown = ({ options, selected = [], onChange, label, placeholder = "Select...", emptyText = "No options found", widthClass = "w-44" }) => {
+const MultiSelectDropdown = ({ 
+  options = [], 
+  selected = [], 
+  onChange, 
+  label, 
+  placeholder = "Select...", 
+  emptyText = "No options found", 
+  widthClass = "w-44",
+  searchable = false,
+  searchPlaceholder = "Search..."
+}) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
+        setSearchTerm('');
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && searchable && searchInputRef.current) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    }
+    if (!isOpen) {
+      setSearchTerm('');
+    }
+  }, [isOpen, searchable]);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchable || !searchTerm.trim()) return options;
+    const term = searchTerm.toLowerCase();
+    return options.filter(opt =>
+      (opt.label || '').toLowerCase().includes(term) ||
+      (opt.value || '').toLowerCase().includes(term)
+    );
+  }, [options, searchable, searchTerm]);
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className={`relative ${widthClass.includes('w-full') ? 'w-full' : ''}`} ref={dropdownRef}>
       <button 
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors ${widthClass} flex justify-between items-center text-left`}
+        className={`bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 transition-colors ${widthClass} flex justify-between items-center text-left cursor-pointer`}
       >
         <span className="truncate pr-2">
           {selected.length === 0 
-            ? placeholder 
+            ? <span className="text-gray-400">{placeholder}</span> 
             : selected.length === 1 
-              ? (options.find(o => o.value === selected[0])?.label || "1 Selected") 
+              ? (options.find(o => o.value === selected[0])?.label || selected[0]) 
               : `${selected.length} Selected`}
         </span>
         <ChevronDown size={14} className="text-gray-400 shrink-0" />
       </button>
       
       {isOpen && (
-        <div className="absolute z-50 mt-1 min-w-[220px] w-max max-w-xs bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar p-2">
-          {options.length === 0 ? (
-            <div className="text-xs text-gray-400 py-3 text-center">{emptyText}</div>
+        <div className={`absolute z-50 mt-1 ${widthClass.includes('w-full') ? 'w-full left-0 right-0' : 'min-w-[220px] w-max max-w-xs'} bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar p-2`}>
+          {searchable && (
+            <div className="p-1 border-b border-gray-100 mb-1.5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 rounded-lg border border-gray-200 focus-within:border-purple-400">
+                <Search size={13} className="text-gray-400 shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  className="bg-transparent text-xs text-gray-700 placeholder-gray-400 outline-none w-full"
+                  placeholder={searchPlaceholder}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {filteredOptions.length === 0 ? (
+            <div className="text-xs text-gray-400 py-3 text-center">
+              {searchTerm ? `No matches for "${searchTerm}"` : emptyText}
+            </div>
           ) : (
-            options.map(opt => (
+            filteredOptions.map(opt => (
               <label key={opt.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded transition-colors">
                 <input 
                   type="checkbox" 
@@ -180,6 +239,22 @@ const MultiSelectDropdown = ({ options, selected = [], onChange, label, placehol
                 <span className="text-sm text-gray-700 select-none truncate">{opt.label}</span>
               </label>
             ))
+          )}
+
+          {selected.length > 0 && (
+            <div className="flex justify-between items-center px-2 pt-2 border-t border-gray-100 mt-1 text-[11px] text-gray-500">
+              <span>{selected.length} selected</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange([]);
+                }}
+                className="text-purple-600 hover:text-purple-700 font-medium cursor-pointer"
+              >
+                Clear all
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -330,10 +405,16 @@ export default function SourceDashboard() {
   // Invite-status tab: role selector
   const [inviteStatusRoleId, setInviteStatusRoleId] = useState('');
   const [showInviteStatus, setShowInviteStatus] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
-  
   // Filter helpers - repository folders
   const [repoFolders, setRepoFolders] = useState([]);
+
+  const currentRoleTitle = useMemo(() => {
+    if (!filters.role_id) return '';
+    const r = jobRoles.find(j => String(j.id) === String(filters.role_id));
+    return r ? r.title : '';
+  }, [filters.role_id, jobRoles]);
 
   const fetchRepoFolders = useCallback(async () => {
     try {
@@ -377,6 +458,7 @@ export default function SourceDashboard() {
   const [showBulkTagModal, setShowBulkTagModal] = useState(false);
   const [bulkTagAction, setBulkTagAction] = useState('add');
   const [bulkTagInput, setBulkTagInput] = useState('');
+  const [bulkSelectedTags, setBulkSelectedTags] = useState([]);
   const [bulkTagging, setBulkTagging] = useState(false);
 
   // ── Upload with Tag Prompt states (Upload tab & Quick Upload) ──
@@ -384,26 +466,20 @@ export default function SourceDashboard() {
   const [stagedUploadFiles, setStagedUploadFiles] = useState([]);
   const [showUploadTagModal, setShowUploadTagModal] = useState(false);
   const [uploadSelectedTags, setUploadSelectedTags] = useState([]);
-  const [uploadCustomTagInput, setUploadCustomTagInput] = useState('');
   const [uploadTargetMonth, setUploadTargetMonth] = useState('');
 
-  const suggestedRoleTags = useMemo(() => {
-    const roleTitles = Array.isArray(jobRoles) ? jobRoles.map(r => r.title?.trim()).filter(Boolean) : [];
-    const existingTags = Array.isArray(availableTags) ? availableTags.map(t => {
-      const name = t?.name || t?.tag || (typeof t === 'string' ? t : '');
-      return name.trim();
-    }).filter(n => n && n !== '__untagged__' && n.toLowerCase() !== 'general pool') : [];
-    return Array.from(new Set([...roleTitles, ...existingTags]));
-  }, [jobRoles, availableTags]);
-
-  const handleAddUploadTag = (tagToAdd) => {
-    const clean = (tagToAdd || uploadCustomTagInput).trim();
-    if (!clean) return;
-    if (!uploadSelectedTags.some(t => t.toLowerCase() === clean.toLowerCase())) {
-      setUploadSelectedTags(prev => [...prev, clean]);
-    }
-    setUploadCustomTagInput('');
-  };
+  // Tags strictly derived from active Job Roles
+  const jobRoleTagOptions = useMemo(() => {
+    if (!Array.isArray(jobRoles)) return [];
+    const titles = jobRoles
+      .map(r => (r.title || '').trim())
+      .filter(Boolean);
+    const unique = Array.from(new Set(titles));
+    return unique.map(title => ({
+      value: title,
+      label: title
+    }));
+  }, [jobRoles]);
 
   const handleRemoveUploadTag = (tagToRemove) => {
     setUploadSelectedTags(prev => prev.filter(t => t.toLowerCase() !== tagToRemove.toLowerCase()));
@@ -413,10 +489,11 @@ export default function SourceDashboard() {
     setShowUploadTagModal(false);
     setStagedUploadFiles([]);
     setUploadSelectedTags([]);
-    setUploadCustomTagInput('');
     setUploadTargetMonth('');
   };
-  const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'expert' });
+  const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'required' });
+  const [editingSkillIdx, setEditingSkillIdx] = useState(null);
+  const [editingSkillName, setEditingSkillName] = useState('');
   const [scoreStatus, setScoreStatus] = useState({});
   const [inviteForm, setInviteForm] = useState({
     role_id: '',
@@ -784,7 +861,6 @@ export default function SourceDashboard() {
     setShowUploadTagModal(false);
     setStagedUploadFiles([]);
     setUploadSelectedTags([]);
-    setUploadCustomTagInput('');
     setUploadTargetMonth('');
 
     await handleBulkUploadDirect(filesToUpload, targetMonth, tagsToAssign);
@@ -797,7 +873,6 @@ export default function SourceDashboard() {
 
     setStagedUploadFiles(Array.from(files));
     setUploadSelectedTags([]);
-    setUploadCustomTagInput('');
     setUploadTargetMonth('');
     setShowUpload(false);
     setShowUploadTagModal(true);
@@ -920,14 +995,27 @@ export default function SourceDashboard() {
   };
 
   const openEditRole = (r) => {
+    let parsedSkills = [];
+    if (Array.isArray(r.required_skills)) {
+      parsedSkills = r.required_skills.map(s => {
+        if (typeof s === 'string') return { skill: s, level: 'required' };
+        const lvl = (s.level || 'required').toLowerCase();
+        return {
+          skill: s.skill || s.name || '',
+          level: (lvl === 'preferred' || lvl === 'optional' || lvl === 'intermediate' || lvl === 'beginner') ? 'preferred' : 'required'
+        };
+      });
+    }
     setNewRole({
       id: r.id,
       title: r.title,
       description: r.description || '',
       min_experience: r.min_experience || 0,
-      required_skills: Array.isArray(r.required_skills) ? r.required_skills : [],
+      required_skills: parsedSkills,
     });
-    setNewSkillInput({ name: '', level: 'expert' });
+    setEditingSkillIdx(null);
+    setEditingSkillName('');
+    setNewSkillInput({ name: '', level: 'required' });
     setShowNewRole(true);
   };
 
@@ -956,8 +1044,27 @@ export default function SourceDashboard() {
     if (!name) return;
     const already = newRole.required_skills.some(s => (s.name || s.skill || '').toLowerCase() === name.toLowerCase());
     if (already) { toast.error('Skill already added'); return; }
-    setNewRole(r => ({ ...r, required_skills: [...r.required_skills, { skill: name, level: newSkillInput.level }] }));
+    setNewRole(r => ({ ...r, required_skills: [...r.required_skills, { skill: name, level: newSkillInput.level || 'required' }] }));
     setNewSkillInput(s => ({ ...s, name: '' }));
+  };
+
+  const toggleSkillLevel = (idx) => {
+    setNewRole(r => ({
+      ...r,
+      required_skills: r.required_skills.map((s, i) => {
+        if (i !== idx) return s;
+        const currentLvl = (s.level || 'required').toLowerCase();
+        const nextLvl = (currentLvl === 'preferred' || currentLvl === 'optional' || currentLvl === 'intermediate' || currentLvl === 'beginner') ? 'required' : 'preferred';
+        return { ...s, level: nextLvl };
+      })
+    }));
+  };
+
+  const updateSkillInRole = (idx, updated) => {
+    setNewRole(r => ({
+      ...r,
+      required_skills: r.required_skills.map((s, i) => i === idx ? { ...s, ...updated } : s)
+    }));
   };
 
   const removeSkillFromRole = (idx) => {
@@ -1104,9 +1211,11 @@ export default function SourceDashboard() {
 
   const handleBulkTagSubmit = async (e) => {
     e?.preventDefault?.();
-    const tagList = bulkTagInput.split(',').map(s => s.trim()).filter(Boolean);
+    const tagList = Array.isArray(bulkSelectedTags) && bulkSelectedTags.length > 0
+      ? bulkSelectedTags
+      : bulkTagInput.split(',').map(s => s.trim()).filter(Boolean);
     if (tagList.length === 0) {
-      toast.error('Please enter at least one tag');
+      toast.error('Please select at least one job role tag');
       return;
     }
     setBulkTagging(true);
@@ -1126,6 +1235,7 @@ export default function SourceDashboard() {
       if (res.ok && data.success) {
         toast.success(data.message || 'Tags updated successfully', { id: tid });
         setShowBulkTagModal(false);
+        setBulkSelectedTags([]);
         setBulkTagInput('');
         fetchCandidates();
         fetchAvailableTags();
@@ -1318,6 +1428,14 @@ export default function SourceDashboard() {
               >
                 <Filter size={15} /> Filters
               </button>
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 text-sm font-semibold transition-colors duration-150 shadow-xs"
+                title="Generate Candidate Shortlist Report (CSV, Excel, PDF)"
+              >
+                <FileSpreadsheet size={15} className="text-purple-600" />
+                <span>Generate Report</span>
+              </button>
               {/* <button
                 onClick={() => setShowUpload(true)}
                 className="
@@ -1345,7 +1463,7 @@ export default function SourceDashboard() {
 
           {currentTab === 'jobs' && hasPermission(P.SOURCE_JOBS_MANAGE) && (
             <button
-              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setNewSkillInput({ name: '', level: 'expert' }); setShowNewRole(true); }}
+              onClick={() => { setNewRole({ title: '', description: '', min_experience: 0, required_skills: [] }); setEditingSkillIdx(null); setEditingSkillName(''); setNewSkillInput({ name: '', level: 'required' }); setShowNewRole(true); }}
               className="
               px-7
               py-4
@@ -2067,7 +2185,12 @@ export default function SourceDashboard() {
                 >
                   <option value="newest">Newest</option>
                   <option value="experience">Experience</option>
-                  {filters.role_id && <option value="fit_score">Fit Score</option>}
+                  {filters.role_id && (
+                    <>
+                      <option value="required_score">Required Skills Score</option>
+                      <option value="preferred_score">Preferred Skills Score</option>
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -2095,6 +2218,14 @@ export default function SourceDashboard() {
                 className="px-5 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:text-gray-700 transition-colors duration-150"
               >
                 Reset
+              </button>
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors duration-150 flex items-center gap-2 shadow-xs"
+                title="Generate Candidate Shortlist Report (CSV, Excel, PDF)"
+              >
+                <FileSpreadsheet size={14} className="text-purple-600" />
+                <span>Generate Report</span>
               </button>
               {(() => {
                 const selectedTags = (filters.tags && filters.tags.length > 0)
@@ -2140,8 +2271,23 @@ export default function SourceDashboard() {
           {/* ── Candidate Table ── */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col overflow-hidden min-h-0">
           {/* Table header */}
-          <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 border-b border-gray-100 text-xs font-medium text-gray-500 shrink-0`}>
-            {/* Header content */}
+          <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_95px_95px_90px_110px_100px_56px]' : 'grid-cols-[40px_1fr_90px_110px_100px_56px]'} gap-4 px-6 py-3 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0 items-center bg-gray-50/50`}>
+            <div className="flex items-center justify-center" onClick={toggleAll}>
+              <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors cursor-pointer ${allSelected ? 'bg-purple-600 border-purple-600' : 'border-gray-300 hover:border-purple-400'}`}>
+                {allSelected && <span className="text-white text-xs font-bold">✓</span>}
+              </div>
+            </div>
+            <div>Candidate</div>
+            {filters.role_id && (
+              <>
+                <div className="text-center font-bold text-gray-700">Required</div>
+                <div className="text-center font-bold text-gray-700">Preferred</div>
+              </>
+            )}
+            <div className="text-center">Experience</div>
+            <div className="text-center">Status</div>
+            <div>Location</div>
+            <div></div>
           </div>
 
           {/* Rows - Scrollable */}
@@ -2179,7 +2325,7 @@ export default function SourceDashboard() {
                 <div
                   key={c.id}
                   onClick={() => setDrawerCandidate(c)}
-                  className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_110px_100px_120px_110px_56px]' : 'grid-cols-[40px_1fr_100px_120px_110px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
+                  className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_95px_95px_90px_110px_100px_56px]' : 'grid-cols-[40px_1fr_90px_110px_100px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
                 >
                   {/* Checkbox */}
                   <div className="flex items-center justify-center" onClick={e => { e.stopPropagation(); toggle(c.id); }}>
@@ -2215,14 +2361,50 @@ export default function SourceDashboard() {
                     </div>
                   </div>
 
-                  {/* Score */}
-                  {filters.role_id && (
-                    <div className="flex justify-center">
-                      <span className={`px-3 py-1 rounded-lg border text-sm font-semibold ${SCORE_COLOR(c.fit_score)}`}>
-                        {c.fit_score != null ? `${Math.round(c.fit_score)}%` : '—'}
-                      </span>
-                    </div>
-                  )}
+                  {/* Required & Preferred Scores */}
+                  {filters.role_id && (() => {
+                    const reqTot = c.required_total || 0;
+                    const reqMat = c.required_matched || 0;
+                    const reqPct = reqTot > 0 ? Math.round((reqMat / reqTot) * 100) : (c.required_score != null ? Math.round(c.required_score) : null);
+
+                    const prefTot = c.preferred_total || 0;
+                    const prefMat = c.preferred_matched || 0;
+                    const prefPct = prefTot > 0 ? Math.round((prefMat / prefTot) * 100) : (c.preferred_score != null ? Math.round(c.preferred_score) : null);
+
+                    return (
+                      <>
+                        {/* Required */}
+                        <div className="flex flex-col items-center justify-center">
+                          <span 
+                            className={`px-2.5 py-1 rounded-lg border text-xs font-bold ${SCORE_COLOR(reqPct)}`}
+                            title={reqTot > 0 ? `${reqMat}/${reqTot} required skills matched` : 'No required skills'}
+                          >
+                            {reqPct != null ? `${reqPct}%` : '—'}
+                          </span>
+                          {reqTot > 0 && (
+                            <span className="text-[10px] text-gray-400 font-medium mt-0.5">
+                              {reqMat}/{reqTot}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Preferred */}
+                        <div className="flex flex-col items-center justify-center">
+                          <span 
+                            className={`px-2.5 py-1 rounded-lg border text-xs font-bold ${SCORE_COLOR(prefPct)}`}
+                            title={prefTot > 0 ? `${prefMat}/${prefTot} preferred skills matched` : 'No preferred skills'}
+                          >
+                            {prefPct != null ? `${prefPct}%` : '—'}
+                          </span>
+                          {prefTot > 0 && (
+                            <span className="text-[10px] text-gray-400 font-medium mt-0.5">
+                              {prefMat}/{prefTot}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   {/* Exp */}
                   <div className="text-center">
@@ -2279,6 +2461,7 @@ export default function SourceDashboard() {
     <button
       onClick={() => {
         setBulkTagInput('');
+        setBulkSelectedTags([]);
         setBulkTagAction('add');
         setShowBulkTagModal(true);
       }}
@@ -2407,14 +2590,28 @@ export default function SourceDashboard() {
                   Assign Job Role Tag(s)
                 </label>
                 <p className="text-[11px] text-gray-500 mb-2">
-                  Select or type role tags to categorize these resumes. You can filter and score candidates by these tags.
+                  Select job roles to categorize these resumes. You can filter and score candidates by these tags.
                 </p>
 
+                {/* Multi-Select Dropdown with Search */}
+                <div className="mb-2.5">
+                  <MultiSelectDropdown
+                    options={jobRoleTagOptions}
+                    selected={uploadSelectedTags}
+                    onChange={setUploadSelectedTags}
+                    placeholder="Select Job Role(s)..."
+                    emptyText={jobRoleTagOptions.length === 0 ? "No active job roles found. Create job roles in Roles tab." : "No matching job roles"}
+                    widthClass="w-full"
+                    searchable={true}
+                    searchPlaceholder="Search job roles..."
+                  />
+                </div>
+
                 {/* Selected Tags Display */}
-                <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-purple-50/50 border border-purple-100 rounded-xl mb-2.5 items-center">
+                <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-purple-50/50 border border-purple-100 rounded-xl items-center">
                   {uploadSelectedTags.length === 0 ? (
                     <span className="text-xs text-purple-500 italic flex items-center gap-1">
-                      No tags selected → Will be stored in <strong>General Pool (Untagged)</strong>
+                      No job roles selected → Will be stored in <strong>General Pool (Untagged)</strong>
                     </span>
                   ) : (
                     uploadSelectedTags.map(tag => (
@@ -2422,11 +2619,11 @@ export default function SourceDashboard() {
                         key={tag} 
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-600 text-white shadow-xs"
                       >
-                        🏷️ {tag}
+                        💼 {tag}
                         <button 
                           type="button" 
                           onClick={() => handleRemoveUploadTag(tag)}
-                          className="hover:text-red-200 ml-1 transition-colors"
+                          className="hover:text-red-200 ml-1 transition-colors cursor-pointer"
                         >
                           <X size={12} />
                         </button>
@@ -2434,65 +2631,11 @@ export default function SourceDashboard() {
                     ))
                   )}
                 </div>
-
-                {/* Custom Tag Input */}
-                <div className="flex gap-2 mb-2.5">
-                  <input
-                    type="text"
-                    className="form-input flex-1 text-xs"
-                    placeholder="Type a custom tag name (e.g. Senior DevOps, Lead Designer)..."
-                    value={uploadCustomTagInput}
-                    onChange={e => setUploadCustomTagInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddUploadTag();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleAddUploadTag()}
-                    disabled={!uploadCustomTagInput.trim()}
-                    className="px-3.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    + Add
-                  </button>
-                </div>
-
-                {/* Suggested Job Role Chips */}
-                {suggestedRoleTags.length > 0 && (
-                  <div>
-                    <span className="text-[11px] font-semibold text-gray-500 block mb-1.5">
-                      Suggested Roles &amp; Tags:
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-0.5">
-                      {suggestedRoleTags.map(roleTitle => {
-                        const isSelected = uploadSelectedTags.some(t => t.toLowerCase() === roleTitle.toLowerCase());
-                        return (
-                          <button
-                            key={roleTitle}
-                            type="button"
-                            onClick={() => isSelected ? handleRemoveUploadTag(roleTitle) : handleAddUploadTag(roleTitle)}
-                            className={`px-2.5 py-1 rounded-full text-xs transition-all flex items-center gap-1 border ${
-                              isSelected
-                                ? 'bg-purple-600 text-white border-purple-600 font-semibold shadow-xs'
-                                : 'bg-gray-50 hover:bg-purple-50 text-gray-700 hover:text-purple-700 border-gray-200 font-normal'
-                            }`}
-                          >
-                            {isSelected ? <Check size={11} /> : <Plus size={11} />}
-                            {roleTitle}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* General Pool Notice */}
               <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-800 leading-snug">
-                💡 <strong>Tip:</strong> Tagging is optional. Resumes without tags land in the <strong>General Pool</strong> and can be tagged, re-tagged, or filtered at any time.
+                💡 <strong>Tip:</strong> Job role tagging is optional. Resumes without tags land in the <strong>General Pool</strong> and can be tagged, re-tagged, or filtered at any time.
               </div>
             </div>
 
@@ -2538,20 +2681,145 @@ export default function SourceDashboard() {
 
 
 
-            {/* Skills Builder - NEUTRAL TAGS INSIDE MODAL */}
+            {/* Skills Builder */}
             <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Required Skills</label>
-              {/* Existing skill chips - NEUTRAL, NO COLOR */}
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Role Skills ({newRole.required_skills.length})
+                </label>
+                <span className="text-[11px] text-gray-500 font-medium">
+                  {newRole.required_skills.filter(s => {
+                    const l = (s.level || 'required').toLowerCase();
+                    return l === 'required' || l === 'critical' || l === 'expert' || l === 'advanced';
+                  }).length} Required · {newRole.required_skills.filter(s => {
+                    const l = (s.level || 'required').toLowerCase();
+                    return l === 'preferred' || l === 'optional' || l === 'intermediate' || l === 'beginner';
+                  }).length} Preferred
+                </span>
+              </div>
+
+              {/* Existing skill chips */}
               {newRole.required_skills.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {newRole.required_skills.map((s, i) => (
-                    <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
-                      {s.name || s.skill} <span className="text-gray-400">→</span> {s.level}
-                      <button type="button" onClick={() => removeSkillFromRole(i)} className="ml-1 text-gray-400 hover:text-gray-700"><X size={10} /></button>
-                    </span>
-                  ))}
+                <div className="flex flex-wrap gap-2 mb-3 max-h-48 overflow-y-auto p-2 bg-gray-50 border border-gray-100 rounded-xl">
+                  {newRole.required_skills.map((s, i) => {
+                    const skillName = s.name || s.skill || (typeof s === 'string' ? s : '');
+                    const rawLvl = (s.level || 'required').toLowerCase();
+                    const isReq = rawLvl === 'required' || rawLvl === 'critical' || rawLvl === 'expert' || rawLvl === 'advanced';
+                    const isEditingThis = editingSkillIdx === i;
+
+                    if (isEditingThis) {
+                      return (
+                        <div key={i} className="flex items-center gap-1.5 p-1 bg-white border-2 border-purple-400 rounded-xl shadow-xs">
+                          <input
+                            type="text"
+                            autoFocus
+                            className="text-xs px-2 py-1 border border-gray-200 rounded-lg outline-none text-gray-800 w-32"
+                            value={editingSkillName}
+                            onChange={e => setEditingSkillName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (editingSkillName.trim()) {
+                                  updateSkillInRole(i, { skill: editingSkillName.trim(), name: editingSkillName.trim() });
+                                }
+                                setEditingSkillIdx(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingSkillIdx(null);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => toggleSkillLevel(i)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                              isReq ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                            }`}
+                            title="Click to toggle level"
+                          >
+                            {isReq ? 'Required' : 'Preferred'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (editingSkillName.trim()) {
+                                updateSkillInRole(i, { skill: editingSkillName.trim(), name: editingSkillName.trim() });
+                              }
+                              setEditingSkillIdx(null);
+                            }}
+                            className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 cursor-pointer"
+                            title="Save"
+                          >
+                            <Check size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingSkillIdx(null)}
+                            className="p-1 rounded-md text-gray-400 hover:bg-gray-100 cursor-pointer"
+                            title="Cancel"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={i}
+                        className={`group flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-xl text-xs font-medium border transition-all ${
+                          isReq
+                            ? 'bg-purple-50/70 border-purple-200 text-purple-900'
+                            : 'bg-indigo-50/70 border-indigo-200 text-indigo-900'
+                        }`}
+                      >
+                        {/* Skill Name */}
+                        <span
+                          onClick={() => { setEditingSkillIdx(i); setEditingSkillName(skillName); }}
+                          className="cursor-pointer hover:underline font-semibold"
+                          title="Click to edit name"
+                        >
+                          {skillName}
+                        </span>
+
+                        {/* Level badge (click to toggle) */}
+                        <button
+                          type="button"
+                          onClick={() => toggleSkillLevel(i)}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase cursor-pointer transition-transform active:scale-95 ${
+                            isReq
+                              ? 'bg-purple-600 text-white hover:bg-purple-700'
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                          }`}
+                          title="Click to toggle between Required and Preferred"
+                        >
+                          {isReq ? 'Required' : 'Preferred'}
+                        </button>
+
+                        {/* Edit button */}
+                        <button
+                          type="button"
+                          onClick={() => { setEditingSkillIdx(i); setEditingSkillName(skillName); }}
+                          className="p-0.5 text-gray-400 hover:text-purple-600 rounded cursor-pointer"
+                          title="Edit skill name"
+                        >
+                          <Edit size={11} />
+                        </button>
+
+                        {/* Remove button */}
+                        <button
+                          type="button"
+                          onClick={() => removeSkillFromRole(i)}
+                          className="p-0.5 text-gray-400 hover:text-rose-600 rounded cursor-pointer"
+                          title="Remove skill"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+
               {/* Add new skill row */}
               <div className="flex items-center gap-2">
                 <input
@@ -2564,16 +2832,13 @@ export default function SourceDashboard() {
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSkillToRole(); } }}
                 />
                 <select
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-500 focus:bg-white transition-colors cursor-pointer shrink-0"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-500 focus:bg-white transition-colors cursor-pointer shrink-0 font-medium"
                   style={{ width: '135px' }}
                   value={newSkillInput.level}
                   onChange={e => setNewSkillInput(s => ({ ...s, level: e.target.value }))}
                 >
-                  <option value="critical">Critical</option>
-                  <option value="expert">Expert</option>
-                  <option value="advanced">Advanced</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="beginner">Beginner</option>
+                  <option value="required">Required</option>
+                  <option value="preferred">Preferred</option>
                 </select>
                 <button
                   type="button"
@@ -2583,7 +2848,9 @@ export default function SourceDashboard() {
                   + Add
                 </button>
               </div>
-              <p className="text-[10px] text-gray-400 mt-1.5">Press Enter or click Add. All candidates will be auto-ranked against these skills after saving.</p>
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                Click a skill's badge to toggle between <strong>Required</strong> and <strong>Preferred</strong>, or click the name to edit.
+              </p>
             </div>
 
             <div className="flex gap-3 pt-2">
@@ -2645,43 +2912,53 @@ export default function SourceDashboard() {
               ))}
             </div>
 
-            <Field label="Tags (comma-separated)">
-              <input
-                type="text"
-                className="form-input w-full"
-                placeholder="e.g. Frontend Developer, Senior Engineer, Python"
-                value={bulkTagInput}
-                onChange={e => setBulkTagInput(e.target.value)}
-                autoFocus
-              />
-            </Field>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Job Role Tag(s) to {bulkTagAction === 'remove' ? 'Remove' : bulkTagAction === 'set' ? 'Set' : 'Add'}
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Select active job roles to {bulkTagAction === 'remove' ? 'remove from' : bulkTagAction === 'set' ? 'assign as sole tags to' : 'add to'} the {selectedIds.size} selected candidate(s).
+              </p>
 
-            {Array.isArray(availableTags) && availableTags.length > 0 && (
-              <div>
-                <p className="text-xs text-gray-500 mb-2 font-medium">Existing Tags (click to add):</p>
-                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
-                  {availableTags.map(t => {
-                    const tagLabel = t?.name || t?.tag || (typeof t === 'string' ? t : '');
-                    if (!tagLabel) return null;
-                    return (
-                      <button
-                        key={tagLabel}
-                        type="button"
-                        onClick={() => {
-                          const current = bulkTagInput.split(',').map(s => s.trim()).filter(Boolean);
-                          if (!current.includes(tagLabel)) {
-                            setBulkTagInput([...current, tagLabel].join(', '));
-                          }
-                        }}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-purple-100 hover:text-purple-700 border border-gray-200 transition-colors"
-                      >
-                        🏷️ {tagLabel}
-                      </button>
-                    );
-                  })}
-                </div>
+              {/* Multi-Select Dropdown with Search */}
+              <div className="mb-2.5">
+                <MultiSelectDropdown
+                  options={jobRoleTagOptions}
+                  selected={bulkSelectedTags}
+                  onChange={setBulkSelectedTags}
+                  placeholder={`Select Job Role(s) to ${bulkTagAction === 'remove' ? 'remove' : bulkTagAction === 'set' ? 'set' : 'add'}...`}
+                  emptyText={jobRoleTagOptions.length === 0 ? "No active job roles found. Create job roles in Roles tab." : "No matching job roles"}
+                  widthClass="w-full"
+                  searchable={true}
+                  searchPlaceholder="Search job roles..."
+                />
               </div>
-            )}
+
+              {/* Selected Tags Display */}
+              <div className="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-gray-50 border border-gray-200 rounded-xl items-center">
+                {bulkSelectedTags.length === 0 ? (
+                  <span className="text-xs text-gray-400 italic">No job roles chosen yet</span>
+                ) : (
+                  bulkSelectedTags.map(tag => (
+                    <span 
+                      key={tag} 
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        bulkTagAction === 'remove' ? 'bg-red-600 text-white' : 'bg-purple-600 text-white'
+                      }`}
+                    >
+                      💼 {tag}
+                      <button 
+                        type="button" 
+                        onClick={() => setBulkSelectedTags(prev => prev.filter(t => t !== tag))}
+                        className="hover:text-red-200 ml-0.5 cursor-pointer"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
 
             <div className="flex gap-3 justify-end pt-2">
               <button
@@ -2765,6 +3042,16 @@ export default function SourceDashboard() {
           </form>
         </Modal>
       )}
+
+      {/* ── Candidate Report Modal ── */}
+      <CandidateReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        candidates={filteredCandidates}
+        roleTitle={currentRoleTitle}
+        filters={filters}
+        companyName={user?.company_name || 'Phygitron 360'}
+      />
 
         </div>
       </div>

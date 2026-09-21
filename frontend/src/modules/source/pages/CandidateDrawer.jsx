@@ -5,7 +5,7 @@ import {
   AlertTriangle, ExternalLink, UserCheck, Send,
   Star, Loader2, ChevronRight,
   Globe, Calendar, DollarSign, Activity, FileText,
-  Award, Globe2, BookOpen, Plus, Trash2, Edit, Download, Tag
+  Award, Globe2, BookOpen, Plus, Trash2, Edit, Download, Tag, Target
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
@@ -111,6 +111,24 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   const fitScore = profile?.ai_scores?.find(s => s.score_type === 'role_fit');
   let fitData = null;
   try { fitData = fitScore ? JSON.parse(fitScore.reasoning) : null; } catch { /* ignore */ }
+
+  const activeRoleFit = profile?.role_fit || candidate?.ats_detail || fitData || {};
+  const reqMatchedCount = activeRoleFit?.required_matched ?? candidate?.required_matched ?? fitData?.required_matched ?? 0;
+  const reqTotalCount = activeRoleFit?.required_total ?? candidate?.required_total ?? fitData?.required_total ?? 0;
+  const prefMatchedCount = activeRoleFit?.preferred_matched ?? candidate?.preferred_matched ?? fitData?.preferred_matched ?? 0;
+  const prefTotalCount = activeRoleFit?.preferred_total ?? candidate?.preferred_total ?? fitData?.preferred_total ?? 0;
+
+  // Strictly (matched / total) * 100
+  const reqScore = reqTotalCount > 0 
+    ? Math.round((reqMatchedCount / reqTotalCount) * 100) 
+    : (activeRoleFit?.required_score != null ? Math.round(activeRoleFit.required_score) : null);
+  const prefScore = prefTotalCount > 0 
+    ? Math.round((prefMatchedCount / prefTotalCount) * 100) 
+    : (activeRoleFit?.preferred_score != null ? Math.round(activeRoleFit.preferred_score) : null);
+
+  const matchedSkills = activeRoleFit?.matched_skills || fitData?.matched || [];
+  const missingSkills = activeRoleFit?.missing_skills || fitData?.missing || [];
+  const partialSkills = activeRoleFit?.partial_skills || fitData?.partial || [];
 
   const confidence = profile?.ai_scores?.find(s => s.score_type === 'confidence_signals');
   let confFlags = [];
@@ -737,6 +755,115 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     <div className="glass-panel p-3 text-xs text-white/40 italic">General Pool (Untagged)</div>
                   )}
                 </section>
+
+                {/* ATS Role-Fit Analysis */}
+                {(reqScore != null || prefScore != null || matchedSkills.length > 0 || missingSkills.length > 0) && (
+                  <section className="space-y-3">
+                    <SectionLabel icon={<Target size={13} />} label="ATS Role-Fit Analysis" color="text-primary" />
+                    
+                    {/* Score Cards Grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Required Score Card */}
+                      <div className="glass-panel p-4 flex flex-col justify-between border-white/10 bg-white/[0.02]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Required</span>
+                          {reqTotalCount > 0 && (
+                            <span className="text-[10px] font-bold text-primary/80">
+                              {reqMatchedCount}/{reqTotalCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className={`text-2xl font-black ${reqScore >= 70 ? 'text-emerald-400' : reqScore >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
+                            {reqScore != null ? `${Math.round(reqScore)}%` : '—'}
+                          </span>
+                        </div>
+                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mt-3">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${reqScore >= 70 ? 'bg-emerald-400' : reqScore >= 40 ? 'bg-amber-400' : 'bg-rose-400'}`}
+                            style={{ width: `${Math.min(reqScore || 0, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Preferred Score Card */}
+                      <div className="glass-panel p-4 flex flex-col justify-between border-white/10 bg-white/[0.02]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Preferred</span>
+                          {prefTotalCount > 0 && (
+                            <span className="text-[10px] font-bold text-purple-400">
+                              {prefMatchedCount}/{prefTotalCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className={`text-2xl font-black ${prefScore >= 70 ? 'text-emerald-400' : prefScore >= 40 ? 'text-purple-400' : 'text-slate-400'}`}>
+                            {prefScore != null ? `${Math.round(prefScore)}%` : '—'}
+                          </span>
+                        </div>
+                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mt-3">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${prefScore >= 70 ? 'bg-emerald-400' : prefScore >= 40 ? 'bg-purple-400' : 'bg-slate-400'}`}
+                            style={{ width: `${Math.min(prefScore || 0, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Matched & Missing Skills Breakdown */}
+                    {(matchedSkills.length > 0 || partialSkills.length > 0 || missingSkills.length > 0) && (
+                      <div className="glass-panel p-4 space-y-3 border-white/5">
+                        {/* Matched Skills */}
+                        {matchedSkills.length > 0 && (
+                          <div>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5 mb-2">
+                              <CheckCircle size={11} /> Matched Skills ({matchedSkills.length})
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {matchedSkills.map((s, idx) => (
+                                <span key={idx} className="px-2.5 py-1 rounded-lg bg-emerald-400/10 border border-emerald-400/20 text-[11px] font-semibold text-emerald-300">
+                                  ✓ {typeof s === 'string' ? s : s.skill}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Partial Skills */}
+                        {partialSkills.length > 0 && (
+                          <div className="pt-2 border-t border-white/5">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5 mb-2">
+                              <Zap size={11} /> Partial / Alias Matches ({partialSkills.length})
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {partialSkills.map((p, idx) => (
+                                <span key={idx} className="px-2.5 py-1 rounded-lg bg-amber-400/10 border border-amber-400/20 text-[11px] font-semibold text-amber-300" title={`Candidate skill: ${p.candidate_skill || 'Related'}`}>
+                                  ~ {typeof p === 'string' ? p : p.skill} {p.candidate_skill ? `(${p.candidate_skill})` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Missing Skills */}
+                        {missingSkills.length > 0 && (
+                          <div className="pt-2 border-t border-white/5">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-rose-400 flex items-center gap-1.5 mb-2">
+                              <X size={11} /> Missing Skills ({missingSkills.length})
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {missingSkills.map((s, idx) => (
+                                <span key={idx} className="px-2.5 py-1 rounded-lg bg-rose-400/10 border border-rose-400/20 text-[11px] font-semibold text-rose-300">
+                                  ✗ {typeof s === 'string' ? s : s.skill}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )}
 
                 {/* Skills */}
                 <section>

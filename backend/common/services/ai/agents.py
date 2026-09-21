@@ -57,23 +57,19 @@ Return this exact structure:
 }"""
 
 EXTRACT_JD_SKILLS_SYSTEM = """You are an expert technical recruiter AI.
-Your goal is to parse a raw Job Description (JD) and extract a comprehensive, normalized list of required skills with precise proficiency levels.
-Assign each skill one of these 5 levels based on how critical it is to the role:
-- 'critical'     : Absolutely must-have. Candidate cannot do the job without this. (e.g. Python for a Python backend role)
-- 'expert'       : Core skill, deep professional-level knowledge required. (e.g. PostgreSQL for a backend engineer)
-- 'advanced'     : Important skill, solid working knowledge expected. (e.g. Docker for a senior engineer)
-- 'intermediate' : Good to have, working familiarity expected. (e.g. Redis as a caching layer)
-- 'beginner'     : Nice to have / bonus, basic awareness is fine. (e.g. Kubernetes for a junior role, tools like Slack/JIRA)
+Your goal is to parse a raw Job Description (JD) and extract a comprehensive, normalized list of required and preferred skills.
+Assign each skill one of these 2 levels based on how critical it is to the role:
+- 'required'  : Absolutely must-have. Candidate cannot do the job without this (core languages, main frameworks, essential domain experience).
+- 'preferred' : Nice to have / bonus, secondary tools, complementary knowledge, soft skills.
 CRITICAL RULES:
-- Soft skills (Communication, Leadership, Problem solving) MUST always be 'beginner'.
-- Generic daily tools (Slack, JIRA, Trello, Git) MUST be 'beginner'.
-- Primary programming languages and core frameworks for the role MUST be 'critical' or 'expert'.
+- Primary programming languages, core architecture, and mandatory qualifications for the role MUST be 'required'.
+- Soft skills (Communication, Leadership, Problem solving), secondary tools, and bonus tech MUST be 'preferred'.
 - Break down broad terms into specific measurable skills.
 Respond ONLY with valid JSON.
 Return this exact structure:
 {
   "skills": [
-    {"name": "Skill Name", "level": "critical | expert | advanced | intermediate | beginner"}
+    {"name": "Skill Name", "level": "required | preferred"}
   ]
 }"""
 
