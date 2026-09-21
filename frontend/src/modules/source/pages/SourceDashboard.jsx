@@ -9,7 +9,7 @@ import {
   Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
   ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
   Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
-  Archive, Pause, Play, Folder, Tag, Check
+  Archive, Pause, Play, Folder, Tag, Check, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
@@ -19,6 +19,7 @@ import OfferApprovals from './OfferApprovals';
 import ActiveCandidates from './ActiveCandidates';
 import InviteStatus from './InviteStatus';
 import ResumeRepo from './ResumeRepo';
+import CandidateReportModal from '../components/CandidateReportModal';
 
 import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
@@ -404,10 +405,16 @@ export default function SourceDashboard() {
   // Invite-status tab: role selector
   const [inviteStatusRoleId, setInviteStatusRoleId] = useState('');
   const [showInviteStatus, setShowInviteStatus] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
-  
   // Filter helpers - repository folders
   const [repoFolders, setRepoFolders] = useState([]);
+
+  const currentRoleTitle = useMemo(() => {
+    if (!filters.role_id) return '';
+    const r = jobRoles.find(j => String(j.id) === String(filters.role_id));
+    return r ? r.title : '';
+  }, [filters.role_id, jobRoles]);
 
   const fetchRepoFolders = useCallback(async () => {
     try {
@@ -1421,6 +1428,14 @@ export default function SourceDashboard() {
               >
                 <Filter size={15} /> Filters
               </button>
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 text-sm font-semibold transition-colors duration-150 shadow-xs"
+                title="Generate Candidate Shortlist Report (CSV, Excel, PDF)"
+              >
+                <FileSpreadsheet size={15} className="text-purple-600" />
+                <span>Generate Report</span>
+              </button>
               {/* <button
                 onClick={() => setShowUpload(true)}
                 className="
@@ -2203,6 +2218,14 @@ export default function SourceDashboard() {
                 className="px-5 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:text-gray-700 transition-colors duration-150"
               >
                 Reset
+              </button>
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors duration-150 flex items-center gap-2 shadow-xs"
+                title="Generate Candidate Shortlist Report (CSV, Excel, PDF)"
+              >
+                <FileSpreadsheet size={14} className="text-purple-600" />
+                <span>Generate Report</span>
               </button>
               {(() => {
                 const selectedTags = (filters.tags && filters.tags.length > 0)
@@ -3019,6 +3042,16 @@ export default function SourceDashboard() {
           </form>
         </Modal>
       )}
+
+      {/* ── Candidate Report Modal ── */}
+      <CandidateReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        candidates={filteredCandidates}
+        roleTitle={currentRoleTitle}
+        filters={filters}
+        companyName={user?.company_name || 'Phygitron 360'}
+      />
 
         </div>
       </div>
