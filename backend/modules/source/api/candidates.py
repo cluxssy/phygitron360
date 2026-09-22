@@ -315,6 +315,34 @@ async def get_active_bulk_upload(
         "data": progress
     }
 
+@router.post("/bulk-upload/active/cancel", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def cancel_active_bulk_upload(
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Cancel whatever bulk upload job is currently active or stuck."""
+    from backend.core.database import get_db_connection
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            service.repo._set_search_path(cur)
+            cur.execute("""
+                UPDATE bulk_upload_job_items 
+                SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
+                WHERE status IN ('pending', 'processing')
+            """)
+            cur.execute("""
+                UPDATE bulk_upload_jobs 
+                SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
+                WHERE status IN ('processing', 'extracting', 'paused')
+            """)
+            conn.commit()
+    finally:
+        conn.close()
+    return {
+        "success": True,
+        "message": "All active or stuck bulk uploads cancelled."
+    }
+
 @router.get("/bulk-upload/{job_id}", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def get_bulk_upload_status(
     job_id: int,

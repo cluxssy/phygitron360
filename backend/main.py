@@ -96,11 +96,93 @@ from backend.core.scheduler_jobs import run_missed_clockout_check, run_bimonthly
 
 scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
 
+async def run_tenant_background_init():
+    """Runs tenant schema migrations and background workers asynchronously without blocking server startup."""
+    import backend.core.database as db
+    from backend.core.database import get_db_connection, create_tables
+
+    def _get_tenants():
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute('SET search_path TO public')
+                cur.execute("SELECT id FROM tenants")
+                return [row[0] for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+    try:
+        tenant_ids = await asyncio.to_thread(_get_tenants)
+    except Exception as e:
+        print(f"[Startup] Failed to fetch tenants for background migration: {e}", flush=True)
+        return
+
+    print(f"[Startup] Running schema migration for {len(tenant_ids)} tenants: {tenant_ids}", flush=True)
+
+    # Run create_tables() for every tenant in background thread
+    for t_id in tenant_ids:
+        if t_id == 'public':
+            continue
+        try:
+            await asyncio.to_thread(create_tables, schema_name=t_id)
+            print(f"[Startup] Schema migration OK for {t_id}", flush=True)
+        except Exception as e:
+            print(f"[Startup] Schema migration FAILED for {t_id}: {e}", flush=True)
+
+    # Post-migrations in background thread
+    def _run_post_migrations():
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET lock_timeout = '5s'")
+                for t_id in ['public'] + tenant_ids:
+                    try:
+                        cur.execute(f'SET search_path TO "{t_id}"')
+                        cur.execute('ALTER TABLE users RENAME COLUMN roles TO templates')
+                        conn.commit()
+                        print(f"[Migration] Renamed roles to templates for {t_id}", flush=True)
+                    except Exception:
+                        conn.rollback()
+
+                    try:
+                        cur.execute(f'SET search_path TO "{t_id}", public')
+                        cur.execute('''
+                            UPDATE company_holidays 
+                            SET holiday_type = 'regular_holiday' 
+                            WHERE holiday_type IN ('company_holiday', 'festival')
+                        ''')
+                        cur.execute('''
+                            UPDATE company_holidays 
+                            SET holiday_type = 'restricted_holiday' 
+                            WHERE holiday_type IN ('optional_holiday')
+                        ''')
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+        except Exception as e:
+            print(f"[Startup] Post-migration error: {e}", flush=True)
+        finally:
+            conn.close()
+
+    await asyncio.to_thread(_run_post_migrations)
+
+    # Start bulk upload workers directly as async tasks
+    for t_id in tenant_ids:
+        try:
+            svc = CandidateService(tenant_id=t_id)
+            asyncio.create_task(svc.process_bulk_upload_queue())
+            print(f"[Startup] Bulk-upload worker started for {t_id}", flush=True)
+        except Exception as e:
+            print(f"[Startup] Failed starting bulk-upload worker for {t_id}: {e}", flush=True)
+
+    print("[Startup] Tenant background initialization complete.", flush=True)
+
+
 @app.on_event("startup")
 async def start_background_workers():
     import backend.core.database as db
     db.main_loop = asyncio.get_running_loop()
-    from backend.core.database import get_db_connection, create_tables
+    from backend.core.database import create_tables
 
     # First, ensure the public schema and master tables exist
     try:
@@ -109,70 +191,13 @@ async def start_background_workers():
     except Exception as e:
         print(f"[Startup] Public schema migration FAILED: {e}", flush=True)
 
-    # Now we can safely query the tenants table
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute('SET search_path TO public')
-            cur.execute("SELECT id FROM tenants")
-            tenant_ids = [row[0] for row in cur.fetchall()]
-    finally:
-        conn.close()
-
-    print(f"[Startup] Running schema migration for {len(tenant_ids)} tenants: {tenant_ids}", flush=True)
-
-    # Run create_tables() for every tenant as an idempotent migration.
-    for t_id in tenant_ids:
-        # Skip public as we already did it
-        if t_id == 'public':
-            continue
-        try:
-            create_tables(schema_name=t_id)
-            print(f"[Startup] Schema migration OK for {t_id}", flush=True)
-        except Exception as e:
-            print(f"[Startup] Schema migration FAILED for {t_id}: {e}", flush=True)
-
-    # TEMPORARY MIGRATION: Rename `roles` to `templates`
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            for t_id in ['public'] + tenant_ids:
-                try:
-                    cur.execute(f'SET search_path TO "{t_id}"')
-                    cur.execute('ALTER TABLE users RENAME COLUMN roles TO templates')
-                    conn.commit()
-                    print(f"[Migration] Renamed roles to templates for {t_id}", flush=True)
-                except Exception as e:
-                    conn.rollback()
-
-                # Migrate legacy holiday types if present
-                try:
-                    cur.execute(f'SET search_path TO "{t_id}", public')
-                    cur.execute('''
-                        UPDATE company_holidays 
-                        SET holiday_type = 'regular_holiday' 
-                        WHERE holiday_type IN ('company_holiday', 'festival')
-                    ''')
-                    cur.execute('''
-                        UPDATE company_holidays 
-                        SET holiday_type = 'restricted_holiday' 
-                        WHERE holiday_type = 'optional_holiday'
-                    ''')
-                    conn.commit()
-                except Exception:
-                    conn.rollback()
-    finally:
-        conn.close()
-
-    for t_id in tenant_ids:
-        svc = CandidateService(tenant_id=t_id)
-        asyncio.create_task(svc.process_bulk_upload_queue())
-        print(f"[Startup] Bulk-upload worker started for {t_id}", flush=True)
-
     # Start APScheduler tasks
     scheduler.add_job(run_missed_clockout_check, CronTrigger(hour="17,21", minute=0))
     scheduler.add_job(run_bimonthly_report, CronTrigger(hour=9, minute=0))
     scheduler.start()
+
+    # Launch tenant migrations and workers asynchronously so port 8000 opens immediately
+    asyncio.create_task(run_tenant_background_init())
 
 @app.on_event("shutdown")
 async def shutdown_event():

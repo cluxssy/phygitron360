@@ -43,14 +43,18 @@ class _TokenBucketLimiter:
 _GROQ_LIMITER   = _TokenBucketLimiter(rpm=int(os.getenv("GROQ_RPM_LIMIT", "28")))
 _GEMINI_LIMITER = _TokenBucketLimiter(rpm=int(os.getenv("GEMINI_RPM_LIMIT", "13")))
 
-# Free tiers strictly prohibit concurrent requests per key.
-_gemini_keys = []
-multi = os.getenv("GEMINI_API_KEYS", "")
-if multi: _gemini_keys = [k.strip() for k in multi.split(",") if k.strip()]
-if not _gemini_keys:
-    single = os.getenv("GOOGLE_API_KEY", "")
-    if single.strip(): _gemini_keys = [single.strip()]
+def _get_gemini_key_list() -> list[str]:
+    keys = []
+    multi = os.getenv("GEMINI_API_KEYS", "")
+    if multi:
+        keys.extend([k.strip().strip("'\"") for k in multi.split(",") if k.strip().strip("'\"")])
+    for single_var in ["GOOGLE_API_KEY", "GOOGLE_API_KEY_SELF"]:
+        v = os.getenv(single_var, "").strip().strip("'\"")
+        if v and v not in keys:
+            keys.append(v)
+    return keys
 
+_gemini_keys = _get_gemini_key_list()
 _GEMINI_CONCURRENCY = threading.Semaphore(max(len(_gemini_keys), 1))
 
 
@@ -61,7 +65,7 @@ _GEMINI_CONCURRENCY = threading.Semaphore(max(len(_gemini_keys), 1))
 class _KeyPool:
     """Round-robin key pool. On 429, rotates to the next key."""
     def __init__(self, keys: list[str]):
-        self._keys = [k.strip() for k in keys if k.strip()]
+        self._keys = [k.strip().strip("'\"") for k in keys if k.strip().strip("'\"")]
         self._idx = 0
         self._lock = threading.Lock()
 
@@ -81,11 +85,11 @@ class _KeyPool:
 def _parse_key_list(env_var: str, single_var: str) -> list[str]:
     """Support both GROQ_API_KEYS=k1,k2 (multi) and GROQ_API_KEY=k1 (single)."""
     multi = os.getenv(env_var, "")
-    keys = [k.strip() for k in multi.split(",") if k.strip()]
+    keys = [k.strip().strip("'\"") for k in multi.split(",") if k.strip().strip("'\"")]
     if not keys:
         single = os.getenv(single_var, "")
         if single.strip():
-            keys = [single.strip()]
+            keys = [single.strip().strip("'\"")]
     return keys
 
 
@@ -181,13 +185,14 @@ class AIService:
 
     def __init__(self):
         self.provider = os.getenv("AI_PROVIDER", "mock").lower()
-        self.groq_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-        # Defaulting to 3.1-flash-lite as it has a massive 500 RPD and 250k TPM free tier limit
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+        # Primary Gemini model
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
+        # Fallback Gemini model when primary hits 503/429
+        self.gemini_fallback_model = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite").strip()
 
         # --- Key pools (support both single and comma-separated multi-key) ---
         self._groq_pool   = _KeyPool(_parse_key_list("GROQ_API_KEYS",   "GROQ_API_KEY"))
-        self._gemini_pool = _KeyPool(_parse_key_list("GEMINI_API_KEYS", "GOOGLE_API_KEY"))
+        self._gemini_pool = _KeyPool(_get_gemini_key_list())
 
         # Backward-compat single-key references used by _sanitize_error
         self.openai_api_key  = os.getenv("OPENAI_API_KEY")
@@ -330,24 +335,41 @@ class AIService:
                 return await self.generate_json(prompt, system_prompt, provider_override="gemini")
 
         elif provider == "gemini":
-            key = self._gemini_pool.current()
-            if not key:
+            num_keys = len(self._gemini_pool._keys)
+            if num_keys == 0:
                 return self._mock_json_response(prompt)
-            _GEMINI_LIMITER.acquire()
-            client = self._get_gemini_client(key)
-            full_prompt = f"{system_prompt}\n\n{prompt}\n\nIMPORTANT: Return ONLY valid JSON. No markdown."
-            if client:
-                try:
-                    response = client.models.generate_content(model=self.gemini_model, contents=full_prompt)
-                    clean = response.text.replace('```json', '').replace('```', '').strip()
-                    return json.loads(clean)
-                except Exception as e:
-                    err = self._sanitize_error(e)
-                    if self._is_rate_limit(err):
-                        self._gemini_pool.rotate()
-                    print(f"Gemini async failed: {err}")
-                    raise RuntimeError(err) from None
-            return self._mock_json_response(prompt)
+
+            models_to_try = [self.gemini_model]
+            if self.gemini_fallback_model and self.gemini_fallback_model not in models_to_try:
+                models_to_try.append(self.gemini_fallback_model)
+
+            last_err = "No attempt made."
+            for attempt in range(max(num_keys, 1)):
+                key = self._gemini_pool.current()
+                if not key:
+                    break
+                _GEMINI_LIMITER.acquire()
+                client = self._get_gemini_client(key)
+                full_prompt = f"{system_prompt}\n\n{prompt}\n\nIMPORTANT: Return ONLY valid JSON. No markdown."
+                if client:
+                    for model_name in models_to_try:
+                        try:
+                            response = client.models.generate_content(model=model_name, contents=full_prompt)
+                            clean = response.text.replace('```json', '').replace('```', '').strip()
+                            return json.loads(clean)
+                        except Exception as e:
+                            err = self._sanitize_error(e)
+                            if '404' in err or 'NOT_FOUND' in err:
+                                print(f"Gemini async ({model_name}) not found (404), skipping model.")
+                                continue
+                            last_err = err
+                            if self._is_rate_limit(err):
+                                print(f"Gemini async ({model_name}) 429/503 busy on key[{self._gemini_pool._idx}]. Error: {err[:120]}. Trying fallback...")
+                                continue
+                            print(f"Gemini async failed: {err[:100]}")
+                            break
+                self._gemini_pool.rotate()
+            raise RuntimeError(f"All Gemini keys exhausted (503 UNAVAILABLE / rate limited on {self.gemini_model}). Last error: {last_err}")
         return {}
 
     # ------------------------------------------------------------------
@@ -361,8 +383,8 @@ class AIService:
 
         Features:
         - Per-provider token-bucket rate limiting (global, shared across workers)
-        - Key rotation and retry loops across the entire key pool on 429
-        - Gemini SDK → REST fallback per key, with immediate rotation on 429
+        - Key rotation and retry loops across the entire key pool on 429 / 503
+        - Gemini SDK → REST fallback per key, with fallback to gemini-3.5-flash-lite on 503/429
         """
         import requests as _req
 
@@ -419,63 +441,93 @@ class AIService:
             if num_keys == 0:
                 raise RuntimeError("Gemini: no API key available. All AI providers exhausted.")
 
+            models_to_try = [self.gemini_model]
+            if self.gemini_fallback_model and self.gemini_fallback_model not in models_to_try:
+                models_to_try.append(self.gemini_fallback_model)
+
             last_err = "No attempt made."
-            for attempt in range(num_keys):
-                key = self._gemini_pool.current()
-                if not key:
-                    break
+            max_rounds = 3  # Retry keys across 3 rounds if demand spikes (503) or rate limits occur
 
-                _GEMINI_LIMITER.acquire()   # block until we have capacity
+            for round_idx in range(max_rounds):
+                for attempt in range(num_keys):
+                    key = self._gemini_pool.current()
+                    if not key:
+                        break
 
-                full_prompt = (
-                    f"{system_prompt}\n\n{prompt}\n\n"
-                    "IMPORTANT: Return ONLY valid JSON. No markdown, no backticks, no explanation."
-                )
+                    _GEMINI_LIMITER.acquire()   # block until we have capacity
 
-                # Acquire the semaphore to prevent concurrent requests on the free tier
-                with _GEMINI_CONCURRENCY:
-                    # 1. Try SDK first
-                    client = self._get_gemini_client(key)
-                    if client:
-                        try:
-                            response = client.models.generate_content(model=self.gemini_model, contents=full_prompt)
-                            clean = response.text.replace('```json', '').replace('```', '').strip()
-                            return json.loads(clean)
-                        except Exception as sdk_err:
-                            err = self._sanitize_error(sdk_err)
-                            last_err = err
-                            if self._is_rate_limit(err):
-                                print(f"Gemini SDK 429 on key[{self._gemini_pool._idx}]. Error: {err[:200]}. Rotating key...")
-                                self._gemini_pool.rotate()
+                    full_prompt = (
+                        f"{system_prompt}\n\n{prompt}\n\n"
+                        "IMPORTANT: Return ONLY valid JSON. No markdown, no backticks, no explanation."
+                    )
+
+                    # Acquire the semaphore to prevent concurrent requests per key
+                    with _GEMINI_CONCURRENCY:
+                        parsed_result = None
+
+                        for model_name in models_to_try:
+                            # 1. Try SDK first
+                            client = self._get_gemini_client(key)
+                            if client:
+                                try:
+                                    print(f"Calling Gemini SDK ({model_name}) on key[{self._gemini_pool._idx}]...", flush=True)
+                                    response = client.models.generate_content(model=model_name, contents=full_prompt)
+                                    clean = response.text.replace('```json', '').replace('```', '').strip()
+                                    parsed_result = json.loads(clean)
+                                    print(f"Gemini SDK ({model_name}) success!", flush=True)
+                                    break
+                                except Exception as sdk_err:
+                                    err = self._sanitize_error(sdk_err)
+                                    if '404' in err or 'NOT_FOUND' in err:
+                                        print(f"Gemini SDK ({model_name}) not found (404), skipping model.")
+                                        continue
+                                    last_err = err
+                                    if self._is_rate_limit(err):
+                                        print(f"Gemini SDK ({model_name}) 429/503 busy on key[{self._gemini_pool._idx}]. Error: {err[:150]}. Trying fallback model...")
+                                        continue
+                                    else:
+                                        print(f"Gemini SDK ({model_name}) error: {err[:80]}. Trying REST...")
+
+                            # 2. REST fallback
+                            try:
+                                print(f"Calling Gemini REST ({model_name}) on key[{self._gemini_pool._idx}]...", flush=True)
+                                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+                                resp = _req.post(url, json={"contents": [{"parts": [{"text": full_prompt}]}]}, timeout=40)
+                                resp.raise_for_status()
+                                res_json = resp.json()
+                                if "candidates" in res_json and res_json["candidates"]:
+                                    text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                                    clean = text.replace('```json', '').replace('```', '').strip()
+                                    parsed_result = json.loads(clean)
+                                    print(f"Gemini REST ({model_name}) success!", flush=True)
+                                    break
+                                else:
+                                    raise RuntimeError(f"Gemini REST unexpected payload: {res_json}")
+                            except Exception as e:
+                                err = self._sanitize_error(e)
+                                if '404' in err or 'NOT_FOUND' in err:
+                                    print(f"Gemini REST ({model_name}) not found (404), skipping model.")
+                                    continue
+                                last_err = err
+                                if self._is_rate_limit(err):
+                                    print(f"Gemini REST ({model_name}) 429/503 busy on key[{self._gemini_pool._idx}]. Error: {err[:150]}. Trying fallback model...")
+                                else:
+                                    print(f"Gemini REST ({model_name}) error: {err[:100]}. Rotating key...")
                                 continue
-                            else:
-                                print(f"Gemini SDK error: {err[:80]}. Trying REST...")
 
-                    # 2. REST fallback (only if SDK failed for non-429 reason or client wasn't created)
-                    try:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={key}"
-                        resp = _req.post(url, json={"contents": [{"parts": [{"text": full_prompt}]}]}, timeout=40)
-                        resp.raise_for_status()
-                        res_json = resp.json()
-                        if "candidates" in res_json and res_json["candidates"]:
-                            text = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                            clean = text.replace('```json', '').replace('```', '').strip()
-                            return json.loads(clean)
-                        raise RuntimeError(f"Gemini REST unexpected payload: {res_json}")
-                    except Exception as e:
-                        err = self._sanitize_error(e)
-                        last_err = err
-                        if self._is_rate_limit(err):
-                            print(f"Gemini REST 429. Error: {err[:200]}. Rotating key...")
-                            self._gemini_pool.rotate()
-                            continue
-                        else:
-                            print(f"Gemini REST error: {err[:80]}")
-                            # Non-rate-limit error on REST fallback: rotate and try next key
-                            self._gemini_pool.rotate()
-                            continue
+                        if parsed_result is not None:
+                            return parsed_result
 
-            raise RuntimeError(f"All Gemini keys exhausted. Last error: {last_err}")
+                        # If all models on this key were busy or failed, rotate to next key
+                        self._gemini_pool.rotate()
+
+                # End of a full round through all keys. If not finished, wait briefly before next round (demand spikes are temporary)
+                if round_idx < max_rounds - 1:
+                    sleep_secs = 2.0 * (round_idx + 1)
+                    print(f"All {num_keys} Gemini key(s) busy/503 in round {round_idx + 1}. Backing off {sleep_secs}s before retry round {round_idx + 2}...")
+                    time.sleep(sleep_secs)
+
+            raise RuntimeError(f"All Gemini keys exhausted (503 UNAVAILABLE / rate limited on {self.gemini_model}). Last error: {last_err}")
 
         elif provider == "openai":
             raise RuntimeError("OpenAI async client cannot be used in sync workers. Set BULK_AI_PROVIDER=groq or gemini.")

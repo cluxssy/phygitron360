@@ -623,7 +623,7 @@ export default function SourceDashboard() {
   useEffect(() => {
     const fetchActiveJobOnMount = async () => {
       try {
-        const res = await fetch('/api/source/candidates/bulk-upload/active');
+        const res = await fetch('/api/source/candidates/bulk-upload/active', { credentials: 'include' });
         const data = await res.json();
         if (res.ok && data.success && data.data && data.data.job) {
           setBulkJobId(data.data.job.id);
@@ -640,7 +640,7 @@ export default function SourceDashboard() {
   const fetchActiveJob = useCallback(async () => {
     if (!bulkJobId) return;
     try {
-      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`);
+      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`, { credentials: 'include' });
       if (r.status === 404) {
         setBulkJobId(null);
         setBulkJobProgress(null);
@@ -662,7 +662,7 @@ export default function SourceDashboard() {
 
     const fetchProgress = async () => {
       try {
-        const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`);
+        const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}`, { credentials: 'include' });
         if (r.status === 404) {
           setBulkJobId(null);
           setBulkJobProgress(null);
@@ -834,10 +834,25 @@ export default function SourceDashboard() {
           const res = await fetch('/api/source/candidates/bulk-upload/active', { credentials: 'include' });
           const data = await res.json();
           if (res.ok && data.success && data.data?.job) {
-            setBulkJobId(data.data.job.id);
+            const activeId = data.data.job.id;
+            setBulkJobId(activeId);
             setBulkJobProgress(data.data);
             setBulkUploadTriggered(true);
-            toast('A previous upload is still processing. Reconnected to its progress.', { icon: 'ℹ️' });
+            toast((t) => (
+              <div className="flex items-center justify-between gap-3 w-full">
+                <span className="text-xs text-gray-800 font-medium">A previous upload is active. Reconnected to its progress.</span>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    toast.dismiss(t.id);
+                    await handleCancelQueue(activeId);
+                  }}
+                  className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-bold whitespace-nowrap transition-colors shadow-sm cursor-pointer"
+                >
+                  Cancel Old Job
+                </button>
+              </div>
+            ), { icon: 'ℹ️', duration: 15000 });
           } else {
             // Active job was self-healed by backend — retry the upload
             toast('Previous upload completed. Please try uploading again.', { icon: '✅' });
@@ -896,23 +911,47 @@ export default function SourceDashboard() {
     handleUpload(e);
   };
 
-  const handleCancelQueue = async () => {
-    if (!bulkJobId) return;
+  const handleCancelQueue = async (overrideJobId = null) => {
+    const validOverride = (typeof overrideJobId === 'string' || typeof overrideJobId === 'number') && !isNaN(Number(overrideJobId))
+      ? Number(overrideJobId)
+      : null;
+    const idToCancel = validOverride || bulkJobId;
     try {
-      const r = await fetch(`/api/source/candidates/bulk-upload/${bulkJobId}/cancel`, { 
-        method: 'POST', 
-        credentials: 'include' 
-      });
+      let r;
+      if (idToCancel) {
+        r = await fetch(`/api/source/candidates/bulk-upload/${idToCancel}/cancel`, { 
+          method: 'POST', 
+          credentials: 'include' 
+        });
+      } else {
+        r = await fetch('/api/source/candidates/bulk-upload/active/cancel', { 
+          method: 'POST', 
+          credentials: 'include' 
+        });
+      }
       if (r.ok) {
-        toast.success('Queue canceled successfully');
+        toast.success('Previous upload canceled. You can upload new files now!');
         setBulkJobId(null);
         setBulkJobProgress(null);
         setBulkUploadTriggered(false);
       } else {
-        toast.error('Failed to cancel queue');
+        // Fallback: try global active cancel if specific ID failed
+        const fallback = await fetch('/api/source/candidates/bulk-upload/active/cancel', { 
+          method: 'POST', 
+          credentials: 'include' 
+        });
+        if (fallback.ok) {
+          toast.success('Upload queue cleared. You can upload new files now!');
+          setBulkJobId(null);
+          setBulkJobProgress(null);
+          setBulkUploadTriggered(false);
+        } else {
+          const errJson = await fallback.json().catch(() => ({}));
+          toast.error(errJson.detail || 'Failed to cancel queue');
+        }
       }
-    } catch {
-      toast.error('Error canceling queue');
+    } catch (err) {
+      toast.error('Error canceling queue: ' + (err.message || 'Network error'));
     }
   };
 
@@ -2044,7 +2083,7 @@ export default function SourceDashboard() {
                       <Pause size={12} /> Pause
                     </button>
                   )}
-                  <button onClick={handleCancelQueue} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
+                  <button onClick={() => handleCancelQueue()} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors">
                     Cancel Queue
                   </button>
                 </div>
@@ -3143,7 +3182,20 @@ export default function SourceDashboard() {
               ></div>
             ) : null}
           </div>
-          <p className="text-[10px] text-gray-400 mt-2 font-medium">Click to view details</p>
+          <div className="flex justify-between items-center mt-2">
+            <p className="text-[10px] text-gray-400 font-medium">Click to view details</p>
+            {bulkJobId && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCancelQueue();
+                }}
+                className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:underline transition-colors"
+              >
+                Cancel Queue
+              </button>
+            )}
+          </div>
         </div>
       )}
 
