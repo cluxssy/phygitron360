@@ -1,4 +1,6 @@
 import os
+import time
+import asyncio
 import uuid
 import math
 import logging
@@ -892,6 +894,13 @@ class CandidateService:
                     # Fetch up to 50 pending items (SKIP LOCKED)
                     items = self.repo.get_pending_bulk_upload_job_items(limit=50)
                     if not items:
+                        # Auto-heal: Rescue any items stuck in 'processing' for > 300s (5 minutes)
+                        # (Prevents idle workers from stealing items that are actively being parsed by AI)
+                        try:
+                            self.repo.reset_stuck_processing_items(older_than_seconds=300)
+                            self.repo.cleanup_stale_processing_jobs()
+                        except Exception as heal_err:
+                            logger.error(f"[Worker-{worker_id}][{self.tenant_id}] Auto-heal error: {heal_err}")
                         await asyncio.sleep(5)
                         continue
 
@@ -932,23 +941,22 @@ class CandidateService:
                                         self.repo.update_bulk_upload_job_item(
                                             item["id"], status="cancelled", error_message="Job was cancelled.", conn=conn, cur=cur
                                         )
+                                        conn.commit()
                                         continue
 
-                                    cur.execute("SAVEPOINT check_item")
                                     # 1. Duplicate hash check
                                     if self.repo.check_file_hash_exists(item["file_hash"]):
                                         self.repo.update_bulk_upload_job_item(
                                             item["id"], status="duplicate", error_message="Exact file already uploaded before.", conn=conn, cur=cur
                                         )
+                                        conn.commit()
                                         print(f"[Worker-{worker_id}][{self.tenant_id}] SKIPPED item {item['id']} ({item['filename']}): Duplicate file hash.", flush=True)
-                                        cur.execute("RELEASE SAVEPOINT check_item")
                                         
                                         # Cleanup duplicated file
                                         if item.get("file_path") and os.path.exists(item["file_path"]):
                                             try: os.remove(item["file_path"])
                                             except Exception: pass
                                         continue
-                                    cur.execute("RELEASE SAVEPOINT check_item")
                                     
                                     # 2. Extract text
                                     extracted_text = item.get("extracted_text") or ""
@@ -963,12 +971,14 @@ class CandidateService:
                                             self.repo.update_bulk_upload_job_item(
                                                 item["id"], status="failed", error_message=str(e)[:500], conn=conn, cur=cur
                                             )
+                                            conn.commit()
                                             continue
 
                                     if not extracted_text.strip():
                                         self.repo.update_bulk_upload_job_item(
                                             item["id"], status="failed", error_message="Could not extract text from file.", conn=conn, cur=cur
                                         )
+                                        conn.commit()
                                         continue
                                         
                                     from backend.common.services.ai.agents import PARSE_RESUME_SYSTEM
@@ -990,36 +1000,56 @@ class CandidateService:
                                     continue
                                     
                                 # 3. Call AI with batched prompt
+                                cur.execute("SELECT status FROM bulk_upload_jobs WHERE id = %s", (sub_batch[0]["job_id"],))
+                                j_row = cur.fetchone()
+                                if j_row and j_row[0] in ('cancelled', 'paused'):
+                                    print(f"[Worker-{worker_id}][{self.tenant_id}] Job {sub_batch[0]['job_id']} is {j_row[0]}. Aborting AI call.", flush=True)
+                                    break
+
                                 try:
+                                    print(f"[Worker-{worker_id}][{self.tenant_id}] Sending {len(batched_payloads)} resume(s) to AI ({ai_service.provider})...", flush=True)
                                     prompt = ai_service.build_batched_prompt(batched_payloads)
                                     
+                                    start_t = time.monotonic()
                                     ai_result_map = await asyncio.wait_for(
                                         loop.run_in_executor(
                                             None,
                                             lambda p=prompt: ai_service.generate_json_sync(p, PARSE_RESUME_SYSTEM)
                                         ),
-                                        timeout=900.0 # high timeout (15 mins) because 8 workers queueing on a single free tier semaphore can take minutes
+                                        timeout=900.0
                                     )
+                                    duration = round(time.monotonic() - start_t, 1)
+                                    print(f"[Worker-{worker_id}][{self.tenant_id}] AI response received in {duration}s. Parsing items...", flush=True)
                                     
                                     if not isinstance(ai_result_map, dict):
                                         raise ValueError(f"AI did not return a valid dictionary. Got type {type(ai_result_map)}")
                                         
                                 except Exception as e:
                                     err_str = str(e) or e.__class__.__name__
-                                    # Handle Rate limit
-                                    if any(err in err_str for err in ['413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 'rate_limit', 'timed out', 'nodename nor servname', 'ConnectionError', 'Timeout', 'TimeoutError', 'RemoteDisconnected', 'aborted', 'closed connection']):
+                                    # Handle Rate limit & temporary AI service unavailability
+                                    if any(err in err_str for err in [
+                                        '413', '429', 'RESOURCE_EXHAUSTED', '503', 'UNAVAILABLE', 
+                                        'rate_limit', 'timed out', 'nodename nor servname', 
+                                        'ConnectionError', 'Timeout', 'TimeoutError', 
+                                        'RemoteDisconnected', 'aborted', 'closed connection',
+                                        'exhausted', 'All Gemini keys', 'All Groq keys', 'busy', 'high demand'
+                                    ]):
                                         match = re.search(r'(?:retry in|try again in) (\d+\.?\d*)', err_str)
-                                        wait = int(float(match.group(1))) + 2 if match else 35
-                                        print(f"[Worker-{worker_id}][{self.tenant_id}] API busy, backing off {wait}s...", flush=True)
+                                        wait = int(float(match.group(1))) + 2 if match else 20
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] API busy/exhausted ({err_str[:120]}), backing off {wait}s...", flush=True)
                                         backoff = wait
-                                        # Return all remaining items in the overall batch to pending so they aren't stuck in processing!
-                                        for item in items[i:]:
+                                        # Return uncompleted items back to pending so they aren't stuck in processing!
+                                        for v_item, _, _ in valid_items:
+                                            self.repo.update_bulk_upload_job_item(v_item["id"], status="pending", error_message=None, conn=conn, cur=cur)
+                                        for item in items[i + len(sub_batch):]:
                                             self.repo.update_bulk_upload_job_item(item["id"], status="pending", error_message=None, conn=conn, cur=cur)
+                                        conn.commit()
                                         break  # Break out of the batch loop entirely
                                     else:
                                         print(f"[Worker-{worker_id}][{self.tenant_id}] ERROR on AI batch prompt: {err_str[:300]}", flush=True)
                                         for item, _, _ in valid_items:
                                             self.repo.update_bulk_upload_job_item(item["id"], status="failed", error_message=err_str[:500], conn=conn, cur=cur)
+                                        conn.commit()
                                         continue # move to next sub-batch
 
                                 # 4. Process each returned item in the batch

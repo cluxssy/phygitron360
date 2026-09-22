@@ -699,16 +699,25 @@ class CandidateRepository:
                 cur.close()
                 conn.close()
 
-    def reset_stuck_processing_items(self):
+    def reset_stuck_processing_items(self, older_than_seconds: int = 0):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                cur.execute(
-                    """UPDATE bulk_upload_job_items
-                       SET status = 'pending', updated_at = CURRENT_TIMESTAMP
-                       WHERE status = 'processing'"""
-                )
+                if older_than_seconds > 0:
+                    cur.execute(
+                        """UPDATE bulk_upload_job_items
+                           SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+                           WHERE status = 'processing' 
+                             AND COALESCE(updated_at, created_at) < CURRENT_TIMESTAMP - (%s || ' seconds')::interval""",
+                        (older_than_seconds,)
+                    )
+                else:
+                    cur.execute(
+                        """UPDATE bulk_upload_job_items
+                           SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+                           WHERE status = 'processing'"""
+                    )
                 conn.commit()
         finally:
             conn.close()
@@ -784,8 +793,17 @@ class CandidateRepository:
                         return int(list(r.values())[0] or 0)
                     return int(r[0] or 0)
 
-                # Self-healing: if a 'processing' job has no remaining work, auto-complete it
+                # Self-healing: if a 'processing' job has items stuck in 'processing' for >60s, reset them to 'pending'
                 if job['status'] == 'processing':
+                    cur.execute(
+                        """UPDATE bulk_upload_job_items
+                           SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+                           WHERE job_id = %s AND status = 'processing' 
+                             AND COALESCE(updated_at, created_at) < CURRENT_TIMESTAMP - INTERVAL '60 seconds'""",
+                        (job['id'],)
+                    )
+                    conn.commit()
+
                     cur.execute(
                         "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s AND status IN ('pending', 'processing')",
                         (job['id'],)
@@ -806,6 +824,19 @@ class CandidateRepository:
                             conn.commit()
                             logger.info(f"[SelfHeal] Auto-completed stale job {job['id']} ({total_items} items, 0 remaining)")
                             return None
+                        else:
+                            created_at = job.get('created_at')
+                            if created_at:
+                                from datetime import datetime, timezone
+                                now = datetime.now(timezone.utc) if getattr(created_at, 'tzinfo', None) else datetime.now()
+                                age_minutes = (now - created_at).total_seconds() / 60
+                                if age_minutes > 5:
+                                    cur.execute(
+                                        "UPDATE bulk_upload_jobs SET status = 'failed', error_message = 'Job ended with no files.', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                                        (job['id'],)
+                                    )
+                                    conn.commit()
+                                    return None
 
                 # Staleness timeout: extracting jobs stuck with 0 items for >30 minutes
                 if job['status'] == 'extracting':
@@ -1021,20 +1052,16 @@ class CandidateRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                # Mark pending and processing items as cancelled, skipping any locked by active workers
+                # Mark all pending and processing items as cancelled immediately
                 cur.execute("""
                     UPDATE bulk_upload_job_items 
-                    SET status = 'cancelled' 
-                    WHERE id IN (
-                        SELECT id FROM bulk_upload_job_items 
-                        WHERE job_id = %s AND status IN ('pending', 'processing')
-                        FOR UPDATE SKIP LOCKED
-                    )
+                    SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
+                    WHERE job_id = %s AND status IN ('pending', 'processing')
                 """, (job_id,))
                 # Mark job as cancelled
                 cur.execute("""
                     UPDATE bulk_upload_jobs 
-                    SET status = 'cancelled' 
+                    SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
                     WHERE id = %s
                 """, (job_id,))
             conn.commit()

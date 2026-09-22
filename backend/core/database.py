@@ -85,6 +85,9 @@ def create_tables(schema_name='public'):
     try:
         cur = conn.cursor()
 
+        # Set lock timeout so schema migrations never block indefinitely on active tables
+        cur.execute("SET lock_timeout = '10s'")
+
         # Set Search Path for Isolation
         cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"')
         cur.execute(f'SET search_path TO "{schema_name}"')
