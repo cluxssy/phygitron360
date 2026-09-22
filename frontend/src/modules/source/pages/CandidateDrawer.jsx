@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, MapPin, Mail, Phone, Briefcase, Clock,
   Zap, Shield, MessageSquare, CheckCircle,
@@ -107,12 +107,26 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   const [assessmentResults, setAssessmentResults] = useState([]);
   const [loadingAssessments, setLoadingAssessments] = useState(false);
 
-  // AI analysis parsed from stored scores
-  const fitScore = profile?.ai_scores?.find(s => s.score_type === 'role_fit');
+  // Selected role for evaluating ATS fit (defaults to roleId passed from the active dashboard filter)
+  const [activeEvalRoleId, setActiveEvalRoleId] = useState(roleId || '');
+
+  useEffect(() => {
+    setActiveEvalRoleId(roleId || '');
+  }, [roleId]);
+
+  const activeRole = useMemo(() => {
+    if (!activeEvalRoleId || !jobRoles) return null;
+    return jobRoles.find(r => String(r.id) === String(activeEvalRoleId));
+  }, [activeEvalRoleId, jobRoles]);
+
+  // AI analysis parsed from stored scores (strictly scoped to the active role if selected)
+  const fitScore = activeEvalRoleId 
+    ? profile?.ai_scores?.find(s => s.score_type === 'role_fit' && String(s.job_role_id) === String(activeEvalRoleId)) 
+    : null;
   let fitData = null;
   try { fitData = fitScore ? JSON.parse(fitScore.reasoning) : null; } catch { /* ignore */ }
 
-  const activeRoleFit = profile?.role_fit || candidate?.ats_detail || fitData || {};
+  const activeRoleFit = activeEvalRoleId ? (profile?.role_fit || candidate?.ats_detail || fitData || null) : null;
   const reqMatchedCount = activeRoleFit?.required_matched ?? candidate?.required_matched ?? fitData?.required_matched ?? 0;
   const reqTotalCount = activeRoleFit?.required_total ?? candidate?.required_total ?? fitData?.required_total ?? 0;
   const prefMatchedCount = activeRoleFit?.preferred_matched ?? candidate?.preferred_matched ?? fitData?.preferred_matched ?? 0;
@@ -126,9 +140,9 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     ? Math.round((prefMatchedCount / prefTotalCount) * 100) 
     : (activeRoleFit?.preferred_score != null ? Math.round(activeRoleFit.preferred_score) : null);
 
-  const matchedSkills = activeRoleFit?.matched_skills || fitData?.matched || [];
-  const missingSkills = activeRoleFit?.missing_skills || fitData?.missing || [];
-  const partialSkills = activeRoleFit?.partial_skills || fitData?.partial || [];
+  const matchedSkills = activeRoleFit ? (activeRoleFit?.matched_skills || fitData?.matched || []) : [];
+  const missingSkills = activeRoleFit ? (activeRoleFit?.missing_skills || fitData?.missing || []) : [];
+  const partialSkills = activeRoleFit ? (activeRoleFit?.partial_skills || fitData?.partial || []) : [];
 
   const confidence = profile?.ai_scores?.find(s => s.score_type === 'confidence_signals');
   let confFlags = [];
@@ -137,7 +151,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     confFlags = Array.isArray(parsed) ? parsed.map(f => typeof f === 'string' ? f : (f.reason || f.skill || '')).filter(Boolean) : [];
   } catch { /* ignore */ }
 
-  // Fetch full profile when drawer opens
+  // Fetch full profile when drawer opens or active role changes
   useEffect(() => {
     if (!candidate) { setProfile(null); return; }
     setProfile(null);
@@ -145,7 +159,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     setShowInviteForm(false);
     setShowScoreForm(false);
     setIsEditing(false);
-    const url = roleId ? `/api/source/candidates/${candidate.id}?role_id=${roleId}` : `/api/source/candidates/${candidate.id}`;
+    const url = activeEvalRoleId ? `/api/source/candidates/${candidate.id}?role_id=${activeEvalRoleId}` : `/api/source/candidates/${candidate.id}`;
     fetch(url)
       .then(r => r.json())
       .then(d => { 
@@ -163,7 +177,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       })
       .catch(() => { /* use shallow data */ })
       .finally(() => setLoadingProfile(false));
-  }, [candidate?.id]);
+  }, [candidate?.id, activeEvalRoleId]);
 
   const data = profile || candidate;
 
@@ -235,10 +249,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
         toast.success('Scored!');
         setShowScoreForm(false);
         onRefresh();
-        // Refetch profile to show new score
-        const rr = await fetch(`/api/source/candidates/${candidate.id}`);
-        const dd = await rr.json();
-        if (dd.success) setProfile(dd.data);
+        setActiveEvalRoleId(scoreRoleId);
       } else { toast.error(d.detail || 'Scoring failed'); }
     } catch { toast.error('Scoring error'); }
     finally { setScoring(false); }
@@ -249,10 +260,11 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     setUpdatingStatus(true);
     const tid = toast.loading(`Updating status to ${newStatus}...`);
     try {
+      const effRoleId = activeEvalRoleId || roleId;
       const r = await fetch(`/api/source/candidates/${candidate.id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, role_id: roleId ? parseInt(roleId) : null }),
+        body: JSON.stringify({ status: newStatus, role_id: effRoleId ? parseInt(effRoleId) : null }),
       });
       const d = await r.json();
       if (r.ok && d.success) {
@@ -756,19 +768,23 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   )}
                 </section>
 
-                {/* ATS Role-Fit Analysis */}
-                {(reqScore != null || prefScore != null || matchedSkills.length > 0 || missingSkills.length > 0) && (
+                {/* ATS Role-Fit Analysis - Strictly rendered when a specific job role is selected */}
+                {Boolean(activeEvalRoleId) && Boolean(activeRoleFit) && (reqScore != null || prefScore != null || matchedSkills.length > 0 || missingSkills.length > 0) && (
                   <section className="space-y-3">
-                    <SectionLabel icon={<Target size={13} />} label="ATS Role-Fit Analysis" color="text-primary" />
+                    <SectionLabel 
+                      icon={<Target size={13} />} 
+                      label={activeRole?.title ? `ATS Role-Fit Analysis • ${activeRole.title}` : "ATS Role-Fit Analysis"} 
+                      color="text-primary" 
+                    />
                     
                     {/* Score Cards Grid */}
                     <div className="grid grid-cols-2 gap-3">
                       {/* Required Score Card */}
                       <div className="glass-panel p-4 flex flex-col justify-between border-white/10 bg-white/[0.02]">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Required</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-rose-300">Required</span>
                           {reqTotalCount > 0 && (
-                            <span className="text-[10px] font-bold text-primary/80">
+                            <span className="text-[10px] font-bold text-rose-400">
                               {reqMatchedCount}/{reqTotalCount}
                             </span>
                           )}
@@ -789,21 +805,21 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                       {/* Preferred Score Card */}
                       <div className="glass-panel p-4 flex flex-col justify-between border-white/10 bg-white/[0.02]">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Preferred</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Preferred</span>
                           {prefTotalCount > 0 && (
-                            <span className="text-[10px] font-bold text-purple-400">
+                            <span className="text-[10px] font-bold text-emerald-400">
                               {prefMatchedCount}/{prefTotalCount}
                             </span>
                           )}
                         </div>
                         <div className="flex items-baseline gap-2 mt-2">
-                          <span className={`text-2xl font-black ${prefScore >= 70 ? 'text-emerald-400' : prefScore >= 40 ? 'text-purple-400' : 'text-slate-400'}`}>
+                          <span className={`text-2xl font-black ${prefScore >= 70 ? 'text-emerald-400' : prefScore >= 40 ? 'text-teal-400' : 'text-slate-400'}`}>
                             {prefScore != null ? `${Math.round(prefScore)}%` : '—'}
                           </span>
                         </div>
                         <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mt-3">
                           <div
-                            className={`h-full rounded-full transition-all duration-500 ${prefScore >= 70 ? 'bg-emerald-400' : prefScore >= 40 ? 'bg-purple-400' : 'bg-slate-400'}`}
+                            className={`h-full rounded-full transition-all duration-500 ${prefScore >= 70 ? 'bg-emerald-400' : prefScore >= 40 ? 'bg-teal-400' : 'bg-slate-400'}`}
                             style={{ width: `${Math.min(prefScore || 0, 100)}%` }}
                           />
                         </div>

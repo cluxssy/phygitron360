@@ -20,6 +20,7 @@ import ActiveCandidates from './ActiveCandidates';
 import InviteStatus from './InviteStatus';
 import ResumeRepo from './ResumeRepo';
 import CandidateReportModal from '../components/CandidateReportModal';
+import RoleDetailsModal from '../components/RoleDetailsModal';
 
 import "../../../styles/light-theme-override.css";
 import logo from "../../../assets/phy360.png";
@@ -44,7 +45,7 @@ import api from '../../../core/api/axios';
 const SCORE_COLOR = (s) => {
   if (!s && s !== 0) return 'text-gray-400 bg-gray-50 border-gray-200';
   if (s >= 80) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
-  if (s >= 60) return 'text-purple-600 bg-purple-50 border-purple-200';
+  if (s >= 50) return 'text-amber-700 bg-amber-50 border-amber-200';
   return 'text-rose-600 bg-rose-50 border-rose-200';
 };
 
@@ -406,6 +407,7 @@ export default function SourceDashboard() {
   const [inviteStatusRoleId, setInviteStatusRoleId] = useState('');
   const [showInviteStatus, setShowInviteStatus] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [viewingRole, setViewingRole] = useState(null);
 
   // Filter helpers - repository folders
   const [repoFolders, setRepoFolders] = useState([]);
@@ -1779,27 +1781,29 @@ export default function SourceDashboard() {
                 return (
                   <div 
                     key={r.id} 
-                    className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-lg transition-all hover:scale-[1.01] hover:z-10 flex flex-col"
+                    onClick={() => setViewingRole(r)}
+                    className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-lg transition-all hover:scale-[1.01] hover:z-10 flex flex-col cursor-pointer group"
+                    title="Click to view full job role description & skills"
                   >
                     <div className="flex w-full items-start justify-between mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center ${colors.text} shrink-0`}>
                           <Briefcase size={16} />
                         </div>
-                        <h3 className="text-lg font-semibold text-gray-800 truncate">{r.title}</h3>
+                        <h3 className="text-lg font-semibold text-gray-800 truncate group-hover:text-purple-700 transition-colors">{r.title}</h3>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button 
-                          onClick={() => openEditRole(r)} 
+                          onClick={(e) => { e.stopPropagation(); openEditRole(r); }} 
                           title="Edit role" 
-                          className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                          className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                         >
                           <Edit size={14} />
                         </button>
                         <button 
-                          onClick={() => deleteJobRole(r.id)} 
+                          onClick={(e) => { e.stopPropagation(); deleteJobRole(r.id); }} 
                           title="Delete role" 
-                          className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1823,23 +1827,35 @@ export default function SourceDashboard() {
                       </div>
                     )}
                     
-                    {/* Required Skills chips - all same color per role */}
+                    {/* Skills chips */}
                     {Array.isArray(r.required_skills) && r.required_skills.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {r.required_skills.slice(0, 6).map((s, i) => (
-                          <span key={i} className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium ${colors.bg} ${colors.text} border ${colors.border}`}>
-                            {s.name || s.skill || (typeof s === 'string' ? s : '')}
-                          </span>
-                        ))}
+                        {r.required_skills.slice(0, 6).map((s, i) => {
+                          const skillName = s.name || s.skill || (typeof s === 'string' ? s : '');
+                          const rawLvl = (s.level || 'required').toLowerCase();
+                          const isReq = rawLvl === 'required' || rawLvl === 'critical' || rawLvl === 'expert' || rawLvl === 'advanced';
+                          return (
+                            <span 
+                              key={i} 
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                isReq 
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}
+                            >
+                              {skillName}
+                            </span>
+                          );
+                        })}
                         {r.required_skills.length > 6 && (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200">
                             +{r.required_skills.length - 6} more
                           </span>
                         )}
                       </div>
                     )}
                     
-                    <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4 flex-1">
+                    <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4 flex-1 group-hover:text-gray-700 transition-colors">
                       {r.description || 'No description provided.'}
                     </p>
                     
@@ -1847,18 +1863,9 @@ export default function SourceDashboard() {
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${candidateCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
                         <span className="text-sm text-gray-600">
-                          {candidateCount > 0 ? `${candidateCount} assigned` : ''}
+                          {candidateCount > 0 ? `${candidateCount} assigned` : '0 assigned'}
                         </span>
                       </div>
-                      <button
-                        onClick={() => { handleAutoRank(r.id); fetchScoreStatus(r.id); }}
-                        disabled={autoRanking}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-xs font-medium hover:bg-purple-100 transition-colors disabled:opacity-50"
-                        title="Auto-rank candidates against this role"
-                      >
-                        <Zap size={12} /> 
-                        {autoRanking ? 'Ranking...' : 'Re-rank'}
-                      </button>
                     </div>
                     
                     {scoreStatus[r.id] && (
@@ -2280,8 +2287,8 @@ export default function SourceDashboard() {
             <div>Candidate</div>
             {filters.role_id && (
               <>
-                <div className="text-center font-bold text-gray-700">Required</div>
-                <div className="text-center font-bold text-gray-700">Preferred</div>
+                <div className="text-center font-bold text-rose-700">Required</div>
+                <div className="text-center font-bold text-emerald-700">Preferred</div>
               </>
             )}
             <div className="text-center">Experience</div>
@@ -2687,14 +2694,19 @@ export default function SourceDashboard() {
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Role Skills ({newRole.required_skills.length})
                 </label>
-                <span className="text-[11px] text-gray-500 font-medium">
-                  {newRole.required_skills.filter(s => {
-                    const l = (s.level || 'required').toLowerCase();
-                    return l === 'required' || l === 'critical' || l === 'expert' || l === 'advanced';
-                  }).length} Required · {newRole.required_skills.filter(s => {
-                    const l = (s.level || 'required').toLowerCase();
-                    return l === 'preferred' || l === 'optional' || l === 'intermediate' || l === 'beginner';
-                  }).length} Preferred
+                <span className="text-[11px] font-semibold flex items-center gap-2">
+                  <span className="text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg font-bold">
+                    {newRole.required_skills.filter(s => {
+                      const l = (s.level || 'required').toLowerCase();
+                      return l === 'required' || l === 'critical' || l === 'expert' || l === 'advanced';
+                    }).length} Required
+                  </span>
+                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg font-bold">
+                    {newRole.required_skills.filter(s => {
+                      const l = (s.level || 'required').toLowerCase();
+                      return l === 'preferred' || l === 'optional' || l === 'intermediate' || l === 'beginner';
+                    }).length} Preferred
+                  </span>
                 </span>
               </div>
 
@@ -2731,8 +2743,8 @@ export default function SourceDashboard() {
                           <button
                             type="button"
                             onClick={() => toggleSkillLevel(i)}
-                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                              isReq ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                            className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                              isReq ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                             }`}
                             title="Click to toggle level"
                           >
@@ -2766,16 +2778,16 @@ export default function SourceDashboard() {
                     return (
                       <div
                         key={i}
-                        className={`group flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-xl text-xs font-medium border transition-all ${
+                        className={`group flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                           isReq
-                            ? 'bg-purple-50/70 border-purple-200 text-purple-900'
-                            : 'bg-indigo-50/70 border-indigo-200 text-indigo-900'
+                            ? 'bg-rose-50/80 border-rose-200 hover:border-rose-300 text-gray-900'
+                            : 'bg-emerald-50/80 border-emerald-200 hover:border-emerald-300 text-gray-900'
                         }`}
                       >
                         {/* Skill Name */}
                         <span
                           onClick={() => { setEditingSkillIdx(i); setEditingSkillName(skillName); }}
-                          className="cursor-pointer hover:underline font-semibold"
+                          className="cursor-pointer hover:underline font-bold text-gray-900 text-xs"
                           title="Click to edit name"
                         >
                           {skillName}
@@ -2785,10 +2797,10 @@ export default function SourceDashboard() {
                         <button
                           type="button"
                           onClick={() => toggleSkillLevel(i)}
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase cursor-pointer transition-transform active:scale-95 ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider cursor-pointer transition-transform active:scale-95 shadow-2xs ${
                             isReq
-                              ? 'bg-purple-600 text-white hover:bg-purple-700'
-                              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
                           }`}
                           title="Click to toggle between Required and Preferred"
                         >
@@ -2799,7 +2811,9 @@ export default function SourceDashboard() {
                         <button
                           type="button"
                           onClick={() => { setEditingSkillIdx(i); setEditingSkillName(skillName); }}
-                          className="p-0.5 text-gray-400 hover:text-purple-600 rounded cursor-pointer"
+                          className={`p-0.5 rounded cursor-pointer ${
+                            isReq ? 'text-gray-400 hover:text-rose-700' : 'text-gray-400 hover:text-emerald-700'
+                          }`}
                           title="Edit skill name"
                         >
                           <Edit size={11} />
@@ -2849,7 +2863,7 @@ export default function SourceDashboard() {
                 </button>
               </div>
               <p className="text-[10px] text-gray-400 mt-1.5">
-                Click a skill's badge to toggle between <strong>Required</strong> and <strong>Preferred</strong>, or click the name to edit.
+                Click a skill's badge to toggle between <strong className="text-rose-700 font-bold">Required</strong> and <strong className="text-emerald-700 font-bold">Preferred</strong>, or click the name to edit.
               </p>
             </div>
 
@@ -3052,6 +3066,26 @@ export default function SourceDashboard() {
         filters={filters}
         companyName={user?.company_name || 'Phygitron 360'}
       />
+
+      {/* ── Role Details Dialogue ── */}
+      {viewingRole && (
+        <RoleDetailsModal
+          isOpen={Boolean(viewingRole)}
+          role={viewingRole}
+          onClose={() => setViewingRole(null)}
+          onEdit={(role) => {
+            setViewingRole(null);
+            openEditRole(role);
+          }}
+          onViewCandidates={(roleId) => {
+            setViewingRole(null);
+            setFilters(prev => ({ ...prev, role_id: String(roleId) }));
+            setTab('directory');
+          }}
+          candidateCount={candidates.filter(c => c.role_id === viewingRole.id).length}
+          scoreStatus={scoreStatus[viewingRole.id]}
+        />
+      )}
 
         </div>
       </div>
