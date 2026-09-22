@@ -8,7 +8,7 @@ import { usePermission } from '../../../core/permissions/usePermission';
 import { 
   Folder, File, ChevronRight, ChevronDown, Search, Upload, Trash2, CalendarDays, Loader, Plus, X, 
   LayoutGrid, List, User, ArrowRightLeft, Zap, Briefcase, CheckCircle2,
-  FolderPlus, MoveRight, ArrowLeft, Tag, Edit2, Check
+  FolderPlus, MoveRight, ArrowLeft, Tag, Edit2, Check, RefreshCw, Sparkles
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
@@ -198,6 +198,9 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
   const [showManageTagsModal, setShowManageTagsModal] = useState(false); // Bulk Tag management
   const [showSingleTagModal, setShowSingleTagModal] = useState(false); // Single candidate tag edit
   const [showMoveModal, setShowMoveModal] = useState(false); // Move resumes to another month
+  const [showReprocessModal, setShowReprocessModal] = useState(false); // Re-extract skills & ATS modal
+  const [reprocessTarget, setReprocessTarget] = useState(null); // { type: 'folder'|'selected'|'all', folderId, candidateIds, label, count }
+  const [isReprocessing, setIsReprocessing] = useState(false);
 
   // Upload modal state
   const [stagedFiles, setStagedFiles] = useState([]);
@@ -605,6 +608,45 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
     }
   };
 
+  // ── Reprocess Resumes Handler ──────────────────────────────────────────────
+  const handleOpenReprocessModal = (target) => {
+    setReprocessTarget(target);
+    setShowReprocessModal(true);
+  };
+
+  const handleExecuteReprocess = async () => {
+    if (!reprocessTarget) return;
+    setIsReprocessing(true);
+    try {
+      const payload = {};
+      if (reprocessTarget.type === 'folder') {
+        payload.month_year = reprocessTarget.folderId;
+      } else if (reprocessTarget.type === 'selected') {
+        payload.candidate_ids = reprocessTarget.candidateIds;
+      } else if (reprocessTarget.type === 'all') {
+        payload.all = true;
+      }
+
+      const res = await api.post('/source/candidates/reprocess', payload);
+      if (res.data?.success) {
+        const total = res.data.total_items || res.data.data?.total_items || 0;
+        const jobId = res.data.job_id || res.data.data?.job_id;
+        toast.success(`Queued ${total} resume(s) for re-extraction and ATS scoring!`);
+        
+        if (jobId && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('bulk-job-started', { detail: { jobId } }));
+        }
+        
+        setShowReprocessModal(false);
+        setSelected(new Set());
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || err.message || 'Reprocessing failed');
+    } finally {
+      setIsReprocessing(false);
+    }
+  };
+
   // ── Year / Month creation ──────────────────────────────────────────────────
   const handleCreateFolder = () => {
     if (!currentYear) {
@@ -712,12 +754,21 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
             )}
 
             {hasManagePermission && !currentFolder && (
-              <button 
-                onClick={handleTriggerFileInput}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-1.5 px-3.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-2xs"
-              >
-                <Upload size={14} /> Upload Resumes
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => handleOpenReprocessModal({ type: 'all', label: 'All Resumes (Entire Vault)', count: folders.reduce((a, b) => a + (b.count || 0), 0) })}
+                  className="bg-white border border-purple-200 hover:border-purple-300 hover:bg-purple-50 text-purple-700 font-semibold py-1.5 px-3.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-2xs"
+                  title="Re-extract skills with enhanced parser and refresh ATS scores for all resumes"
+                >
+                  <Sparkles size={13} /> Re-extract All Skills
+                </button>
+                <button 
+                  onClick={handleTriggerFileInput}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-1.5 px-3.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Upload size={14} /> Upload Resumes
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -919,12 +970,22 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
 
                 <div className="flex items-center gap-2 self-start sm:self-auto">
                   {hasManagePermission && (
-                    <button
-                      onClick={handleTriggerFileInput}
-                      className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-1.5 px-3.5 rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-2xs"
-                    >
-                      <Upload size={13} /> Upload to this Month
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleOpenReprocessModal({ type: 'folder', folderId: currentFolder.id, label: currentFolder.label, count: currentFolder.count || 0 })}
+                        disabled={(currentFolder.count || 0) === 0}
+                        className="bg-white border border-purple-200 hover:border-purple-300 hover:bg-purple-50 text-purple-700 font-semibold py-1.5 px-3 rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+                        title="Re-extract skills and recalculate ATS scores for all resumes in this month"
+                      >
+                        <Sparkles size={13} /> Re-extract Folder Skills
+                      </button>
+                      <button
+                        onClick={handleTriggerFileInput}
+                        className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-1.5 px-3.5 rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <Upload size={13} /> Upload to this Month
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -1034,6 +1095,13 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
 
                 {hasManagePermission && selected.size > 0 && (
                   <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => handleOpenReprocessModal({ type: 'selected', candidateIds: Array.from(selected), label: `${selected.size} selected resume(s)`, count: selected.size })}
+                      className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold py-1 px-3 rounded-lg text-xs transition-colors flex items-center gap-1.5"
+                      title="Re-extract skills and recalculate ATS scores for selected candidates"
+                    >
+                      <Sparkles size={13} /> Re-extract ({selected.size})
+                    </button>
                     <button 
                       onClick={handleOpenManageTagsModal}
                       className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-1 px-3 rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-2xs"
@@ -1678,6 +1746,71 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button className="text-gray-600 hover:bg-gray-100 font-medium py-2 px-4 rounded-xl transition-colors duration-200" onClick={() => setShowFolderModal(false)}>Cancel</button>
               <button className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-xl transition-colors duration-200" onClick={handleCreateFolder}>Create & Open</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODAL: RE-EXTRACT & PROCESS RESUMES (SKILLS + ATS)
+          ══════════════════════════════════════════════════════════════════════ */}
+      {showReprocessModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div className="card animate-fade-in" style={{ width: 480, padding: 24, borderRadius: 16, background: '#FFFFFF' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#111827', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+                <Sparkles size={18} color="#9333EA" /> Re-extract Skills & ATS Score
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors" 
+                onClick={() => setShowReprocessModal(false)}
+                disabled={isReprocessing}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-purple-50 border border-purple-100 rounded-xl p-3.5 mb-4 text-xs text-purple-900 leading-relaxed">
+              <p className="font-semibold mb-1 text-purple-950 flex items-center gap-1.5">
+                <Zap size={13} className="text-purple-600" /> Enhanced Multi-Category Parser & ATS Engine
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-purple-800">
+                <li>Extracts <strong>Methodologies</strong> (Agile, SDLC, Shift-Left), <strong>Domain Knowledge</strong> (HIPAA, EHR), and <strong>QA Practices</strong> (Defect Reporting, Test Cases).</li>
+                <li>Normalizes slashes and parenthetical items (e.g. <em>Agile/Scrum</em> &rarr; <em>Agile, Scrum</em>).</li>
+                <li>Recalculates candidate match scores across all active job roles automatically.</li>
+              </ul>
+            </div>
+
+            <div className="text-xs text-gray-600 mb-5">
+              <span className="font-semibold text-gray-700">Target:</span>{' '}
+              <span className="font-bold text-purple-700">{reprocessTarget?.label}</span>
+              {reprocessTarget?.count !== undefined && (
+                <span className="text-gray-500"> ({reprocessTarget.count} resume{reprocessTarget.count === 1 ? '' : 's'})</span>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <button 
+                type="button" 
+                className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                onClick={() => setShowReprocessModal(false)}
+                disabled={isReprocessing}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={handleExecuteReprocess}
+                disabled={isReprocessing}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              >
+                {isReprocessing ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                {isReprocessing ? 'Starting Reprocess...' : 'Start Re-extraction'}
+              </button>
             </div>
           </div>
         </div>

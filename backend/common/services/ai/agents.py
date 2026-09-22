@@ -25,7 +25,7 @@ Schema:
     "ln": "LinkedIn URL",
     "pt": "Portfolio URL",
     "s": "AI Profile Summary", // Maximum 250 characters. No more.
-    "sk": [{"n": "Skill Name", "l": "expert"}], // Extract EVERY single skill explicitly mentioned OR implicitly required. Assign level: expert (used professionally), advanced (solid knowledge), intermediate (working knowledge), beginner (basic/mentioned once). Do not leave any out.
+    "sk": [{"n": "Skill Name", "l": "expert"}], // Extract EVERY single skill across tools, methodologies, domains, QA practices, testing types.
     "exp": [{"c": "Company Name", "r": "Role", "s": "Start Date", "e": "End Date", "d": "Concise summary of duties and technical tools/skills used"}], // Professional experience only.
     "edu": [{"d": "Degree Name", "c": "College Name", "s": "Start Date YYYY-MM", "e": "End Date YYYY-MM"}], // Education only. No other fields.
     "cert": [{"n": "Certification Name", "i": "Issuer", "y": 2024}], // Certifications
@@ -34,12 +34,23 @@ Schema:
 }
 Rules:
 1. "s" (AI Profile Summary) MUST be maximum 250 characters.
-2. "sk" MUST contain EVERY single skill extracted from the candidate's resume, including implicitly inferred skills from their experience/titles. Do not limit the count.
-3. "exp" elements MUST contain keys "c", "r", "s", "e", and "d". The "d" field MUST capture a concise summary of the duties and SPECIFIC technical tools/skills used.
-4. "edu" elements MUST ONLY contain keys "d", "c", "s", and "e". No field of study or other keys.
-5. "cs" MUST contain at most 2 critical red flags or confidence signals. Specifically check for and flag any skills listed in the resume that are NEVER mentioned or used in their work experience/projects. If none, return [].
-6. Copy pre-extracted fields verbatim if present.
-7. You MUST return a key for EVERY <resume id="X"> provided. Do NOT mix up candidate details.
+2. "sk" MUST contain EVERY single skill mentioned in the resume across ALL categories:
+   - Technical Tools & Languages (e.g. Python, Java, Playwright, Selenium, Postman, Docker, Git, JIRA)
+   - Methodologies & Frameworks (e.g. Agile, Scrum, SDLC, STLC, Sprint-Based Testing, Shift-Left Testing)
+   - Domain Knowledge & Compliance (e.g. Healthcare, HIPAA Awareness, EHR, Banking, Fintech, Regulatory Compliance)
+   - QA Practices & Deliverables (e.g. Defect Reporting, Test Documentation, Test Planning, Test Cases)
+   - Testing Types (e.g. Manual Testing, Regression Testing, Smoke Testing, Sanity Testing, Exploratory Testing, UAT, Integration Testing, System Testing, API Testing, ETL Testing)
+   - Cloud, Databases & Architecture (e.g. AWS, S3, Lambda, Glue, PostgreSQL, Snowflake SQL, Microservices, REST APIs)
+3. "sk" CRITICAL SPLITTING RULES:
+   - Split slashed items into separate skills: "Agile/Scrum" -> "Agile", "Scrum"; "SDLC/STLC" -> "SDLC", "STLC"; "Linux/Bash" -> "Linux", "Bash".
+   - Split parenthetical sub-items: "AWS (S3, Glue, Lambda)" -> "AWS", "S3", "Glue", "Lambda".
+   - Strip category headers from skills: "Healthcare Domain: HIPAA Awareness" -> "Healthcare", "HIPAA Awareness".
+   - Extract at least 30-50 skills if present. Never omit methodologies or domain skills.
+4. "exp" elements MUST contain keys "c", "r", "s", "e", and "d". The "d" field MUST capture a concise summary of the duties and SPECIFIC technical tools/skills used.
+5. "edu" elements MUST ONLY contain keys "d", "c", "s", and "e". No field of study or other keys.
+6. "cs" MUST contain at most 2 critical red flags or confidence signals. Specifically check for and flag any skills listed in the resume that are NEVER mentioned or used in their work experience/projects. If none, return [].
+7. Copy pre-extracted fields verbatim if present.
+8. You MUST return a key for EVERY <resume id="X"> provided. Do NOT mix up candidate details.
 """
 
 ROLE_FIT_SYSTEM = """You are an expert technical recruiter and talent assessment AI. Your goal is to rigorously score a candidate's fit for a specific job role based on their skills, experience, and background.

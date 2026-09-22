@@ -125,6 +125,13 @@ class CandidateReportExportRequest(BaseModel):
     company_name: Optional[str] = "Phygitron 360"
 
 
+class ReprocessCandidatesRequest(BaseModel):
+    folder_id: Optional[int] = None
+    month_year: Optional[str] = None
+    candidate_ids: Optional[List[int]] = None
+    all: Optional[bool] = False
+
+
 # ---------------------------------------------------------------------------
 def get_candidate_service(user=Depends(get_current_user)):
     return CandidateService(tenant_id=user.get('tenant_id', 'public'))
@@ -299,6 +306,42 @@ async def bulk_upload_resumes(
     except Exception as e:
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise e
+
+@router.post("/reprocess", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def reprocess_candidates(
+    payload: ReprocessCandidatesRequest,
+    user: dict = Depends(get_current_user),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """
+    Queue background job to re-extract skills and recalculate ATS scores
+    for candidates in a folder, selected by IDs, or the entire repository.
+    """
+    active_job = service.repo.get_active_bulk_upload_job()
+    if active_job:
+        raise HTTPException(
+            status_code=400,
+            detail="Another background parsing job is currently in progress. Please wait for it to finish or cancel it before starting a new one."
+        )
+
+    result = await service.reprocess_candidates(
+        folder_id=payload.folder_id,
+        month_year=payload.month_year,
+        candidate_ids=payload.candidate_ids,
+        reprocess_all=bool(payload.all),
+        user_id=user.get("id", 1)
+    )
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "No candidates found to reprocess."))
+
+    return {
+        "success": True,
+        "data": result,
+        "job_id": result.get("job_id"),
+        "total_items": result.get("total_items"),
+        "message": result.get("message")
+    }
 
 @router.get("/bulk-upload/active", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def get_active_bulk_upload(

@@ -655,22 +655,69 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def create_bulk_upload_job_items(self, job_id: int, items: List[Dict[str, str]]):
+    def create_bulk_upload_job_items(self, job_id: int, items: List[Dict[str, Any]]):
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 from psycopg2.extras import execute_values
                 query = """
-                    INSERT INTO bulk_upload_job_items (job_id, filename, file_path, file_hash, extracted_text)
+                    INSERT INTO bulk_upload_job_items (job_id, filename, file_path, file_hash, extracted_text, candidate_id)
                     VALUES %s
                 """
                 values = [
-                    (job_id, i["filename"], i["file_path"], i["file_hash"], i.get("extracted_text"))
+                    (job_id, i["filename"], i["file_path"], i.get("file_hash"), i.get("extracted_text"), i.get("candidate_id"))
                     for i in items
                 ]
                 execute_values(cur, query, values)
                 conn.commit()
+        finally:
+            conn.close()
+
+    def get_candidates_for_reprocessing(
+        self,
+        folder_id: Optional[int] = None,
+        month_year: Optional[str] = None,
+        candidate_ids: Optional[List[int]] = None,
+        reprocess_all: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Fetch candidates matching criteria for skill re-extraction and ATS reprocessing."""
+        conn = get_db_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                self._set_search_path(cur)
+                where_clauses = ["(c.resume_path IS NOT NULL OR c.id IN (SELECT candidate_id FROM bulk_upload_job_items WHERE extracted_text IS NOT NULL AND extracted_text != ''))"]
+                params = []
+
+                if candidate_ids and len(candidate_ids) > 0:
+                    where_clauses.append("c.id = ANY(%s)")
+                    params.append(candidate_ids)
+                elif folder_id is not None:
+                    where_clauses.append("c.folder_id = %s")
+                    params.append(folder_id)
+                elif month_year:
+                    where_clauses.append("TO_CHAR(c.created_at, 'YYYY-MM') = %s")
+                    params.append(month_year)
+                elif not reprocess_all:
+                    return []
+
+                query = f"""
+                    SELECT c.id, c.full_name, c.email, c.resume_path, c.folder_id,
+                           COALESCE(
+                             (
+                               SELECT bi.extracted_text 
+                               FROM bulk_upload_job_items bi 
+                               WHERE bi.candidate_id = c.id AND bi.extracted_text IS NOT NULL AND bi.extracted_text != ''
+                               ORDER BY bi.id DESC LIMIT 1
+                             ),
+                             ''
+                           ) AS extracted_text
+                    FROM candidates c
+                    WHERE {' AND '.join(where_clauses)}
+                    ORDER BY c.id ASC
+                """
+                cur.execute(query, tuple(params))
+                return [dict(r) for r in cur.fetchall()]
         finally:
             conn.close()
 
@@ -974,6 +1021,10 @@ class CandidateRepository:
                     "UPDATE bulk_upload_jobs SET status = 'paused', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                     (job_id,)
                 )
+                cur.execute(
+                    "UPDATE bulk_upload_job_items SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE job_id = %s AND status = 'processing'",
+                    (job_id,)
+                )
                 conn.commit()
                 return True
         finally:
@@ -986,6 +1037,10 @@ class CandidateRepository:
                 self._set_search_path(cur)
                 cur.execute(
                     "UPDATE bulk_upload_jobs SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (job_id,)
+                )
+                cur.execute(
+                    "UPDATE bulk_upload_job_items SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE job_id = %s AND status = 'processing'",
                     (job_id,)
                 )
                 conn.commit()
