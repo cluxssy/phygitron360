@@ -666,7 +666,7 @@ class CandidateService:
                 try:
                     primary = self._parse_skill_list(row.get("primary_skills"))
                     secondary = self._parse_skill_list(row.get("secondary_skills"))
-                    flat_skills = [{"name": s, "level": "intermediate"} for s in primary] + [{"name": s, "level": "beginner"} for s in secondary]
+                    flat_skills = [{"name": s, "level": "expert"} for s in primary] + [{"name": s, "level": "intermediate"} for s in secondary]
                     
                     from backend.modules.source.repositories.job_role_repo import JobRoleRepository
                     from backend.modules.source.services.ats_engine import normalise_required_skills, calculate_role_fit
@@ -1416,6 +1416,12 @@ class CandidateService:
             candidate_id = existing["id"]
             if folder_id is None and existing.get("folder_id"):
                 candidate_data["folder_id"] = existing["folder_id"]
+            # Preserve existing tags — only update tags if caller explicitly passed new ones.
+            # Passing [] (empty list) is not NULL, so COALESCE would wipe them. Use None to skip.
+            if not tags:
+                candidate_data["tags"] = None
+            # Preserve existing status — don't reset to "New" on re-extract
+            candidate_data["status"] = existing.get("status") or "New"
             self.repo.update_candidate(candidate_id, candidate_data, conn=conn, cur=cur)
             self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via resume re-extract & ATS re-score', conn=conn, cur=cur)
         else:

@@ -126,7 +126,7 @@ class JobService:
         cand_db = self.candidate_repo.get_candidate_by_id(cid)
         primary = (cand_db.get("primary_skills") or []) if cand_db else []
         secondary = (cand_db.get("secondary_skills") or []) if cand_db else []
-        cand_skills = [{"name": s, "level": "intermediate"} for s in primary] + [{"name": s, "level": "beginner"} for s in secondary]
+        cand_skills = [{"name": s, "level": "expert"} for s in primary] + [{"name": s, "level": "intermediate"} for s in secondary]
         
         cand_experience_text = ""
         resume_ats_score = 0.0
