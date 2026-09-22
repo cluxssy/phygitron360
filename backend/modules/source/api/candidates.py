@@ -8,7 +8,7 @@ import json
 import os
 import uuid
 import logging
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict, Union
 from datetime import datetime
 
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Form
