@@ -642,6 +642,18 @@ class CandidateService:
                 cand["required_total"] = cand["ats_detail"].get("required_total", 0)
                 cand["preferred_matched"] = cand["ats_detail"].get("preferred_matched", 0)
                 cand["preferred_total"] = cand["ats_detail"].get("preferred_total", 0)
+                # Hoist matched/missing skills — stored as "matched"/"missing" in reasoning JSON
+                # or "matched_skills"/"missing_skills" when computed live
+                cand["matched_skills"] = (
+                    cand["ats_detail"].get("matched_skills")
+                    or cand["ats_detail"].get("matched")
+                    or []
+                )
+                cand["missing_skills"] = (
+                    cand["ats_detail"].get("missing_skills")
+                    or cand["ats_detail"].get("missing")
+                    or []
+                )
             else:
                 cand["fit_score"] = compute_resume_ats_score(cand)
                 cand["required_score"] = None

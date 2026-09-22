@@ -58,8 +58,8 @@ function prepareCandidateExportRows(candidates) {
       : 'General Pool';
 
     const ats = c.ats_detail || {};
-    const matchedSkills = (c.matched_skills || ats.matched_skills || []).join(', ') || '—';
-    const missingSkills = (c.missing_skills || ats.missing_skills || []).join(', ') || '—';
+    const matchedSkills = (c.matched_skills || ats.matched_skills || ats.matched || []).join(', ') || '—';
+    const missingSkills = (c.missing_skills || ats.missing_skills || ats.missing || []).join(', ') || '—';
     const allSkills = Array.isArray(c.skills) 
       ? c.skills.join(', ') 
       : (Array.isArray(c.structured_skills) ? c.structured_skills.map(s => s.name || s.skill_name).join(', ') : '—');
