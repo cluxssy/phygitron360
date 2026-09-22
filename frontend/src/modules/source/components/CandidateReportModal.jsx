@@ -268,12 +268,12 @@ export default function CandidateReportModal({
 
                         <div className="flex items-center gap-3 shrink-0">
                           {reqPct != null && (
-                            <span className="px-2 py-0.5 rounded-md font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px]">
+                            <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200 text-[11px]">
                               Req: {reqPct}%
                             </span>
                           )}
                           {prefPct != null && (
-                            <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 border border-purple-200 text-[11px]">
+                            <span className="px-2 py-0.5 rounded-md font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px]">
                               Pref: {prefPct}%
                             </span>
                           )}
