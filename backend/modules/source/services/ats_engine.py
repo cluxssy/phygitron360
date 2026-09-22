@@ -433,6 +433,49 @@ def normalise_required_skills(
 
 
 # ---------------------------------------------------------------------------
+# Experience text fallback matching
+# ---------------------------------------------------------------------------
+
+_GENERIC_SKILL_WORDS = {
+    'awareness', 'testing', 'development', 'management', 'knowledge',
+    'skills', 'experience', 'level', 'practices', 'engineering', 'types'
+}
+
+def _check_experience_match(req_name: str, exp_text: str) -> bool:
+    """Check if a required skill or its canonical alias/core terms appear as a whole word in experience text."""
+    if not req_name or not exp_text:
+        return False
+    terms = {req_name.strip()}
+    canon = _canonicalize_skill(req_name)
+    if canon and len(canon) >= 2:
+        terms.add(canon)
+    for alias, target in SKILL_ALIASES.items():
+        if target == canon and len(alias) >= 2:
+            terms.add(alias)
+
+    # Core non-generic token extraction (e.g. "HIPAA Awareness" -> "HIPAA", "Shift-Left Testing" -> "Shift-Left")
+    tokens = [w for w in re.split(r'[\s/]+', req_name) if w.lower() not in _GENERIC_SKILL_WORDS and len(w) >= 3]
+    if tokens:
+        stripped_phrase = " ".join(tokens)
+        if len(stripped_phrase) >= 3:
+            terms.add(stripped_phrase)
+        for t in tokens:
+            if len(t) >= 4 or t.isupper():
+                terms.add(t)
+
+    for term in terms:
+        if len(term) < 2:
+            continue
+        try:
+            pattern = r"\b" + re.escape(term) + r"\b"
+            if re.search(pattern, exp_text, re.IGNORECASE):
+                return True
+        except re.error:
+            pass
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Main scoring function — two-bucket model
 # ---------------------------------------------------------------------------
 
@@ -505,6 +548,9 @@ def calculate_role_fit(
 
             if best_sim >= 0.75:
                 # Full match (exact, alias, token overlap, or prefix match)
+                matched.append(req_name)
+            elif _check_experience_match(req_name, cand_experience_text):
+                # Fallback: verified directly in candidate work history / resume text
                 matched.append(req_name)
             elif best_sim > 0.4:
                 # Related / partial skill (for display/insights only, does not count as acquired skill)

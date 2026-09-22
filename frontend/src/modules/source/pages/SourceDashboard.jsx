@@ -619,7 +619,7 @@ export default function SourceDashboard() {
   }, [currentTab, fetchActivities, fetchPendingOffers]);
 
 
-  // Restore active bulk upload job on mount
+  // Restore active bulk upload job on mount and listen for new jobs
   useEffect(() => {
     const fetchActiveJobOnMount = async () => {
       try {
@@ -635,6 +635,16 @@ export default function SourceDashboard() {
       }
     };
     fetchActiveJobOnMount();
+
+    const handleJobStarted = (e) => {
+      if (e.detail?.jobId) {
+        setBulkJobId(e.detail.jobId);
+        setBulkJobProgress(null);
+        setBulkUploadTriggered(true);
+      }
+    };
+    window.addEventListener('bulk-job-started', handleJobStarted);
+    return () => window.removeEventListener('bulk-job-started', handleJobStarted);
   }, []);
 
   const fetchActiveJob = useCallback(async () => {

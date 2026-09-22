@@ -132,10 +132,19 @@ class JobService:
         resume_ats_score = 0.0
         if cand_db:
             exp_list = cand_db.get("experience") or []
-            cand_experience_text = " ".join([
+            exp_parts = [
                 f"{e.get('company', '')} {e.get('designation', '')} {e.get('description', '')}"
                 for e in exp_list
-            ])
+            ]
+            if cand_db.get("ai_summary"):
+                exp_parts.append(str(cand_db["ai_summary"]))
+            certs = cand_db.get("certifications") or []
+            for c in certs:
+                if isinstance(c, dict):
+                    exp_parts.append(f"{c.get('name', '')} {c.get('issuer', '')}")
+                elif isinstance(c, str):
+                    exp_parts.append(c)
+            cand_experience_text = " ".join(exp_parts)
             # Merge primary and secondary into 'skills' for the compute_resume_ats_score function which expects 'skills'
             cand_db_for_scoring = dict(cand_db)
             cand_db_for_scoring['skills'] = primary + secondary

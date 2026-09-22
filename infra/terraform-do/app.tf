@@ -156,6 +156,11 @@ resource "digitalocean_app" "phygitron" {
         scope = "RUN_TIME"
       }
       env {
+        key   = "GEMINI_FALLBACK_MODEL"
+        value = var.gemini_fallback_model
+        scope = "RUN_TIME"
+      }
+      env {
         key   = "GEMINI_RPM_LIMIT"
         value = var.gemini_rpm_limit
         scope = "RUN_TIME"
@@ -179,8 +184,24 @@ resource "digitalocean_app" "phygitron" {
         type  = "SECRET"
       }
       env {
+        key   = "GROQ_API_KEYS"
+        value = var.groq_api_keys
+        scope = "RUN_TIME"
+        type  = "SECRET"
+      }
+      env {
         key   = "GROQ_MODEL"
         value = var.groq_model
+        scope = "RUN_TIME"
+      }
+      env {
+        key   = "GROQ_FALLBACK_MODELS"
+        value = var.groq_fallback_models
+        scope = "RUN_TIME"
+      }
+      env {
+        key   = "GROQ_RPM_LIMIT"
+        value = var.groq_rpm_limit
         scope = "RUN_TIME"
       }
       env {
@@ -346,6 +367,11 @@ resource "digitalocean_app" "phygitron" {
         scope = "RUN_TIME"
       }
       env {
+        key   = "GEMINI_FALLBACK_MODEL"
+        value = var.gemini_fallback_model
+        scope = "RUN_TIME"
+      }
+      env {
         key   = "GEMINI_RPM_LIMIT"
         value = var.gemini_rpm_limit
         scope = "RUN_TIME"
@@ -369,8 +395,24 @@ resource "digitalocean_app" "phygitron" {
         type  = "SECRET"
       }
       env {
+        key   = "GROQ_API_KEYS"
+        value = var.groq_api_keys
+        scope = "RUN_TIME"
+        type  = "SECRET"
+      }
+      env {
         key   = "GROQ_MODEL"
         value = var.groq_model
+        scope = "RUN_TIME"
+      }
+      env {
+        key   = "GROQ_FALLBACK_MODELS"
+        value = var.groq_fallback_models
+        scope = "RUN_TIME"
+      }
+      env {
+        key   = "GROQ_RPM_LIMIT"
+        value = var.groq_rpm_limit
         scope = "RUN_TIME"
       }
       env {
