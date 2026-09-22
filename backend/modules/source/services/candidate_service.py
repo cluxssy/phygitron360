@@ -1035,8 +1035,11 @@ class CandidateService:
                                         try:
                                             if file_p.startswith("http://") or file_p.startswith("https://"):
                                                 import urllib.request, tempfile
-                                                req = urllib.request.Request(file_p, headers={'User-Agent': 'Phygitron/1.0'})
-                                                with urllib.request.urlopen(req, timeout=30) as resp:
+                                                from backend.common.services.storage_service import generate_presigned_url as _presign
+                                                # Generate a presigned URL so private S3/Spaces buckets don't 403
+                                                fetch_url = _presign(file_p, expiry_seconds=300)
+                                                req = urllib.request.Request(fetch_url, headers={'User-Agent': 'Phygitron/1.0'})
+                                                with urllib.request.urlopen(req, timeout=60) as resp:
                                                     remote_bytes = resp.read()
                                                 ext = os.path.splitext(file_p.split("?")[0])[1].lower() or ".pdf"
                                                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
