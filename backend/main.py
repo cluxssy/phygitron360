@@ -47,6 +47,7 @@ from backend.modules.lexai.api.export import router as lexai_export_router, alia
 from backend.modules.lexai.api.folders import router as lexai_folders_router, alias_folders_router
 from backend.modules.lexai.api.files import router as lexai_files_router, alias_files_router
 from backend.modules.lexai.api.voice import router as lexai_voice_router, alias_voice_router
+from backend.modules.lexai.api.sop import router as lexai_sop_router, alias_sop_router as lexai_alias_sop_router
 
 app = FastAPI(
     title="PHYGITRON 360",
@@ -254,6 +255,8 @@ app.include_router(lexai_files_router, dependencies=[Depends(require_module("lex
 app.include_router(alias_files_router, dependencies=[Depends(require_module("lexai"))])
 app.include_router(lexai_voice_router, dependencies=[Depends(require_module("lexai"))])
 app.include_router(alias_voice_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_sop_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_alias_sop_router, dependencies=[Depends(require_module("lexai"))])
 
 
 if __name__ == "__main__":
