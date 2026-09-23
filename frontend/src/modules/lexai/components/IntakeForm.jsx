@@ -9,6 +9,9 @@ export default function IntakeForm({ onBack, onComplete }) {
     const [error, setError] = useState('');
     const [files, setFiles] = useState([]);
     const [urls, setUrls] = useState('');
+    const [showKnowledgeTypes, setShowKnowledgeTypes] = useState(false);
+    const [styleGuideFile, setStyleGuideFile] = useState(null);
+    const [styleGuideError, setStyleGuideError] = useState('');
 
     // Form state matching the backend Intake model exactly
     const [formData, setFormData] = useState({
@@ -29,6 +32,7 @@ export default function IntakeForm({ onBack, onComplete }) {
         objective_3: '',
         interactivity_level: 'Level 1 - Informational (content + graphics + knowledge checks)', // default
         output_required: 'Design Document', // default
+        preferred_english: 'American English',
         num_modules: 5 // default
     });
 
@@ -81,14 +85,31 @@ export default function IntakeForm({ onBack, onComplete }) {
         setError('');
 
         try {
+            // Sync preferred_english → language_preference for AI consistency
+            const submitData = { ...formData, language_preference: formData.preferred_english || formData.language_preference };
+
             // 1. Create Project and Save Intake Data via /intake/ (JSON payload)
             const projectResponse = await api.request('/intake/', {
                 method: 'POST',
-                body: JSON.stringify(formData)
+                body: JSON.stringify(submitData)
             });
             const projectId = projectResponse.id;
 
-            // 2. Upload/Process Files sequentially
+            // 2. Upload Style Guide PDF if provided
+            if (styleGuideFile) {
+                try {
+                    const sgForm = new FormData();
+                    sgForm.append('file', styleGuideFile);
+                    await api.request(`/intake/${projectId}/style-guide`, {
+                        method: 'POST',
+                        body: sgForm
+                    });
+                } catch (sgErr) {
+                    console.warn('Style guide upload failed (non-fatal):', sgErr);
+                }
+            }
+
+            // 3. Upload/Process Files sequentially
             for (let i = 0; i < files.length; i++) {
                 const f = files[i];
                 if (f.type === 'local') {
@@ -109,7 +130,7 @@ export default function IntakeForm({ onBack, onComplete }) {
                 }
             }
 
-            // 3. Process URLs sequentially
+            // 4. Process URLs sequentially
             for (let i = 0; i < urlList.length; i++) {
                 const urlData = new URLSearchParams();
                 urlData.append('url', urlList[i]);
@@ -120,7 +141,7 @@ export default function IntakeForm({ onBack, onComplete }) {
                 });
             }
 
-            // 4. Proceed to design phase
+            // 5. Proceed to design phase
             onComplete(projectId);
         } catch (err) {
             setError(err.message || 'Error processing content. Please check API connection.');
@@ -275,15 +296,8 @@ export default function IntakeForm({ onBack, onComplete }) {
                 </div>
 
                 <div className="card">
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">5. Knowledge Checks and Language</h3>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">5. Knowledge Checks</h3>
                     <div className="grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                        <div className="form-group mb-0">
-                            <label className="form-label">Language Preference</label>
-                            <select className="form-control" name="language_preference" value={formData.language_preference} onChange={handleChange}>
-                                <option>American English</option>
-                                <option>British English</option>
-                            </select>
-                        </div>
                         <div className="form-group mb-0">
                             <label className="form-label">Knowledge Check Difficulty</label>
                             <select className="form-control" name="knowledge_check_difficulty" value={formData.knowledge_check_difficulty} onChange={handleChange}>
@@ -300,7 +314,69 @@ export default function IntakeForm({ onBack, onComplete }) {
                         </div>
                         <div className="form-group mb-0">
                             <label className="form-label">Knowledge Check Types</label>
-                            <input type="text" className="form-control" name="knowledge_check_types" value={formData.knowledge_check_types} onChange={handleChange} />
+                            <div style={{ position: 'relative' }}>
+                                <button
+                                    type="button"
+                                    className="form-control"
+                                    onClick={() => setShowKnowledgeTypes(!showKnowledgeTypes)}
+                                    style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                >
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '85%' }}>
+                                        {formData.knowledge_check_types || 'Select Knowledge Check Types'}
+                                    </span>
+                                    <span>⌄</span>
+                                </button>
+                                {showKnowledgeTypes && (
+                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px', zIndex: 1000, boxShadow: 'var(--shadow)' }}>
+                                        {['Multiple Choice', 'True/False', 'Fill in the Blank', 'Scenario-Based'].map((type) => {
+                                            const selectedTypes = formData.knowledge_check_types.split(',').map(i => i.trim()).filter(Boolean);
+                                            return (
+                                                <label key={type} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', cursor: 'pointer' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedTypes.includes(type)}
+                                                        onChange={() => {
+                                                            const updated = selectedTypes.includes(type)
+                                                                ? selectedTypes.filter(i => i !== type)
+                                                                : [...selectedTypes, type];
+                                                            setFormData(prev => ({ ...prev, knowledge_check_types: updated.join(', ') }));
+                                                        }}
+                                                        style={{ accentColor: 'var(--primary)', width: '16px', height: '16px', cursor: 'pointer' }}
+                                                    />
+                                                    {type}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="form-group mb-0">
+                            <label className="form-label">Preferred English *</label>
+                            <div className="flex gap-6 mt-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="preferred_english"
+                                        value="American English"
+                                        checked={formData.preferred_english === 'American English'}
+                                        onChange={handleChange}
+                                        style={{ accentColor: 'var(--primary)' }}
+                                    />
+                                    American English
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="preferred_english"
+                                        value="British English"
+                                        checked={formData.preferred_english === 'British English'}
+                                        onChange={handleChange}
+                                        style={{ accentColor: 'var(--primary)' }}
+                                    />
+                                    British English
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -315,6 +391,60 @@ export default function IntakeForm({ onBack, onComplete }) {
                         </div>
                         <div className="form-group mb-0">
                             <label className="form-label">Guidelines / Spelling Check Notes</label>
+
+                            {/* Style Guide PDF Upload */}
+                            <div style={{ marginBottom: '0.75rem' }}>
+                                <input
+                                    type="file"
+                                    id="style-guide-pdf"
+                                    accept=".pdf"
+                                    onChange={(e) => {
+                                        setStyleGuideError('');
+                                        const f = e.target.files && e.target.files[0];
+                                        if (!f) return;
+                                        if (!f.name.toLowerCase().endsWith('.pdf')) {
+                                            setStyleGuideError('Only PDF files are accepted for the style guide.');
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        if (f.size > 50 * 1024 * 1024) {
+                                            setStyleGuideError('Style guide PDF must be 50 MB or smaller.');
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        setStyleGuideFile(f);
+                                        e.target.value = '';
+                                    }}
+                                    style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', opacity: 0 }}
+                                />
+                                {!styleGuideFile ? (
+                                    <label
+                                        htmlFor="style-guide-pdf"
+                                        className="btn btn-outline"
+                                        style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', padding: '0.45rem 1rem' }}
+                                    >
+                                        <UploadCloud size={15} /> Upload Style Guide PDF
+                                    </label>
+                                ) : (
+                                    <div className="flex items-center gap-3 p-2 rounded-lg" style={{ border: '1px solid var(--border-light)', background: 'white', boxShadow: 'var(--shadow-sm)', display: 'inline-flex' }}>
+                                        <FileText size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                                        <span className="text-sm" style={{ color: 'var(--text-main)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={styleGuideFile.name}>{styleGuideFile.name}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStyleGuideFile(null)}
+                                            className="p-1 rounded"
+                                            style={{ color: 'var(--danger)' }}
+                                            title="Remove style guide"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                )}
+                                {styleGuideError && (
+                                    <p className="text-danger text-xs mt-1">{styleGuideError}</p>
+                                )}
+                            </div>
+
                             <GrammarTextarea className="form-control" name="guidelines" placeholder="Add client-specific terminology, tone, words to avoid, or spelling rules." value={formData.guidelines} onChange={handleChange} style={{ minHeight: '100px' }} />
                         </div>
                     </div>

@@ -12,6 +12,7 @@ import ProjectView from '../components/ProjectView';
 import IntakeForm from '../components/IntakeForm';
 import ProjectUpload from '../components/ProjectUpload';
 import FolderManager from '../components/FolderManager';
+import SopFormatter from '../components/SopFormatter';
 
 import logo from '../../../assets/phy360.png';
 import bellIcon from '../../../assets/bell.png';
@@ -24,7 +25,8 @@ import {
   PlusCircle,
   UploadCloud,
   Sparkles,
-  BookOpen
+  BookOpen,
+  FileEdit
 } from 'lucide-react';
 
 import '../../deploy/styles/deploy.css';
@@ -189,6 +191,13 @@ export default function LexAIDashboard() {
           >
             <UploadCloud size={16} /> Upload Project
           </button>
+
+          <button
+            className={tab === 'sop' ? 'active' : ''}
+            onClick={() => setTab('sop')}
+          >
+            <FileEdit size={16} /> SOP Formatter
+          </button>
         </div>
 
         {/* ================= MAIN CONTENT ================= */}
@@ -226,6 +235,10 @@ export default function LexAIDashboard() {
               onBack={handleBackToDashboard}
               onComplete={handleOpenProject}
             />
+          )}
+
+          {tab === 'sop' && (
+            <SopFormatter />
           )}
 
           {tab === 'editor' && activeProjectId && (

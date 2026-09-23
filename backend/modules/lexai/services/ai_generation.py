@@ -1,5 +1,6 @@
 import json
 import re
+import time as _time
 from datetime import datetime
 from typing import Dict, Optional
 from openai import OpenAI
@@ -114,8 +115,16 @@ def get_language_rules(intake_data: Dict) -> str:
     return "Use American English spelling and phrasing consistently, such as organize, behavior, program, and center where appropriate."
 
 def get_quality_rules(intake_data: Dict) -> str:
-    return f"""
-LANGUAGE AND STYLE:
+    # If user uploaded a PDF style guide, prepend it as explicit AI instructions
+    pdf_style_guide = intake_data.get("style_guide_pdf_text", "").strip()
+    pdf_guide_section = ""
+    if pdf_style_guide:
+        pdf_guide_section = f"""
+STYLE GUIDE / GUIDELINES PROVIDED BY USER (PDF UPLOAD):
+{pdf_style_guide}
+
+"""
+    return f"""{pdf_guide_section}LANGUAGE AND STYLE:
 - {get_language_rules(intake_data)}
 - Follow this style guide: {intake_data.get('style_guide', 'Clear, professional, concise instructional design language.')}
 - Apply these project guidelines: {intake_data.get('guidelines', 'Use plain language, correct spelling, and a consistent instructional tone.')}
@@ -259,17 +268,69 @@ Generate the complete Design Document now:"""
         raise HTTPException(status_code=500, detail=f"Error generating Design Document: {error_msg}")
 
 
-import time as _time
+def extract_module_knowledge_check(design_doc: str, module_num: int) -> str:
+    """Extract the Knowledge Check for a specific module from the Design Document."""
+    if not design_doc:
+        return ""
+
+    start = design_doc.find("7. KNOWLEDGE CHECK")
+    if start == -1:
+        return ""
+
+    knowledge_section = design_doc[start:]
+
+    possible_headers = [
+        f"### Module {module_num}",
+        f"Module {module_num}"
+    ]
+
+    module_start = -1
+    for header in possible_headers:
+        module_start = knowledge_section.find(header)
+        if module_start != -1:
+            break
+
+    if module_start == -1:
+        return ""
+
+    possible_next_headers = [
+        f"### Module {module_num + 1}",
+        f"Module {module_num + 1}"
+    ]
+
+    module_end = -1
+    for header in possible_next_headers:
+        module_end = knowledge_section.find(header, module_start)
+        if module_end != -1:
+            break
+
+    if module_end == -1:
+        return knowledge_section[module_start:].strip()
+
+    return knowledge_section[module_start:module_end].strip()
+
 
 def _generate_single_module_type1(client, module_num: int, total_modules: int, design_doc: str, intake_data: Dict, content: str, strategies: Dict) -> str:
     """Generate storyboard for a single module (Type 1 format). Kept under 6000 TPM."""
+    module_knowledge_check = extract_module_knowledge_check(design_doc, module_num)
     prompt = f"""Generate storyboard for MODULE {module_num} ONLY (of {total_modules}).
 
 DESIGN DOCUMENT:
-{design_doc[:3000]}
+{design_doc[:2200]}
 
-SOURCE CONTENT:
-{content[:2000]}
+MODULE KNOWLEDGE CHECK:
+{module_knowledge_check}
+
+SOURCE CONTENT (REFERENCE ONLY)
+
+---------------- START SOURCE ----------------
+
+{content[:1200]}
+
+---------------- END SOURCE ----------------
+IMPORTANT:
+
+Use the SOURCE CONTENT only as reference material.
 
 RULES:
 {get_quality_rules(intake_data)}
@@ -312,13 +373,22 @@ Generate 5-8 screens for Module {module_num} now:"""
 
 def _generate_single_module_type2(client, module_num: int, total_modules: int, design_doc: str, intake_data: Dict, content: str, strategies: Dict) -> str:
     """Generate storyboard for a single module (Type 2 tabular format). Kept under 6000 TPM."""
+    module_knowledge_check = extract_module_knowledge_check(design_doc, module_num)
     prompt = f"""Generate Type 2 tabular storyboard for MODULE {module_num} ONLY (of {total_modules}).
 
 DESIGN DOCUMENT:
-{design_doc[:3000]}
+{design_doc[:2200]}
 
-SOURCE CONTENT:
-{content[:2000]}
+MODULE KNOWLEDGE CHECK:
+{module_knowledge_check}
+
+SOURCE CONTENT (REFERENCE ONLY)
+
+---------------- START SOURCE ----------------
+
+{content[:1200]}
+
+---------------- END SOURCE ----------------
 
 RULES:
 {get_quality_rules(intake_data)}

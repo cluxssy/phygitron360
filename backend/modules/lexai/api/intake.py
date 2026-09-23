@@ -127,3 +127,77 @@ async def upload_project_alias(
     current_user: dict = Depends(get_current_user)
 ):
     return await upload_project_impl(file, type, title, current_user)
+
+
+MAX_STYLE_GUIDE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+async def upload_style_guide_impl(project_id: str, file: UploadFile, current_user: dict):
+    """Upload a PDF style guide for a project. Extracts text and stores it in intake_data JSON."""
+    import pathlib
+    ext = pathlib.Path(file.filename).suffix.lower()
+    if ext != ".pdf":
+        raise HTTPException(status_code=400, detail="Style guide must be a PDF file.")
+
+    service = get_service(current_user)
+    emp_code = get_emp_code(current_user)
+
+    project = service.get_project(project_id, emp_code)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    content = await file.read()
+    if len(content) > MAX_STYLE_GUIDE_SIZE:
+        raise HTTPException(status_code=400, detail="Style guide PDF exceeds the 50 MB size limit.")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        with open(tmp_path, "rb") as f:
+            extracted_text = extraction_service.extract_text_from_pdf(f)
+
+        if isinstance(extracted_text, str) and extracted_text.startswith("Error"):
+            raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {extracted_text}")
+
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="The uploaded PDF appears to contain no readable text.")
+
+        # Merge into existing intake_data JSON — do not overwrite other fields
+        existing_intake = {}
+        raw = project.get("intake_data")
+        if raw:
+            try:
+                existing_intake = json.loads(raw)
+            except json.JSONDecodeError:
+                pass
+
+        existing_intake["style_guide_pdf_text"] = extracted_text
+        existing_intake["style_guide_pdf_name"] = file.filename
+
+        service.update_project_data(project_id, emp_code, {"intake_data": json.dumps(existing_intake)})
+
+        return {
+            "message": "Style guide uploaded and processed successfully.",
+            "filename": file.filename,
+            "extracted_length": len(extracted_text)
+        }
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+@router.post("/{project_id}/style-guide", dependencies=[Depends(require_permission(P.LEXAI_PROJECTS_MANAGE))])
+async def upload_style_guide(
+    project_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    return await upload_style_guide_impl(project_id, file, current_user)
+
+@alias_intake_router.post("/{project_id}/style-guide", dependencies=[Depends(require_permission(P.LEXAI_PROJECTS_MANAGE))])
+async def upload_style_guide_alias(
+    project_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    return await upload_style_guide_impl(project_id, file, current_user)
