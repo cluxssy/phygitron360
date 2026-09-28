@@ -680,6 +680,10 @@ class AIService:
                         if any(k in err.lower() for k in ['404', 'decommissioned', 'not_found', 'does not exist', 'invalid_request_error', 'deprecated']):
                             print(f"Groq model {g_model} unavailable or decommissioned: {err[:80]}. Trying next fallback model...", flush=True)
                             continue
+                        if any(k in err.lower() for k in ['401', 'unauthorized', 'invalid_api_key']):
+                            print(f"Groq 401 Unauthorized on key[{self._groq_pool._idx}]: key is invalid or revoked. Rotating key...", flush=True)
+                            self._groq_pool.rotate()
+                            break
                         if self._is_rate_limit(err):
                             print(f"Groq 429 on key[{self._groq_pool._idx}]. Rotating key...", flush=True)
                             self._groq_pool.rotate()

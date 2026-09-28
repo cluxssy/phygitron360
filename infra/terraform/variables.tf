@@ -104,7 +104,7 @@ variable "bulk_parse_workers" {
 
 variable "groq_model" {
   description = "Groq Model"
-  default     = "llama-3.1-8b-instant"
+  default     = "openai/gpt-oss-20b"
 }
 
 variable "sender_name" {
