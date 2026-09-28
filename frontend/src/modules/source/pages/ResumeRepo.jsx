@@ -271,7 +271,7 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
   }, []);
 
   // ── Fetch candidates for active month folder & tag ──────────────────────────
-  const fetchCandidates = async (folderId, tagFilter = 'all') => {
+  const fetchCandidates = async (folderId, tagFilter = 'all', search = '') => {
     if (!folderId) return;
     setLoadingCandidates(true);
     try {
@@ -281,6 +281,9 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
       };
       if (tagFilter && tagFilter !== 'all') {
         params.tag = tagFilter;
+      }
+      if (search && search.trim()) {
+        params.search = search.trim();
       }
 
       const res = await api.get('/source/candidates/search', { params });
@@ -302,22 +305,100 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
   // Re-fetch candidates when folder or tag filter changes
   useEffect(() => {
     if (currentFolder) {
-      fetchCandidates(currentFolder.id, selectedTagFilter);
+      const handler = setTimeout(() => {
+        fetchCandidates(currentFolder.id, selectedTagFilter, searchQuery);
+      }, 350);
+      return () => clearTimeout(handler);
     } else {
       setCandidates([]);
       setSelected(new Set());
     }
-  }, [currentFolder?.id, selectedTagFilter]);
+  }, [currentFolder?.id, selectedTagFilter, searchQuery]);
 
   // Derived filtered & sorted candidates
   const filteredCandidates = useMemo(() => {
-    return candidates
-      .filter(c => {
-        const name = (c.name || c.full_name || '').toLowerCase();
-        const email = (c.email || '').toLowerCase();
-        const search = searchQuery.toLowerCase();
-        return name.includes(search) || email.includes(search);
-      })
+    const rawTerm = searchQuery.trim().toLowerCase();
+    let list = candidates;
+
+    if (rawTerm) {
+      const excludePatterns = [
+        /(?:not in|not at|not from|without|never worked at)\s+([a-zA-Z0-9\s,\.&-]+)/g,
+        /-([a-zA-Z0-9]+)/g
+      ];
+      const excludedTerms = [];
+      let positiveText = rawTerm;
+
+      for (const pat of excludePatterns) {
+        let match;
+        while ((match = pat.exec(rawTerm)) !== null) {
+          if (match[1]) {
+            match[1].split(/[,/]|(?:\s+or\s+)|\s+and\s+/).forEach(t => {
+              const clean = t.trim();
+              if (clean) excludedTerms.push(clean);
+            });
+          }
+        }
+        positiveText = positiveText.replace(pat, ' ');
+      }
+
+      const tokens = positiveText
+        .split(/[,/]|(?:\s+and\s+)|\s+or\s+|\s+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 0 && !['not', 'in', 'at', 'with', 'from', 'who', 'has', 'have'].includes(t));
+
+      const DEGREE_ALIASES = {
+        'btech': ['btech', 'b.tech', 'b tech', 'be', 'b.e', 'bachelor of technology', 'bachelor of engineering'],
+        'be': ['be', 'b.e', 'btech', 'b.tech'],
+        'mtech': ['mtech', 'm.tech', 'me', 'm.e', 'master of technology'],
+        'bca': ['bca', 'bachelor of computer applications'],
+        'mca': ['mca', 'master of computer applications'],
+        'mba': ['mba', 'm.b.a', 'master of business administration'],
+        'bsc': ['bsc', 'b.sc', 'bachelor of science'],
+        'msc': ['msc', 'm.sc', 'master of science']
+      };
+
+      list = candidates.filter(c => {
+        if (excludedTerms.length > 0) {
+          const hasExcluded = excludedTerms.some(ex => {
+            const inComp = (c.past_companies || []).some(comp => (comp || '').toLowerCase().includes(ex));
+            const inExp = (c.experience || []).some(exp => (exp.company || '').toLowerCase().includes(ex));
+            const inDesig = (c.current_designation || '').toLowerCase().includes(ex);
+            return inComp || inExp || inDesig;
+          });
+          if (hasExcluded) return false;
+        }
+
+        if (tokens.length === 0) return true;
+
+        return tokens.every(token => {
+          const tokenAliases = DEGREE_ALIASES[token] || [token];
+
+          const name = (c.name || c.full_name || '').toLowerCase();
+          const email = (c.email || '').toLowerCase();
+          const designation = (c.current_designation || '').toLowerCase();
+          const summary = (c.ai_summary || '').toLowerCase();
+          const skillStrings = [
+            ...(Array.isArray(c.skills) ? c.skills : []),
+            ...(Array.isArray(c.primary_skills) ? c.primary_skills : []),
+            ...(Array.isArray(c.secondary_skills) ? c.secondary_skills : []),
+            ...(Array.isArray(c.tags) ? c.tags : [])
+          ];
+          const skillMatch = skillStrings.some(s => (s || '').toLowerCase().includes(token));
+          const eduMatch = (c.education || []).some(e => {
+            const deg = (e.degree || '').toLowerCase();
+            const inst = (e.institution || '').toLowerCase();
+            const fos = (e.field_of_study || '').toLowerCase();
+            return tokenAliases.some(alias => deg.includes(alias) || fos.includes(alias)) || inst.includes(token);
+          });
+          const compMatch = (c.past_companies || []).some(comp => (comp || '').toLowerCase().includes(token)) ||
+                            (c.experience || []).some(exp => (exp.company || '').toLowerCase().includes(token) || (exp.designation || '').toLowerCase().includes(token));
+
+          return name.includes(token) || email.includes(token) || designation.includes(token) || skillMatch || eduMatch || compMatch || summary.includes(token);
+        });
+      });
+    }
+
+    return list
       .sort((a, b) => {
         const nameA = a.name || a.full_name || '';
         const nameB = b.name || b.full_name || '';
@@ -1049,17 +1130,25 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
                 <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4B5563' }}>Select All ({filteredCandidates.length})</span>
               </div>
               
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, maxWidth: 280 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, maxWidth: 340 }}>
                 <div style={{ position: 'relative', width: '100%' }}>
                   <Search size={15} color="#9CA3AF" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
                   <input 
                     type="text" 
                     className="form-input w-full" 
-                    placeholder="Search candidate or email..." 
+                    placeholder="Search skills, degree, company..." 
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    style={{ paddingLeft: 32, width: '100%', borderRadius: '8px', fontSize: '0.85rem' }}
+                    style={{ paddingLeft: 32, paddingRight: searchQuery ? 28 : 12, width: '100%', borderRadius: '8px', fontSize: '0.85rem' }}
                   />
+                  {searchQuery && (
+                    <button 
+                      onClick={() => setSearchQuery('')}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1197,6 +1286,21 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
                             <div style={{ fontSize: '0.75rem', color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {c.email}
                             </div>
+                            {(c.current_designation || (c.education && c.education.length > 0) || (c.past_companies && c.past_companies.length > 0)) && (
+                              <div className="flex items-center gap-1.5 flex-wrap mt-1 text-[11px] text-gray-500">
+                                {c.current_designation && <span className="font-medium text-gray-600 truncate max-w-[140px]">{c.current_designation}</span>}
+                                {c.education && c.education.length > 0 && (c.education[0].degree || c.education[0].institution) && (
+                                  <span className="inline-flex items-center text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded font-medium">
+                                    🎓 {c.education[0].degree || c.education[0].institution}
+                                  </span>
+                                )}
+                                {c.past_companies && c.past_companies.length > 0 && (
+                                  <span className="inline-flex items-center text-[10px] text-gray-600 bg-gray-100 border border-gray-200 px-1.5 py-0.2 rounded">
+                                    Ex-{c.past_companies.slice(0, 2).join(', ')}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* TAGS BADGES */}
