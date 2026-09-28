@@ -25,6 +25,14 @@ def is_job_active(job_id: int) -> bool:
     with _INACTIVE_JOBS_LOCK:
         return job_id not in _INACTIVE_JOB_IDS
 
+class CandidateSearchResult(tuple):
+    def __new__(cls, candidates, total_count, query_breakdown=None):
+        return super(CandidateSearchResult, cls).__new__(cls, (candidates, total_count))
+    def __init__(self, candidates, total_count, query_breakdown=None):
+        self.candidates = candidates
+        self.total_count = total_count
+        self.query_breakdown = query_breakdown or {}
+
 class CandidateService:
     def __init__(self, tenant_id: str = 'public'):
         self.tenant_id = tenant_id
@@ -563,6 +571,7 @@ class CandidateService:
             return [str(s) for s in skills]
         return []
 
+
     # ── New Business Logic ───────────────────────────────────────────────────
 
     def search_candidates(
@@ -580,10 +589,16 @@ class CandidateService:
         tags: Optional[List[str]] = None,
         limit: int = 20
     ) -> tuple[List[Dict[str, Any]], int]:
+        parsed_query = None
+        if search and search.strip():
+            from backend.modules.source.services.candidate_search_parser import parse_search_query
+            ai_svc = getattr(self.ai_agents, 'ai', None) if hasattr(self, 'ai_agents') else None
+            parsed_query = parse_search_query(search.strip(), ai_service=ai_svc)
+
         candidates, total_count = self.repo.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
             search=search, sort_by=sort_by, limit=limit, role_id=role_id, upload_time=upload_time,
-            folder_id=folder_id, tag=tag, tags=tags
+            folder_id=folder_id, tag=tag, tags=tags, parsed_query=parsed_query
         )
 
         req_skills = []
@@ -666,7 +681,7 @@ class CandidateService:
         elif sort_by == "preferred_score":
             candidates.sort(key=lambda c: c.get("preferred_score") or 0, reverse=True)
 
-        return candidates, total_count
+        return CandidateSearchResult(candidates, total_count, query_breakdown=parsed_query)
 
     def get_active_candidates(self) -> List[Dict[str, Any]]:
         rows = self.repo.get_active_candidates()

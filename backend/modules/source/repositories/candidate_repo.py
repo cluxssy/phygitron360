@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Tuple
 
 logger = logging.getLogger(__name__)
 from backend.core.database import get_db_connection
@@ -393,7 +393,7 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None, tag: Optional[str] = None, tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None, tag: Optional[str] = None, tags: Optional[List[str]] = None, parsed_query: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], int]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -482,9 +482,126 @@ class CandidateRepository:
                     if sub_conds:
                         conditions.append("(" + " OR ".join(sub_conds) + ")")
 
-                if search:
-                    conditions.append("(c.full_name ILIKE %s OR c.email ILIKE %s OR c.current_designation ILIKE %s)")
-                    params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+                # Fallback to rule-based parser if parsed_query not supplied
+                if not parsed_query and search and search.strip():
+                    from backend.modules.source.services.candidate_search_parser import parse_search_query_rule_based
+                    parsed_query = parse_search_query_rule_based(search.strip())
+
+                if parsed_query:
+                    # 1. Excluded Companies (e.g. "not in wipro")
+                    for comp in parsed_query.get("exclude_companies", []):
+                        conditions.append("""
+                            NOT EXISTS (
+                                SELECT 1 FROM candidate_experience cx
+                                WHERE cx.candidate_id = c.id AND cx.company ILIKE %s
+                            )
+                            AND (c.current_designation IS NULL OR c.current_designation NOT ILIKE %s)
+                        """)
+                        params.extend([f"%{comp}%", f"%{comp}%"])
+
+                    # 2. Included Companies (e.g. "ex-google")
+                    for comp in parsed_query.get("include_companies", []):
+                        conditions.append("""
+                            (
+                                EXISTS (
+                                    SELECT 1 FROM candidate_experience cx
+                                    WHERE cx.candidate_id = c.id AND cx.company ILIKE %s
+                                )
+                                OR c.current_designation ILIKE %s
+                            )
+                        """)
+                        params.extend([f"%{comp}%", f"%{comp}%"])
+
+                    # 3. Degrees (e.g. "btech", "mba", with synonyms)
+                    if parsed_query.get("degrees"):
+                        deg_patterns = [f"%{d}%" for d in parsed_query["degrees"]]
+                        conditions.append("""
+                            (
+                                EXISTS (
+                                    SELECT 1 FROM candidate_education ce
+                                    WHERE ce.candidate_id = c.id
+                                      AND (
+                                          ce.degree ILIKE ANY(%s)
+                                          OR ce.field_of_study ILIKE ANY(%s)
+                                      )
+                                )
+                                OR c.ai_summary ILIKE ANY(%s)
+                            )
+                        """)
+                        params.extend([deg_patterns, deg_patterns, deg_patterns])
+
+                    # 4. Institutions (e.g. "iit", "vit")
+                    if parsed_query.get("institutions"):
+                        inst_patterns = [f"%{inst}%" for inst in parsed_query["institutions"]]
+                        conditions.append("""
+                            EXISTS (
+                                SELECT 1 FROM candidate_education ce
+                                WHERE ce.candidate_id = c.id AND ce.institution ILIKE ANY(%s)
+                            )
+                        """)
+                        params.append(inst_patterns)
+
+                    # 5. Experience parsed from query (if not already filtered)
+                    if min_exp is None and parsed_query.get("min_exp") is not None:
+                        conditions.append("c.total_experience_years >= %s")
+                        params.append(parsed_query["min_exp"])
+                    if exp_range is None and parsed_query.get("max_exp") is not None:
+                        conditions.append("c.total_experience_years <= %s")
+                        params.append(parsed_query["max_exp"])
+
+                    # 6. General keywords (search across all fields)
+                    terms_to_match = parsed_query.get("general_terms", [])
+                    if not terms_to_match and not parsed_query.get("is_complex") and search:
+                        terms_to_match = [w.strip() for w in search.split() if w.strip()]
+
+                    for term in terms_to_match:
+                        t_like = f"%{term}%"
+                        conditions.append("""
+                            (
+                                c.full_name ILIKE %s
+                                OR c.email ILIKE %s
+                                OR c.current_designation ILIKE %s
+                                OR c.location ILIKE %s
+                                OR c.ai_summary ILIKE %s
+                                OR EXISTS (
+                                    SELECT 1 FROM unnest(COALESCE(c.primary_skills, '{}'::text[]) || COALESCE(c.secondary_skills, '{}'::text[]) || COALESCE(c.tags, '{}'::text[])) _s
+                                    WHERE _s ILIKE %s
+                                )
+                                OR EXISTS (
+                                    SELECT 1 FROM candidate_experience cx
+                                    WHERE cx.candidate_id = c.id AND (cx.company ILIKE %s OR cx.designation ILIKE %s OR cx.description ILIKE %s)
+                                )
+                                OR EXISTS (
+                                    SELECT 1 FROM candidate_education ce
+                                    WHERE ce.candidate_id = c.id AND (ce.degree ILIKE %s OR ce.institution ILIKE %s OR ce.field_of_study ILIKE %s)
+                                )
+                            )
+                        """)
+                        params.extend([t_like] * 12)
+                elif search:
+                    s_like = f"%{search.strip()}%"
+                    conditions.append("""
+                        (
+                            c.full_name ILIKE %s
+                            OR c.email ILIKE %s
+                            OR c.current_designation ILIKE %s
+                            OR c.location ILIKE %s
+                            OR c.ai_summary ILIKE %s
+                            OR EXISTS (
+                                SELECT 1 FROM unnest(COALESCE(c.primary_skills, '{}'::text[]) || COALESCE(c.secondary_skills, '{}'::text[]) || COALESCE(c.tags, '{}'::text[])) _s
+                                WHERE _s ILIKE %s
+                            )
+                            OR EXISTS (
+                                SELECT 1 FROM candidate_experience cx
+                                WHERE cx.candidate_id = c.id AND (cx.company ILIKE %s OR cx.designation ILIKE %s OR cx.description ILIKE %s)
+                            )
+                            OR EXISTS (
+                                SELECT 1 FROM candidate_education ce
+                                WHERE ce.candidate_id = c.id AND (ce.degree ILIKE %s OR ce.institution ILIKE %s OR ce.field_of_study ILIKE %s)
+                            )
+                        )
+                    """)
+                    params.extend([s_like] * 12)
 
                 where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
                 
@@ -506,9 +623,30 @@ class CandidateRepository:
                 params.append(limit)
 
                 joins_rf = " LEFT JOIN resume_folders rf ON c.folder_id = rf.id"
+                extra_fields = """, COALESCE((
+                    SELECT json_agg(json_build_object(
+                        'degree', ce.degree, 
+                        'institution', ce.institution, 
+                        'field_of_study', ce.field_of_study
+                    ))
+                    FROM candidate_education ce WHERE ce.candidate_id = c.id
+                ), '[]'::json) AS education,
+                COALESCE((
+                    SELECT json_agg(json_build_object(
+                        'company', cx.company, 
+                        'designation', cx.designation, 
+                        'is_current', cx.is_current
+                    ))
+                    FROM candidate_experience cx WHERE cx.candidate_id = c.id
+                ), '[]'::json) AS experience,
+                COALESCE((
+                    SELECT array_agg(DISTINCT cx.company)
+                    FROM candidate_experience cx WHERE cx.candidate_id = c.id AND cx.company IS NOT NULL AND cx.company != ''
+                ), '{}'::text[]) AS past_companies"""
+
                 if role_id:
                     joins = f"LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s LEFT JOIN ai_scores a ON c.id = a.entity_id AND a.entity_type = 'candidate' AND a.job_role_id = %s AND a.score_type = 'role_fit'{joins_rf}"
-                    select_fields = "c.*, ca.status as job_status, a.score as fit_score, a.reasoning as ats_detail_json, rf.name as folder_name, rf.job_role_id as folder_job_role_id"
+                    select_fields = f"c.*, ca.status as job_status, a.score as fit_score, a.reasoning as ats_detail_json, rf.name as folder_name, rf.job_role_id as folder_job_role_id{extra_fields}"
                     
                     count_sql = f"""
                         SELECT COUNT(*) as total
@@ -541,8 +679,9 @@ class CandidateRepository:
                     cur.execute(count_sql, tuple(count_params))
                     total_count = cur.fetchone()['total']
 
+                    select_fields = f"c.*, c.status as job_status, rf.name as folder_name, rf.job_role_id as folder_job_role_id{extra_fields}"
                     sql = f"""
-                        SELECT c.*, c.status as job_status, rf.name as folder_name, rf.job_role_id as folder_job_role_id
+                        SELECT {select_fields}
                         FROM candidates c
                         {joins_rf}
                         {where_clause}
@@ -557,6 +696,18 @@ class CandidateRepository:
                     row = dict(r)
                     row['status'] = row.get('job_status') or row['status']
                     row['name'] = row.get('full_name') or ''
+                    if isinstance(row.get('education'), str):
+                        try:
+                            row['education'] = json.loads(row['education'])
+                        except Exception:
+                            row['education'] = []
+                    if isinstance(row.get('experience'), str):
+                        try:
+                            row['experience'] = json.loads(row['experience'])
+                        except Exception:
+                            row['experience'] = []
+                    if not isinstance(row.get('past_companies'), list):
+                        row['past_companies'] = []
                     results.append(row)
                 return results, total_count
         finally:

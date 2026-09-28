@@ -388,6 +388,16 @@ export default function SourceDashboard() {
 
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchBreakdown, setSearchBreakdown] = useState(null);
+
+  // Debounce search input for backend search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   // Activity feed state
   const [activities, setActivities] = useState([]);
@@ -527,9 +537,10 @@ export default function SourceDashboard() {
     } catch { /* silent */ }
   }, []);
 
-  const fetchCandidates = useCallback(async () => {
+  const fetchCandidates = useCallback(async (customSearch) => {
     setLoading(true);
     try {
+      const activeSearch = customSearch !== undefined ? customSearch : debouncedSearch;
       const params = new URLSearchParams();
       if (filters.pool !== 'all') params.set('pool', filters.pool);
       if (filters.location) params.set('location', filters.location);
@@ -549,17 +560,21 @@ export default function SourceDashboard() {
       } else {
         params.set('limit', 5000);
       }
+      if (activeSearch && activeSearch.trim()) {
+        params.set('search', activeSearch.trim());
+      }
 
       const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
       const d = await r.json();
       setCandidates(d.data || []);
       setTotalCandidates(d.total_count ?? (d.data || []).length);
+      setSearchBreakdown(d.query_breakdown || null);
     } catch {
       toast.error('Failed to load candidates');
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, debouncedSearch]);
 
   const fetchActivities = useCallback(async () => {
     setLoadingActivities(true);
@@ -710,20 +725,101 @@ export default function SourceDashboard() {
   }, [bulkJobId, bulkUploadTriggered, fetchCandidates, currentTab]);
 
   // ── Filter candidates client-side ──
-  const filteredCandidates = candidates.filter(c => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    const nameMatch = c.full_name?.toLowerCase().includes(term);
-    const emailMatch = c.email?.toLowerCase().includes(term);
-    const designationMatch = c.current_designation?.toLowerCase().includes(term);
-    const locationMatch = c.location?.toLowerCase().includes(term);
-    const skillStrings = [
-      ...(Array.isArray(c.skills) ? c.skills : []),
-      ...(Array.isArray(c.structured_skills) ? c.structured_skills.map(s => s.skill_name || s.name) : [])
+  const filteredCandidates = useMemo(() => {
+    if (!searchTerm || !searchTerm.trim()) return candidates;
+
+    // If candidates was already returned by the backend for this search query, trust backend results!
+    if (debouncedSearch && searchTerm.trim().toLowerCase() === debouncedSearch.trim().toLowerCase()) {
+      return candidates;
+    }
+
+    const rawTerm = searchTerm.toLowerCase().trim();
+
+    // 1. Extract exclusions (e.g. "not in wipro", "-wipro", "without infosys")
+    const excludePatterns = [
+      /(?:not in|not at|not from|without|never worked at)\s+([a-zA-Z0-9\s,\.&-]+)/g,
+      /-([a-zA-Z0-9]+)/g
     ];
-    const skillMatch = skillStrings.some(s => s?.toLowerCase().includes(term));
-    return nameMatch || emailMatch || designationMatch || locationMatch || skillMatch;
-  });
+    const excludedTerms = [];
+    let positiveText = rawTerm;
+
+    for (const pat of excludePatterns) {
+      let match;
+      while ((match = pat.exec(rawTerm)) !== null) {
+        if (match[1]) {
+          match[1].split(/[,/]|(?:\s+or\s+)|\s+and\s+/).forEach(t => {
+            const clean = t.trim();
+            if (clean) excludedTerms.push(clean);
+          });
+        }
+      }
+      positiveText = positiveText.replace(pat, ' ');
+    }
+
+    // 2. Tokenize positive keywords (split by comma, "and", "or", whitespace)
+    const tokens = positiveText
+      .split(/[,/]|(?:\s+and\s+)|\s+or\s+|\s+/)
+      .map(t => t.trim())
+      .filter(t => t.length > 0 && !['not', 'in', 'at', 'with', 'from', 'who', 'has', 'have'].includes(t));
+
+    const DEGREE_ALIASES = {
+      'btech': ['btech', 'b.tech', 'b tech', 'be', 'b.e', 'bachelor of technology', 'bachelor of engineering'],
+      'be': ['be', 'b.e', 'btech', 'b.tech'],
+      'mtech': ['mtech', 'm.tech', 'me', 'm.e', 'master of technology'],
+      'bca': ['bca', 'bachelor of computer applications'],
+      'mca': ['mca', 'master of computer applications'],
+      'mba': ['mba', 'm.b.a', 'master of business administration'],
+      'bsc': ['bsc', 'b.sc', 'bachelor of science'],
+      'msc': ['msc', 'm.sc', 'master of science']
+    };
+
+    return candidates.filter(c => {
+      // Exclusions check
+      if (excludedTerms.length > 0) {
+        const hasExcluded = excludedTerms.some(ex => {
+          const inComp = (c.past_companies || []).some(comp => (comp || '').toLowerCase().includes(ex));
+          const inExp = (c.experience || []).some(exp => (exp.company || '').toLowerCase().includes(ex));
+          const inDesig = (c.current_designation || '').toLowerCase().includes(ex);
+          return inComp || inExp || inDesig;
+        });
+        if (hasExcluded) return false;
+      }
+
+      if (tokens.length === 0) return true;
+
+      // Every positive token must match at least one candidate property
+      return tokens.every(token => {
+        const tokenAliases = DEGREE_ALIASES[token] || [token];
+
+        const nameMatch = c.full_name?.toLowerCase().includes(token);
+        const emailMatch = c.email?.toLowerCase().includes(token);
+        const desigMatch = c.current_designation?.toLowerCase().includes(token);
+        const locMatch = c.location?.toLowerCase().includes(token);
+        const summaryMatch = c.ai_summary?.toLowerCase().includes(token);
+
+        const skillStrings = [
+          ...(Array.isArray(c.skills) ? c.skills : []),
+          ...(Array.isArray(c.primary_skills) ? c.primary_skills : []),
+          ...(Array.isArray(c.secondary_skills) ? c.secondary_skills : []),
+          ...(Array.isArray(c.tags) ? c.tags : []),
+          ...(Array.isArray(c.structured_skills) ? c.structured_skills.map(s => s.skill_name || s.name) : [])
+        ];
+        const skillMatch = skillStrings.some(s => (s || '').toLowerCase().includes(token));
+
+        const eduMatch = (c.education || []).some(e => {
+          const deg = (e.degree || '').toLowerCase();
+          const inst = (e.institution || '').toLowerCase();
+          const fos = (e.field_of_study || '').toLowerCase();
+          return tokenAliases.some(alias => deg.includes(alias) || fos.includes(alias)) || inst.includes(token);
+        });
+
+        const compMatch = (c.past_companies || []).some(comp => (comp || '').toLowerCase().includes(token)) ||
+                          (c.experience || []).some(exp => (exp.company || '').toLowerCase().includes(token) || (exp.designation || '').toLowerCase().includes(token));
+
+        return nameMatch || emailMatch || desigMatch || locMatch || skillMatch || eduMatch || compMatch || summaryMatch;
+      });
+    });
+  }, [candidates, searchTerm, debouncedSearch]);
 
   // ── Selection helpers ──────────────────────────────────────────────────────
   const toggle = (id) => setSelectedIds(prev => {
@@ -1451,24 +1547,42 @@ export default function SourceDashboard() {
 
           {currentTab === 'directory' && (
             <>
-              <div className="relative w-64 md:w-80">
+              <div className="relative w-72 md:w-96">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
                   <Search size={15} />
                 </span>
                 <input
                   type="text"
-                  placeholder="Search name, email, role, skills..."
+                  placeholder="Search skills, degree, company (e.g. 'btech not in wipro')..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
-                  title="Search"  // ← Add this
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      fetchCandidates(searchTerm);
+                    }
+                  }}
+                  className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-8 py-2.5 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all placeholder:text-gray-400"
+                  title="Semantic search: search by education, skills, past companies, or exclusions like 'btech not in wipro'"
                 />
                 {searchTerm && (
-                  <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600">
+                  <button onClick={() => { setSearchTerm(''); fetchCandidates(''); }} className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600">
                     <X size={14} />
                   </button>
                 )}
               </div>
+              {searchBreakdown && (searchBreakdown.degrees?.length > 0 || searchBreakdown.exclude_companies?.length > 0 || searchBreakdown.include_companies?.length > 0) && (
+                <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-purple-50/80 border border-purple-200 rounded-xl text-xs">
+                  {searchBreakdown.degrees?.length > 0 && (
+                    <span className="text-purple-700 font-medium">🎓 {searchBreakdown.degrees[0].toUpperCase()}</span>
+                  )}
+                  {searchBreakdown.exclude_companies?.length > 0 && (
+                    <span className="text-rose-600 font-medium">🚫 Excluded: {searchBreakdown.exclude_companies.join(', ')}</span>
+                  )}
+                  {searchBreakdown.include_companies?.length > 0 && (
+                    <span className="text-emerald-700 font-medium">🏢 {searchBreakdown.include_companies.join(', ')}</span>
+                  )}
+                </div>
+              )}
               <button
                 onClick={() => setShowFilters(f => !f)}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors duration-150 ${
@@ -2414,6 +2528,19 @@ export default function SourceDashboard() {
                         )}
                       </div>
                       <InlineEmailEditor candidate={c} fetchCandidates={fetchCandidates} />
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-xs text-gray-500">
+                        {c.current_designation && <span className="font-medium text-gray-600 truncate max-w-[160px]">{c.current_designation}</span>}
+                        {c.education && c.education.length > 0 && (c.education[0].degree || c.education[0].institution) && (
+                          <span className="inline-flex items-center text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded font-medium">
+                            🎓 {c.education[0].degree || c.education[0].institution}
+                          </span>
+                        )}
+                        {c.past_companies && c.past_companies.length > 0 && (
+                          <span className="inline-flex items-center text-[10px] text-gray-600 bg-gray-100 border border-gray-200 px-1.5 py-0.2 rounded">
+                            Ex-{c.past_companies.slice(0, 2).join(', ')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
