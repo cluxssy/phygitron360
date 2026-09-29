@@ -323,6 +323,56 @@ class CandidateService:
         }
 
 
+    @staticmethod
+    def _is_legible_text(text: str) -> bool:
+        """Check if extracted text contains real readable content vs. corrupted font glyphs/binary noise."""
+        if not text or len(text.strip()) < 20:
+            return False
+        clean = text.strip()
+        alnum_count = sum(1 for c in clean if c.isalnum())
+        total_len = len(clean)
+        # Readable resumes have a high ratio of alphanumeric characters. If < 25%, it's garbled glyphs.
+        if alnum_count / total_len < 0.25:
+            return False
+        # Check for excessive unmapped Windows-1252 glyphs or control characters
+        garbled_glyphs = sum(1 for c in clean if '\x80' <= c <= '\x9f' or c in '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ\x00\x0c\xad\xa0')
+        if garbled_glyphs / max(alnum_count, 1) > 0.4:
+            return False
+        return True
+
+    def _extract_text_via_gemini_vision(self, file_path: str) -> str:
+        """Fallback OCR using Gemini Vision when local PDF font encodings are garbled/missing or document is scanned."""
+        try:
+            with open(file_path, "rb") as f:
+                pdf_bytes = f.read()
+            if not pdf_bytes:
+                return ""
+
+            from google.genai import types
+            ai_service = self.ai_agents.ai
+            key = ai_service.gemini_api_key or ai_service._gemini_pool.current()
+            client = ai_service._get_gemini_client(key) if key else None
+            if not client:
+                return ""
+
+            prompt = (
+                "You are an expert OCR and document transcription system. "
+                "Transcribe all text from this resume document verbatim. "
+                "Preserve all names, contact info, headings, sections, job titles, companies, dates, education, and skills. "
+                "Output plain readable text only."
+            )
+            response = client.models.generate_content(
+                model=ai_service.gemini_model,
+                contents=[
+                    types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    prompt
+                ]
+            )
+            return (response.text or "").strip()
+        except Exception as e:
+            logger.warning(f"Gemini vision OCR extraction failed for {file_path}: {e}")
+            return ""
+
     def _extract_text(self, file_path: str, ext: str) -> str:
         """Extract plain text from a resume file. Always returns a clean string safe for DB storage."""
         extracted_text = ""
@@ -342,15 +392,26 @@ class CandidateService:
                     logger.warning(f"PyMuPDF failed to parse {file_path}: {pdf_err}. Trying pdfplumber...")
                     extracted_text = ""
                 
-                # Fallback: if PyMuPDF extracted nothing, try pdfplumber
-                if not extracted_text.strip():
+                # Check if extracted text is legible; if not, try pdfplumber
+                if not self._is_legible_text(extracted_text):
                     try:
                         import pdfplumber
                         with pdfplumber.open(file_path) as pdf:
+                            pl_text = ""
                             for page in pdf.pages:
-                                extracted_text += (page.extract_text() or "") + "\n"
+                                pl_text += (page.extract_text() or "") + "\n"
+                            if self._is_legible_text(pl_text):
+                                extracted_text = pl_text
                     except Exception as pl_err:
                         logger.warning(f"pdfplumber fallback failed for {file_path}: {pl_err}")
+
+                # If text is STILL not legible or empty (e.g. Canva/Illustrator custom fonts, broken ToUnicode CMap, or scanned PDF),
+                # use Gemini Vision OCR to transcribe the visual document.
+                if not self._is_legible_text(extracted_text):
+                    print(f"[TextExtract] PDF {os.path.basename(file_path)} has unreadable/corrupted font encoding or is scanned. Transcribing with Gemini Vision OCR...", flush=True)
+                    ocr_text = self._extract_text_via_gemini_vision(file_path)
+                    if self._is_legible_text(ocr_text):
+                        extracted_text = ocr_text
             elif ext == ".txt":
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
