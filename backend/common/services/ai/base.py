@@ -90,7 +90,31 @@ def _parse_key_list(env_var: str, single_var: str) -> list[str]:
         single = os.getenv(single_var, "")
         if single.strip():
             keys = [single.strip().strip("'\"")]
-    return keys
+def _parse_json_from_llm(raw_text: str) -> dict:
+    """
+    Robustly parse JSON returned by LLMs.
+    Handles:
+    - Markdown code fences (```json ... ```)
+    - Trailing text/notes after the closing brace (fixes "Extra data: line X column Y")
+    - Leading text/preambles before the opening brace
+    """
+    clean = str(raw_text or "").replace("```json", "").replace("```", "").strip()
+    try:
+        return json.loads(clean)
+    except Exception:
+        pass
+
+    first_brace = clean.find("{")
+    first_bracket = clean.find("[")
+    start_pos = 0
+    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        start_pos = first_brace
+    elif first_bracket != -1:
+        start_pos = first_bracket
+
+    decoder = json.JSONDecoder()
+    obj, _ = decoder.raw_decode(clean[start_pos:])
+    return obj
 
 
 # ---------------------------------------------------------------------------
@@ -514,7 +538,7 @@ class AIService:
                             max_tokens=8192,
                             response_format={"type": "json_object"},
                         )
-                        return json.loads(response.choices[0].message.content.strip())
+                        return _parse_json_from_llm(response.choices[0].message.content.strip())
                     except Exception as e:
                         err = self._sanitize_error(e)
                         if any(k in err.lower() for k in ['404', 'decommissioned', 'not_found', 'does not exist', 'invalid_request_error', 'deprecated']):
@@ -576,7 +600,7 @@ class AIService:
                             )
                             response = client.models.generate_content(model=model_name, contents=full_prompt, config=_cfg)
                             clean = response.text.replace('```json', '').replace('```', '').strip()
-                            return json.loads(clean)
+                            return _parse_json_from_llm(clean)
                         except Exception as e:
                             err = self._sanitize_error(e)
                             if '404' in err or 'NOT_FOUND' in err:
@@ -669,8 +693,7 @@ class AIService:
                         )
                         resp.raise_for_status()
                         content = resp.json()["choices"][0]["message"]["content"].strip()
-                        m = re.search(r'(\{.*\}|\[.*\])', content, re.DOTALL)
-                        parsed = json.loads(m.group(1) if m else content)
+                        parsed = _parse_json_from_llm(content)
                         print(f"Groq REST ({g_model}) success!", flush=True)
                         return parsed
 
@@ -753,7 +776,7 @@ class AIService:
                                     )
                                     response = client.models.generate_content(model=model_name, contents=full_prompt, config=_cfg)
                                     clean = response.text.replace('```json', '').replace('```', '').strip()
-                                    parsed_result = json.loads(clean)
+                                    parsed_result = _parse_json_from_llm(clean)
                                     print(f"Gemini SDK ({model_name}) success!", flush=True)
                                     break
                                 except Exception as sdk_err:
@@ -791,7 +814,7 @@ class AIService:
                                 if "candidates" in res_json and res_json["candidates"]:
                                     text = res_json["candidates"][0]["content"]["parts"][0]["text"]
                                     clean = text.replace('```json', '').replace('```', '').strip()
-                                    parsed_result = json.loads(clean)
+                                    parsed_result = _parse_json_from_llm(clean)
                                     print(f"Gemini REST ({model_name}) success!", flush=True)
                                     break
                                 else:
