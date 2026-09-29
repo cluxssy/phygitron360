@@ -1181,14 +1181,57 @@ class CandidateService:
                                         continue # move to next sub-batch
 
                                 # 4. Process each returned item in the batch
-                                for item, pre, item_id_str in valid_items:
+                                for v_idx, (item, pre, item_id_str) in enumerate(valid_items):
                                     await asyncio.sleep(0.01) # Yield to event loop
-                                    ai_result = ai_result_map.get(item_id_str)
-                                    
+
+                                    # Multi-pattern lookup: the LLM may key by "item_3166", "3166", 3166, or "resume_3166"
+                                    ai_result = (
+                                        ai_result_map.get(item_id_str)
+                                        or ai_result_map.get(str(item["id"]))
+                                        or ai_result_map.get(item["id"])
+                                        or ai_result_map.get(f"resume_{item['id']}")
+                                        or ai_result_map.get(f"candidate_{item['id']}")
+                                    )
+
+                                    # Single-item batch handling: LLMs often return the candidate object unwrapped,
+                                    # or key it as "1", "item_1", "0", etc.
+                                    if not ai_result and len(valid_items) == 1:
+                                        if any(k in ai_result_map for k in ("n", "sk", "exp", "e", "p", "d", "x", "skills", "name")):
+                                            ai_result = ai_result_map
+                                        else:
+                                            for fallback_k in ("1", 1, "item_1", "0", 0, "item_0", "resume_1", "resume_0"):
+                                                if fallback_k in ai_result_map and isinstance(ai_result_map[fallback_k], dict):
+                                                    ai_result = ai_result_map[fallback_k]
+                                                    break
+                                            if not ai_result and len(ai_result_map) == 1:
+                                                first_val = next(iter(ai_result_map.values()))
+                                                if isinstance(first_val, dict):
+                                                    ai_result = first_val
+                                    elif not ai_result:
+                                        # Multi-item batch index fallback (1-based or 0-based)
+                                        for idx_k in (str(v_idx + 1), v_idx + 1, f"item_{v_idx + 1}", f"resume_{v_idx + 1}", str(v_idx), v_idx):
+                                            if idx_k in ai_result_map and isinstance(ai_result_map[idx_k], dict):
+                                                ai_result = ai_result_map[idx_k]
+                                                break
+
                                     cur.execute("SAVEPOINT item_insert")
                                     try:
-                                        # MODIFIED: Use fallback for missing AI result instead of failing
-                                        if not ai_result or not isinstance(ai_result, dict) or (not ai_result.get("n") and not ai_result.get("exp") and not ai_result.get("p_sk")):
+                                        # Validate that the AI result has actual parsed content
+                                        has_valid_content = (
+                                            isinstance(ai_result, dict) and (
+                                                bool(ai_result.get("n"))
+                                                or bool(ai_result.get("name"))
+                                                or bool(ai_result.get("exp"))
+                                                or bool(ai_result.get("experience"))
+                                                or bool(ai_result.get("sk"))
+                                                or bool(ai_result.get("skills"))
+                                                or bool(ai_result.get("p_sk"))
+                                                or bool(ai_result.get("primary_skills"))
+                                                or bool(ai_result.get("d"))
+                                                or bool(ai_result.get("current_designation"))
+                                            )
+                                        )
+                                        if not has_valid_content:
                                             print(f"[Worker-{worker_id}][{self.tenant_id}] WARNING: AI omitted or returned empty parse result for item {item['id']}. Using fallback.", flush=True)
                                             # Create minimal ai_result with filename-based name
                                             inferred_name = self._extract_name_from_filename(item.get("filename", ""))

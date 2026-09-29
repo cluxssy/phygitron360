@@ -362,7 +362,7 @@ class AIService:
         # Primary Gemini model
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
         # Fallback Gemini models when primary hits 503/429
-        fallback_cfg = os.getenv("GEMINI_FALLBACK_MODEL", os.getenv("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite"))
+        fallback_cfg = os.getenv("GEMINI_FALLBACK_MODEL", os.getenv("GEMINI_FALLBACK_MODELS", "gemini-3.5-flash-lite,gemini-3.5-flash,gemini-flash-latest"))
         self.gemini_fallback_models = [m.strip().strip("'\"") for m in fallback_cfg.split(",") if m.strip().strip("'\"")]
 
         # Groq model and fallbacks
