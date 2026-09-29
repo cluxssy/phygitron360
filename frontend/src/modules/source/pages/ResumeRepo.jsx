@@ -512,22 +512,22 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
         await onBulkUpload(stagedFiles, overrideDate, tags);
       } else {
         const validFiles = stagedFiles;
-        if (validFiles.length === 1 && validFiles[0].name.toLowerCase().endsWith('.zip')) {
-          const zipFile = validFiles[0];
+        if (validFiles.length === 1 && (validFiles[0].name.toLowerCase().endsWith('.zip') || validFiles[0].size > 35 * 1024 * 1024)) {
+          const largeFile = validFiles[0];
           try {
             const presignedRes = await api.post('/source/candidates/bulk-upload/request-presigned', {
-              filename: zipFile.name,
-              filesize: zipFile.size,
+              filename: largeFile.name,
+              filesize: largeFile.size,
               override_date: overrideDate,
               tags: Array.isArray(tags) ? tags : []
             });
             if (presignedRes.data?.data?.direct_upload && presignedRes.data.data.upload_url) {
               const { job_id, upload_url, s3_key } = presignedRes.data.data;
-              await axios.put(upload_url, zipFile, {
+              await axios.put(upload_url, largeFile, {
                 headers: { 'Content-Type': 'application/octet-stream' }
               });
               await api.post('/source/candidates/bulk-upload/confirm-archive', { job_id, s3_key });
-              toast.success(`Uploaded ${zipFile.name}! Processing in background.`);
+              toast.success(`Uploaded ${largeFile.name}! Processing in background.`);
               setShowUploadModal(false);
               setStagedFiles([]);
               setUploadSelectedTags([]);
