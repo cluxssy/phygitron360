@@ -98,7 +98,7 @@ variable "gemini_model" {
 variable "gemini_fallback_model" {
   description = "Fallback Gemini model(s) when primary model hits 503/429/404"
   type        = string
-  default     = "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite"
+  default     = "gemini-3.5-flash-lite,gemini-3.5-flash,gemini-flash-latest"
 }
 
 variable "groq_api_key" {
