@@ -149,7 +149,7 @@ variable "ai_provider" {
 variable "bulk_ai_provider" {
   description = "AI provider used for bulk resume parsing (groq | gemini | openai | mock)"
   type        = string
-  default     = "groq"
+  default     = "gemini"
 }
 
 variable "bulk_parse_workers" {

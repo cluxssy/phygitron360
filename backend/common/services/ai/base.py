@@ -511,7 +511,7 @@ class AIService:
                                 {"role": "user",   "content": prompt},
                             ],
                             temperature=0.1,
-                            max_tokens=2048,
+                            max_tokens=8192,
                             response_format={"type": "json_object"},
                         )
                         return json.loads(response.choices[0].message.content.strip())
@@ -662,10 +662,10 @@ class AIService:
                                     {"role": "user",   "content": prompt},
                                 ],
                                 "temperature": 0.1,
-                                "max_tokens": 2048,
+                                "max_tokens": 8192,
                                 "response_format": {"type": "json_object"},
                             },
-                            timeout=40,
+                            timeout=60,
                         )
                         resp.raise_for_status()
                         content = resp.json()["choices"][0]["message"]["content"].strip()

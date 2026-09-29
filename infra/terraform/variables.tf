@@ -94,7 +94,7 @@ variable "ai_provider" {
 
 variable "bulk_ai_provider" {
   description = "Fallback/Bulk AI Provider for heavy tasks"
-  default     = "groq"
+  default     = "gemini"
 }
 
 variable "bulk_parse_workers" {
