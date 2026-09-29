@@ -17,7 +17,10 @@ resource "digitalocean_spaces_bucket" "uploads" {
     allowed_origins = [
       "https://phygitron.com",
       "https://www.phygitron.com",
-      "https://*.phygitron.com"
+      "https://*.phygitron.com",
+      "https://*.ondigitalocean.app",
+      "http://localhost:5173",
+      "http://localhost:3000"
     ]
     max_age_seconds = 3000
   }
