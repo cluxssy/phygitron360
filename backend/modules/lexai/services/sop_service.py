@@ -90,6 +90,13 @@ DEFAULT_ORGANIZATION_STANDARD = {
     }
 }
 
+SOP_HEADING_PATTERN = re.compile(
+    r"^(?:(?:Level|Module|Section|Chapter|Phase|Step|Part)\s+\d+|Final\s+Level|"
+    r"\d+(\.\d+)*\s+[A-Za-z]|"
+    r"(?:Purpose|Scope|Overview|Objectives?|Prerequisites|Responsibilities|Procedure|Process\s+Flow|Workflow|Quality\s+Standards|References|Summary|Appendix|Suggested\s+End-to-End)\b)",
+    re.IGNORECASE
+)
+
 
 def extract_all_text(doc: Document) -> str:
     """
@@ -140,8 +147,10 @@ def get_ewandz_banner_image_path() -> Optional[str]:
     potential_paths = [
         os.path.join(os.path.dirname(__file__), "..", "templates", "ewandz_header_banner.png"),
         os.path.join(os.path.dirname(__file__), "..", "templates", "ewandz_header_banner.jpg"),
-        os.path.join(os.getcwd(), "instructional_ai_system", "backend", "app", "templates", "ewandz_header_banner.png"),
-        os.path.join(os.getcwd(), "instructional_ai_system", "backend", "app", "templates", "ewandz_header_banner.jpg"),
+        os.path.join(os.getcwd(), "backend", "modules", "lexai", "templates", "ewandz_header_banner.png"),
+        os.path.join(os.getcwd(), "backend", "modules", "lexai", "templates", "ewandz_header_banner.jpg"),
+        r"d:\Phygitron\phygitron360\backend\modules\lexai\templates\ewandz_header_banner.png",
+        r"d:\Lexai\phygitron360\backend\modules\lexai\templates\ewandz_header_banner.png",
     ]
     for p in potential_paths:
         if os.path.exists(p):
@@ -154,15 +163,28 @@ def apply_ewandz_standard_header(target_doc: Document):
     Applies the official EWANDZ header banner from SOP_001.pdf to all sections of target_doc.
     """
     banner_img = get_ewandz_banner_image_path()
-    if banner_img:
-        for s in target_doc.sections:
-            hdr = s.header
-            hdr.is_linked_to_previous = False
-            for child in list(hdr._element):
-                hdr._element.remove(child)
-            hp = hdr.paragraphs[0] if hdr.paragraphs else hdr.add_paragraph()
-            hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            hp.add_run().add_picture(banner_img, width=Inches(6.5))
+    for s in target_doc.sections:
+        hdr = s.header
+        hdr.is_linked_to_previous = False
+        for child in list(hdr._element):
+            hdr._element.remove(child)
+        hp = hdr.paragraphs[0] if hdr.paragraphs else hdr.add_paragraph()
+        hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        if banner_img:
+            try:
+                hp.add_run().add_picture(banner_img, width=Inches(6.5))
+            except Exception:
+                r = hp.add_run("EWANDZ DIGITAL  |  STANDARD OPERATING PROCEDURE")
+                r.font.name = "Calibri"
+                r.font.size = Pt(10)
+                r.font.bold = True
+                r.font.color.rgb = RGBColor(31, 78, 120)
+        else:
+            r = hp.add_run("EWANDZ DIGITAL  |  STANDARD OPERATING PROCEDURE")
+            r.font.name = "Calibri"
+            r.font.size = Pt(10)
+            r.font.bold = True
+            r.font.color.rgb = RGBColor(31, 78, 120)
 
 
 def apply_ewandz_standard_footer(target_doc: Document):
@@ -232,7 +254,12 @@ def analyze_sop_document(file_path_or_stream) -> Dict[str, Any]:
 
     for p in doc.paragraphs:
         style_name = p.style.name.lower() if p.style else ""
+        p_text_clean = p.text.strip()
         is_heading = "heading" in style_name
+        if not is_heading and p_text_clean:
+            if SOP_HEADING_PATTERN.match(p_text_clean) or (len(p_text_clean) < 65 and p_text_clean.isupper() and len(p_text_clean) > 3) or (any(r.font.bold for r in p.runs) and len(p_text_clean) < 70 and not p_text_clean.endswith((".", ":", ";"))):
+                is_heading = True
+
         if is_heading:
             headings_count += 1
 
@@ -680,17 +707,33 @@ def apply_sop_formatting(file_path_or_stream, config: Dict[str, Any], header_fil
     # 10. Process Body Paragraphs
     for p in doc.paragraphs:
         style_name = p.style.name.lower() if p.style else ""
+        p_clean = p.text.strip()
         is_title = "title" in style_name
         is_subtitle = "subtitle" in style_name
         is_h1 = "heading 1" in style_name
         is_h2 = "heading 2" in style_name
         is_h3 = "heading 3" in style_name
         is_any_heading = "heading" in style_name
-        is_list = "list" in style_name or p.text.strip().startswith(("•", "-", "*", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "0."))
-        is_caption = "caption" in style_name or p.text.strip().lower().startswith(("figure ", "fig. ", "table ", "exhibit "))
+        is_list = "list" in style_name or p_clean.startswith(("•", "-", "*", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "0."))
+        is_caption = "caption" in style_name or p_clean.lower().startswith(("figure ", "fig. ", "table ", "exhibit "))
         
+        # Check for pattern-based headings even if style is Normal
+        if not is_title and not is_subtitle and not is_any_heading and p_clean:
+            if SOP_HEADING_PATTERN.match(p_clean):
+                is_any_heading = True
+                if re.match(r"^(?:(?:Level|Module|Section|Chapter|Phase)\s+\d+|Final\s+Level|\d+\s+[A-Za-z])", p_clean, re.IGNORECASE):
+                    is_h1 = True
+                else:
+                    is_h2 = True
+            elif len(p_clean) < 65 and p_clean.isupper() and len(p_clean) > 3:
+                is_any_heading = True
+                is_h1 = True
+            elif any(r.font.bold for r in p.runs) and len(p_clean) < 70 and not p_clean.endswith((".", ":", ";")):
+                is_any_heading = True
+                is_h2 = True
+
         # Check for Special SOP Section labels
-        raw_text_upper = p.text.strip().upper()
+        raw_text_upper = p_clean.upper()
         is_note = raw_text_upper.startswith("NOTE:") or raw_text_upper.startswith("NOTE :")
         is_warning = raw_text_upper.startswith("WARNING:") or raw_text_upper.startswith("WARNING :")
         is_caution = raw_text_upper.startswith("CAUTION:") or raw_text_upper.startswith("CAUTION :")
@@ -713,6 +756,17 @@ def apply_sop_formatting(file_path_or_stream, config: Dict[str, Any], header_fil
                     size_pt=title_size_pt or 20,
                     bold=True,
                     color_rgb=RGBColor(31, 78, 120) if doc_title_action == "standard" else None
+                )
+        elif is_subtitle:
+            p.paragraph_format.space_after = Pt(8)
+            for run in p.runs:
+                apply_formatting_to_run(
+                    run,
+                    font_name=target_font_name,
+                    size_pt=12,
+                    bold=False,
+                    italic=True,
+                    color_rgb=RGBColor(89, 89, 89)
                 )
         elif is_any_heading:
             if h_space_before is not None:
@@ -862,9 +916,9 @@ def apply_sop_formatting(file_path_or_stream, config: Dict[str, Any], header_fil
             applied_changes.append("Table header and cell typography standardized")
 
     # 12. Header & Footer
-    header_action = formatting_cfg.get("header", {}).get("action", "preserve")
-    footer_action = formatting_cfg.get("footer", {}).get("action", "preserve")
-    page_num_action = formatting_cfg.get("page_numbers", {}).get("action", "preserve")
+    header_action = formatting_cfg.get("header", {}).get("action", "standard")
+    footer_action = formatting_cfg.get("footer", {}).get("action", "standard")
+    page_num_action = formatting_cfg.get("page_numbers", {}).get("action", "standard")
 
     # Handle Header
     if header_action == "standard":

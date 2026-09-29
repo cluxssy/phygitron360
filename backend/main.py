@@ -66,6 +66,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "Content-Disposition",
+        "X-Compliance-Final",
+        "X-Formatting-Changes-Count",
+        "X-Content-Changes-Count",
+        "X-SOP-Baseline-Compliance",
+        "X-SOP-Final-Compliance",
+        "X-SOP-Formatting-Changes",
+    ],
 )
 
 # Global API Response
@@ -253,8 +262,8 @@ app.include_router(lexai_folders_router, dependencies=[Depends(require_module("l
 app.include_router(alias_folders_router, dependencies=[Depends(require_module("lexai"))])
 app.include_router(lexai_files_router, dependencies=[Depends(require_module("lexai"))])
 app.include_router(alias_files_router, dependencies=[Depends(require_module("lexai"))])
-app.include_router(lexai_voice_router, dependencies=[Depends(require_module("lexai"))])
-app.include_router(alias_voice_router, dependencies=[Depends(require_module("lexai"))])
+app.include_router(lexai_voice_router)
+app.include_router(alias_voice_router)
 app.include_router(lexai_sop_router, dependencies=[Depends(require_module("lexai"))])
 app.include_router(lexai_alias_sop_router, dependencies=[Depends(require_module("lexai"))])
 

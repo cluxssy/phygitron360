@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { UploadCloud, FileText, CheckCircle, ChevronDown, ChevronUp, X, Download } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle, ChevronDown, ChevronUp, X, Download, Sparkles } from 'lucide-react';
 
 const INITIAL_FORMATTING_CONFIG = {
     // 1-16: Core
@@ -20,17 +20,17 @@ const INITIAL_FORMATTING_CONFIG = {
         width: 'full'
     },
     table_borders: { 
-        action: 'preserve', 
+        action: 'standard', 
         style: 'outside', 
         custom_borders: { top: true, bottom: true, left: true, right: true, inside_h: true, inside_v: true } 
     },
-    header: { action: 'preserve', filename: '' },
-    footer: { action: 'preserve', filename: '' },
-    page_numbers: { action: 'preserve', format: 'page_x_of_y', alignment: 'right' },
-    images: { action: 'preserve', align: 'center', max_width_inches: 6.5 },
-    page_breaks: { action: 'preserve', break_before_h1: true, keep_with_next: true },
-    page_orientation: { action: 'preserve', orientation: 'portrait' },
-    page_size: { action: 'preserve', size: 'letter' },
+    header: { action: 'standard', filename: '' },
+    footer: { action: 'standard', filename: '' },
+    page_numbers: { action: 'standard', format: 'page_x_of_y', alignment: 'right' },
+    images: { action: 'standard', align: 'center', max_width_inches: 6.5 },
+    page_breaks: { action: 'standard', break_before_h1: true, keep_with_next: true },
+    page_orientation: { action: 'standard', orientation: 'portrait' },
+    page_size: { action: 'standard', size: 'letter' },
 
     // 17-23: Structural & Enhancements
     paragraph_list: {
@@ -70,7 +70,7 @@ const INITIAL_FORMATTING_CONFIG = {
         prevent_orphans: true
     },
     document_title: {
-        action: 'preserve',
+        action: 'standard',
         alignment: 'left',
         title_size: 20,
         subtitle_size: 12,
@@ -225,7 +225,7 @@ export default function SopFormatter() {
         active_voice: false
     });
 
-    const [formattingConfig, setFormattingConfig] = useState(INITIAL_FORMATTING_CONFIG);
+    const [formattingConfig, setFormattingConfig] = useState(PRESET_DEFINITIONS.ewandz_standard.config);
     const [selectedPreset, setSelectedPreset] = useState('ewandz_standard');
     const [openAccordions, setOpenAccordions] = useState({
         typography: true,
@@ -244,22 +244,36 @@ export default function SopFormatter() {
     const [acceptedSuggestions, setAcceptedSuggestions] = useState({});
     const [resultMeta, setResultMeta] = useState(null);
 
+    // If file is not selected, but user uploaded a PDF in the style guide slot, treat it as effective SOP input
+    const effectiveFile = file || styleGuidePdf;
+
+    // Automatically assign styleGuidePdf as primary SOP document if main file is not selected
+    useEffect(() => {
+        if (!file && styleGuidePdf) {
+            setFile(styleGuidePdf);
+            setStyleGuidePdf(null);
+        }
+    }, [file, styleGuidePdf]);
+
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             const selected = e.target.files[0];
-            if (selected.name.endsWith('.docx')) {
+            const lowerName = selected.name.toLowerCase();
+            if (lowerName.endsWith('.docx') || lowerName.endsWith('.pdf') || lowerName.endsWith('.doc') || lowerName.endsWith('.txt')) {
                 setFile(selected);
                 setError(null);
                 setAnalysisData(null);
                 setResultMeta(null);
             } else {
-                setError('Please select a valid .docx SOP document.');
+                setError('Please select a valid SOP document (.docx or .pdf).');
             }
         }
     };
 
     const handleRemoveFile = () => {
         setFile(null);
+        setStyleGuidePdf(null);
+        setLoading(false);
         setError(null);
         setAnalysisData(null);
         setResultMeta(null);
@@ -269,8 +283,15 @@ export default function SopFormatter() {
     const handleStyleGuideChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             const selected = e.target.files[0];
-            if (selected.name.endsWith('.pdf')) {
-                setStyleGuidePdf(selected);
+            if (selected.name.toLowerCase().endsWith('.pdf')) {
+                if (!file) {
+                    setFile(selected);
+                } else {
+                    setStyleGuidePdf(selected);
+                }
+                setError(null);
+                setAnalysisData(null);
+                setResultMeta(null);
             } else {
                 setError('Style guide must be a valid .pdf file.');
             }
@@ -326,8 +347,9 @@ export default function SopFormatter() {
     };
 
     const handleAnalyzeDocument = async () => {
-        if (!file) {
-            setError('Please upload a .docx SOP file first.');
+        const fileToProcess = file || styleGuidePdf;
+        if (!fileToProcess) {
+            setError('Please upload an SOP document (.docx or .pdf) first.');
             return;
         }
 
@@ -336,8 +358,9 @@ export default function SopFormatter() {
 
         try {
             const formData = new FormData();
-            formData.append('file', file);
-            if (styleGuidePdf) {
+            formData.append('file', fileToProcess);
+            // Only attach style guide if a separate style guide was provided alongside the main file
+            if (file && styleGuidePdf) {
                 formData.append('style_guide_pdf', styleGuidePdf);
             }
             if (headerFile) {
@@ -361,6 +384,11 @@ export default function SopFormatter() {
                     });
                     setAcceptedSuggestions(initialAcc);
                     setCurrentStep('review_content');
+                } else {
+                    setTimeout(() => {
+                        const el = document.getElementById('sop-pre-analysis-card');
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 100);
                 }
             } else {
                 setError(res.data?.error || 'Document pre-analysis failed.');
@@ -374,8 +402,9 @@ export default function SopFormatter() {
     };
 
     const handleExecuteFormatting = async () => {
-        if (!file) {
-            setError('Please upload a .docx SOP file first.');
+        const fileToProcess = file || styleGuidePdf;
+        if (!fileToProcess) {
+            setError('Please upload an SOP document (.docx or .pdf) first.');
             return;
         }
 
@@ -384,8 +413,8 @@ export default function SopFormatter() {
 
         try {
             const formData = new FormData();
-            formData.append('file', file);
-            if (styleGuidePdf) {
+            formData.append('file', fileToProcess);
+            if (file && styleGuidePdf) {
                 formData.append('style_guide_pdf', styleGuidePdf);
             }
             if (headerFile) {
@@ -427,7 +456,7 @@ export default function SopFormatter() {
             const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = blobUrl;
-            const originalName = file.name.replace(/\.[^/.]+$/, '');
+            const originalName = (fileToProcess.name || 'Document').replace(/\.[^/.]+$/, '');
             link.setAttribute('download', `${originalName}_Formatted_SOP.docx`);
             document.body.appendChild(link);
             link.click();
@@ -444,11 +473,12 @@ export default function SopFormatter() {
     };
 
     const handleDownloadChangeReport = async () => {
-        if (!file) return;
+        const fileToProcess = file || styleGuidePdf;
+        if (!fileToProcess) return;
         setLoading(true);
         try {
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', fileToProcess);
             formData.append('formatting_config', JSON.stringify(formattingConfig));
             formData.append('accepted_suggestions', JSON.stringify(acceptedSuggestions));
 
@@ -456,7 +486,7 @@ export default function SopFormatter() {
             const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = blobUrl;
-            const originalName = file.name.replace(/\.[^/.]+$/, '');
+            const originalName = (fileToProcess.name || 'Document').replace(/\.[^/.]+$/, '');
             link.setAttribute('download', `${originalName}_Formatting_Report.docx`);
             document.body.appendChild(link);
             link.click();
@@ -577,9 +607,9 @@ export default function SopFormatter() {
                         <h3 className="text-lg font-semibold m-0">
                             1. Upload SOP Document
                         </h3>
-                        {file && (
+                        {effectiveFile && (
                             <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 flex items-center gap-1.5">
-                                <CheckCircle className="w-3.5 h-3.5" /> Ready for formatting
+                                <CheckCircle className="w-3.5 h-3.5" /> Ready for formatting ({effectiveFile.name.toLowerCase().endsWith('.pdf') ? 'PDF Document' : 'Word Document'})
                             </span>
                         )}
                     </div>
@@ -590,16 +620,16 @@ export default function SopFormatter() {
                             <input
                                 type="file"
                                 id="sop-docx-upload"
-                                accept=".docx"
+                                accept=".docx,.pdf,.doc,.txt"
                                 onChange={handleFileChange}
                                 style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', opacity: 0 }}
                             />
                             {!file ? (
                                 <div className="text-center">
                                     <label htmlFor="sop-docx-upload" className="btn btn-primary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.6rem', padding: '0.8rem 1.6rem' }}>
-                                        <UploadCloud size={20} /> Select SOP (.docx)
+                                        <UploadCloud size={20} /> Select SOP (.docx or .pdf)
                                     </label>
-                                    <p className="text-xs text-muted mt-3 mb-0">Microsoft Word format (Max 50MB)</p>
+                                    <p className="text-xs text-muted mt-3 mb-0">Word (.docx) or PDF format (Max 50MB)</p>
                                 </div>
                             ) : (
                                 <div className="flex items-center justify-between p-3 rounded-lg border border-light w-full" style={{ background: 'white', boxShadow: 'var(--shadow-sm)' }}>
@@ -639,22 +669,39 @@ export default function SopFormatter() {
                                     <p className="text-xs text-muted mt-3 mb-0">Optional reference for branding rules</p>
                                 </div>
                             ) : (
-                                <div className="flex items-center justify-between p-3 rounded-lg border border-light w-full" style={{ background: 'white', boxShadow: 'var(--shadow-sm)' }}>
-                                    <div className="flex items-center gap-3 overflow-hidden">
-                                        <FileText size={16} className="text-primary flex-shrink-0" />
-                                        <div className="overflow-hidden">
-                                            <span className="text-sm font-semibold truncate block text-gray-800" title={styleGuidePdf.name}>{styleGuidePdf.name}</span>
-                                            <span className="text-xs text-muted">{formatSize(styleGuidePdf.size)}</span>
+                                <div className="w-full">
+                                    <div className="flex items-center justify-between p-3 rounded-lg border border-light w-full" style={{ background: 'white', boxShadow: 'var(--shadow-sm)' }}>
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                            <FileText size={16} className="text-primary flex-shrink-0" />
+                                            <div className="overflow-hidden">
+                                                <span className="text-sm font-semibold truncate block text-gray-800" title={styleGuidePdf.name}>{styleGuidePdf.name}</span>
+                                                <span className="text-xs text-muted">{formatSize(styleGuidePdf.size)}</span>
+                                            </div>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStyleGuidePdf(null)}
+                                            className="p-1 hover:bg-danger-light rounded text-danger transition-colors flex-shrink-0"
+                                            title="Remove style guide"
+                                        >
+                                            <X size={16} />
+                                        </button>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setStyleGuidePdf(null)}
-                                        className="p-1 hover:bg-danger-light rounded text-danger transition-colors flex-shrink-0"
-                                        title="Remove style guide"
-                                    >
-                                        <X size={16} />
-                                    </button>
+                                    {!file && (
+                                        <div className="mt-2.5 p-2 rounded border flex items-center justify-between gap-2" style={{ backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }}>
+                                            <span className="text-xs text-emerald-800 font-medium">Uploaded as SOP document</span>
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm btn-primary text-xs py-1 px-2.5"
+                                                onClick={() => {
+                                                    setFile(styleGuidePdf);
+                                                    setStyleGuidePdf(null);
+                                                }}
+                                            >
+                                                Move to Main Slot
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -798,6 +845,51 @@ export default function SopFormatter() {
                                     </label>
                                 );
                             })}
+                        </div>
+                    </div>
+
+                    {/* Active Standards Highlights */}
+                    <div className="mb-6 p-4 rounded-xl border border-purple-200" style={{ background: 'linear-gradient(135deg, rgba(147, 71, 255, 0.05) 0%, rgba(31, 78, 120, 0.04) 100%)' }}>
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <Sparkles size={16} className="text-[#9347FF]" />
+                                <span className="text-xs font-bold uppercase tracking-wider text-purple-950">
+                                    Active Standard: {PRESET_DEFINITIONS[selectedPreset]?.label || 'EWANDZ Standard'}
+                                </span>
+                            </div>
+                            <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                                Standards Enforced
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs text-slate-800">
+                            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-white border border-purple-100 shadow-sm">
+                                <span className="text-emerald-600 font-bold text-sm">✓</span>
+                                <div>
+                                    <span className="font-semibold block text-gray-900">Header Banner</span>
+                                    <span className="text-xs text-muted">EWANDZ Standard Logo</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-white border border-purple-100 shadow-sm">
+                                <span className="text-emerald-600 font-bold text-sm">✓</span>
+                                <div>
+                                    <span className="font-semibold block text-gray-900">Typographic Hierarchy</span>
+                                    <span className="text-xs text-muted">Title 20pt, H1 16pt, Body 11pt</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-white border border-purple-100 shadow-sm">
+                                <span className="text-emerald-600 font-bold text-sm">✓</span>
+                                <div>
+                                    <span className="font-semibold block text-gray-900">Table Normalization</span>
+                                    <span className="text-xs text-muted">Navy Headers & Zebra Fill</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-white border border-purple-100 shadow-sm">
+                                <span className="text-emerald-600 font-bold text-sm">✓</span>
+                                <div>
+                                    <span className="font-semibold block text-gray-900">Corporate Footer</span>
+                                    <span className="text-xs text-muted">USA | PL | IN | CA Web</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1761,7 +1853,7 @@ export default function SopFormatter() {
 
                 {/* Analysis Details Panel (if analyzed) */}
                 {analysisData && (
-                    <div className="card">
+                    <div id="sop-pre-analysis-card" className="card" style={{ borderColor: 'var(--primary)', boxShadow: '0 4px 20px rgba(147, 71, 255, 0.08)' }}>
                         <div className="flex items-center justify-between border-b pb-2 mb-4">
                             <h4 className="text-lg font-semibold m-0">
                                 SOP Document Pre-Analysis
@@ -1805,32 +1897,40 @@ export default function SopFormatter() {
 
                 {/* Action Bar (Initial / Config State) */}
                 {currentStep === 'config' && (
-                    <div className="flex justify-end gap-3 mt-2">
-                        {file && (
-                            <button type="button" className="btn btn-outline" onClick={handleRemoveFile} disabled={loading}>
-                                Cancel
+                    <div className="flex flex-wrap items-center justify-between gap-3 mt-4 p-4 rounded-xl bg-purple-50/50 border border-purple-100">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-purple-900 bg-purple-100 px-2.5 py-1 rounded-md">
+                                Preset: {PRESET_DEFINITIONS[selectedPreset]?.label || 'EWANDZ Standard'}
+                            </span>
+                            <span className="text-xs text-muted">
+                                {effectiveFile ? `Ready: ${effectiveFile.name}` : 'Upload a DOCX or PDF above to begin'}
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2.5">
+                            {effectiveFile && (
+                                <button type="button" className="btn btn-outline" onClick={handleRemoveFile}>
+                                    Clear File
+                                </button>
+                            )}
+                            <button 
+                                type="button" 
+                                onClick={handleAnalyzeDocument} 
+                                className="btn btn-outline" 
+                                disabled={loading || !effectiveFile}
+                            >
+                                {loading ? 'Analyzing...' : 'Analyze Compliance'}
                             </button>
-                        )}
-                        <button 
-                            type="button" 
-                            onClick={handleAnalyzeDocument} 
-                            className="btn btn-primary" 
-                            disabled={loading || !file}
-                            style={{ minWidth: '180px' }}
-                        >
-                            {loading ? 'Analyzing Document...' : 'Analyze & Prepare'}
-                        </button>
-                        {analysisData && (
                             <button 
                                 type="button" 
                                 onClick={handleExecuteFormatting} 
                                 className="btn btn-primary" 
-                                disabled={loading || !file}
-                                style={{ minWidth: '180px' }}
+                                disabled={loading || !effectiveFile}
+                                style={{ minWidth: '220px' }}
                             >
-                                Apply Formatting
+                                <Sparkles size={16} className="inline mr-1.5" />
+                                {loading ? 'Formatting...' : 'Format & Download SOP (.docx)'}
                             </button>
-                        )}
+                        </div>
                     </div>
                 )}
 
