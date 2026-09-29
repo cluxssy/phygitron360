@@ -90,6 +90,9 @@ def _parse_key_list(env_var: str, single_var: str) -> list[str]:
         single = os.getenv(single_var, "")
         if single.strip():
             keys = [single.strip().strip("'\"")]
+    return keys
+
+
 def _parse_json_from_llm(raw_text: str) -> dict:
     """
     Robustly parse JSON returned by LLMs.
