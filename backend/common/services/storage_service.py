@@ -1,6 +1,7 @@
 import os
 import shutil
 import logging
+from typing import Optional, List, Dict, Any
 from fastapi import UploadFile
 from backend.core.database import DATA_DIR
 
