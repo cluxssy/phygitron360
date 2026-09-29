@@ -4,6 +4,7 @@
 /* eslint-disable react-hooks/purity */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../../../core/api/axios';
+import axios from 'axios';
 import { usePermission } from '../../../core/permissions/usePermission';
 import { 
   Folder, File, ChevronRight, ChevronDown, Search, Upload, Trash2, CalendarDays, Loader, Plus, X, 
@@ -510,11 +511,64 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
       if (onBulkUpload) {
         await onBulkUpload(stagedFiles, overrideDate, tags);
       } else {
-        const fd = new FormData();
-        stagedFiles.forEach(f => fd.append('files', f));
-        if (overrideDate) fd.append('override_date', overrideDate);
-        if (tags && tags.length > 0) fd.append('tags', JSON.stringify(tags));
-        await api.post('/source/candidates/bulk-upload', fd);
+        const validFiles = stagedFiles;
+        if (validFiles.length === 1 && validFiles[0].name.toLowerCase().endsWith('.zip')) {
+          const zipFile = validFiles[0];
+          try {
+            const presignedRes = await api.post('/source/candidates/bulk-upload/request-presigned', {
+              filename: zipFile.name,
+              filesize: zipFile.size,
+              override_date: overrideDate,
+              tags: Array.isArray(tags) ? tags : []
+            });
+            if (presignedRes.data?.data?.direct_upload && presignedRes.data.data.upload_url) {
+              const { job_id, upload_url, s3_key } = presignedRes.data.data;
+              await axios.put(upload_url, zipFile, {
+                headers: { 'Content-Type': 'application/octet-stream' }
+              });
+              await api.post('/source/candidates/bulk-upload/confirm-archive', { job_id, s3_key });
+              toast.success(`Uploaded ${zipFile.name}! Processing in background.`);
+              setShowUploadModal(false);
+              setStagedFiles([]);
+              setUploadSelectedTags([]);
+              return;
+            }
+          } catch (e) {
+            console.warn('[DirectUpload] Spaces direct upload unavailable, falling back:', e);
+          }
+        }
+
+        const CHUNK_MAX_SIZE = 35 * 1024 * 1024;
+        const CHUNK_MAX_COUNT = 25;
+        const batches = [];
+        let curBatch = [];
+        let curSize = 0;
+        for (const file of validFiles) {
+          if (curBatch.length >= CHUNK_MAX_COUNT || (curSize + file.size > CHUNK_MAX_SIZE && curBatch.length > 0)) {
+            batches.push(curBatch);
+            curBatch = [];
+            curSize = 0;
+          }
+          curBatch.push(file);
+          curSize += file.size;
+        }
+        if (curBatch.length > 0) batches.push(curBatch);
+
+        let activeJobId = null;
+        for (let b = 0; b < batches.length; b++) {
+          const fd = new FormData();
+          batches[b].forEach(f => fd.append('files', f));
+          if (b === 0) {
+            if (overrideDate) fd.append('override_date', overrideDate);
+            if (tags && tags.length > 0) fd.append('tags', JSON.stringify(tags));
+          } else if (activeJobId) {
+            fd.append('job_id', activeJobId);
+          }
+          const res = await api.post('/source/candidates/bulk-upload', fd);
+          if (b === 0 && res.data?.data?.job_id) {
+            activeJobId = res.data.data.job_id;
+          }
+        }
         toast.success(`Queued ${stagedFiles.length} file(s) for processing.`);
       }
 

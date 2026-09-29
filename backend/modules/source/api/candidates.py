@@ -14,7 +14,7 @@ from datetime import datetime
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Form
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
-import os
+import re
 
 from backend.core.database import DATA_DIR
 from backend.core.dependencies import get_current_user, require_permission
@@ -123,6 +123,19 @@ class CandidateReportExportRequest(BaseModel):
     job_role_title: Optional[str] = None
     filters_summary: Optional[Dict[str, Any]] = None
     company_name: Optional[str] = "Phygitron 360"
+
+
+class RequestPresignedUploadRequest(BaseModel):
+    filename: str
+    filesize: int
+    override_date: Optional[str] = None
+    folder_id: Optional[int] = None
+    tags: Optional[List[str]] = None
+
+
+class ConfirmArchiveUploadRequest(BaseModel):
+    job_id: int
+    s3_key: str
 
 
 class ReprocessCandidatesRequest(BaseModel):
@@ -264,13 +277,21 @@ async def bulk_upload_resumes(
     override_date: Optional[str] = Form(None),
     folder_id: Optional[int] = Form(None),
     tags: Optional[str] = Form(None),
+    job_id: Optional[int] = Form(None),
     user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
-    """Process multiple resume files at once. Returns a job ID to track progress."""
-    active_job = service.repo.get_active_bulk_upload_job()
-    if active_job:
-        raise HTTPException(status_code=400, detail="Another bulk upload is currently in progress. Please wait for it to finish or cancel it before starting a new one.")
+    """Process multiple resume files at once. Supports chunking by passing job_id to append files."""
+    if not job_id:
+        active_job = service.repo.get_active_bulk_upload_job()
+        if active_job:
+            raise HTTPException(status_code=400, detail="Another bulk upload is currently in progress. Please wait for it to finish or cancel it before starting a new one.")
+    else:
+        progress = service.repo.get_bulk_upload_job_progress(job_id)
+        if not progress or not progress.get("job"):
+            raise HTTPException(status_code=404, detail="Bulk upload job not found")
+        if progress["job"].get("status") not in ("processing", "extracting"):
+            raise HTTPException(status_code=400, detail="Cannot append files to a completed or cancelled bulk upload job")
 
     import tempfile
     import shutil
@@ -297,7 +318,15 @@ async def bulk_upload_resumes(
                 shutil.copyfileobj(f.file, buffer)
             files_data.append((f.filename, temp_path))
             
-        result = await service.bulk_upload_resumes(files_data, user.get("id"), temp_dir, override_date=override_date, folder_id=folder_id, tags=parsed_tags)
+        result = await service.bulk_upload_resumes(
+            files_data,
+            user.get("id"),
+            temp_dir,
+            override_date=override_date,
+            folder_id=folder_id,
+            tags=parsed_tags,
+            job_id=job_id
+        )
         return {
             "success": True,
             "data": result,
@@ -306,6 +335,55 @@ async def bulk_upload_resumes(
     except Exception as e:
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise e
+
+
+@router.post("/bulk-upload/request-presigned", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def request_presigned_upload(
+    payload: RequestPresignedUploadRequest,
+    user: dict = Depends(get_current_user),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """
+    Generate an S3/Spaces presigned URL for direct browser uploads.
+    Completely bypasses 100MB proxy limits for large ZIP files.
+    """
+    try:
+        data = service.prepare_presigned_archive_upload(
+            user_id=user.get("id", 1),
+            filename=payload.filename,
+            filesize=payload.filesize,
+            override_date=payload.override_date,
+            folder_id=payload.folder_id,
+            tags=payload.tags
+        )
+        return {"success": True, "data": data}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.exception(f"Failed to generate presigned upload: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bulk-upload/confirm-archive", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def confirm_archive_upload(
+    payload: ConfirmArchiveUploadRequest,
+    user: dict = Depends(get_current_user),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """
+    Called by browser once the direct S3/Spaces upload finishes.
+    Spawns background worker to download and unpack the archive.
+    """
+    try:
+        result = await service.process_s3_archive(
+            job_id=payload.job_id,
+            s3_key=payload.s3_key,
+            user_id=user.get("id", 1)
+        )
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.exception(f"Failed to confirm archive: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reprocess", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def reprocess_candidates(
@@ -678,11 +756,21 @@ def get_candidate_resume(
 
     file_path = row["resume_path"]
 
-    # If the resume is stored in S3, generate a pre-signed URL (bucket is private)
+    # Compute a clean human-readable filename (strip internal UUID / MD5 prefixes)
+    raw_filename = os.path.basename(file_path.split("?")[0])
+    clean_filename = re.sub(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_', '', raw_filename)
+    clean_filename = re.sub(r'^[0-9a-fA-F]{32}_', '', clean_filename)
+    if not clean_filename or clean_filename.startswith("uuid_"):
+        candidate_name = row.get("full_name") or row.get("name") or "candidate"
+        clean_name = re.sub(r'\s+', '_', candidate_name.strip())
+        ext = os.path.splitext(raw_filename)[1] or ".pdf"
+        clean_filename = f"{clean_name}_Resume{ext}"
+
+    # If the resume is stored in S3, generate a pre-signed URL with clean Content-Disposition filename
     if file_path.startswith("https://") or file_path.startswith("http://"):
         from fastapi.responses import RedirectResponse
         from backend.common.services.storage_service import generate_presigned_url
-        presigned = generate_presigned_url(file_path, expiry_seconds=900)  # 15 min
+        presigned = generate_presigned_url(file_path, expiry_seconds=900, filename=clean_filename)  # 15 min
         return RedirectResponse(url=presigned)
 
     # Local disk fallback
@@ -713,7 +801,7 @@ def get_candidate_resume(
 
     return FileResponse(
         file_path, 
-        filename=os.path.basename(file_path),
+        filename=clean_filename,
         media_type=media_type,
         content_disposition_type="inline"
     )

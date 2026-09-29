@@ -192,7 +192,18 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = objectUrl;
-      link.download = data.resume_path?.split('/').pop() || `${data.full_name || 'candidate'}_resume`;
+
+      const raw = data.resume_path?.split('/').pop() || '';
+      let cleanFilename = raw
+        .replace(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_/, '')
+        .replace(/^[0-9a-fA-F]{32}_/, '');
+      if (!cleanFilename || cleanFilename.startsWith('uuid_')) {
+        const ext = raw.split('.').pop() || 'pdf';
+        const candidateName = (data.full_name || data.name || 'candidate').trim().replace(/\s+/g, '_');
+        cleanFilename = `${candidateName}_Resume.${ext}`;
+      }
+
+      link.download = cleanFilename;
       document.body.appendChild(link);
       link.click();
       link.remove();

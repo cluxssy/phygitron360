@@ -866,10 +866,12 @@ class CandidateService:
             try:
                 with conn.cursor() as cur:
                     self.repo._set_search_path(cur)
+                    cur.execute("SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s", (job_id,))
+                    actual_total = cur.fetchone()[0]
                     if status_to_set:
-                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s, status = %s WHERE id = %s", (total_files, status_to_set, job_id))
+                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s, status = %s WHERE id = %s", (actual_total, status_to_set, job_id))
                     else:
-                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s WHERE id = %s", (total_files, job_id))
+                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s WHERE id = %s", (actual_total, job_id))
                     conn.commit()
             finally:
                 conn.close()
@@ -954,37 +956,43 @@ class CandidateService:
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        # Safety catch-all to ensure job is marked processing even if there were 0 files
+        # Safety catch-all to ensure job is marked processing with accurate count
         from backend.core.database import get_db_connection
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self.repo._set_search_path(cur)
-                cur.execute("UPDATE bulk_upload_jobs SET status = 'processing' WHERE id = %s AND status = 'extracting'", (job_id,))
+                cur.execute("SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s", (job_id,))
+                cnt = cur.fetchone()[0]
+                cur.execute("UPDATE bulk_upload_jobs SET total_files = %s, status = 'processing' WHERE id = %s AND status = 'extracting'", (cnt, job_id))
                 conn.commit()
         finally:
             conn.close()
 
-    async def bulk_upload_resumes(self, files: List[tuple], user_id: int, temp_dir: str = None, override_date: Optional[str] = None, folder_id: Optional[int] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def bulk_upload_resumes(
+        self,
+        files: List[tuple],
+        user_id: int,
+        temp_dir: str = None,
+        override_date: Optional[str] = None,
+        folder_id: Optional[int] = None,
+        tags: Optional[List[str]] = None,
+        job_id: Optional[int] = None
+    ) -> Dict[str, Any]:
         """files is a list of tuples: (filename, file_path_source).
-        Phase 1: Spin up background thread to extract text immediately at upload time, save to disk, batch-insert queue items.
-        Phase 2: parallel workers pick up items and call AI asynchronously.
-        
-        IMPORTANT: We use a DEDICATED ThreadPoolExecutor (not the shared default pool) for the
-        extraction task. The shared pool (asyncio default) can be fully consumed by the 8 AI parse
-        workers' run_in_executor calls. If extraction queues into the same pool, it will block
-        indefinitely - preventing the HTTP response from returning and the UI from spawning.
+        Supports creating a new job or appending files to an existing job_id (chunked batching).
         """
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
 
-        job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date, folder_id, tags)
+        if not job_id:
+            job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date, folder_id, tags)
+        
         job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
         os.makedirs(job_dir, exist_ok=True)
 
         loop = asyncio.get_running_loop()
         # Use a dedicated 1-thread executor so extraction is NEVER blocked by AI workers
-        # occupying all slots of the shared default pool.
         extraction_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"extraction_job_{job_id}")
         loop.run_in_executor(
             extraction_executor,
@@ -994,7 +1002,6 @@ class CandidateService:
             job_dir,
             temp_dir
         )
-        # Detach the executor - it will self-destruct once the thread finishes
         extraction_executor.shutdown(wait=False)
 
         return {
@@ -1002,6 +1009,96 @@ class CandidateService:
             "status": "processing",
             "message": "Upload accepted. Files are being unpacked and queued."
         }
+
+    def prepare_presigned_archive_upload(
+        self,
+        user_id: int,
+        filename: str,
+        filesize: int,
+        override_date: Optional[str] = None,
+        folder_id: Optional[int] = None,
+        tags: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """Generate a presigned PUT URL directly to DO Spaces/S3 to bypass 100MB proxy limits."""
+        import re
+        from backend.common.services.storage_service import generate_presigned_upload_url, _USE_S3
+        if not _USE_S3:
+            return {"direct_upload": False}
+
+        active_job = self.repo.get_active_bulk_upload_job()
+        if active_job:
+            raise ValueError("Another bulk upload is currently in progress. Please wait for it to finish or cancel it before starting a new one.")
+
+        # Create job
+        job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date, folder_id, tags)
+        
+        # Clean filename
+        clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
+        s3_key = f"{self.tenant_id}/bulk_uploads/job_{job_id}_{uuid.uuid4().hex[:8]}_{clean_name}"
+        
+        upload_url = generate_presigned_upload_url(s3_key, expiry_seconds=3600)
+        if not upload_url:
+            return {"direct_upload": False}
+
+        return {
+            "direct_upload": True,
+            "job_id": job_id,
+            "upload_url": upload_url,
+            "s3_key": s3_key
+        }
+
+    async def process_s3_archive(self, job_id: int, s3_key: str, user_id: int = 1) -> Dict[str, Any]:
+        """Trigger background worker to stream and unpack a direct-to-S3 uploaded archive."""
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
+        os.makedirs(job_dir, exist_ok=True)
+
+        loop = asyncio.get_running_loop()
+        extraction_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"s3_extraction_job_{job_id}")
+        loop.run_in_executor(
+            extraction_executor,
+            self._sync_process_s3_archive,
+            job_id,
+            s3_key,
+            job_dir
+        )
+        extraction_executor.shutdown(wait=False)
+        return {
+            "job_id": job_id,
+            "status": "processing",
+            "message": "Archive received and unpacking started."
+        }
+
+    def _sync_process_s3_archive(self, job_id: int, s3_key: str, job_dir: str):
+        """Worker thread task: download archive from S3, extract via _sync_process_files, then clean up."""
+        from backend.common.services.storage_service import download_s3_file, delete_s3_file
+        import tempfile
+        import shutil
+
+        temp_dir = tempfile.mkdtemp(prefix="s3_bulk_upload_")
+        clean_fn = os.path.basename(s3_key)
+        temp_zip_path = os.path.join(temp_dir, clean_fn)
+        try:
+            logger.info(f"[BulkUpload] Downloading archive {s3_key} for job {job_id}...")
+            self.repo.update_bulk_upload_job(job_id, 0, "[]", "extracting")
+            success = download_s3_file(s3_key, temp_zip_path)
+            if not success:
+                logger.error(f"[BulkUpload] Failed to download {s3_key} for job {job_id}")
+                self.repo.update_bulk_upload_job(job_id, 0, json.dumps([{"error": "Failed to download archive from cloud storage"}]), "failed")
+                return
+
+            logger.info(f"[BulkUpload] Archive downloaded. Unpacking files for job {job_id}...")
+            self._sync_process_files(job_id, [(clean_fn, temp_zip_path)], job_dir, temp_dir)
+            
+            # Clean up the S3 uploaded ZIP once extracted
+            delete_s3_file(s3_key)
+        except Exception as e:
+            logger.exception(f"[BulkUpload] Error processing S3 archive for job {job_id}: {e}")
+            self.repo.update_bulk_upload_job(job_id, 0, json.dumps([{"error": str(e)}]), "failed")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     async def process_bulk_upload_queue(self):
         """
