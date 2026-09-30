@@ -143,14 +143,47 @@ KNOWLEDGE CHECK REQUIREMENTS:
 - Each knowledge check must align to that module's objectives and include the correct answer plus feedback.
 - Use varied assessment types across modules when multiple types are selected.
 """
+def _resolve_ai_client_and_model(api_key: Optional[str] = None, default_model: str = "gemini-3.5-flash-lite", timeout: float = 60.0) -> tuple:
+    from backend.common.services.ai.base import get_gemini_api_key
+
+    key = (api_key or "").strip().strip("'\"")
+
+    # If key is missing or is a Groq key (gsk_), prefer Gemini from unified source because LexAI is designed for Gemini
+    gemini_key = get_gemini_api_key()
+    if gemini_key:
+        if not key or key.startswith("gsk_") or key.startswith("your-") or "placeholder" in key.lower():
+            key = gemini_key
+
+    if not key:
+        key = os.getenv("GROQ_API_KEY", "").strip().strip("'\"")
+    if not key:
+        key = os.getenv("OPENAI_API_KEY", "").strip().strip("'\"")
+
+    if not key:
+        raise HTTPException(
+            status_code=500,
+            detail="AI API Key is missing. Please configure GOOGLE_API_KEY or GEMINI_API_KEYS on the server."
+        )
+
+    if key.startswith("gsk_"):
+        base_url = "https://api.groq.com/openai/v1"
+        model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    elif key.startswith("sk-") and not key.startswith("sk-or-"):
+        base_url = "https://api.openai.com/v1"
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    else:
+        base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+        model = os.getenv("GEMINI_MODEL", default_model)
+
+    client = OpenAI(api_key=key, base_url=base_url, timeout=timeout)
+    return client, model
+
+
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=4, max=30), reraise=True)
 def generate_design_document(api_key: str, intake_data: Dict, content: str) -> str:
-    """Generate Design Document using Groq Llama 3.1 8B Instant."""
+    """Generate Design Document using AI."""
     try:
-        if not api_key:
-            raise HTTPException(status_code=401, detail="Groq API key is missing")
-
-        client = OpenAI(api_key=api_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+        client, model = _resolve_ai_client_and_model(api_key, "gemini-3.5-flash-lite")
         strategies = get_strategy_for_level(intake_data.get('interactivity_level', ''))
         
         prompt = f"""You are an expert Instructional Designer creating a comprehensive Design Document.
@@ -251,7 +284,7 @@ IMPORTANT INSTRUCTIONS:
 Generate the complete Design Document now:"""
 
         response = client.chat.completions.create(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+            model=model,
             messages=[
                 {"role": "system", "content": "You are an expert Instructional Designer who creates detailed, professional design documents based on source materials."},
                 {"role": "user", "content": prompt}
@@ -436,10 +469,7 @@ def _call_module_with_retry(generate_fn, client, module_num, total_modules, desi
 def generate_storyboard(api_key: str, design_doc: str, intake_data: Dict, content: str, storyboard_type: str) -> str:
     """Generate Storyboard module-by-module to avoid token truncation."""
     try:
-        if not api_key:
-            raise HTTPException(status_code=401, detail="Groq API key is missing")
-
-        client = OpenAI(api_key=api_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+        client, model = _resolve_ai_client_and_model(api_key, "gemini-3.5-flash-lite")
         strategies = get_strategy_for_level(intake_data.get('interactivity_level', ''))
         num_modules = int(intake_data.get('num_modules', 3))
 
@@ -577,10 +607,7 @@ def fix_markdown_tables(text: str) -> str:
 def beautify_uploaded_content(api_key: str, content: str, target_type: str, storyboard_type: Optional[str] = None) -> str:
     """Uses AI to format a raw file dump into a professional project document."""
     try:
-        if not api_key:
-            raise HTTPException(status_code=401, detail="Groq API key is missing")
-
-        client = OpenAI(api_key=api_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+        client, model = _resolve_ai_client_and_model(api_key, "gemini-3.5-flash-lite")
         
         # Storyboard Format Detection
         is_storyboard_type2 = False

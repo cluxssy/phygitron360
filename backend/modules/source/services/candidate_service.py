@@ -1,10 +1,12 @@
 import os
+import re
 import time
 import asyncio
 import uuid
 import math
 import logging
 import json
+import mimetypes
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 import threading
@@ -157,8 +159,11 @@ class CandidateService:
 
         # 3. Save File Permanently (S3 or Local)
         content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-        file_id = str(uuid.uuid4())
-        save_filename = f"{file_id}{ext}"
+        orig_base = os.path.splitext(os.path.basename(filename or "resume"))[0]
+        safe_orig = re.sub(r'[^\w\s-]', '', orig_base).strip() or "resume"
+        safe_orig = re.sub(r'\s+', '_', safe_orig)[:60]
+        file_id = uuid.uuid4().hex[:8]
+        save_filename = f"{file_id}_{safe_orig}{ext}"
         
         final_file_path = save_file_content(
             content=file_content,
@@ -323,6 +328,56 @@ class CandidateService:
         }
 
 
+    @staticmethod
+    def _is_legible_text(text: str) -> bool:
+        """Check if extracted text contains real readable content vs. corrupted font glyphs/binary noise."""
+        if not text or len(text.strip()) < 20:
+            return False
+        clean = text.strip()
+        alnum_count = sum(1 for c in clean if c.isalnum())
+        total_len = len(clean)
+        # Readable resumes have a high ratio of alphanumeric characters. If < 25%, it's garbled glyphs.
+        if alnum_count / total_len < 0.25:
+            return False
+        # Check for excessive unmapped Windows-1252 glyphs or control characters
+        garbled_glyphs = sum(1 for c in clean if '\x80' <= c <= '\x9f' or c in '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ\x00\x0c\xad\xa0')
+        if garbled_glyphs / max(alnum_count, 1) > 0.4:
+            return False
+        return True
+
+    def _extract_text_via_gemini_vision(self, file_path: str) -> str:
+        """Fallback OCR using Gemini Vision when local PDF font encodings are garbled/missing or document is scanned."""
+        try:
+            with open(file_path, "rb") as f:
+                pdf_bytes = f.read()
+            if not pdf_bytes:
+                return ""
+
+            from google.genai import types
+            ai_service = self.ai_agents.ai
+            key = ai_service.gemini_api_key or ai_service._gemini_pool.current()
+            client = ai_service._get_gemini_client(key) if key else None
+            if not client:
+                return ""
+
+            prompt = (
+                "You are an expert OCR and document transcription system. "
+                "Transcribe all text from this resume document verbatim. "
+                "Preserve all names, contact info, headings, sections, job titles, companies, dates, education, and skills. "
+                "Output plain readable text only."
+            )
+            response = client.models.generate_content(
+                model=ai_service.gemini_model,
+                contents=[
+                    types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    prompt
+                ]
+            )
+            return (response.text or "").strip()
+        except Exception as e:
+            logger.warning(f"Gemini vision OCR extraction failed for {file_path}: {e}")
+            return ""
+
     def _extract_text(self, file_path: str, ext: str) -> str:
         """Extract plain text from a resume file. Always returns a clean string safe for DB storage."""
         extracted_text = ""
@@ -342,15 +397,26 @@ class CandidateService:
                     logger.warning(f"PyMuPDF failed to parse {file_path}: {pdf_err}. Trying pdfplumber...")
                     extracted_text = ""
                 
-                # Fallback: if PyMuPDF extracted nothing, try pdfplumber
-                if not extracted_text.strip():
+                # Check if extracted text is legible; if not, try pdfplumber
+                if not self._is_legible_text(extracted_text):
                     try:
                         import pdfplumber
                         with pdfplumber.open(file_path) as pdf:
+                            pl_text = ""
                             for page in pdf.pages:
-                                extracted_text += (page.extract_text() or "") + "\n"
+                                pl_text += (page.extract_text() or "") + "\n"
+                            if self._is_legible_text(pl_text):
+                                extracted_text = pl_text
                     except Exception as pl_err:
                         logger.warning(f"pdfplumber fallback failed for {file_path}: {pl_err}")
+
+                # If text is STILL not legible or empty (e.g. Canva/Illustrator custom fonts, broken ToUnicode CMap, or scanned PDF),
+                # use Gemini Vision OCR to transcribe the visual document.
+                if not self._is_legible_text(extracted_text):
+                    print(f"[TextExtract] PDF {os.path.basename(file_path)} has unreadable/corrupted font encoding or is scanned. Transcribing with Gemini Vision OCR...", flush=True)
+                    ocr_text = self._extract_text_via_gemini_vision(file_path)
+                    if self._is_legible_text(ocr_text):
+                        extracted_text = ocr_text
             elif ext == ".txt":
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
@@ -805,10 +871,12 @@ class CandidateService:
             try:
                 with conn.cursor() as cur:
                     self.repo._set_search_path(cur)
+                    cur.execute("SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s", (job_id,))
+                    actual_total = cur.fetchone()[0]
                     if status_to_set:
-                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s, status = %s WHERE id = %s", (total_files, status_to_set, job_id))
+                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s, status = %s WHERE id = %s", (actual_total, status_to_set, job_id))
                     else:
-                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s WHERE id = %s", (total_files, job_id))
+                        cur.execute("UPDATE bulk_upload_jobs SET total_files = %s WHERE id = %s", (actual_total, job_id))
                     conn.commit()
             finally:
                 conn.close()
@@ -893,37 +961,43 @@ class CandidateService:
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        # Safety catch-all to ensure job is marked processing even if there were 0 files
+        # Safety catch-all to ensure job is marked processing with accurate count
         from backend.core.database import get_db_connection
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self.repo._set_search_path(cur)
-                cur.execute("UPDATE bulk_upload_jobs SET status = 'processing' WHERE id = %s AND status = 'extracting'", (job_id,))
+                cur.execute("SELECT COUNT(*) FROM bulk_upload_job_items WHERE job_id = %s", (job_id,))
+                cnt = cur.fetchone()[0]
+                cur.execute("UPDATE bulk_upload_jobs SET total_files = %s, status = 'processing' WHERE id = %s AND status = 'extracting'", (cnt, job_id))
                 conn.commit()
         finally:
             conn.close()
 
-    async def bulk_upload_resumes(self, files: List[tuple], user_id: int, temp_dir: str = None, override_date: Optional[str] = None, folder_id: Optional[int] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def bulk_upload_resumes(
+        self,
+        files: List[tuple],
+        user_id: int,
+        temp_dir: str = None,
+        override_date: Optional[str] = None,
+        folder_id: Optional[int] = None,
+        tags: Optional[List[str]] = None,
+        job_id: Optional[int] = None
+    ) -> Dict[str, Any]:
         """files is a list of tuples: (filename, file_path_source).
-        Phase 1: Spin up background thread to extract text immediately at upload time, save to disk, batch-insert queue items.
-        Phase 2: parallel workers pick up items and call AI asynchronously.
-        
-        IMPORTANT: We use a DEDICATED ThreadPoolExecutor (not the shared default pool) for the
-        extraction task. The shared pool (asyncio default) can be fully consumed by the 8 AI parse
-        workers' run_in_executor calls. If extraction queues into the same pool, it will block
-        indefinitely - preventing the HTTP response from returning and the UI from spawning.
+        Supports creating a new job or appending files to an existing job_id (chunked batching).
         """
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
 
-        job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date, folder_id, tags)
+        if not job_id:
+            job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date, folder_id, tags)
+        
         job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
         os.makedirs(job_dir, exist_ok=True)
 
         loop = asyncio.get_running_loop()
         # Use a dedicated 1-thread executor so extraction is NEVER blocked by AI workers
-        # occupying all slots of the shared default pool.
         extraction_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"extraction_job_{job_id}")
         loop.run_in_executor(
             extraction_executor,
@@ -933,7 +1007,6 @@ class CandidateService:
             job_dir,
             temp_dir
         )
-        # Detach the executor - it will self-destruct once the thread finishes
         extraction_executor.shutdown(wait=False)
 
         return {
@@ -941,6 +1014,96 @@ class CandidateService:
             "status": "processing",
             "message": "Upload accepted. Files are being unpacked and queued."
         }
+
+    def prepare_presigned_archive_upload(
+        self,
+        user_id: int,
+        filename: str,
+        filesize: int,
+        override_date: Optional[str] = None,
+        folder_id: Optional[int] = None,
+        tags: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """Generate a presigned PUT URL directly to DO Spaces/S3 to bypass 100MB proxy limits."""
+        import re
+        from backend.common.services.storage_service import generate_presigned_upload_url, _USE_S3
+        if not _USE_S3:
+            return {"direct_upload": False}
+
+        active_job = self.repo.get_active_bulk_upload_job()
+        if active_job:
+            raise ValueError("Another bulk upload is currently in progress. Please wait for it to finish or cancel it before starting a new one.")
+
+        # Create job
+        job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date, folder_id, tags)
+        
+        # Clean filename
+        clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
+        s3_key = f"{self.tenant_id}/bulk_uploads/job_{job_id}_{uuid.uuid4().hex[:8]}_{clean_name}"
+        
+        upload_url = generate_presigned_upload_url(s3_key, expiry_seconds=3600)
+        if not upload_url:
+            return {"direct_upload": False}
+
+        return {
+            "direct_upload": True,
+            "job_id": job_id,
+            "upload_url": upload_url,
+            "s3_key": s3_key
+        }
+
+    async def process_s3_archive(self, job_id: int, s3_key: str, user_id: int = 1) -> Dict[str, Any]:
+        """Trigger background worker to stream and unpack a direct-to-S3 uploaded archive."""
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
+        os.makedirs(job_dir, exist_ok=True)
+
+        loop = asyncio.get_running_loop()
+        extraction_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"s3_extraction_job_{job_id}")
+        loop.run_in_executor(
+            extraction_executor,
+            self._sync_process_s3_archive,
+            job_id,
+            s3_key,
+            job_dir
+        )
+        extraction_executor.shutdown(wait=False)
+        return {
+            "job_id": job_id,
+            "status": "processing",
+            "message": "Archive received and unpacking started."
+        }
+
+    def _sync_process_s3_archive(self, job_id: int, s3_key: str, job_dir: str):
+        """Worker thread task: download archive from S3, extract via _sync_process_files, then clean up."""
+        from backend.common.services.storage_service import download_s3_file, delete_s3_file
+        import tempfile
+        import shutil
+
+        temp_dir = tempfile.mkdtemp(prefix="s3_bulk_upload_")
+        clean_fn = os.path.basename(s3_key)
+        temp_zip_path = os.path.join(temp_dir, clean_fn)
+        try:
+            logger.info(f"[BulkUpload] Downloading archive {s3_key} for job {job_id}...")
+            self.repo.update_bulk_upload_job(job_id, 0, "[]", "extracting")
+            success = download_s3_file(s3_key, temp_zip_path)
+            if not success:
+                logger.error(f"[BulkUpload] Failed to download {s3_key} for job {job_id}")
+                self.repo.update_bulk_upload_job(job_id, 0, json.dumps([{"error": "Failed to download archive from cloud storage"}]), "failed")
+                return
+
+            logger.info(f"[BulkUpload] Archive downloaded. Unpacking files for job {job_id}...")
+            self._sync_process_files(job_id, [(clean_fn, temp_zip_path)], job_dir, temp_dir)
+            
+            # Clean up the S3 uploaded ZIP once extracted
+            delete_s3_file(s3_key)
+        except Exception as e:
+            logger.exception(f"[BulkUpload] Error processing S3 archive for job {job_id}: {e}")
+            self.repo.update_bulk_upload_job(job_id, 0, json.dumps([{"error": str(e)}]), "failed")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     async def process_bulk_upload_queue(self):
         """
@@ -1431,7 +1594,11 @@ class CandidateService:
                 final_path = existing["resume_path"]
             else:
                 ext = os.path.splitext(file_path)[1].lower() if file_path else ".bin"
-                filename = f"{uuid.uuid4()}{ext}"
+                orig_base = os.path.splitext(os.path.basename(file_path or (name or "resume")))[0]
+                safe_orig = re.sub(r'[^\w\s-]', '', orig_base).strip() or (name or "resume").replace(" ", "_")
+                safe_orig = re.sub(r'\s+', '_', safe_orig)[:60]
+                file_id = uuid.uuid4().hex[:8]
+                filename = f"{file_id}_{safe_orig}{ext}"
                 saved_path = save_file_content(
                     content=actual_content,
                     filename=filename,

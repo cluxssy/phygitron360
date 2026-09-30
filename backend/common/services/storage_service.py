@@ -1,6 +1,7 @@
 import os
 import shutil
 import logging
+from typing import Optional, List, Dict, Any
 from fastapi import UploadFile
 from backend.core.database import DATA_DIR
 
@@ -21,9 +22,16 @@ def _get_s3():
     global _s3_client
     if _s3_client is None:
         import boto3
+        from botocore.client import Config
         kwargs = {'region_name': _S3_REGION}
         if _S3_ENDPOINT:                     # LocalStack / custom endpoint
             kwargs['endpoint_url'] = _S3_ENDPOINT
+        access_key = os.environ.get('AWS_ACCESS_KEY_ID') or os.environ.get('SPACES_ACCESS_KEY')
+        secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY') or os.environ.get('SPACES_SECRET_KEY')
+        if access_key and secret_key:
+            kwargs['aws_access_key_id'] = access_key
+            kwargs['aws_secret_access_key'] = secret_key
+        kwargs['config'] = Config(signature_version='s3v4')
         _s3_client = boto3.client('s3', **kwargs)
     return _s3_client
 
@@ -124,7 +132,7 @@ def save_file_content(content: bytes, filename: str, content_type: str, tenant_i
         logger.error(f"[LocalDisk] Save failed for {filename}: {e}")
         return None
 
-def generate_presigned_url(s3_url: str, expiry_seconds: int = 900) -> str:
+def generate_presigned_url(s3_url: str, expiry_seconds: int = 900, filename: Optional[str] = None) -> str:
     """
     Given a full S3 HTTPS URL, generate a pre-signed URL valid for `expiry_seconds`.
     Falls back to the original URL if S3 is not configured or generation fails.
@@ -146,9 +154,13 @@ def generate_presigned_url(s3_url: str, expiry_seconds: int = 900) -> str:
             return s3_url
         
         key = s3_url[len(prefix):]
+        params = {'Bucket': _S3_BUCKET, 'Key': key}
+        if filename:
+            safe_filename = filename.replace('"', '').replace(';', '').strip()
+            params['ResponseContentDisposition'] = f'inline; filename="{safe_filename}"'
         presigned = s3.generate_presigned_url(
             'get_object',
-            Params={'Bucket': _S3_BUCKET, 'Key': key},
+            Params=params,
             ExpiresIn=expiry_seconds
         )
         logger.info(f"[S3] Generated presigned URL for key: {key}")
@@ -156,6 +168,60 @@ def generate_presigned_url(s3_url: str, expiry_seconds: int = 900) -> str:
     except Exception as e:
         logger.error(f"[S3] Failed to generate presigned URL: {e}")
         return s3_url
+
+
+def generate_presigned_upload_url(key: str, expiry_seconds: int = 3600) -> str:
+    """
+    Generate an S3/Spaces presigned PUT URL for direct browser uploads.
+    Does NOT restrict ContentType so browser can upload with its own MIME type without signature mismatch.
+    """
+    if not _USE_S3:
+        return None
+    try:
+        s3 = _get_s3()
+        url = s3.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': _S3_BUCKET,
+                'Key': key,
+            },
+            ExpiresIn=expiry_seconds,
+            HttpMethod='PUT'
+        )
+        logger.info(f"[S3] Generated presigned upload URL for key: {key}")
+        return url
+    except Exception as e:
+        logger.error(f"[S3] Failed to generate presigned upload URL for {key}: {e}")
+        return None
+
+
+def download_s3_file(key: str, target_path: str) -> bool:
+    """Download an object from S3/Spaces to a local file path."""
+    if not _USE_S3:
+        return False
+    try:
+        s3 = _get_s3()
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        s3.download_file(_S3_BUCKET, key, target_path)
+        logger.info(f"[S3] Downloaded {key} to {target_path}")
+        return True
+    except Exception as e:
+        logger.error(f"[S3] Failed to download {key} from S3: {e}")
+        return False
+
+
+def delete_s3_file(key: str) -> bool:
+    """Delete an object from S3/Spaces."""
+    if not _USE_S3:
+        return False
+    try:
+        s3 = _get_s3()
+        s3.delete_object(Bucket=_S3_BUCKET, Key=key)
+        logger.info(f"[S3] Deleted {key} from S3")
+        return True
+    except Exception as e:
+        logger.error(f"[S3] Failed to delete {key} from S3: {e}")
+        return False
 
 
 def delete_tenant_directory(tenant_id: str):

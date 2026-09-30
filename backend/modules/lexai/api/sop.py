@@ -3,7 +3,10 @@ import io
 import re
 import json
 import tempfile
-import PyPDF2
+try:
+    import PyPDF2
+except ImportError:
+    PyPDF2 = None
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.oxml import parse_xml
@@ -39,17 +42,33 @@ def _prepare_working_docx(filename: str, content: bytes) -> str:
 
     # 2. PDF Document (.pdf)
     elif lower_name.endswith(".pdf") or content.startswith(b"%PDF"):
-        reader = PyPDF2.PdfReader(io.BytesIO(content))
-        doc = Document()
-
-        # Extract all non-empty lines from PDF pages
         all_raw_lines = []
-        for page in reader.pages:
-            text = page.extract_text() or ""
-            for line in text.split("\n"):
-                ls = line.strip()
-                if ls:
-                    all_raw_lines.append(ls)
+        if PyPDF2:
+            try:
+                reader = PyPDF2.PdfReader(io.BytesIO(content))
+                for page in reader.pages:
+                    text = page.extract_text() or ""
+                    for line in text.split("\n"):
+                        ls = line.strip()
+                        if ls:
+                            all_raw_lines.append(ls)
+            except Exception:
+                pass
+
+        if not all_raw_lines:
+            try:
+                import fitz
+                pdf_doc = fitz.open(stream=content, filetype="pdf")
+                for page in pdf_doc:
+                    text = page.get_text() or ""
+                    for line in text.split("\n"):
+                        ls = line.strip()
+                        if ls:
+                            all_raw_lines.append(ls)
+            except Exception:
+                pass
+
+        doc = Document()
 
         if not all_raw_lines:
             doc.add_paragraph("Standard Operating Procedure")
@@ -242,7 +261,8 @@ async def suggest_content_enhancements_impl(file: UploadFile, categories: str):
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
 
-    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    from backend.common.services.ai.base import get_gemini_api_key
+    gemini_key = get_gemini_api_key()
     if not gemini_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY / GOOGLE_API_KEY is not configured on the server.")
 

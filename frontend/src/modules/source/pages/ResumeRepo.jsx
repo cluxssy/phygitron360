@@ -4,6 +4,7 @@
 /* eslint-disable react-hooks/purity */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../../../core/api/axios';
+import axios from 'axios';
 import { usePermission } from '../../../core/permissions/usePermission';
 import { 
   Folder, File, ChevronRight, ChevronDown, Search, Upload, Trash2, CalendarDays, Loader, Plus, X, 
@@ -510,12 +511,81 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
       if (onBulkUpload) {
         await onBulkUpload(stagedFiles, overrideDate, tags);
       } else {
-        const fd = new FormData();
-        stagedFiles.forEach(f => fd.append('files', f));
-        if (overrideDate) fd.append('override_date', overrideDate);
-        if (tags && tags.length > 0) fd.append('tags', JSON.stringify(tags));
-        await api.post('/source/candidates/bulk-upload', fd);
-        toast.success(`Queued ${stagedFiles.length} file(s) for processing.`);
+        const validFiles = stagedFiles;
+        const archivesOrLarge = validFiles.filter(f => f.name.toLowerCase().endsWith('.zip') || f.size > 35 * 1024 * 1024);
+        const standardFiles = validFiles.filter(f => !f.name.toLowerCase().endsWith('.zip') && f.size <= 35 * 1024 * 1024);
+
+        for (const largeFile of archivesOrLarge) {
+          try {
+            const presignedRes = await api.post('/source/candidates/bulk-upload/request-presigned', {
+              filename: largeFile.name,
+              filesize: largeFile.size,
+              override_date: overrideDate,
+              tags: Array.isArray(tags) ? tags : []
+            });
+            if (presignedRes.data?.data?.direct_upload && presignedRes.data.data.upload_url) {
+              const { job_id, upload_url, s3_key } = presignedRes.data.data;
+              await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.withCredentials = false;
+                xhr.open('PUT', upload_url, true);
+                xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                xhr.onload = () => {
+                  if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve();
+                  } else {
+                    reject(new Error(`Storage upload failed with status ${xhr.status}: ${xhr.statusText}`));
+                  }
+                };
+                xhr.onerror = () => reject(new Error('Network error during cloud storage upload'));
+                xhr.send(largeFile);
+              });
+              await api.post('/source/candidates/bulk-upload/confirm-archive', { job_id, s3_key });
+              toast.success(`Uploaded ${largeFile.name}! Processing in background.`);
+            }
+          } catch (e) {
+            if (e.response?.status === 400 || largeFile.size > 80 * 1024 * 1024) {
+              throw e;
+            }
+            console.warn('[DirectUpload] Spaces direct upload unavailable, falling back:', e);
+            standardFiles.push(largeFile);
+          }
+        }
+
+        if (standardFiles.length > 0) {
+          const CHUNK_MAX_SIZE = 35 * 1024 * 1024;
+          const CHUNK_MAX_COUNT = 25;
+          const batches = [];
+          let curBatch = [];
+          let curSize = 0;
+          for (const file of standardFiles) {
+            if (curBatch.length >= CHUNK_MAX_COUNT || (curSize + file.size > CHUNK_MAX_SIZE && curBatch.length > 0)) {
+              batches.push(curBatch);
+              curBatch = [];
+              curSize = 0;
+            }
+            curBatch.push(file);
+            curSize += file.size;
+          }
+          if (curBatch.length > 0) batches.push(curBatch);
+
+          let activeJobId = null;
+          for (let b = 0; b < batches.length; b++) {
+            const fd = new FormData();
+            batches[b].forEach(f => fd.append('files', f));
+            if (b === 0) {
+              if (overrideDate) fd.append('override_date', overrideDate);
+              if (tags && tags.length > 0) fd.append('tags', JSON.stringify(tags));
+            } else if (activeJobId) {
+              fd.append('job_id', activeJobId);
+            }
+            const res = await api.post('/source/candidates/bulk-upload', fd);
+            if (b === 0 && res.data?.data?.job_id) {
+              activeJobId = res.data.data.job_id;
+            }
+          }
+          toast.success(`Queued ${standardFiles.length} file(s) for processing.`);
+        }
       }
 
       setShowUploadModal(false);
