@@ -356,7 +356,8 @@ Return ONLY JSON:
 
 def classify_intent(instruction: str, history: List[Dict], gemini_key: str) -> Dict:
     try:
-        client = OpenAI(api_key=gemini_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/", timeout=30.0)
+        from .ai_generation import _resolve_ai_client_and_model
+        client, model = _resolve_ai_client_and_model(gemini_key, "gemini-3.5-flash-lite", timeout=30.0)
         
         prompt = f"System: {CLASSIFIER_SYS}\n\n"
         if history:
@@ -366,7 +367,7 @@ def classify_intent(instruction: str, history: List[Dict], gemini_key: str) -> D
         @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
         def call_classifier():
             return client.chat.completions.create(
-                model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.0
@@ -598,7 +599,8 @@ def ai_edit_document(
     all_edits = []
     assistant_replies = []
     
-    client = OpenAI(api_key=gemini_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/", timeout=60.0)
+    from .ai_generation import _resolve_ai_client_and_model
+    client, model = _resolve_ai_client_and_model(gemini_key, "gemini-3.5-flash-lite", timeout=60.0)
 
     for chunk_idx, chunk in enumerate(expanded_chunks):
         ctx = "\n### CURRENT CONTENT ###\n"
@@ -674,7 +676,7 @@ def ai_edit_document(
             @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
             def call_editor():
                 return client.chat.completions.create(
-                    model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+                    model=model,
                     messages=[{"role": "user", "content": full_prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.5

@@ -54,6 +54,12 @@ def _get_gemini_key_list() -> list[str]:
             keys.append(v)
     return keys
 
+def get_gemini_api_key() -> str:
+    """Returns the first available Gemini / Google API key stripped of quotes."""
+    keys = _get_gemini_key_list()
+    return keys[0] if keys else ""
+
+
 _gemini_keys = _get_gemini_key_list()
 _GEMINI_CONCURRENCY = threading.Semaphore(max(len(_gemini_keys), 1))
 

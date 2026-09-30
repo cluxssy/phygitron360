@@ -87,7 +87,8 @@ async def upload_project_impl(
                 text = "Unsupported format"
 
             # 3. Beautify Content with AI
-            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+            from backend.common.services.ai.base import get_gemini_api_key
+            api_key = get_gemini_api_key() or os.getenv("GROQ_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
             beautified_text = text
             if api_key:
                 try:

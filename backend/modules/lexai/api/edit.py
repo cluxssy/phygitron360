@@ -2,6 +2,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from backend.core.dependencies import get_current_user, require_permission
 from backend.core.permissions import P
+from backend.common.services.ai.base import get_gemini_api_key
 from .. import schemas
 from ..services.project_service import ProjectService
 from ..services import ai_editing
@@ -30,9 +31,9 @@ def ai_chat_edit_impl(request: schemas.DocumentEditRequest, project_id: str, cur
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    api_key = get_gemini_api_key() or os.getenv("GROQ_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
-        raise HTTPException(status_code=500, detail="AI API Key is missing.")
+        raise HTTPException(status_code=500, detail="AI API Key is missing. Please configure GOOGLE_API_KEY or GEMINI_API_KEYS.")
 
     chat_history_db = repo.get_chat_messages(tenant_id, project_id, request.doc_type)
     chat_history = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history_db]
