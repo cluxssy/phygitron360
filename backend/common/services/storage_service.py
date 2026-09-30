@@ -156,7 +156,8 @@ def generate_presigned_url(s3_url: str, expiry_seconds: int = 900, filename: Opt
         key = s3_url[len(prefix):]
         params = {'Bucket': _S3_BUCKET, 'Key': key}
         if filename:
-            params['ResponseContentDisposition'] = f'inline; filename="{filename}"'
+            safe_filename = filename.replace('"', '').replace(';', '').strip()
+            params['ResponseContentDisposition'] = f'inline; filename="{safe_filename}"'
         presigned = s3.generate_presigned_url(
             'get_object',
             Params=params,

@@ -195,12 +195,16 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
 
       const raw = data.resume_path?.split('/').pop() || '';
       let cleanFilename = raw
-        .replace(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_/, '')
-        .replace(/^[0-9a-fA-F]{32}_/, '');
-      if (!cleanFilename || cleanFilename.startsWith('uuid_')) {
-        const ext = raw.split('.').pop() || 'pdf';
-        const candidateName = (data.full_name || data.name || 'candidate').trim().replace(/\s+/g, '_');
+        .replace(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}[_-]?/, '')
+        .replace(/^[0-9a-fA-F]{32}[_-]?/, '')
+        .replace(/^[0-9a-fA-F]{8}[_-]/, '');
+      const ext = raw.split('.').pop() || 'pdf';
+      const baseName = cleanFilename.replace(/\.[^/.]+$/, '').trim();
+      if (!baseName || baseName.toLowerCase().startsWith('uuid')) {
+        const candidateName = (data.full_name || data.name || 'Candidate').trim().replace(/\s+/g, '_');
         cleanFilename = `${candidateName}_Resume.${ext}`;
+      } else {
+        cleanFilename = `${baseName}.${ext}`;
       }
 
       link.download = cleanFilename;

@@ -1,3 +1,4 @@
+import os
 import json
 import re
 import time as _time
@@ -250,7 +251,7 @@ IMPORTANT INSTRUCTIONS:
 Generate the complete Design Document now:"""
 
         response = client.chat.completions.create(
-            model="gemini-3.5-flash",
+            model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
             messages=[
                 {"role": "system", "content": "You are an expert Instructional Designer who creates detailed, professional design documents based on source materials."},
                 {"role": "user", "content": prompt}
@@ -359,7 +360,7 @@ Screen {module_num}.1 Title: [Descriptive Title]
 Generate 5-8 screens for Module {module_num} now:"""
 
     response = client.chat.completions.create(
-        model="gemini-3.5-flash",
+        model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
         messages=[
             {"role": "system", "content": "You are a senior eLearning Storyboard Developer. NEVER summarize or skip content. Be extremely detailed. OST = real learner text. Audio = actual narrator script. Visual = specific graphic designer directions. CRITICAL: Every table row MUST be ONE PHYSICAL LINE. Use <br> for all internal line breaks."},
             {"role": "user", "content": prompt}
@@ -414,7 +415,7 @@ MODULE {module_num}: [Title from Design Doc]
 Generate 5-8 rows for Module {module_num} now:"""
 
     response = client.chat.completions.create(
-        model="gemini-3.5-flash",
+        model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
         messages=[
             {"role": "system", "content": "You are a senior eLearning Storyboard Developer. NEVER summarize or skip content. Be extremely detailed. OST = real learner text. Audio = actual narrator script. Visual = specific graphic designer directions. CRITICAL: Every table row MUST be ONE PHYSICAL LINE. Use <br> for all internal line breaks."},
             {"role": "user", "content": prompt}
@@ -659,7 +660,7 @@ def beautify_uploaded_content(api_key: str, content: str, target_type: str, stor
         @retry(stop=stop_after_attempt(15), wait=wait_exponential(multiplier=2, min=15, max=60), reraise=True)
         def generate_chunk(prompt_text):
             return client.chat.completions.create(
-                model="gemini-3.5-flash",
+                model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
                 messages=[
                     {"role": "system", "content": "You are a master Instructional Designer. You follow structural and formatting constraints perfectly. You never put non-table data inside a table."},
                     {"role": "user", "content": prompt_text}

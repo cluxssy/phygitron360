@@ -895,11 +895,13 @@ export default function SourceDashboard() {
     const parsedTags = Array.isArray(tags) ? tags : (tags ? [tags] : []);
 
     try {
-      // ── Path 1: Single ZIP or Large File Direct Cloud Upload (Bypasses 100MB proxy limit) ──
-      if (validFiles.length === 1 && (validFiles[0].name.toLowerCase().endsWith('.zip') || validFiles[0].size > 35 * 1024 * 1024)) {
-        const largeFile = validFiles[0];
-        let directUploadHandled = false;
+      // Separate archives / large files (which stream directly to S3 to bypass proxy limits) from standard files
+      const archivesOrLarge = validFiles.filter(f => f.name.toLowerCase().endsWith('.zip') || f.size > 35 * 1024 * 1024);
+      const standardFiles = validFiles.filter(f => !f.name.toLowerCase().endsWith('.zip') && f.size <= 35 * 1024 * 1024);
 
+      // ── Path 1: Archives and Large Files Direct Cloud Upload ──
+      for (let i = 0; i < archivesOrLarge.length; i++) {
+        const largeFile = archivesOrLarge[i];
         try {
           const presignedRes = await api.post('/source/candidates/bulk-upload/request-presigned', {
             filename: largeFile.name,
@@ -914,17 +916,27 @@ export default function SourceDashboard() {
             setBulkJobId(job_id);
             setBulkJobProgress(null);
 
-            // Upload directly to DigitalOcean Spaces via raw axios PUT without application headers
-            await axios.put(upload_url, largeFile, {
-              headers: {
-                'Content-Type': 'application/octet-stream'
-              },
-              onUploadProgress: (progressEvent) => {
+            // Upload directly to DigitalOcean Spaces via clean native XHR (explicitly without credentials to satisfy S3 CORS)
+            await new Promise((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.withCredentials = false;
+              xhr.open('PUT', upload_url, true);
+              xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+              xhr.upload.onprogress = (progressEvent) => {
                 if (progressEvent.lengthComputable) {
                   const percentComplete = Math.round((progressEvent.loaded / progressEvent.total) * 100);
                   setUploadProgress(percentComplete);
                 }
-              }
+              };
+              xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  resolve();
+                } else {
+                  reject(new Error(`Storage upload failed with status ${xhr.status}: ${xhr.statusText}`));
+                }
+              };
+              xhr.onerror = () => reject(new Error('Network error during cloud storage upload'));
+              xhr.send(largeFile);
             });
 
             // Notify backend that file is completely uploaded to Spaces
@@ -935,97 +947,95 @@ export default function SourceDashboard() {
 
             toast.success(`Uploaded ${largeFile.name}! Unpacking resumes...`);
             setShowUpload(false);
-            directUploadHandled = true;
 
             try {
               const r = await fetch(`/api/source/candidates/bulk-upload/${job_id}`, { credentials: 'include' });
               const d = await r.json();
               if (r.ok && d.success) setBulkJobProgress(d.data);
             } catch (_) { /* silent */ }
-
-            return;
           }
         } catch (directErr) {
-          if (directErr.response?.status === 400) {
+          if (directErr.response?.status === 400 || largeFile.size > 80 * 1024 * 1024) {
             throw directErr;
           }
           console.warn('[DirectUpload] Spaces direct upload unavailable, falling back to standard upload:', directErr);
+          standardFiles.push(largeFile);
         }
-
-        if (directUploadHandled) return;
       }
 
       // ── Path 2: Multi-File Chunked Batch Upload (Prevents proxy 413 limit) ──
-      const CHUNK_MAX_SIZE = 35 * 1024 * 1024; // 35 MB safe limit per chunk
-      const CHUNK_MAX_COUNT = 25; // 25 files max per chunk
-      const batches = [];
-      let currentBatch = [];
-      let currentBatchSize = 0;
+      if (standardFiles.length > 0) {
+        const CHUNK_MAX_SIZE = 35 * 1024 * 1024; // 35 MB safe limit per chunk
+        const CHUNK_MAX_COUNT = 25; // 25 files max per chunk
+        const batches = [];
+        let currentBatch = [];
+        let currentBatchSize = 0;
 
-      for (const file of validFiles) {
-        if (currentBatch.length >= CHUNK_MAX_COUNT || (currentBatchSize + file.size > CHUNK_MAX_SIZE && currentBatch.length > 0)) {
-          batches.push(currentBatch);
-          currentBatch = [];
-          currentBatchSize = 0;
-        }
-        currentBatch.push(file);
-        currentBatchSize += file.size;
-      }
-      if (currentBatch.length > 0) {
-        batches.push(currentBatch);
-      }
-
-      let activeJobId = null;
-
-      for (let b = 0; b < batches.length; b++) {
-        const batchFiles = batches[b];
-        const fd = new FormData();
-
-        for (const file of batchFiles) {
-          const cleanFile = (typeof window !== 'undefined' && typeof window.File === 'function')
-            ? new window.File([file], file.name, { type: file.type })
-            : file;
-          fd.append('files', cleanFile);
-        }
-
-        if (b === 0) {
-          if (overrideDate) fd.append('override_date', overrideDate);
-          if (parsedTags.length > 0) fd.append('tags', JSON.stringify(parsedTags));
-        } else if (activeJobId) {
-          fd.append('job_id', activeJobId);
-        }
-
-        const response = await api.post('/source/candidates/bulk-upload', fd, {
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.lengthComputable) {
-              const batchFraction = progressEvent.loaded / progressEvent.total;
-              const overallPercent = Math.round(((b + batchFraction) / batches.length) * 100);
-              setUploadProgress(overallPercent);
-            }
+        for (const file of standardFiles) {
+          if (currentBatch.length >= CHUNK_MAX_COUNT || (currentBatchSize + file.size > CHUNK_MAX_SIZE && currentBatch.length > 0)) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentBatchSize = 0;
           }
-        });
-
-        const data = response.data;
-        if (b === 0 && data.data?.job_id) {
-          activeJobId = data.data.job_id;
-          setBulkUploadTriggered(true);
-          setBulkJobId(activeJobId);
-          setBulkJobProgress(null);
-
-          try {
-            const r = await fetch(`/api/source/candidates/bulk-upload/${activeJobId}`, { credentials: 'include' });
-            const d = await r.json();
-            if (r.ok && d.success) setBulkJobProgress(d.data);
-          } catch (_) { /* silent */ }
+          currentBatch.push(file);
+          currentBatchSize += file.size;
         }
-      }
+        if (currentBatch.length > 0) {
+          batches.push(currentBatch);
+        }
 
-      toast.success(
-        batches.length > 1 
-          ? `Queued ${validFiles.length} file(s) across ${batches.length} batch(es) for processing!` 
-          : `Queued ${validFiles.length} file(s) for processing!`
-      );
-      setShowUpload(false);
+        let activeJobId = null;
+
+        for (let b = 0; b < batches.length; b++) {
+          const batchFiles = batches[b];
+          const fd = new FormData();
+
+          for (const file of batchFiles) {
+            const cleanFile = (typeof window !== 'undefined' && typeof window.File === 'function')
+              ? new window.File([file], file.name, { type: file.type })
+              : file;
+            fd.append('files', cleanFile);
+          }
+
+          if (b === 0) {
+            if (overrideDate) fd.append('override_date', overrideDate);
+            if (parsedTags.length > 0) fd.append('tags', JSON.stringify(parsedTags));
+          } else if (activeJobId) {
+            fd.append('job_id', activeJobId);
+          }
+
+          const response = await api.post('/source/candidates/bulk-upload', fd, {
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.lengthComputable) {
+                const batchFraction = progressEvent.loaded / progressEvent.total;
+                const overallPercent = Math.round(((b + batchFraction) / batches.length) * 100);
+                setUploadProgress(overallPercent);
+              }
+            }
+          });
+
+          const data = response.data;
+          if (b === 0 && data.data?.job_id) {
+            activeJobId = data.data.job_id;
+            setBulkUploadTriggered(true);
+            setBulkJobId(activeJobId);
+            setBulkJobProgress(null);
+
+            try {
+              const r = await fetch(`/api/source/candidates/bulk-upload/${activeJobId}`, { credentials: 'include' });
+              const d = await r.json();
+              if (r.ok && d.success) setBulkJobProgress(d.data);
+            } catch (_) { /* silent */ }
+          }
+        }
+
+        toast.success(
+          batches.length > 1 
+            ? `Queued ${standardFiles.length} file(s) across ${batches.length} batch(es) for processing!` 
+            : `Queued ${standardFiles.length} file(s) for processing!`
+        );
+        setShowUpload(false);
+      }
     } catch (err) {
       if (err.response?.status === 413) {
         toast.error('Upload payload exceeded network proxy limit (413). Please upload files in smaller batches or as a ZIP file.');

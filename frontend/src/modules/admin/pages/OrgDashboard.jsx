@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import axios from "axios";
+import api from "../../../core/api/axios";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 import "../styles/admin.css";
@@ -19,8 +19,6 @@ import AdminPanel from "../components/AdminPanel";
 import { useNotifications } from "../../../core/context/NotificationContext";
 import useTabListKeyNav from "../../../core/hooks/useTabListKeyNav";
 import { getInitials } from "../../../core/utils/nameHelpers";
-
-axios.defaults.withCredentials = true;
 
 const hubNameMap = {
   source: "Talent Central",
@@ -88,12 +86,12 @@ export default function OrgDashboard() {
         journeysRes,
         teamRes,
       ] = await Promise.all([
-        axios.get("/api/org/dashboard-stats"),
-        axios.get("/api/org/pipeline-funnel"),
-        axios.get("/api/org/recent-activity"),
-        axios.get("/api/org/alerts"),
-        axios.get("/api/org/journey-overview"),
-        axios.get("/api/org/team-overview"),
+        api.get("/org/dashboard-stats"),
+        api.get("/org/pipeline-funnel"),
+        api.get("/org/recent-activity"),
+        api.get("/org/alerts"),
+        api.get("/org/journey-overview"),
+        api.get("/org/team-overview"),
       ]);
 
       const statsData = statsRes.data || {};

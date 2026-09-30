@@ -758,13 +758,19 @@ def get_candidate_resume(
 
     # Compute a clean human-readable filename (strip internal UUID / MD5 prefixes)
     raw_filename = os.path.basename(file_path.split("?")[0])
-    clean_filename = re.sub(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_', '', raw_filename)
-    clean_filename = re.sub(r'^[0-9a-fA-F]{32}_', '', clean_filename)
-    if not clean_filename or clean_filename.startswith("uuid_"):
-        candidate_name = row.get("full_name") or row.get("name") or "candidate"
-        clean_name = re.sub(r'\s+', '_', candidate_name.strip())
-        ext = os.path.splitext(raw_filename)[1] or ".pdf"
+    clean_filename = re.sub(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}[_-]?', '', raw_filename)
+    clean_filename = re.sub(r'^[0-9a-fA-F]{32}[_-]?', '', clean_filename)
+    clean_filename = re.sub(r'^[0-9a-fA-F]{8}[_-]', '', clean_filename)
+
+    ext = os.path.splitext(raw_filename)[1] or ".pdf"
+    name_without_ext = os.path.splitext(clean_filename)[0].strip(" ._-")
+    if not name_without_ext or name_without_ext.lower().startswith("uuid"):
+        candidate_name = row.get("full_name") or row.get("name") or "Candidate"
+        clean_name = re.sub(r'[^\w\s-]', '', candidate_name.strip())
+        clean_name = re.sub(r'\s+', '_', clean_name) or "Candidate"
         clean_filename = f"{clean_name}_Resume{ext}"
+    else:
+        clean_filename = f"{name_without_ext}{ext}"
 
     # If the resume is stored in S3, generate a pre-signed URL with clean Content-Disposition filename
     if file_path.startswith("https://") or file_path.startswith("http://"):

@@ -22,6 +22,65 @@ turndown.addRule('br', {
     }
 });
 
+// Encode raw Float32 PCM samples into standard 16-bit Mono WAV Blob
+function encodeWAV(pcmInput, sampleRate = 16000) {
+    let pcmData;
+    if (Array.isArray(pcmInput)) {
+        let totalLength = pcmInput.reduce((acc, curr) => acc + curr.length, 0);
+        pcmData = new Float32Array(totalLength);
+        let offset = 0;
+        for (let chunk of pcmInput) {
+            pcmData.set(chunk, offset);
+            offset += chunk.length;
+        }
+    } else {
+        pcmData = pcmInput;
+    }
+
+    // Boost volume if too low so Whisper hears it loud and clear
+    let maxAmp = 0;
+    for (let i = 0; i < pcmData.length; i++) {
+        let a = Math.abs(pcmData[i]);
+        if (a > maxAmp) maxAmp = a;
+    }
+    let gain = 1.0;
+    if (maxAmp > 0 && maxAmp < 0.4) {
+        gain = Math.min(10.0, 0.7 / maxAmp);
+    }
+
+    let buffer = new ArrayBuffer(44 + pcmData.length * 2);
+    let view = new DataView(buffer);
+
+    function writeString(view, offset, str) {
+        for (let i = 0; i < str.length; i++) {
+            view.setUint8(offset + i, str.charCodeAt(i));
+        }
+    }
+
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + pcmData.length * 2, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, 1, true); // Mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true); // 16-bit
+    writeString(view, 36, 'data');
+    view.setUint32(40, pcmData.length * 2, true);
+
+    let index = 44;
+    for (let i = 0; i < pcmData.length; i++) {
+        let s = Math.max(-1, Math.min(1, pcmData[i] * gain));
+        view.setInt16(index, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        index += 2;
+    }
+
+    return new Blob([view], { type: 'audio/wav' });
+}
+
 // Diff Utility Component (Table-Safe Rendering)
 const DiffViewer = ({ oldText, newText, cleanMarkdown }) => {
     // Switch to more granular diff for better "Track Changes" feel
@@ -141,8 +200,20 @@ export default function ProjectView({ projectId, onBack }) {
     const selectionTooltipRef = useRef(null);
     const copilotPanelRef = useRef(null);
     const [isRecording, setIsRecording] = useState(false);
-    const mediaRecorder = useRef(null);
-    const audioChunks = useRef([]);
+    const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+    const [audioActivity, setAudioActivity] = useState(false);
+    const micStreamRef = useRef(null);
+    const audioCtxRef = useRef(null);
+    const mediaRecorderRef = useRef(null);
+    const recordedChunksRef = useRef([]);
+    const analyserRef = useRef(null);
+    const animFrameRef = useRef(null);
+    const initialPrefixRef = useRef('');
+    const silenceTimerRef = useRef(null);
+    const hasSpokenRef = useRef(false);
+    const isStoppingRef = useRef(false);
+    const speechRecognitionRef = useRef(null);
+    const transcriptReceivedRef = useRef(false);
 
 
     useEffect(() => { fetchProject(); }, [projectId]);
@@ -360,10 +431,13 @@ export default function ProjectView({ projectId, onBack }) {
         setSbProgress({ current: 0, total: 0, status: 'Starting generation...' });
         try {
             const token = localStorage.getItem('token');
-            const BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : '/api';
+            const BASE_URL = '/api';
+            const headers = { 'Accept': 'text/event-stream' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
             const response = await fetch(`${BASE_URL}/storyboard/${projectId}/generate?storyboard_type=${encodeURIComponent(sbType)}`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'text/event-stream' }
+                credentials: 'include',
+                headers
             });
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -447,8 +521,8 @@ export default function ProjectView({ projectId, onBack }) {
         setChatInput(''); setChatLoading(true);
         try {
             const currentContent = copilotDocType === 'design_doc' ? ddContent : sbContent;
-            // TRUNCATE: Prevent the PDF from crashing the AI
-            const maxContextLength = 1500;
+            // Allow comprehensive reference PDF content (Gemini context window handles this effortlessly)
+            const maxContextLength = 40000;
             const safeFileContext = fileContext && fileContext.length > maxContextLength
                 ? fileContext.substring(0, maxContextLength) + "\n\n[...TRUNCATED DUE TO LENGTH...]"
                 : fileContext;
@@ -608,7 +682,7 @@ export default function ProjectView({ projectId, onBack }) {
         formData.append('file', file);
 
         try {
-            const BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : '/api';
+            const BASE_URL = '/api';
             const response = await fetch(`${BASE_URL}/extraction/extract-text-only`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
@@ -628,49 +702,163 @@ export default function ProjectView({ projectId, onBack }) {
     };
     const startRecording = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder.current = new MediaRecorder(stream);
-            audioChunks.current = [];
+            initialPrefixRef.current = chatInput ? chatInput.trim() + " " : "";
+            isStoppingRef.current = false;
+            hasSpokenRef.current = false;
+            transcriptReceivedRef.current = false;
 
-            mediaRecorder.current.ondataavailable = (event) => {
-                if (event.data.size > 0) audioChunks.current.push(event.data);
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            if (SpeechRec) {
+                try {
+                    const recognition = new SpeechRec();
+                    recognition.continuous = true;
+                    recognition.interimResults = true;
+                    recognition.lang = 'en-US';
+
+                    recognition.onstart = () => {
+                        console.log("Speech recognition started.");
+                        setIsRecording(true);
+                        setAudioActivity(true);
+                    };
+
+                    recognition.onresult = (event) => {
+                        let text = '';
+                        for (let i = 0; i < event.results.length; i++) {
+                            text += event.results[i][0].transcript;
+                        }
+                        if (text.trim()) {
+                            transcriptReceivedRef.current = true;
+                            hasSpokenRef.current = true;
+                            setAudioActivity(true);
+                            const clean = text.trim();
+                            setChatInput(initialPrefixRef.current ? `${initialPrefixRef.current}${clean}` : clean);
+
+                            if (silenceTimerRef.current) {
+                                clearTimeout(silenceTimerRef.current);
+                                silenceTimerRef.current = null;
+                            }
+                            silenceTimerRef.current = setTimeout(() => {
+                                stopRecording();
+                            }, 2000);
+                        }
+                    };
+
+                    recognition.onerror = (e) => {
+                        console.warn("Speech recognition notice:", e.error);
+                        if (e.error === 'not-allowed') {
+                            alert("Microphone permission was denied. Please allow microphone in your browser address bar.");
+                            stopRecording();
+                        } else if (e.error === 'audio-capture') {
+                            alert("Microphone capture failed. Please ensure your microphone is enabled in Windows Settings.");
+                            stopRecording();
+                        }
+                    };
+
+                    recognition.onend = () => {
+                        setIsRecording(false);
+                        setAudioActivity(false);
+                    };
+
+                    recognition.start();
+                    speechRecognitionRef.current = recognition;
+                    setIsRecording(true);
+                    return;
+                } catch (recErr) {
+                    console.warn("Could not start SpeechRecognition, using fallback:", recErr);
+                }
+            }
+
+            // Fallback for browsers without SpeechRecognition: MediaRecorder + Local Whisper
+            startMediaRecorderWhisper();
+        } catch (err) {
+            console.error("Microphone error:", err);
+            alert("Microphone error: " + (err.message || err));
+            setIsRecording(false);
+        }
+    };
+
+    const startMediaRecorderWhisper = async () => {
+        try {
+            recordedChunksRef.current = [];
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            micStreamRef.current = stream;
+
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    recordedChunksRef.current.push(e.data);
+                }
             };
 
-            mediaRecorder.current.onstop = async () => {
-                const audioBlob = new Blob(audioChunks.current, { type: 'audio/webm' });
+            mediaRecorder.onstop = async () => {
+                if (micStreamRef.current) {
+                    micStreamRef.current.getTracks().forEach(t => t.stop());
+                    micStreamRef.current = null;
+                }
+                const rawChunks = recordedChunksRef.current;
+                if (!rawChunks || rawChunks.length === 0) return;
 
-                const formData = new FormData();
-                formData.append("audio", audioBlob, "recording.webm");
-
+                setIsProcessingVoice(true);
                 try {
-                    const BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : '/api';
-                    const res = await fetch(`${BASE_URL}/speech-to-text/`, {
+                    const blob = new Blob(rawChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    const arrayBuffer = await blob.arrayBuffer();
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    const tempCtx = new AudioCtx();
+                    const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+                    const pcm = audioBuffer.getChannelData(0);
+                    const wavBlob = encodeWAV(pcm, audioBuffer.sampleRate);
+                    tempCtx.close();
+
+                    const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+                    const headers = {};
+                    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                    const res = await fetch('/api/speech-to-text/', {
                         method: "POST",
-                        body: formData,
+                        credentials: 'include',
+                        headers,
+                        body: formData
                     });
                     const data = await res.json();
-
-                    if (data.text) {
-                        setChatInput(prev => prev ? prev + " " + data.text : data.text);
+                    if (data.text && data.text.trim()) {
+                        const clean = data.text.trim();
+                        setChatInput(initialPrefixRef.current ? `${initialPrefixRef.current}${clean}` : clean);
                     }
-                } catch (err) {
-                    console.error("Transcription failed", err);
+                } catch (e) {
+                    console.error("Whisper fallback error:", e);
+                } finally {
+                    setIsProcessingVoice(false);
                 }
-
-                stream.getTracks().forEach(track => track.stop());
             };
 
-            mediaRecorder.current.start();
+            mediaRecorder.start(200);
             setIsRecording(true);
-        } catch (err) {
-            alert("Please allow microphone access to use Voice Typing!");
+        } catch (e) {
+            console.error("MediaRecorder fallback error:", e);
+            alert("Microphone access failed.");
+            setIsRecording(false);
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorder.current && isRecording) {
-            mediaRecorder.current.stop();
-            setIsRecording(false);
+        setIsRecording(false);
+        setAudioActivity(false);
+
+        if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+        }
+
+        if (speechRecognitionRef.current) {
+            try { speechRecognitionRef.current.stop(); } catch (e) {}
+            speechRecognitionRef.current = null;
+        }
+
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            try { mediaRecorderRef.current.stop(); } catch (e) {}
         }
     };
 
@@ -940,6 +1128,22 @@ export default function ProjectView({ projectId, onBack }) {
                         </div>
                     )}
 
+                    {isRecording && (
+                        <div className="px-3 py-1.5 text-xs flex items-center justify-between" style={{ backgroundColor: '#FEE2E2', color: '#DC2626', borderTop: '1px solid #FCA5A5' }}>
+                            <div className="flex items-center gap-2">
+                                <span className={`w-2.5 h-2.5 rounded-full bg-red-600 inline-block ${audioActivity ? 'animate-ping' : 'opacity-70'}`}></span>
+                                <span className="font-semibold">{audioActivity ? '🎙️ Hearing your voice... (keep speaking)' : '🎙️ Listening... Speak now (auto-types when you pause or click Done)'}</span>
+                            </div>
+                            <button className="text-xs font-bold underline cursor-pointer bg-transparent border-none text-red-700" onClick={stopRecording}>Done</button>
+                        </div>
+                    )}
+                    {isProcessingVoice && (
+                        <div className="px-3 py-1 text-xs flex items-center gap-2" style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', borderTop: '1px solid #BFDBFE' }}>
+                            <Loader size={14} className="spinner" />
+                            <span className="font-semibold">Transcribing speech with local Whisper model...</span>
+                        </div>
+                    )}
+
                     <div className="p-3 border-t flex gap-2 items-end" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-color)' }}>
                         <label className="btn btn-outline flex items-center justify-center p-2 cursor-pointer m-0" style={{ height: '40px' }}>
                             {fileUploading ? <Loader size={18} className="spinner" /> : <Paperclip size={18} />}
@@ -947,9 +1151,15 @@ export default function ProjectView({ projectId, onBack }) {
                         </label>
 
                         <div className="flex gap-2 w-full items-end">
-                            <GrammarTextarea className="form-control m-0 w-full" style={{ minHeight: '40px', resize: 'none' }} rows={2} placeholder="Ask to edit... (or use voice)" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChat(); } }} />
-                            <button className={`btn ${isRecording ? 'btn-danger' : 'btn-outline'} flex-shrink-0 items-center justify-center p-2`} style={{ height: '40px' }} onClick={isRecording ? stopRecording : startRecording} title="Voice Typing">
-                                {isRecording ? <Square size={18} /> : <Mic size={18} />}
+                            <GrammarTextarea className="form-control m-0 w-full" style={{ minHeight: '40px', resize: 'none' }} rows={2} placeholder={isRecording ? "Listening... speak now" : isProcessingVoice ? "Transcribing speech..." : "Ask to edit... (or click mic for voice)"} value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChat(); } }} />
+                            <button
+                                className={`btn ${isRecording ? 'btn-danger animate-pulse' : 'btn-outline'} flex-shrink-0 items-center justify-center p-2`}
+                                style={{ height: '40px' }}
+                                onClick={isRecording ? stopRecording : startRecording}
+                                disabled={isProcessingVoice}
+                                title={isRecording ? "Click to finish speaking" : isProcessingVoice ? "Processing speech..." : "Voice Typing"}
+                            >
+                                {isProcessingVoice ? <Loader size={18} className="spinner" /> : isRecording ? <Square size={18} /> : <Mic size={18} />}
                             </button>
                         </div>
 

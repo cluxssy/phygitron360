@@ -512,8 +512,10 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
         await onBulkUpload(stagedFiles, overrideDate, tags);
       } else {
         const validFiles = stagedFiles;
-        if (validFiles.length === 1 && (validFiles[0].name.toLowerCase().endsWith('.zip') || validFiles[0].size > 35 * 1024 * 1024)) {
-          const largeFile = validFiles[0];
+        const archivesOrLarge = validFiles.filter(f => f.name.toLowerCase().endsWith('.zip') || f.size > 35 * 1024 * 1024);
+        const standardFiles = validFiles.filter(f => !f.name.toLowerCase().endsWith('.zip') && f.size <= 35 * 1024 * 1024);
+
+        for (const largeFile of archivesOrLarge) {
           try {
             const presignedRes = await api.post('/source/candidates/bulk-upload/request-presigned', {
               filename: largeFile.name,
@@ -523,53 +525,67 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
             });
             if (presignedRes.data?.data?.direct_upload && presignedRes.data.data.upload_url) {
               const { job_id, upload_url, s3_key } = presignedRes.data.data;
-              await axios.put(upload_url, largeFile, {
-                headers: { 'Content-Type': 'application/octet-stream' }
+              await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.withCredentials = false;
+                xhr.open('PUT', upload_url, true);
+                xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                xhr.onload = () => {
+                  if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve();
+                  } else {
+                    reject(new Error(`Storage upload failed with status ${xhr.status}: ${xhr.statusText}`));
+                  }
+                };
+                xhr.onerror = () => reject(new Error('Network error during cloud storage upload'));
+                xhr.send(largeFile);
               });
               await api.post('/source/candidates/bulk-upload/confirm-archive', { job_id, s3_key });
               toast.success(`Uploaded ${largeFile.name}! Processing in background.`);
-              setShowUploadModal(false);
-              setStagedFiles([]);
-              setUploadSelectedTags([]);
-              return;
             }
           } catch (e) {
+            if (e.response?.status === 400 || largeFile.size > 80 * 1024 * 1024) {
+              throw e;
+            }
             console.warn('[DirectUpload] Spaces direct upload unavailable, falling back:', e);
+            standardFiles.push(largeFile);
           }
         }
 
-        const CHUNK_MAX_SIZE = 35 * 1024 * 1024;
-        const CHUNK_MAX_COUNT = 25;
-        const batches = [];
-        let curBatch = [];
-        let curSize = 0;
-        for (const file of validFiles) {
-          if (curBatch.length >= CHUNK_MAX_COUNT || (curSize + file.size > CHUNK_MAX_SIZE && curBatch.length > 0)) {
-            batches.push(curBatch);
-            curBatch = [];
-            curSize = 0;
+        if (standardFiles.length > 0) {
+          const CHUNK_MAX_SIZE = 35 * 1024 * 1024;
+          const CHUNK_MAX_COUNT = 25;
+          const batches = [];
+          let curBatch = [];
+          let curSize = 0;
+          for (const file of standardFiles) {
+            if (curBatch.length >= CHUNK_MAX_COUNT || (curSize + file.size > CHUNK_MAX_SIZE && curBatch.length > 0)) {
+              batches.push(curBatch);
+              curBatch = [];
+              curSize = 0;
+            }
+            curBatch.push(file);
+            curSize += file.size;
           }
-          curBatch.push(file);
-          curSize += file.size;
-        }
-        if (curBatch.length > 0) batches.push(curBatch);
+          if (curBatch.length > 0) batches.push(curBatch);
 
-        let activeJobId = null;
-        for (let b = 0; b < batches.length; b++) {
-          const fd = new FormData();
-          batches[b].forEach(f => fd.append('files', f));
-          if (b === 0) {
-            if (overrideDate) fd.append('override_date', overrideDate);
-            if (tags && tags.length > 0) fd.append('tags', JSON.stringify(tags));
-          } else if (activeJobId) {
-            fd.append('job_id', activeJobId);
+          let activeJobId = null;
+          for (let b = 0; b < batches.length; b++) {
+            const fd = new FormData();
+            batches[b].forEach(f => fd.append('files', f));
+            if (b === 0) {
+              if (overrideDate) fd.append('override_date', overrideDate);
+              if (tags && tags.length > 0) fd.append('tags', JSON.stringify(tags));
+            } else if (activeJobId) {
+              fd.append('job_id', activeJobId);
+            }
+            const res = await api.post('/source/candidates/bulk-upload', fd);
+            if (b === 0 && res.data?.data?.job_id) {
+              activeJobId = res.data.data.job_id;
+            }
           }
-          const res = await api.post('/source/candidates/bulk-upload', fd);
-          if (b === 0 && res.data?.data?.job_id) {
-            activeJobId = res.data.data.job_id;
-          }
+          toast.success(`Queued ${standardFiles.length} file(s) for processing.`);
         }
-        toast.success(`Queued ${stagedFiles.length} file(s) for processing.`);
       }
 
       setShowUploadModal(false);
