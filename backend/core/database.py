@@ -679,6 +679,23 @@ def create_tables(schema_name='public'):
             )
         ''')
 
+        # 3.5) Candidate & Talent Vault Performance Indexes
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_created_at ON candidates(created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_created_ym ON candidates((TO_CHAR(created_at, 'YYYY-MM')))")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_total_exp ON candidates(total_experience_years)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_location ON candidates(location)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_email_lower ON candidates(LOWER(email))")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_primary_skills ON candidates USING GIN(primary_skills)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_secondary_skills ON candidates USING GIN(secondary_skills)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidate_experience_cid ON candidate_experience(candidate_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidate_education_cid ON candidate_education(candidate_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidate_notes_cid ON candidate_notes(candidate_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidate_activity_cid ON candidate_activity_log(candidate_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_cand_apps_cand_role ON candidate_applications(candidate_id, job_role_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_cand_apps_role_status ON candidate_applications(job_role_id, status)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_scores_lookup ON ai_scores(entity_id, job_role_id, entity_type, score_type)")
+
         # 4) Assets Checklist Table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS assets (

@@ -23,6 +23,19 @@ logger = logging.getLogger(__name__)
 _INACTIVE_JOB_IDS = set()
 _INACTIVE_JOBS_LOCK = threading.Lock()
 
+# In-memory TTL cache for folder summaries and tag aggregate counts (tenant-scoped)
+_CACHE_TTL = 30.0  # 30 seconds TTL
+_folders_cache: Dict[str, Any] = {}
+_tags_cache: Dict[str, Any] = {}
+
+def invalidate_candidate_caches(tenant_id: Optional[str] = None):
+    if tenant_id:
+        _folders_cache.pop(tenant_id, None)
+        _tags_cache.pop(tenant_id, None)
+    else:
+        _folders_cache.clear()
+        _tags_cache.clear()
+
 def is_job_active(job_id: int) -> bool:
     with _INACTIVE_JOBS_LOCK:
         return job_id not in _INACTIVE_JOB_IDS
@@ -49,10 +62,18 @@ class CandidateService:
         os.makedirs(self.UPLOAD_DIR, exist_ok=True)
 
     def get_repository_folders(self) -> List[Dict[str, Any]]:
-        return self.repo.get_repository_folders()
+        now = time.time()
+        cached = _folders_cache.get(self.tenant_id)
+        if cached and (now - cached[0]) < _CACHE_TTL:
+            return cached[1]
+        data = self.repo.get_repository_folders()
+        _folders_cache[self.tenant_id] = (now, data)
+        return data
 
     def create_subfolder(self, name: str, month_year: str, job_role_id: Optional[int] = None) -> Dict[str, Any]:
-        return self.repo.create_subfolder(name, month_year, job_role_id)
+        result = self.repo.create_subfolder(name, month_year, job_role_id)
+        invalidate_candidate_caches(self.tenant_id)
+        return result
 
     def get_subfolders_for_month(self, month_year: str) -> List[Dict[str, Any]]:
         return self.repo.get_subfolders_for_month(month_year)
@@ -61,9 +82,12 @@ class CandidateService:
         return self.repo.get_all_subfolders()
 
     def delete_subfolder(self, folder_id: int) -> bool:
-        return self.repo.delete_subfolder(folder_id)
+        result = self.repo.delete_subfolder(folder_id)
+        invalidate_candidate_caches(self.tenant_id)
+        return result
 
     def bulk_tag_candidates(self, candidate_ids: List[int], tags: List[str], action: str = "add") -> int:
+        invalidate_candidate_caches(self.tenant_id)
         if action == "add":
             return self.repo.add_candidate_tags(candidate_ids, tags)
         elif action == "remove":
@@ -77,13 +101,22 @@ class CandidateService:
         return 0
 
     def update_candidate_tags(self, candidate_id: int, tags: List[str]) -> List[str]:
+        invalidate_candidate_caches(self.tenant_id)
         return self.repo.set_candidate_tags(candidate_id, tags)
 
     def get_all_tags(self) -> Dict[str, Any]:
-        return self.repo.get_all_tags()
+        now = time.time()
+        cached = _tags_cache.get(self.tenant_id)
+        if cached and (now - cached[0]) < _CACHE_TTL:
+            return cached[1]
+        data = self.repo.get_all_tags()
+        _tags_cache[self.tenant_id] = (now, data)
+        return data
 
     def move_candidates(self, candidate_ids: List[int], target_month: Optional[str] = None, target_folder_id: Optional[int] = None) -> int:
-        return self.repo.move_candidates(candidate_ids, target_month, target_folder_id)
+        result = self.repo.move_candidates(candidate_ids, target_month, target_folder_id)
+        invalidate_candidate_caches(self.tenant_id)
+        return result
 
     @staticmethod
     def _normalize_and_merge_skills(ai_skills: Any, pre_skills: Optional[List[str]] = None) -> List[str]:
@@ -607,13 +640,18 @@ class CandidateService:
         data['full_name'] = join_name_parts(data.get('first_name'), data.get('middle_name'), data.get('last_name'))
         candidate_id = self.repo.create_candidate(data)
         self.repo.log_activity(candidate_id, actor_name, "profile_created", "Manual candidate entry")
+        invalidate_candidate_caches(self.tenant_id)
         return candidate_id
 
     def delete_candidate(self, candidate_id: int) -> bool:
-        return self.repo.delete_candidate(candidate_id)
+        result = self.repo.delete_candidate(candidate_id)
+        invalidate_candidate_caches(self.tenant_id)
+        return result
 
     def bulk_delete_candidates(self, candidate_ids: List[int]) -> int:
-        return self.repo.bulk_delete_candidates(candidate_ids)
+        count = self.repo.bulk_delete_candidates(candidate_ids)
+        invalidate_candidate_caches(self.tenant_id)
+        return count
 
     def revert_employee(self, employee_id: int) -> bool:
         return self.repo.revert_employee(employee_id)
@@ -653,7 +691,8 @@ class CandidateService:
         folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None,
         tag: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        limit: int = 20
+        limit: int = 20,
+        offset: int = 0
     ) -> tuple[List[Dict[str, Any]], int]:
         parsed_query = None
         if search and search.strip():
@@ -663,7 +702,7 @@ class CandidateService:
 
         candidates, total_count = self.repo.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
-            search=search, sort_by=sort_by, limit=limit, role_id=role_id, upload_time=upload_time,
+            search=search, sort_by=sort_by, limit=limit, offset=offset, role_id=role_id, upload_time=upload_time,
             folder_id=folder_id, tag=tag, tags=tags, parsed_query=parsed_query
         )
 
@@ -1697,6 +1736,7 @@ class CandidateService:
                 "reasoning": json.dumps(confidence_signals),
             }, conn=conn, cur=cur)
 
+        invalidate_candidate_caches(self.tenant_id)
         return {"candidate_id": candidate_id, "parsed_data": ai_result}
 
     async def reprocess_candidates(

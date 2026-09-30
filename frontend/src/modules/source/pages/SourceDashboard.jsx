@@ -7,7 +7,7 @@ import {
   TrendingUp, PieChart, Activity, Edit, XCircle, UserPlus,
   FileText, Award, User, Calendar, Building, MapPin as MapPinIcon,
   Briefcase as BriefcaseIcon, Mail as MailIcon, Phone, ExternalLink,
-  ChevronRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
+  ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, BarChart, Users as UsersIcon, CheckCircle as CheckCircleIcon,
   Clock as ClockIcon, XCircle as XCircleIcon, AlertCircle,
   Archive, Pause, Play, Folder, Tag, Check, FileSpreadsheet
 } from 'lucide-react';
@@ -396,9 +396,13 @@ export default function SourceDashboard() {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(searchTerm);
-    }, 350);
+    }, 300);
     return () => clearTimeout(handler);
   }, [searchTerm]);
+
+  // Directory Pagination State
+  const [dirPage, setDirPage] = useState(1);
+  const [dirPageSize, setDirPageSize] = useState(50);
 
   // Activity feed state
   const [activities, setActivities] = useState([]);
@@ -729,12 +733,12 @@ export default function SourceDashboard() {
   const filteredCandidates = useMemo(() => {
     if (!searchTerm || !searchTerm.trim()) return candidates;
 
-    // If candidates was already returned by the backend for this search query, trust backend results!
-    if (debouncedSearch && searchTerm.trim().toLowerCase() === debouncedSearch.trim().toLowerCase()) {
+    const activeSearchTerm = (debouncedSearch || '').trim();
+    if (!activeSearchTerm) {
       return candidates;
     }
 
-    const rawTerm = searchTerm.toLowerCase().trim();
+    const rawTerm = activeSearchTerm.toLowerCase();
 
     // 1. Extract exclusions (e.g. "not in wipro", "-wipro", "without infosys")
     const excludePatterns = [
@@ -820,7 +824,24 @@ export default function SourceDashboard() {
         return nameMatch || emailMatch || desigMatch || locMatch || skillMatch || eduMatch || compMatch || summaryMatch;
       });
     });
-  }, [candidates, searchTerm, debouncedSearch]);
+  }, [candidates, debouncedSearch]);
+
+  // Reset Directory pagination on search or filter change
+  useEffect(() => {
+    setDirPage(1);
+  }, [debouncedSearch, filters]);
+
+  const totalDirPages = useMemo(() => {
+    if (dirPageSize === 'all') return 1;
+    return Math.max(1, Math.ceil(filteredCandidates.length / Number(dirPageSize)));
+  }, [filteredCandidates.length, dirPageSize]);
+
+  const paginatedCandidates = useMemo(() => {
+    if (dirPageSize === 'all') return filteredCandidates;
+    const size = Number(dirPageSize);
+    const start = (dirPage - 1) * size;
+    return filteredCandidates.slice(start, start + size);
+  }, [filteredCandidates, dirPage, dirPageSize]);
 
   // ── Selection helpers ──────────────────────────────────────────────────────
   const toggle = (id) => setSelectedIds(prev => {
@@ -2599,7 +2620,7 @@ export default function SourceDashboard() {
                 </div>
               </div>
             ) : (
-              filteredCandidates.map(c => (
+              paginatedCandidates.map(c => (
                 <div
                   key={c.id}
                   onClick={() => setDrawerCandidate(c)}
@@ -2725,6 +2746,80 @@ export default function SourceDashboard() {
               ))
             )}
           </div>
+
+          {/* ── Directory Pagination Bar ── */}
+          {filteredCandidates.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-t border-gray-100 bg-gray-50/70 text-xs text-gray-600 rounded-b-2xl">
+              <div className="flex items-center gap-2">
+                <span>
+                  Showing <strong className="text-gray-800">{dirPageSize === 'all' ? 1 : Math.min((dirPage - 1) * Number(dirPageSize) + 1, filteredCandidates.length)}</strong>–<strong className="text-gray-800">{dirPageSize === 'all' ? filteredCandidates.length : Math.min(dirPage * Number(dirPageSize), filteredCandidates.length)}</strong> of <strong className="text-gray-800">{filteredCandidates.length}</strong> candidates
+                </span>
+                {totalCandidates > filteredCandidates.length && (
+                  <span className="text-gray-400">({totalCandidates} total in pool)</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-500">Rows per page:</span>
+                  <select
+                    value={dirPageSize}
+                    onChange={(e) => {
+                      const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+                      setDirPageSize(val);
+                      setDirPage(1);
+                    }}
+                    className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 outline-none focus:border-purple-400 shadow-2xs"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+
+                {dirPageSize !== 'all' && totalDirPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setDirPage(1)}
+                      disabled={dirPage === 1}
+                      className="p-1 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="First page"
+                    >
+                      <ChevronsLeft size={14} />
+                    </button>
+                    <button
+                      onClick={() => setDirPage(p => Math.max(1, p - 1))}
+                      disabled={dirPage === 1}
+                      className="p-1 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Previous page"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="px-2.5 py-1 font-semibold text-gray-700 bg-white border border-gray-200 rounded-md text-[11px]">
+                      Page {dirPage} of {totalDirPages}
+                    </span>
+                    <button
+                      onClick={() => setDirPage(p => Math.min(totalDirPages, p + 1))}
+                      disabled={dirPage === totalDirPages}
+                      className="p-1 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Next page"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                    <button
+                      onClick={() => setDirPage(totalDirPages)}
+                      disabled={dirPage === totalDirPages}
+                      className="p-1 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Last page"
+                    >
+                      <ChevronsRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
         </>
       )}
