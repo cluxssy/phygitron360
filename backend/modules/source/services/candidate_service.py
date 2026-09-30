@@ -157,8 +157,11 @@ class CandidateService:
 
         # 3. Save File Permanently (S3 or Local)
         content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-        file_id = str(uuid.uuid4())
-        save_filename = f"{file_id}{ext}"
+        orig_base = os.path.splitext(os.path.basename(filename or "resume"))[0]
+        safe_orig = re.sub(r'[^\w\s-]', '', orig_base).strip() or "resume"
+        safe_orig = re.sub(r'\s+', '_', safe_orig)[:60]
+        file_id = uuid.uuid4().hex[:8]
+        save_filename = f"{file_id}_{safe_orig}{ext}"
         
         final_file_path = save_file_content(
             content=file_content,
@@ -1589,7 +1592,11 @@ class CandidateService:
                 final_path = existing["resume_path"]
             else:
                 ext = os.path.splitext(file_path)[1].lower() if file_path else ".bin"
-                filename = f"{uuid.uuid4()}{ext}"
+                orig_base = os.path.splitext(os.path.basename(file_path or (name or "resume")))[0]
+                safe_orig = re.sub(r'[^\w\s-]', '', orig_base).strip() or (name or "resume").replace(" ", "_")
+                safe_orig = re.sub(r'\s+', '_', safe_orig)[:60]
+                file_id = uuid.uuid4().hex[:8]
+                filename = f"{file_id}_{safe_orig}{ext}"
                 saved_path = save_file_content(
                     content=actual_content,
                     filename=filename,
