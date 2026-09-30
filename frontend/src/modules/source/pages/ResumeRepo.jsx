@@ -190,8 +190,19 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
   // View controls
   const [viewMode, setViewMode] = useState('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [repoPage, setRepoPage] = useState(1);
+  const [repoPageSize, setRepoPageSize] = useState(48);
   const [sortBy, setSortBy] = useState('date_desc');
   const [manualYears, setManualYears] = useState(new Set());
+
+  // Debounce search input for silky-smooth typing
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   // Modals state
   const [showFolderModal, setShowFolderModal] = useState(false); // Year / Month creation
@@ -303,22 +314,19 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
     }
   };
 
-  // Re-fetch candidates when folder or tag filter changes
+  // Re-fetch candidates when folder, tag filter, or debouncedSearch changes
   useEffect(() => {
     if (currentFolder) {
-      const handler = setTimeout(() => {
-        fetchCandidates(currentFolder.id, selectedTagFilter, searchQuery);
-      }, 350);
-      return () => clearTimeout(handler);
+      fetchCandidates(currentFolder.id, selectedTagFilter, debouncedSearch);
     } else {
       setCandidates([]);
       setSelected(new Set());
     }
-  }, [currentFolder?.id, selectedTagFilter, searchQuery]);
+  }, [currentFolder?.id, selectedTagFilter, debouncedSearch]);
 
   // Derived filtered & sorted candidates
   const filteredCandidates = useMemo(() => {
-    const rawTerm = searchQuery.trim().toLowerCase();
+    const rawTerm = (debouncedSearch || '').trim().toLowerCase();
     let list = candidates;
 
     if (rawTerm) {
@@ -409,7 +417,24 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
         if (sortBy === 'date_desc') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         return 0;
       });
-  }, [candidates, searchQuery, sortBy]);
+  }, [candidates, debouncedSearch, sortBy]);
+
+  // Reset ResumeRepo pagination on filter or search change
+  useEffect(() => {
+    setRepoPage(1);
+  }, [currentFolder?.id, selectedTagFilter, debouncedSearch, sortBy]);
+
+  const totalRepoPages = useMemo(() => {
+    if (repoPageSize === 'all') return 1;
+    return Math.max(1, Math.ceil(filteredCandidates.length / Number(repoPageSize)));
+  }, [filteredCandidates.length, repoPageSize]);
+
+  const paginatedCandidates = useMemo(() => {
+    if (repoPageSize === 'all') return filteredCandidates;
+    const size = Number(repoPageSize);
+    const start = (repoPage - 1) * size;
+    return filteredCandidates.slice(start, start + size);
+  }, [filteredCandidates, repoPage, repoPageSize]);
 
   // Year aggregation
   const yearCounts = useMemo(() => {
@@ -1309,7 +1334,7 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(290px, 1fr))' : '1fr', gap: 12 }}>
-                {filteredCandidates.map((c) => {
+                {paginatedCandidates.map((c) => {
                   const cTags = Array.isArray(c.tags) ? c.tags : [];
                   return (
                     <div 
@@ -1431,6 +1456,75 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* ── ResumeRepo Pagination Bar ── */}
+            {filteredCandidates.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, padding: '12px 18px', background: '#FFFFFF', borderRadius: 12, border: '1px solid #E5E7EB', fontSize: '0.85rem', color: '#6B7280', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  Showing <strong style={{ color: '#111827' }}>{repoPageSize === 'all' ? 1 : Math.min((repoPage - 1) * Number(repoPageSize) + 1, filteredCandidates.length)}</strong> to <strong style={{ color: '#111827' }}>{repoPageSize === 'all' ? filteredCandidates.length : Math.min(repoPage * Number(repoPageSize), filteredCandidates.length)}</strong> of <strong style={{ color: '#111827' }}>{filteredCandidates.length}</strong> resumes
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem' }}>
+                    <span>Per page:</span>
+                    <select
+                      value={repoPageSize}
+                      onChange={(e) => {
+                        const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+                        setRepoPageSize(val);
+                        setRepoPage(1);
+                      }}
+                      style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: '4px 8px', fontSize: '0.8rem', color: '#374151', outline: 'none' }}
+                    >
+                      <option value={24}>24</option>
+                      <option value={48}>48</option>
+                      <option value={96}>96</option>
+                      <option value="all">All</option>
+                    </select>
+                  </div>
+
+                  {repoPageSize !== 'all' && totalRepoPages > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        onClick={() => setRepoPage(1)}
+                        disabled={repoPage === 1}
+                        style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #E5E7EB', background: repoPage === 1 ? '#F3F4F6' : '#FFFFFF', cursor: repoPage === 1 ? 'not-allowed' : 'pointer', color: repoPage === 1 ? '#9CA3AF' : '#374151', fontSize: '0.8rem' }}
+                        title="First page"
+                      >
+                        «
+                      </button>
+                      <button
+                        onClick={() => setRepoPage(p => Math.max(1, p - 1))}
+                        disabled={repoPage === 1}
+                        style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #E5E7EB', background: repoPage === 1 ? '#F3F4F6' : '#FFFFFF', cursor: repoPage === 1 ? 'not-allowed' : 'pointer', color: repoPage === 1 ? '#9CA3AF' : '#374151', fontSize: '0.8rem' }}
+                        title="Previous page"
+                      >
+                        ‹
+                      </button>
+                      <span style={{ padding: '0 8px', fontWeight: 600, color: '#374151', fontSize: '0.8rem' }}>
+                        Page {repoPage} of {totalRepoPages}
+                      </span>
+                      <button
+                        onClick={() => setRepoPage(p => Math.min(totalRepoPages, p + 1))}
+                        disabled={repoPage === totalRepoPages}
+                        style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #E5E7EB', background: repoPage === totalRepoPages ? '#F3F4F6' : '#FFFFFF', cursor: repoPage === totalRepoPages ? 'not-allowed' : 'pointer', color: repoPage === totalRepoPages ? '#9CA3AF' : '#374151', fontSize: '0.8rem' }}
+                        title="Next page"
+                      >
+                        ›
+                      </button>
+                      <button
+                        onClick={() => setRepoPage(totalRepoPages)}
+                        disabled={repoPage === totalRepoPages}
+                        style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #E5E7EB', background: repoPage === totalRepoPages ? '#F3F4F6' : '#FFFFFF', cursor: repoPage === totalRepoPages ? 'not-allowed' : 'pointer', color: repoPage === totalRepoPages ? '#9CA3AF' : '#374151', fontSize: '0.8rem' }}
+                        title="Last page"
+                      >
+                        »
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

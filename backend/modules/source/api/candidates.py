@@ -558,6 +558,7 @@ def search_candidates(
     tag: Optional[str] = Query(None),                 # Tag name or 'untagged'
     tags: Optional[List[str]] = Query(None),          # Multiple tags
     limit: int = Query(50, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
 ):
@@ -566,7 +567,7 @@ def search_candidates(
         search_res = service.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
             search=search, sort_by=sort_by, role_id=role_id, upload_time=upload_time,
-            folder_id=folder_id, tag=tag, tags=tags, limit=limit
+            folder_id=folder_id, tag=tag, tags=tags, limit=limit, offset=offset
         )
         results = search_res[0]
         total_count = search_res[1]

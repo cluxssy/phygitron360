@@ -393,7 +393,7 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None, tag: Optional[str] = None, tags: Optional[List[str]] = None, parsed_query: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], int]:
+    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, offset: int = 0, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None, tag: Optional[str] = None, tags: Optional[List[str]] = None, parsed_query: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], int]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -620,7 +620,12 @@ class CandidateRepository:
                 else:
                     order_clause = "ORDER BY c.total_experience_years DESC"
 
+                base_params = list(params)
                 params.append(limit)
+                offset_sql = ""
+                if offset and offset > 0:
+                    params.append(offset)
+                    offset_sql = " OFFSET %s"
 
                 joins_rf = " LEFT JOIN resume_folders rf ON c.folder_id = rf.id"
                 extra_fields = """, COALESCE((
@@ -654,7 +659,7 @@ class CandidateRepository:
                         {joins}
                         {where_clause}
                     """
-                    count_params = [role_id, role_id] + params[:-1]
+                    count_params = [role_id, role_id] + base_params
 
                     cur.execute(count_sql, tuple(count_params))
                     total_count = cur.fetchone()['total']
@@ -665,7 +670,7 @@ class CandidateRepository:
                         {joins}
                         {where_clause}
                         {order_clause}
-                        LIMIT %s
+                        LIMIT %s{offset_sql}
                     """
                     params.insert(0, role_id) # for ai_scores join
                     params.insert(0, role_id) # for candidate_applications join
@@ -675,7 +680,7 @@ class CandidateRepository:
                         FROM candidates c
                         {where_clause}
                     """
-                    count_params = params[:-1]
+                    count_params = base_params
                     cur.execute(count_sql, tuple(count_params))
                     total_count = cur.fetchone()['total']
 
@@ -686,7 +691,7 @@ class CandidateRepository:
                         {joins_rf}
                         {where_clause}
                         {order_clause}
-                        LIMIT %s
+                        LIMIT %s{offset_sql}
                     """
                 cur.execute(sql, tuple(params))
                 
@@ -1432,29 +1437,21 @@ class CandidateRepository:
         try:
             self._set_search_path(cur)
             
-            # 1. Fetch all distinct YYYY-MM from candidates where created_at IS NOT NULL
-            cur.execute('''
-                SELECT DISTINCT TO_CHAR(created_at, 'YYYY-MM') AS ym 
-                FROM candidates 
-                WHERE created_at IS NOT NULL AND TO_CHAR(created_at, 'YYYY-MM') ~ '^\d{4}-\d{2}$'
-                ORDER BY ym DESC
-            ''')
-            month_rows = cur.fetchall()
-            
-            # 2. Total count and untagged count per month
+            # 1. Total count and untagged count per month (ordered newest first)
             cur.execute('''
                 SELECT 
                     TO_CHAR(created_at, 'YYYY-MM') AS ym,
                     COUNT(id) AS total_count,
                     COUNT(id) FILTER (WHERE tags IS NULL OR tags = '{}'::text[]) AS untagged_count
                 FROM candidates
-                WHERE created_at IS NOT NULL
+                WHERE created_at IS NOT NULL AND TO_CHAR(created_at, 'YYYY-MM') ~ '^\d{4}-\d{2}$'
                 GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+                ORDER BY ym DESC
             ''')
             cand_count_rows = cur.fetchall()
             month_counts = {r['ym']: {"total": r['total_count'], "untagged": r['untagged_count']} for r in cand_count_rows}
 
-            # 3. Aggregated tags per month
+            # 2. Aggregated tags per month
             cur.execute('''
                 SELECT 
                     TO_CHAR(c.created_at, 'YYYY-MM') AS ym,
@@ -1463,7 +1460,7 @@ class CandidateRepository:
                 FROM candidates c, unnest(c.tags) AS t
                 WHERE c.created_at IS NOT NULL AND t IS NOT NULL AND TRIM(t) <> ''
                 GROUP BY TO_CHAR(c.created_at, 'YYYY-MM'), t
-                ORDER BY tag_count DESC, tag_name ASC
+                ORDER BY ym DESC, tag_count DESC, tag_name ASC
             ''')
             tag_rows = cur.fetchall()
             tags_by_month = {}
@@ -1478,7 +1475,7 @@ class CandidateRepository:
             
             import calendar
             folders = []
-            for row in month_rows:
+            for row in cand_count_rows:
                 ym = row['ym']
                 try:
                     y_str, m_str = ym.split('-')
@@ -1798,16 +1795,18 @@ class CandidateRepository:
                 ''')
                 tag_rows = [dict(r) for r in cur.fetchall()]
                 
-                cur.execute("SELECT COUNT(id) AS untagged_count FROM candidates WHERE tags IS NULL OR tags = '{}'::text[]")
-                untagged_count = cur.fetchone()['untagged_count']
-                
-                cur.execute("SELECT COUNT(id) AS total_count FROM candidates")
-                total_count = cur.fetchone()['total_count']
+                cur.execute('''
+                    SELECT 
+                        COUNT(id) AS total_count,
+                        COUNT(id) FILTER (WHERE tags IS NULL OR tags = '{}'::text[]) AS untagged_count
+                    FROM candidates
+                ''')
+                counts = cur.fetchone() or {'total_count': 0, 'untagged_count': 0}
                 
                 return {
                     "tags": tag_rows,
-                    "untagged_count": untagged_count,
-                    "total_count": total_count
+                    "untagged_count": counts['untagged_count'],
+                    "total_count": counts['total_count']
                 }
         finally:
             conn.close()
