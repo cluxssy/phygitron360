@@ -261,7 +261,8 @@ async def suggest_content_enhancements_impl(file: UploadFile, categories: str):
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
 
-    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    from backend.common.services.ai.base import get_gemini_api_key
+    gemini_key = get_gemini_api_key()
     if not gemini_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY / GOOGLE_API_KEY is not configured on the server.")
 

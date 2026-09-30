@@ -3,6 +3,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from backend.core.dependencies import get_current_user, require_permission
 from backend.core.permissions import P
+from backend.common.services.ai.base import get_gemini_api_key
 from ..services.project_service import ProjectService
 from ..services import ai_generation
 
@@ -24,9 +25,9 @@ def generate_design_doc_impl(project_id: str, current_user: dict):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    api_key = get_gemini_api_key() or os.getenv("GROQ_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
-        raise HTTPException(status_code=500, detail="Server misconfiguration: missing AI API Key")
+        raise HTTPException(status_code=500, detail="Server misconfiguration: missing AI API Key. Please configure GOOGLE_API_KEY or GEMINI_API_KEYS.")
 
     try:
         intake_data = json.loads(project.get("intake_data") or "{}")
