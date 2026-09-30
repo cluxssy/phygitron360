@@ -48,7 +48,7 @@ def _get_gemini_key_list() -> list[str]:
     multi = os.getenv("GEMINI_API_KEYS", "")
     if multi:
         keys.extend([k.strip().strip("'\"") for k in multi.split(",") if k.strip().strip("'\"")])
-    for single_var in ["GOOGLE_API_KEY", "GOOGLE_API_KEY_SELF"]:
+    for single_var in ["GOOGLE_API_KEY", "GOOGLE_API_KEY_SELF", "GEMINI_API_KEY"]:
         v = os.getenv(single_var, "").strip().strip("'\"")
         if v and v not in keys:
             keys.append(v)

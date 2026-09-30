@@ -117,6 +117,10 @@ def get_current_user(request: Request) -> dict:
     """
     session_token = request.cookies.get("session_token")
     if not session_token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            session_token = auth_header[7:].strip()
+    if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated.")
 
     conn = get_db_connection()

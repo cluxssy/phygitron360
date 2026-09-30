@@ -13,6 +13,7 @@ import IntakeForm from '../components/IntakeForm';
 import ProjectUpload from '../components/ProjectUpload';
 import FolderManager from '../components/FolderManager';
 import SopFormatter from '../components/SopFormatter';
+import LandingPage from '../components/LandingPage';
 
 import logo from '../../../assets/phy360.png';
 import bellIcon from '../../../assets/bell.png';
@@ -26,7 +27,8 @@ import {
   UploadCloud,
   Sparkles,
   BookOpen,
-  FileEdit
+  FileEdit,
+  Globe
 } from 'lucide-react';
 
 import '../../deploy/styles/deploy.css';
@@ -179,20 +181,6 @@ export default function LexAIDashboard() {
           </button>
 
           <button
-            className={tab === 'intake' ? 'active' : ''}
-            onClick={() => setTab('intake')}
-          >
-            <PlusCircle size={16} /> New Project
-          </button>
-
-          <button
-            className={tab === 'upload' ? 'active' : ''}
-            onClick={() => setTab('upload')}
-          >
-            <UploadCloud size={16} /> Upload Project
-          </button>
-
-          <button
             className={tab === 'sop' ? 'active' : ''}
             onClick={() => setTab('sop')}
           >
@@ -207,6 +195,15 @@ export default function LexAIDashboard() {
               onNewProject={handleNewProject}
               onUploadProject={handleUploadProject}
             />
+          )}
+
+          {tab === 'showcase' && (
+            <div className="rounded-2xl overflow-hidden border border-slate-200">
+              <LandingPage
+                onGetStarted={handleNewProject}
+                onSignIn={handleBackToDashboard}
+              />
+            </div>
           )}
 
           {tab === 'projects' && (

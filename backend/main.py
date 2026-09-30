@@ -66,6 +66,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "Content-Disposition",
+        "X-Compliance-Final",
+        "X-Formatting-Changes-Count",
+        "X-Content-Changes-Count",
+        "X-SOP-Baseline-Compliance",
+        "X-SOP-Final-Compliance",
+        "X-SOP-Formatting-Changes",
+    ],
 )
 
 # Global API Response

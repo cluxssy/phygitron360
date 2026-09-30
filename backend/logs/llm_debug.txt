@@ -1,0 +1,685 @@
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Added OpenCV and YOLO to the OST (col_index 0) for Screen 1.1 to reflect the requested technologies in the curriculum list.",
+  "assistant_reply": "I have successfully added OpenCV and YOLO to the On-Screen Text (OST) for Screen 1.1.",
+  "edits": [
+    {
+      "screen_num": "Screen 1.1",
+      "col_index": 0,
+      "new_content": "**Welcome to Module 1: Core Programming, Linux, and Software Foundations**<br><br>Modern IT engineering environments require you to master software-first AI and robotics before working with physical hardware.<br><br>In this module, you will learn:<br>• Linux terminal operations and SSH networking<br>• Advanced Python programming and asynchronous concurrency<br>• Git version control workflows<br>• Software engineering practices including REST APIs and databases<br>• Computer vision and object detection using OpenCV and YOLO"
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Enhanced Screen 1.1 and Screen 1.2 to incorporate the 2026-2028 Computer Vision Roadmap concepts, integrating Vision-Language-Action (VLA) models, RT-2, modern Depth Anything, Segment Anything Model 2 (SAM 2), and 3D Gaussian Splatting for spatial AI in robotics into the foundational framing.",
+  "assistant_reply": "Updated Screen 1.1 and Screen 1.2 to introduce modern spatial AI and Computer Vision roadmap concepts (VLA, RT-2, SAM 2, 3D Gaussian Splatting) alongside core software foundations.",
+  "edits": [
+    {
+      "screen_num": "Screen 1.1",
+      "col_index": 0,
+      "new_content": "**Welcome to Module 1: Core Software, Linux, and Spatial AI Foundations**<br><br>Modern robotics and autonomous engineering environments require you to master software-first AI, spatial computing, and advanced computer vision before working with physical hardware.<br><br>In this module, you will learn:<br>• Linux terminal operations and SSH networking<br>• Advanced Python programming and asynchronous concurrency<br>• Integration of Vision-Language-Action (VLA) models and RT-2<br>• Modern depth estimation, SAM 2, and 3D Gaussian Splatting workflows"
+    },
+    {
+      "screen_num": "Screen 1.1",
+      "col_index": 1,
+      "new_content": "Welcome to Module 1 of our robotics software curriculum. Modern autonomous engineering environments require professionals to master software-first artificial intelligence, spatial computing, and advanced computer vision before diving into physical hardware. Throughout this module, you will build a rigorous foundation in Linux terminal operations, advanced Python programming, and state-of-the-art vision-language-action frameworks including RT-2, SAM 2, and 3D Gaussian Splatting. These competencies form the bedrock of modern spatial AI development and prepare you for complex robotic vision and simulation workflows. Take your time to review the concepts on screen, and let's begin your journey into robotics software engineering. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 1.1",
+      "col_index": 2,
+      "new_content": "**Layout:** Clean title slide layout with a dark theme background.<br>**Visuals:** Display a high-tech graphic on the right showing connected spatial AI nodes, VLA model icons, a Linux terminal window outline, and a 3D Gaussian Splatting point cloud silhouette.<br>**Animations:** Fade in the module title and bullet points sequentially from top to bottom.<br>**Interactivity:** Next button enabled at the bottom right."
+    },
+    {
+      "screen_num": "Screen 1.2",
+      "col_index": 0,
+      "new_content": "**Introduction to the 2026-2028 Computer Vision Roadmap**<br><br>Spatial AI in robotics relies heavily on cutting-edge perception models for environmental understanding, interaction, and 3D scene reconstruction.<br><br>• **Vision-Language-Action (VLA):** Leverage models like RT-2 to translate human commands directly into robotic manipulation actions.<br>• **Advanced Perception:** Utilize Segment Anything Model 2 (SAM 2) and modern Depth Anything for precise object tracking and dense depth estimation.<br>• **Spatial Reconstruction:** Implement 3D Gaussian Splatting for real-time neural radiance representations and high-fidelity spatial mapping."
+    },
+    {
+      "screen_num": "Screen 1.2",
+      "col_index": 1,
+      "new_content": "A robust understanding of modern computer vision and spatial AI is essential for any robotics software engineer. As outlined in the 2026-2028 roadmap, modern robotic systems rely heavily on Vision-Language-Action models like RT-2 to bridge natural language understanding with physical execution. You must also master advanced perception tools such as SAM 2 for segmentation and 3D Gaussian Splatting for high-fidelity spatial mapping. Review these core concepts before moving forward. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 1.2",
+      "col_index": 2,
+      "new_content": "**Layout:** Two-column split layout.<br>**Visuals:** Left column displays bullet points. Right column displays a stylized spatial AI graphic showing a 3D Gaussian Splatting point cloud and SAM 2 segmentation overlays.<br>**Animations:** Slide in the spatial AI graphic from the right as the text loads on the left.<br>**Interactivity:** Next button enabled."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Enhanced the original storyboard screens to align strictly with the provided Computer Vision & Robotics Software roadmap for Germany (OpenCV, YOLO, Python, ROS2, Gazebo, Docker, FastAPI), replacing generic software topics with modern computer vision and software-only AI/robotics foundations while preserving the original layout structure.",
+  "assistant_reply": "Updated the storyboard screens to incorporate advanced Computer Vision, OpenCV, YOLO, ROS2, and software deployment principles from the reference roadmap.",
+  "edits": [
+    {
+      "screen_num": "Screen 1.1",
+      "col_index": 0,
+      "new_content": "**Welcome to Module 1: Software-Only AI & Computer Vision Foundations**<br><br>Modern robotics and AI engineering require you to master software-first computer vision, Python, and deployment architectures before working with complex robotics frameworks.<br><br>In this module, you will learn:<br>• OpenCV mastery for image processing, contours, and transformations<br>• YOLOv8 for object detection, tracking, and pose estimation<br>• ROS2 and Gazebo simulation fundamentals<br>• Software deployment practices using Docker, FastAPI, and PostgreSQL"
+    },
+    {
+      "screen_num": "Screen 1.1",
+      "col_index": 1,
+      "new_content": "Welcome to Module 1 of our Computer Vision and Robotics Software curriculum. Modern AI engineering environments require professionals to master software-first artificial intelligence and computer vision workflows. Throughout this module, you will build a rigorous foundation in OpenCV image processing, YOLOv8 object detection, ROS2 simulation, and backend deployment practices. These competencies form the bedrock of autonomous systems development and prepare you for advanced computer vision and simulation workflows. Take your time to review the concepts on screen, and let's begin your journey into robotics software engineering. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 1.1",
+      "col_index": 2,
+      "new_content": "**Layout:** Clean title slide layout with a dark theme background.<br>**Visuals:** Display a high-tech graphic on the right showing a connected network of camera icons, a YOLO detection bounding box outline, and an AI robotics silhouette.<br>**Animations:** Fade in the module title and bullet points sequentially from top to bottom.<br>**Interactivity:** Next button enabled at the bottom right."
+    },
+    {
+      "screen_num": "Screen 1.2",
+      "col_index": 0,
+      "new_content": "**Mastering OpenCV & YOLO for Perception**<br><br>Computer vision applications rely heavily on efficient image processing and real-time object detection pipelines.<br><br>• **OpenCV Mastery:** Implement image processing, contours, geometric transformations, video processing, and multithreading.<br>• **YOLOv8 & Tracking:** Build detection, tracking, counting, segmentation, and pose estimation workflows.<br>• **Real-World Projects:** Deploy AI CCTV analytics dashboards and vehicle speed estimation models."
+    },
+    {
+      "screen_num": "Screen 1.2",
+      "col_index": 1,
+      "new_content": "A robust understanding of OpenCV and YOLO is essential for any computer vision engineer. Most visual perception pipelines require efficient image filtering, contour extraction, and video threading to maintain high frame rates. Additionally, mastering YOLOv8 allows you to implement robust detection, tracking, and pose estimation for real-world analytical systems. Review these core perception concepts before moving forward. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 1.2",
+      "col_index": 2,
+      "new_content": "**Layout:** Two-column split layout.<br>**Visuals:** Left column displays bullet points. Right column displays a stylized computer vision window graphic showing bounding boxes and tracking IDs on a video feed.<br>**Animations:** Slide in the vision graphic from the right as the text loads on the left.<br>**Interactivity:** Next button enabled."
+    },
+    {
+      "screen_num": "Screen 1.3",
+      "col_index": 0,
+      "new_content": "**ROS2, Simulation, and Deployment Architecture**<br><br>Autonomous robotics demand integrated simulation environments and scalable software deployment.<br><br>• **ROS2 & Gazebo:** Build nodes, topics, services, RViz visualizers, and simulated warehouse robots.<br>• **Docker & Linux:** Isolate dependencies, containerize models, and manage Linux environments cleanly.<br>• **FastAPI & Databases:** Expose computer vision inferences via REST APIs backed by PostgreSQL."
+    },
+    {
+      "screen_num": "Screen 1.3",
+      "col_index": 1,
+      "new_content": "Robust robotics software requires seamless integration between perception pipelines, ROS2 communication nodes, and cloud-ready deployment backends. To build scalable autonomous systems, you must leverage ROS2 topics and Gazebo physics simulations, containerize your applications with Docker, and serve model inferences using FastAPI. Study these architectural patterns carefully as you prepare for your end-to-end integration exercises. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 1.3",
+      "col_index": 2,
+      "new_content": "**Layout:** Standard content layout with three distinct horizontal feature cards.<br>**Visuals:** Each card represents a topic (ROS2 & Gazebo, Docker & Linux, FastAPI & PostgreSQL) with a relevant icon (robotics node graph, container box, database cylinder).<br>**Animations:** Cards scale up slightly on appearance.<br>**Interactivity:** Hover effects enabled on the three feature cards."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Enhanced the storyboard screens to incorporate the new PDF context (Rishit Anand's Computer Vision & Robotics roadmap for Germany, featuring OpenCV, YOLO, ROS2, Docker, FastAPI, PostgreSQL, MQTT, and GitHub requirements), while keeping the original structure and instructional style.",
+  "assistant_reply": "Updated the storyboard screens to incorporate advanced Computer Vision, YOLO, ROS2, Docker, and FastAPI concepts from the new reference roadmap while maintaining the established table structure and pedagogical flow.",
+  "edits": [
+    {
+      "screen_num": "1.4",
+      "col_index": 0,
+      "new_content": "**GitHub Portfolio & Documentation Standards**<br><br>Employable Computer Vision and robotics portfolios require rigorous code management, structured repositories, and clear documentation.<br><br>• **Repository Requirements:** Maintain at least 8 robust GitHub repositories complete with structured README files, screenshots, and setup instructions.<br>• **Deployment & Reproducibility:** Utilize `requirements.txt` or Docker containers to ensure software environments are fully reproducible.<br>• **Commit Hygiene:** Write clean, descriptive commit messages to document feature development and bug fixes transparently."
+    },
+    {
+      "screen_num": "1.4",
+      "col_index": 1,
+      "new_content": "Managing complex computer vision and robotics projects requires disciplined GitHub workflows and deployment standards. To attract international employers or master's programs in Germany, your portfolio must feature at least eight well-documented repositories complete with setup instructions, screenshots, and demo videos. Utilizing Docker and standard requirements files ensures your OpenCV and ROS2 applications run seamlessly across different environments. Maintain clean commit histories to demonstrate professional software engineering practices. Review these standards to ensure your portfolio meets professional expectations. Click Next to continue."
+    },
+    {
+      "screen_num": "1.4",
+      "col_index": 2,
+      "new_content": "**Layout:** Process flow layout depicting GitHub repository structuring.<br>**Visuals:** Horizontal flowchart showing Code Development, Docker Containerization, Clean Commits, and GitHub README Documentation.<br>**Animations:** Step-by-step glowing pulse moving across the flowchart nodes.<br>**Interactivity:** Clickable flowchart nodes that pop up a short definition box for each stage."
+    },
+    {
+      "screen_num": "1.5",
+      "col_index": 0,
+      "new_content": "**Backend Architecture, FastAPI, and PostgreSQL**<br><br>Modern computer vision systems require scalable backend services to log data, serve predictions, and communicate state.<br><br>• **FastAPI Services:** Design lightweight, high-performance API endpoints to serve YOLO detections and handle vision-to-action triggers.<br>• **PostgreSQL Integration:** Implement persistent data storage for analytics, event logging, and telemetry tracking.<br>• **Docker & Linux:** Package applications into portable Docker containers running on a Linux OS to ensure reliable cloud and edge deployment."
+    },
+    {
+      "screen_num": "1.5",
+      "col_index": 1,
+      "new_content": "Production-ready AI and robotics systems rely on robust backend architecture. By leveraging FastAPI and PostgreSQL, your computer vision applications can efficiently serve YOLO inferences, log analytics data, and process real-time telemetry. Packaging these services inside Docker containers running on Linux ensures smooth deployment across cloud servers and edge hardware. Master these backend integration principles to complete your software and deployment foundation. Click Next to continue."
+    },
+    {
+      "screen_num": "1.5",
+      "col_index": 2,
+      "new_content": "**Layout:** Grid layout with four quadrant cards.<br>**Visuals:** Icons representing FastAPI (lightning web service), PostgreSQL (database cylinder), Docker (container box), and Linux (terminal prompt).<br>**Animations:** Quadrants fade in sequentially in a clockwise pattern.<br>**Interactivity:** Next button enabled."
+    },
+    {
+      "screen_num": "1.6",
+      "col_index": 0,
+      "new_content": "**Module 1 Knowledge Check**<br><br>**Question 1:** Which tool is primarily used for high-performance object detection and bounding box tracking in modern computer vision pipelines?<br>A) OpenCV contours<br>B) YOLOv8<br>C) ROS2 RViz<br>D) PostgreSQL<br><br>**Question 2:** True or False: Docker containers and `requirements.txt` files are used to ensure software environments remain reproducible across different systems.<br>A) True<br>B) False<br><br>**Question 3:** Which of the following frameworks is standard for building nodes, topics, and robot simulation in Gazebo?<br>A) FastAPI<br>B) MQTT<br>C) ROS2<br>D) OpenCV"
+    },
+    {
+      "screen_num": "1.6",
+      "col_index": 1,
+      "new_content": "You have reached the end of Module 1. Let's test your understanding of computer vision, YOLO, backend deployment, and robotics frameworks with three review questions. Read each question carefully, select your answers, and verify your knowledge before proceeding to the next module. Click Next when you are ready."
+    },
+    {
+      "screen_num": "1.6",
+      "col_index": 2,
+      "new_content": "**Layout:** Interactive assessment layout with multiple-choice radio buttons for Questions 1 and 3, and True/False buttons for Question 2.<br>**Visuals:** Clean assessment container with a progress indicator showing Module 1 complete.<br>**Animations:** Immediate visual feedback (green/red checkmarks) upon user selecting an answer.<br>**Interactivity:** Interactive selection for all three questions with a Submit/Check Answers button. Correct Answer Q1: B (YOLOv8). Correct Answer Q2: A (True). Correct Answer Q3: C (ROS2). Feedback displays immediately upon submission."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Enhanced the storyboard with advanced Computer Vision concepts from the provided reference file (Rishit Anand Germany Roadmap), integrating specific elements like OpenCV mastery, YOLOv8 object detection, contour tracking, threading, and deployment metrics while preserving the original structure and tone.",
+  "assistant_reply": "Successfully upgraded the storyboard for Screens 2.1, 2.2, and 2.3 to incorporate advanced OpenCV, YOLOv8, tracking, and video processing concepts from the provided reference roadmap.",
+  "edits": [
+    {
+      "screen_num": "2.1",
+      "col_index": 0,
+      "new_content": "**Welcome to Module 2: Advanced Computer Vision & YOLOv8**<br><br>In modern robotics and AI engineering, vision systems serve as the primary sensory apparatus for interpreting complex environments.<br><br>• OpenCV is the foundational open-source library for real-time image processing, contours, and transformations.<br>• YOLOv8 provides state-of-the-art object detection, tracking, counting, and pose estimation capabilities.<br>• Core pipeline involves reading matrices, filtering noise, and feeding structured tensors into deep learning models."
+    },
+    {
+      "screen_num": "2.1",
+      "col_index": 1,
+      "new_content": "Welcome to Module 2 of our AI and robotics engineering curriculum, where we focus entirely on advanced computer vision and YOLOv8 deployment. In modern intelligent systems, vision pipelines act as the core sensory mechanism for navigating complex environments. We will utilize OpenCV for foundational image processing and YOLOv8 for high-performance detection, tracking, and segmentation. Mastering these techniques allows your software to perceive objects and track movement in real time before integrating with ROS2 and cloud infrastructure. Let us begin by examining how OpenCV handles raw image arrays and transformation pipelines. Click Next to continue."
+    },
+    {
+      "screen_num": "2.1",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Split-screen layout. Left side displays bullet points on a clean dark slate background. Right side features an animated graphic showing a raw RGB image matrix converting into a YOLOv8 bounding box output.<br>**Animation:** Smooth fade-in for text bullets. Pulsing highlight on detection confidence scores.<br>**Developer Note:** Ensure all image terms align with OpenCV Python syntax (`cv2.imread`, `cv2.cvtColor`) and standard YOLOv8 inference workflows."
+    },
+    {
+      "screen_num": "2.2",
+      "col_index": 0,
+      "new_content": "**Image Transformations, Filtering, and YOLO Integration**<br><br>Raw camera feeds require cleaning, geometric manipulation, and model ingestion.<br><br>• **Geometric Transformations:** Scaling, rotation, and affine warping adjust perspective and image dimensions.<br>• **Filtering & Noise Reduction:** Gaussian blur and median filtering eliminate sensor noise and high-frequency artifacts.<br>• **YOLOv8 Feature Extraction:** Transitioning from processed pixel matrices to deep learning inference for object detection."
+    },
+    {
+      "screen_num": "2.2",
+      "col_index": 1,
+      "new_content": "Raw camera feeds captured from robotic platforms frequently contain optical noise, lighting variations, and perspective distortion. Before feeding data into YOLOv8 models, developers must apply rigorous filtering and geometric transformations. Gaussian and median filters smooth out high-frequency sensor noise, while affine and perspective adjustments normalize camera angles. Seamlessly connecting OpenCV preprocessing pipelines with YOLOv8 ensures robust object detection and classification in variable real-world conditions. Click Next to continue."
+    },
+    {
+      "screen_num": "2.2",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Three-column card layout displaying icons and descriptions for Filtering, YOLOv8 Detection, and Geometry.<br>**Animation:** Cards slide up sequentially from the bottom of the screen upon audio cue.<br>**Developer Note:** Maintain professional technical design with high-contrast text and clear iconography for each preprocessing and detection stage."
+    },
+    {
+      "screen_num": "2.3",
+      "col_index": 0,
+      "new_content": "**Contours, Tracking, and Video Processing**<br><br>Extracting shape boundaries and managing live video streams are essential for dynamic tracking systems.<br><br>• **Contour Detection:** Identifying object boundaries using binary thresholding and gradient analysis alongside YOLO bounding boxes.<br>• **Tracking & Counting:** Implementing multi-object tracking, speed estimation, and counting mechanisms.<br>• **Video Threading:** Implementing multithreaded video capture loops to prevent frame drops and latency in real-time applications."
+    },
+    {
+      "screen_num": "2.3",
+      "col_index": 1,
+      "new_content": "Once an image is filtered and processed, contour detection and YOLOv8 tracking algorithms extract continuous curves and trajectories along object boundaries. By analyzing bounding boxes, moments, and tracking IDs, your software can calculate exact counts, speeds, and trajectories of target items. Furthermore, handling live video streams requires robust multithreading architectures. Running capture loops on dedicated threads prevents processing bottlenecks and ensures your computer vision pipeline responds instantly to visual changes. Click Next to continue."
+    },
+    {
+      "screen_num": "2.3",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Interactive diagram showing a live video frame with a highlighted YOLOv8 bounding box and tracking trajectory line.<br>**Animation:** Bounding box dynamically resizes, tracks, and counts a simulated object moving across the screen.<br>**Developer Note:** Include code snippet callout boxes showing `cv2.findContours`, YOLOv8 inference loops, and multithreaded queue handling."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Enhanced the storyboard with modern Computer Vision and Robotics concepts from the provided reference file, focusing on advanced OpenCV, YOLOv8 tracking, ROS2, and deployment pipelines while retaining the original structure.",
+  "assistant_reply": "Successfully updated the storyboard screens with upgraded Computer Vision, YOLOv8, and ROS2 concepts based on the provided reference roadmap.",
+  "edits": [
+    {
+      "screen_num": "2.4",
+      "col_index": 0,
+      "new_content": "**YOLOv8 and Advanced Tracking**<br><br>Moving beyond basic detection into robust tracking, counting, and segmentation.<br><br>• **YOLOv8 Architecture:** Advanced state-of-the-art models for detection, tracking, counting, segmentation, and pose estimation.<br>• **Tracking & Analytics:** Implementing multi-object tracking for AI CCTV analytics and vehicle speed estimation.<br>• **Model Inference & Threading:** Integrating high-performance models into multi-threaded Python pipelines."
+    },
+    {
+      "screen_num": "2.4",
+      "col_index": 1,
+      "new_content": "Static object detection is only the beginning of a robust computer vision pipeline. Upgrading to YOLOv8 enables advanced capabilities such as object tracking, counting, segmentation, and pose estimation. By incorporating multi-threading and efficient video processing, developers can build real-world applications like AI CCTV analytics and traffic monitoring systems that process high-frame-rate feeds seamlessly. Click Next to continue."
+    },
+    {
+      "screen_num": "2.4",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Flowchart demonstrating video frame ingestion, multi-threaded OpenCV processing, and YOLOv8 inference.<br>**Animation:** Bounding boxes and tracking IDs updating dynamically over a simulated video stream.<br>**Developer Note:** Highlight the integration of Python threading with YOLOv8 for edge deployment readiness."
+    },
+    {
+      "screen_num": "2.5",
+      "col_index": 0,
+      "new_content": "**Module 2 Knowledge Check**<br><br>Test your understanding of computer vision principles, OpenCV operations, and YOLOv8 object detection.<br><br>**Question 1 of 3:**<br>Which OpenCV operation is crucial for handling live video streams efficiently alongside YOLOv8 inference?<br>A) `cv2.destroyAllWindows()`<br>B) Multi-threading for frame capture and processing<br>C) `cv2.cvtColor()` exclusively<br>D) `cv2.imwrite()`"
+    },
+    {
+      "screen_num": "2.5",
+      "col_index": 1,
+      "new_content": "You have reached the end of Module 2. Let us verify your mastery of advanced computer vision concepts, OpenCV operations, and YOLOv8 workflows. Review the question on your screen carefully, select the best answer, and receive immediate feedback. Click Next to continue."
+    },
+    {
+      "screen_num": "2.5",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Standard assessment container with clear radio button selections and a submit button.<br>**Animation:** Interactive click states for answer choices. Instant feedback state upon user submission.<br>**Developer Note:** Program correct answer as B (Multi-threading for frame capture and processing) with targeted explanatory feedback for all distractors."
+    },
+    {
+      "screen_num": "3.1",
+      "col_index": 0,
+      "new_content": "**Robot Operating System 2 (ROS2) & Gazebo**<br>• Middleware framework designed for distributed robotic and AI applications.<br>• Utilizes Data Distribution Service (DDS) for decentralized, robust node communication.<br>• Core primitives: Nodes, Topics, Services, Actions, RViz, and Gazebo simulation.<br>• Applied in building autonomous warehouse robots capable of navigation and obstacle avoidance."
+    },
+    {
+      "screen_num": "3.1",
+      "col_index": 1,
+      "new_content": "Welcome to Module 3, where we focus on deploying autonomous robot simulations using ROS2, Gazebo, and advanced navigation stacks. In modern robotics engineering, writing isolated vision scripts is not enough; you need a robust middleware framework that allows distributed software components to communicate seamlessly. ROS2 serves as this foundational layer, utilizing DDS middleware to ensure reliable communication across nodes. Combined with Gazebo simulation, you can build and test complex robotic behaviors like autonomous warehouse navigation. Click Next to continue."
+    },
+    {
+      "screen_num": "3.1",
+      "col_index": 2,
+      "new_content": "Visual: Show an architecture diagram mapping out ROS2 nodes, topics, and Gazebo simulation environments.<br>Layout: Split screen with bullet points on the left and interactive simulation node topology graphic on the right.<br>Developer Note: Emphasize the integration of ROS2 with autonomous warehouse robot simulation use cases."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Updated the computer vision and robotics software storyboard screens to integrate concepts from the Rishit Anand roadmap, emphasizing OpenCV + YOLO mastery alongside ROS2 and Gazebo simulation frameworks for advanced AI and robotics applications.",
+  "assistant_reply": "Successfully updated the storyboard screens (3.2, 3.3, 3.4) to align with the advanced Computer Vision and ROS2/Gazebo concepts from the provided roadmap reference.",
+  "edits": [
+    {
+      "screen_num": "3.2",
+      "col_index": 0,
+      "new_content": "**OpenCV and YOLO Integration**<br>• OpenCV Mastery: Process images, contours, geometric transformations, and video feeds with threading.<br>• YOLOv8 Detection: Implement real-time object detection, tracking, counting, and pose estimation.<br>• Data Pipeline: Feed high-speed camera frames directly into advanced neural network inference loops.<br>• Performance Optimization: Leverage efficient tensor processing and frame buffering for seamless execution."
+    },
+    {
+      "screen_num": "3.2",
+      "col_index": 1,
+      "new_content": "To build cutting-edge computer vision systems, you must master the integration of OpenCV and YOLOv8 for real-time video analytics. OpenCV provides the foundational tools for image processing, contour extraction, geometric transformations, and multi-threaded video streaming. By combining these capabilities with YOLOv8, you can achieve high-performance object detection, tracking, counting, and even pose estimation in dynamic environments. Implementing efficient data pipelines ensures that camera frames are processed with minimal latency, preparing your vision models for deployment in complex robotics and AI analytics applications. Click Next to continue."
+    },
+    {
+      "screen_num": "3.2",
+      "col_index": 2,
+      "new_content": "Visual: Display a side-by-side view of an OpenCV video stream processing contours and a YOLOv8 bounding box detection overlay.<br>Layout: Code window on the left showing Python OpenCV/YOLO implementation, live vision feed on the right.<br>Developer Note: Highlight detection bounding boxes and tracking IDs in the video feed graphic."
+    },
+    {
+      "screen_num": "3.3",
+      "col_index": 0,
+      "new_content": "**ROS2 & Gazebo Simulation**<br>• ROS2 Core: Utilize nodes, topics, services, and actions for modular software architecture.<br>• Gazebo Physics: Simulate rigid body dynamics, gravity, and collision detection for autonomous robots.<br>• Sensor Integration: Embed virtual LiDAR, depth cameras, and IMUs into the simulation world.<br>• Autonomous Warehouse: Simulate mobile robot navigation and obstacle avoidance in custom virtual environments."
+    },
+    {
+      "screen_num": "3.3",
+      "col_index": 1,
+      "new_content": "Before deploying algorithms to physical hardware, engineers utilize ROS2 and Gazebo simulation to build and test autonomous systems. ROS2 provides the backbone through nodes, topics, and services, while Gazebo delivers high-fidelity physics simulation for rigid body dynamics, friction, and collisions. By integrating virtual sensors like LiDAR and depth cameras, you can test complex navigation and perception stacks within a simulated autonomous warehouse environment. Mastering this simulation workflow is a crucial milestone for any robotics software engineer. Click Next to continue."
+    },
+    {
+      "screen_num": "3.3",
+      "col_index": 2,
+      "new_content": "Visual: Show a 3D rendering of an autonomous warehouse robot navigating a virtual environment in Gazebo with active sensor rays.<br>Layout: Full-width simulation screenshot with callouts pointing to the robot chassis, LiDAR sensor, and environment.<br>Developer Note: Include subtle motion indicators for the robot's movement and sensor sweep."
+    },
+    {
+      "screen_num": "3.4",
+      "col_index": 0,
+      "new_content": "**Vision-to-Action Systems**<br>• Perception Pipeline: Connect YOLO and OpenCV outputs to downstream robotic decision-making.<br>• MQTT Communication: Use lightweight messaging protocols for simulated inter-system telemetry.<br>• Deployment Ready: Containerize applications using Docker and integrate FastAPI with PostgreSQL.<br>• Portfolio Excellence: Document projects on GitHub with clear READMEs, setup guides, and demo videos."
+    },
+    {
+      "screen_num": "3.4",
+      "col_index": 1,
+      "new_content": "A true vision-to-action system bridges the gap between perception and physical behavior by linking AI models with robot control stacks. Using lightweight communication protocols like MQTT, your OpenCV and YOLO detection outputs can drive simulated or physical robot behaviors in real time. Furthermore, preparing your applications for deployment involves containerizing services with Docker, exposing endpoints via FastAPI, and managing data with PostgreSQL. Documenting these complete workflows on GitHub ensures you are fully prepared for high-level AI and robotics roles. Click Next to continue."
+    },
+    {
+      "screen_num": "3.4",
+      "col_index": 2,
+      "new_content": "Visual: Display an architecture diagram connecting a YOLO vision feed to an MQTT broker, driving a robot behavior script.<br>Layout: Flowchart layout showing camera input -> YOLO processing -> MQTT messaging -> Robot Action.<br>Developer Note: Use clear directional arrows and highlight the MQTT bridge node in the flowchart."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Enhanced the storyboard content for Screen 3.5 and 3.6 to incorporate modern concepts from the provided Computer Vision & Robotics roadmap (such as OpenCV + YOLO advanced mastery, Docker + FastAPI deployment, and GitHub portfolio requirements), maintaining the original instructional structure and formatting rules.",
+  "assistant_reply": "Updated Screen 3.5 and Screen 3.6 to reflect advanced concepts from the reference PDF, integrating OpenCV, YOLOv8, Docker, FastAPI, and structured GitHub portfolio standards while preserving the original storyboard layout.",
+  "edits": [
+    {
+      "screen_num": "3.5",
+      "col_index": 0,
+      "new_content": "**Edge AI, Docker, and System Deployment**<br>â€¢ Edge Computing & Deployment: Deploying trained computer vision and AI models using Docker containers and FastAPI endpoints for reliable cloud or edge execution.<br>â€¢ Model Optimization: Convert PyTorch models to optimized runtime formats like ONNX or TensorRT for resource-constrained hardware.<br>â€¢ ROS2 AI Nodes: Wrap advanced YOLOv8 object detection, tracking, and pose estimation algorithms into ROS2 inference nodes.<br>â€¢ End-to-End Testing: Validate complete pipelines integrating perception, navigation, and GitHub-backed version control."
+    },
+    {
+      "screen_num": "3.5",
+      "col_index": 1,
+      "new_content": "The final phase of robotics software engineering involves containerizing and deploying your integrated algorithms using Docker and FastAPI for real-world execution. Edge AI requires running compute-intensive models, such as YOLOv8 detectors, on embedded platforms or via robust microservices without sacrificing performance. To achieve real-time execution, models are optimized into high-performance runtimes like TensorRT, wrapped into dedicated ROS2 nodes, and documented thoroughly in GitHub repositories. Through rigorous end-to-end testing, you ensure that your autonomous robot system operates safely, reliably, and efficiently in production environments. Click Next to continue."
+    },
+    {
+      "screen_num": "3.5",
+      "col_index": 2,
+      "new_content": "Visual: Show an infographic connecting a camera sensor to a Docker container running FastAPI and YOLOv8, passing through a TensorRT optimization box, and outputting to a ROS2 control node.<br>Layout: Linear workflow diagram spanning from left to right.<br>Developer Note: Use distinct color coding for perception, deployment, and ROS2 layers."
+    },
+    {
+      "screen_num": "3.6",
+      "col_index": 0,
+      "new_content": "**Knowledge Check: Autonomous Robot Simulations, ROS2, and Edge AI Deployment**<br><br>**Question 1 (Multiple Choice):**<br>Which tool combination is best suited for deploying a Python-based computer vision service via a lightweight, containerized API endpoint?<br>A) `colcon build` + RViz<br>B) Docker + FastAPI<br>C) Gazebo + Nav2<br>D) MQTT + ROS2 Topics<br><br>**Correct Answer:** B<br>**Feedback:** Correct! Docker and FastAPI provide the ideal stack for containerizing and exposing AI vision services.<br><br>**Question 2 (True/False):**<br>True or False: Gazebo physics simulation requires real physical hardware to calculate gravity, friction, and collision dynamics.<br><br>**Correct Answer:** False<br>**Feedback:** Correct. Gazebo runs an internal physics engine to simulate environment dynamics entirely in software.<br><br>**Question 3 (Scenario-Based):**<br>An engineer needs to deploy a YOLOv8 object detection model onto an edge device to run at maximum frame rates inside a ROS2 pipeline. What model optimization tool should be used?<br>A) `colcon build`<br>B) TensorRT / ONNX<br>C) `ros2 pkg create`<br>D) Nav2 Costmap<br><br>**Correct Answer:** B<br>**Feedback:** Correct! TensorRT and ONNX optimize models for low-latency inference on edge hardware."
+    },
+    {
+      "screen_num": "3.6",
+      "col_index": 1,
+      "new_content": "Now, let's test your understanding of ROS2, simulation environments, Docker deployment, and edge AI. Review the questions on screen and select the best answers to complete your knowledge check. Click Next when you are finished."
+    },
+    {
+      "screen_num": "3.6",
+      "col_index": 2,
+      "new_content": "Visual: Present an interactive quiz container with radio buttons for Question 1, True/False buttons for Question 2, and multiple-choice options for Question 3, followed by a Submit button.<br>Layout: Centered quiz card interface with clear feedback text areas below each question block.<br>Developer Note: Ensure immediate visual validation appears upon selecting an answer, highlighting correct and incorrect choices appropriately."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Updated the storyboard screens to incorporate advanced Computer Vision, Python, Linux, and Docker foundational requirements from the Rishit Anand 2026-2028 roadmap while maintaining the exact pedagogical structure.",
+  "assistant_reply": "Successfully upgraded the storyboard screens (1.1, 1.2, 1.3) to integrate advanced Linux, Docker, Python architecture, and software-first AI foundations from the reference roadmap.",
+  "edits": [
+    {
+      "screen_num": "1.1",
+      "col_index": 0,
+      "new_content": "**Welcome to Module 1: Software Foundations, Linux, and Python Architecture**<br><br>Modern AI and robotics engineering environments require you to master software-first foundations before working with advanced computer vision and simulation.<br><br>In this module, you will learn:<br>• Linux terminal operations and Docker containerization fundamentals<br>• Advanced Python programming and asynchronous concurrency<br>• Git version control workflows and clean GitHub portfolio standards<br>• Software engineering practices including REST APIs, FastAPI, and PostgreSQL databases"
+    },
+    {
+      "screen_num": "1.1",
+      "col_index": 1,
+      "new_content": "Welcome to Module 1 of our AI and robotics software curriculum. Modern engineering environments require professionals to master software-first artificial intelligence, Linux, and containerization before diving into complex deployments. Throughout this module, you will build a rigorous foundation in Linux terminal operations, Docker, advanced Python programming, Git version control, and essential software engineering practices. These competencies form the bedrock of autonomous systems development and prepare you for advanced computer vision and simulation workflows. Take your time to review the concepts on screen, and let's begin your journey into robotics software engineering. Click Next to continue."
+    },
+    {
+      "screen_num": "1.1",
+      "col_index": 2,
+      "new_content": "**Layout:** Clean title slide layout with a dark theme background.<br>**Visuals:** Display a high-tech graphic on the right showing a connected network of code icons, a Docker container silhouette, and a Linux terminal window outline.<br>**Animations:** Fade in the module title and bullet points sequentially from top to bottom.<br>**Interactivity:** Next button enabled at the bottom right."
+    },
+    {
+      "screen_num": "1.2",
+      "col_index": 0,
+      "new_content": "**Mastering Linux & Docker for Software-First AI**<br><br>Robotics and computer vision operating environments rely heavily on Linux and containerization for stability, reproducibility, and deployment.<br><br>• **Terminal Operations:** Execute core commands for navigation, file management, and system monitoring.<br>• **Docker Containerization:** Package computer vision and AI models into reproducible containers using requirements.txt and Dockerfiles.<br>• **File Permissions & Networking:** Configure read, write, and execute permissions using chmod, and establish secure SSH connections and background services."
+    },
+    {
+      "screen_num": "1.2",
+      "col_index": 1,
+      "new_content": "A robust understanding of Linux and Docker is essential for any Computer Vision or Robotics software engineer. Most computer vision frameworks and simulation engines run natively on Linux distributions, requiring you to navigate the terminal efficiently. Furthermore, utilizing Docker ensures your AI models and dependencies are cleanly isolated and easily deployable across different environments. Review these core terminal and containerization concepts before moving forward. Click Next to continue."
+    },
+    {
+      "screen_num": "1.2",
+      "col_index": 2,
+      "new_content": "**Layout:** Two-column split layout.<br>**Visuals:** Left column displays bullet points. Right column displays a stylized terminal and Docker graphic showing simulated commands like `docker build -t cv_app .` and `chmod +x run_pipeline.sh`.<br>**Animations:** Slide in the terminal graphic from the right as the text loads on the left.<br>**Interactivity:** Next button enabled."
+    },
+    {
+      "screen_num": "1.3",
+      "col_index": 0,
+      "new_content": "**Advanced Python Architecture & API Foundations**<br><br>AI and computer vision applications demand clean, modular, and high-performance Python code.<br><br>• **Object-Oriented Programming:** Build robust classes, inheritance structures, and reusable modules for image processing pipelines.<br>• **Virtual Environments & Dependencies:** Isolate project dependencies cleanly using venv, pip, and requirements.txt.<br>• **FastAPI & Asynchronous Integration:** Utilize async and await syntax alongside FastAPI to build high-speed, non-blocking AI microservices."
+    },
+    {
+      "screen_num": "1.3",
+      "col_index": 1,
+      "new_content": "Python serves as a primary language for rapid computer vision prototyping and high-level artificial intelligence logic. To build scalable autonomous systems, you must leverage advanced object-oriented programming principles, clean module design, and isolated virtual environments. Furthermore, mastering FastAPI and asynchronous concurrency enables your software to process multiple non-blocking video and sensor data streams simultaneously without lagging. Study these architectural patterns carefully as you prepare for your coding exercises. Click Next to continue."
+    },
+    {
+      "screen_num": "1.3",
+      "col_index": 2,
+      "new_content": "**Layout:** Standard content layout with three distinct horizontal feature cards.<br>**Visuals:** Each card represents a topic (OOP, Virtual Environments, FastAPI & Async) with a relevant icon (class hierarchy, box, API network).<br>**Animations:** Cards scale up slightly on appearance.<br>**Interactivity:** Hover effects enabled on the three feature cards."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Upgraded the storyboard screens (1.4, 1.5, and 1.6) to incorporate advanced GitHub portfolio standards, Docker containerization, FastAPI deployment, and PostgreSQL database integration based on the provided Rishit Anand reference roadmap while maintaining the established pedagogical structure and formatting.",
+  "assistant_reply": "Successfully updated Screens 1.4, 1.5, and 1.6 to integrate advanced GitHub repository portfolio standards, Docker containerization, FastAPI endpoints, and PostgreSQL database logging.",
+  "edits": [
+    {
+      "screen_num": "Screen 1.4",
+      "col_index": 0,
+      "new_content": "**GitHub Portfolio & Version Control Standards**<br><br>Robotics and Computer Vision projects require strict repository structuring, documentation, and reproducibility standards.<br><br>• **Repository Architecture:** Maintain at least 8 specialized GitHub repositories with professional README documentation, setup instructions, and demo videos.<br>• **Dependency Management:** Utilize `requirements.txt` or containerized Dockerfiles to ensure seamless environment setup.<br>• **Commit Hygiene:** Write clean, descriptive commit messages to track feature progression and manage project milestones effectively."
+    },
+    {
+      "screen_num": "Screen 1.4",
+      "col_index": 1,
+      "new_content": "Managing complex computer vision and robotics codebases requires disciplined version control workflows. Maintaining a structured GitHub portfolio with comprehensive README files, setup guides, and demo videos ensures your software architecture remains reproducible for academic admissions and industry roles. Using dependency managers like requirements.txt or Docker helps standardize execution environments. Clean commit histories and active issue tracking further highlight your engineering professionalism. Review these portfolio standards to maintain high code quality. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 1.4",
+      "col_index": 2,
+      "new_content": "**Layout:** Process flow layout depicting GitHub portfolio requirements.<br>**Visuals:** Horizontal flowchart showing Repository Creation, README & Setup Documentation, Dependency Configuration (`requirements.txt` / Docker), and Demo Video Integration.<br>**Animations:** Step-by-step glowing pulse moving across the flowchart nodes.<br>**Interactivity:** Clickable flowchart nodes that pop up a short definition box for each stage."
+    },
+    {
+      "screen_num": "Screen 1.5",
+      "col_index": 0,
+      "new_content": "**Deployment with Docker, FastAPI, and PostgreSQL**<br><br>AI services and autonomous systems must communicate state data reliably and deploy seamlessly across cloud environments.<br><br>• **FastAPI & PostgreSQL:** Build lightweight REST endpoints, manage database logging, and structure telemetry data for vision analytics.<br>• **Docker Containerization:** Package computer vision services into isolated containers for reliable cloud deployment.<br>• **System Resilience:** Implement structured error handling to manage runtime exceptions in production pipelines."
+    },
+    {
+      "screen_num": "Screen 1.5",
+      "col_index": 1,
+      "new_content": "Software engineering best practices ensure your computer vision applications remain reliable in production environments. By designing clean FastAPI endpoints and utilizing PostgreSQL for systematic logging and data persistence, your AI services can communicate effectively with web dashboards and external servers. Packaging your applications with Docker ensures consistent execution across different cloud infrastructures. Master these deployment and system design principles to complete your software foundation. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 1.5",
+      "col_index": 2,
+      "new_content": "**Layout:** Grid layout with four quadrant cards.<br>**Visuals:** Icons representing FastAPI (web link), PostgreSQL (database cylinder), Docker (container box), and Error Handling (shield checkmark).<br>**Animations:** Quadrants fade in sequentially in a clockwise pattern.<br>**Interactivity:** Next button enabled."
+    },
+    {
+      "screen_num": "Screen 1.6",
+      "col_index": 0,
+      "new_content": "**Module 1 Knowledge Check**<br><br>**Question 1:** Which tool is primarily used to containerize AI models and FastAPI services for seamless cloud deployment?<br>A) `Git`<br>B) `Docker`<br>C) `Gazebo`<br>D) `RViz`<br><br>**Question 2:** True or False: GitHub portfolios for advanced CV and robotics engineering should include a professional README, setup instructions, and a demo video for each repository.<br>A) True<br>B) False<br><br>**Question 3:** Which of the following frameworks is ideal for building high-performance REST API endpoints and handling asynchronous payloads for AI services?<br>A) `FastAPI`<br>B) `MQTT`<br>C) `OpenCV`<br>D) `YOLOv8`"
+    },
+    {
+      "screen_num": "Screen 1.6",
+      "col_index": 1,
+      "new_content": "You have reached the end of Module 1. Let's test your understanding of software deployment, GitHub standards, and system architecture with three review questions. Read each question carefully, select your answers, and verify your knowledge before proceeding to the next module. Click Next when you are ready."
+    },
+    {
+      "screen_num": "Screen 1.6",
+      "col_index": 2,
+      "new_content": "**Layout:** Interactive assessment layout with radio buttons for Question 1, True/False buttons for Question 2, and multiple-choice options for Question 3.<br>**Visuals:** Clean assessment container with a progress indicator showing Module 1 complete.<br>**Animations:** Immediate visual feedback (green/red checkmarks) upon user selecting an answer.<br>**Interactivity:** Interactive selection for all three questions with a Submit/Check Answers button. Correct Answer Q1: B (Docker). Correct Answer Q2: A (True). Correct Answer Q3: A (FastAPI). Feedback displays immediately upon submission."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Upgraded Screens 2.1, 2.2, and 2.3 to incorporate advanced Computer Vision, OpenCV mastery, threading, and video processing concepts from the Rishit Anand roadmap while preserving the storyboard layout.",
+  "assistant_reply": "Successfully updated Screens 2.1, 2.2, and 2.3 with advanced OpenCV mastery, video processing, threading, and filtering concepts from the reference roadmap.",
+  "edits": [
+    {
+      "screen_num": "2.1",
+      "col_index": 0,
+      "new_content": "**Module 2: Advanced OpenCV Mastery**<br><br>In modern robotics and AI engineering, vision systems serve as the primary sensory apparatus for interpreting complex environments.<br><br>• **OpenCV Mastery:** Advanced image processing, pixel manipulation, and color space conversions.<br>• **Image Transformations:** Geometric scaling, rotation, and perspective adjustments for robust feature extraction.<br>• **High-Performance Pipelines:** Preparing foundational matrix operations for downstream AI integration."
+    },
+    {
+      "screen_num": "2.1",
+      "col_index": 1,
+      "new_content": "Welcome to Module 2 of our robotics engineering curriculum, focusing on advanced OpenCV mastery. In modern intelligent systems, vision pipelines act as the core sensory mechanism for navigating complex environments. We will utilize OpenCV to ingest, manipulate, and analyze pixel matrices in real time. Mastering these foundational image processing techniques allows your software to perceive color, shape, and structure before feeding data into higher-level AI models. Let us begin by examining how OpenCV handles raw image arrays, color spaces, and advanced transformations. Click Next to continue."
+    },
+    {
+      "screen_num": "2.1",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Split-screen layout. Left side displays bullet points on a clean dark slate background. Right side features an animated graphic showing a raw RGB image matrix converting into an optimized grayscale pixel grid.<br>**Animation:** Smooth fade-in for text bullets. Pulsing highlight on pixel transformation coordinates.<br>**Developer Note:** Ensure all image terms align with advanced OpenCV Python syntax (`cv2.imread`, `cv2.cvtColor`, matrix slicing)."
+    },
+    {
+      "screen_num": "2.2",
+      "col_index": 0,
+      "new_content": "**Image Transformations and Filtering**<br><br>Raw camera feeds require cleaning and geometric manipulation before feature extraction.<br><br>• **Geometric Transformations:** Scaling, rotation, and affine warping adjust perspective and image dimensions.<br>• **Filtering & Noise Reduction:** Gaussian blur and median filtering eliminate sensor noise and high-frequency artifacts.<br>• **Morphological Operations:** Dilation and erosion manipulate object boundaries to close gaps or separate touching shapes."
+    },
+    {
+      "screen_num": "2.2",
+      "col_index": 1,
+      "new_content": "Raw camera feeds captured from robotic platforms frequently contain optical noise, lighting variations, and perspective distortion. Before any meaningful analysis can occur, developers must apply rigorous filtering and geometric transformations. Gaussian and median filters smooth out high-frequency sensor noise, while morphological operations like erosion and dilation refine object edges and structures. Additionally, affine and perspective transformations allow your software to correct camera angles and align visual feeds for downstream processing. Click Next to continue."
+    },
+    {
+      "screen_num": "2.2",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Three-column card layout displaying icons and descriptions for Filtering, Geometry, and Morphology.<br>**Animation:** Cards slide up sequentially from the bottom of the screen upon audio cue.<br>**Developer Note:** Maintain professional technical design with high-contrast text and clear iconography for each transformation type."
+    },
+    {
+      "screen_num": "2.3",
+      "col_index": 0,
+      "new_content": "**Contours and Video Processing**<br><br>Extracting shape boundaries and managing live video streams are essential for dynamic tracking.<br><br>• **Contour Detection:** Identifying object boundaries using binary thresholding and gradient analysis.<br>• **Bounding Boxes and Moments:** Calculating geometric centers, areas, and bounding rectangles for detected items.<br>• **Video Threading:** Implementing multithreaded video capture loops to prevent frame drops and latency in real-time robotics applications."
+    },
+    {
+      "screen_num": "2.3",
+      "col_index": 1,
+      "new_content": "Once an image is filtered and thresholded, contour detection algorithms extract continuous curves along object boundaries. By analyzing contour moments and bounding boxes, your software can calculate the exact geometric center, orientation, and area of target items in the camera frame. Furthermore, handling live video streams requires robust multithreading architectures. Running capture loops on dedicated threads prevents processing bottlenecks and ensures your robot responds instantly to visual changes. Click Next to continue."
+    },
+    {
+      "screen_num": "2.3",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Interactive diagram showing a live video frame with a highlighted bounding box and contour outline.<br>**Animation:** Bounding box dynamically resizes and tracks a simulated object moving across the screen.<br>**Developer Note:** Include code snippet callout boxes showing `cv2.findContours` and multithreaded queue handling."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Upgraded Screens 2.4, 2.5, and 3.1 to incorporate advanced Computer Vision, YOLOv8 object detection, tracking, segmentation, and ROS2/Gazebo principles from the reference roadmap, while maintaining the established storyboard structure and pedagogical flow.",
+  "assistant_reply": "Successfully upgraded Screens 2.4, 2.5, and 3.1 to incorporate advanced YOLOv8, tracking, pose estimation, and ROS2 middleware concepts from the reference roadmap.",
+  "edits": [
+    {
+      "screen_num": "Screen 2.4",
+      "col_index": 0,
+      "new_content": "**YOLOv8 and Advanced Vision Pipelines**<br><br>Moving beyond basic object detection into real-time tracking, counting, segmentation, and pose estimation.<br><br>• **YOLOv8 Architecture:** State-of-the-art detection and segmentation frameworks.<br>• **Tracking & Counting:** Object tracking across frames for advanced analytics dashboards.<br>• **Pose Estimation:** Skeletal tracking for behavior analysis and human-robot interaction."
+    },
+    {
+      "screen_num": "Screen 2.4",
+      "col_index": 1,
+      "new_content": "Traditional object detection identifies static classes, but complex autonomous systems require tracking, counting, and pose estimation. Using YOLOv8, developers can build advanced vision pipelines that handle multi-object tracking and segmentation in real time. This forms the backbone of projects like AI CCTV analytics and traffic monitoring. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 2.4",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Comparison graphic contrasting bounding box detection with instance segmentation and tracking paths.<br>**Animation:** Video overlay showing real-time object tracking IDs and counting metrics.<br>**Developer Note:** Emphasize YOLOv8 performance and integration with OpenCV video processing threads."
+    },
+    {
+      "screen_num": "Screen 2.5",
+      "col_index": 0,
+      "new_content": "**Module 2 Knowledge Check**<br><br>Test your understanding of advanced computer vision, OpenCV threading, and YOLOv8 principles.<br><br>**Question 1 of 3:**<br>Which framework provides state-of-the-art real-time object detection, tracking, and segmentation capabilities suited for edge deployment?<br>A) `OpenCV Contours`<br>B) `YOLOv8`<br>C) `FastAPI`<br>D) `ROS2 Nav2`"
+    },
+    {
+      "screen_num": "Screen 2.5",
+      "col_index": 1,
+      "new_content": "You have reached the end of Module 2. Let us verify your mastery of advanced computer vision and YOLOv8 concepts with a quick knowledge check. Review the question on your screen carefully, select the best answer, and receive immediate feedback. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 2.5",
+      "col_index": 2,
+      "new_content": "**Visual Layout:** Standard assessment container with clear radio button selections and a submit button.<br>**Animation:** Interactive click states for answer choices. Instant feedback state upon user submission.<br>**Developer Note:** Program correct answer as B (`YOLOv8`) with targeted explanatory feedback for all distractors."
+    },
+    {
+      "screen_num": "Screen 3.1",
+      "col_index": 0,
+      "new_content": "**Robot Operating System 2 (ROS2) & Gazebo**<br>• Middleware framework designed for distributed robotic and autonomous applications.<br>• Utilizes Data Distribution Service (DDS) for decentralized, secure communication.<br>• Core primitives: Nodes, Topics, Services, Actions, and RViz visualization.<br>• Integration with Gazebo simulation for warehouse robotics and obstacle avoidance."
+    },
+    {
+      "screen_num": "Screen 3.1",
+      "col_index": 1,
+      "new_content": "Welcome to Module 3, where we focus on deploying autonomous robot simulations using ROS2, Gazebo, and advanced navigation stacks. In modern robotics engineering, writing isolated scripts is not enough; you need a robust middleware framework that allows distributed software components to communicate seamlessly in real time. ROS2 serves as this foundational layer, utilizing a Data Distribution Service middleware to ensure reliable, secure, and scalable communication across multiple computing nodes, paired with Gazebo simulation environments. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 3.1",
+      "col_index": 2,
+      "new_content": "Visual: Show a clean architecture diagram mapping out ROS2 nodes, topics, publisher/subscriber relationships, and Gazebo simulation loops.<br>Layout: Split screen with bullet points on the left and interactive node topology graphic on the right.<br>Developer Note: Ensure DDS middleware layer and simulation integration are explicitly highlighted in the graphic."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Upgraded Screens 3.2, 3.3, and 3.4 to reflect the advanced ROS2 + Gazebo and warehouse robot simulation roadmap concepts from the provided reference PDF, ensuring accurate terminology regarding colcon build systems, URDF/SDF, ros_gz_bridge, and Nav2 stacks while preserving the original storyboard format.",
+  "assistant_reply": "Successfully updated screens 3.2, 3.3, and 3.4 to incorporate advanced ROS2, Gazebo simulation, and autonomous warehouse robot navigation principles from the reference roadmap.",
+  "edits": [
+    {
+      "screen_num": "Screen 3.2",
+      "col_index": 0,
+      "new_content": "<strong>Building ROS2 Workspaces for Robotics Software</strong><br>â€¢ Workspace Structure: Organize packages within a `src` directory utilizing `colcon` build tools for scalable robotics projects.<br>â€¢ Package Creation: Use `ros2 pkg create` with Python build type dependencies for rapid prototyping.<br>â€¢ Writing Nodes: Inherit from `rclpy.node.Node` to initialize publishers, subscribers, and timers for perception pipelines.<br>â€¢ Execution: Source local setup files using `source install/setup.bash` before launching executables in development workflows."
+    },
+    {
+      "screen_num": "Screen 3.2",
+      "col_index": 1,
+      "new_content": "To implement your advanced robotics software, you must know how to structure and build a professional workspace using ROS2 command-line tools. ROS2 relies on `colcon` as its standard build tool to compile packages and manage dependencies efficiently within your development directory. Within each package, Python nodes are constructed by subclassing the base Node class from the `rclpy` library, allowing you to instantiate publishers, subscribers, and timers cleanly for computer vision and control loops. Proper workspace management ensures that your custom packages, message definitions, and launch files integrate smoothly into the broader autonomous robot architecture. Mastering these build and execution workflows is a prerequisite for deploying software to physical hardware or simulation environments. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 3.2",
+      "col_index": 2,
+      "new_content": "Visual: Display a code snippet of a basic Python ROS2 node alongside a directory tree of a standard ROS2 workspace.<br>Layout: Code window on the left, file directory visualization on the right.<br>Developer Note: Highlight key imports like `rclpy` and the `Node` class in the code snippet."
+    },
+    {
+      "screen_num": "Screen 3.3",
+      "col_index": 0,
+      "new_content": "<strong>Gazebo Simulation Environment for Autonomous Warehouse Robots</strong><br>â€¢ Physics Engine: Simulate rigid body dynamics, gravity, friction, and collision detection for realistic warehouse navigation.<br>â€¢ Robot Description: Define robot geometry, joints, and inertial properties using Unified Robot Description Format (URDF) or Simulation Description Format (SDF).<br>â€¢ Sensor Simulation: Integrate virtual LiDAR, depth cameras, and IMUs into the simulation world for perception tasks.<br>â€¢ ROS2-Gazebo Bridge: Use `ros_gz_bridge` to seamlessly transmit simulated sensor topics into the ROS2 graph."
+    },
+    {
+      "screen_num": "Screen 3.3",
+      "col_index": 1,
+      "new_content": "Before testing algorithms on physical hardware, engineers rely on high-fidelity physics simulators like Gazebo to validate autonomous warehouse robot behavior. Gazebo accurately models environmental physics, including gravity, collisions, friction, and material properties, ensuring that simulations closely mimic real-world conditions. Robots are modeled in Gazebo using URDF or SDF files, which specify physical dimensions, joint limits, and inertial characteristics. Furthermore, you can attach virtual sensors such as LiDAR, cameras, and inertial measurement units to your robot model to generate realistic telemetry data. Using the ROS2 Gazebo bridge, this simulated sensor data is fed directly into your ROS2 software stack for perception, tracking, and mapping. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 3.3",
+      "col_index": 2,
+      "new_content": "Visual: Show a 3D rendering of an autonomous warehouse robot navigating a virtual environment in Gazebo, complete with a LiDAR scan cone.<br>Layout: Full-width simulation screenshot with callouts pointing to the robot, LiDAR sensor, and environment.<br>Developer Note: Include a subtle rotation animation of the LiDAR scan rays to indicate active simulation."
+    },
+    {
+      "screen_num": "Screen 3.4",
+      "col_index": 0,
+      "new_content": "<strong>Nav2 and Autonomous Navigation Stacks</strong><br>â€¢ SLAM (Simultaneous Localization and Mapping): Build real-time 2D grid maps of unknown warehouse environments using LiDAR and odometry.<br>â€¢ Nav2 Architecture: Modular navigation framework utilizing behavior trees, global planners, and local recovery controllers.<br>â€¢ Costmaps: Maintain static and dynamic occupancy grids for robust obstacle avoidance.<br>â€¢ Goal Execution: Send navigation goals via action servers to guide the robot autonomously from point A to point B."
+    },
+    {
+      "screen_num": "Screen 3.4",
+      "col_index": 1,
+      "new_content": "Autonomous navigation requires the robot to understand its surroundings, plan paths, and react dynamically to obstacles in real time during simulation projects. This is achieved by combining Simultaneous Localization and Mapping, or SLAM, with the Nav2 navigation stack. SLAM algorithms process incoming LiDAR and wheel odometry data to construct accurate occupancy grid maps of the environment while tracking the robot's exact pose. The Nav2 framework takes these maps and uses advanced behavior trees, global planners, and local controllers to compute safe, collision-free trajectories. By defining goal poses through action servers, your robot can autonomously navigate complex indoor or warehouse spaces without human intervention. Click Next to continue."
+    },
+    {
+      "screen_num": "Screen 3.4",
+      "col_index": 2,
+      "new_content": "Visual: Display an occupancy grid map showing a global path, local costmap boundaries, and a robot moving along a planned trajectory.<br>Layout: Side-by-side view showing the Gazebo simulation on the left and the corresponding Nav2 costmap on the right.<br>Developer Note: Clearly label the global path, costmap rings, and robot pose arrow on the Nav2 view."
+    }
+  ],
+  "is_edit": true
+}
+======================
+
+=== CHUNK LLM OUTPUT ===
+{
+  "reasoning": "Upgraded Screens 3.5 and 3.6 to incorporate advanced deployment stacks (Docker, FastAPI, PostgreSQL, and cloud/edge integration) reflecting the reference roadmap for Computer Vision and Robotics Software engineers targeting Germany.",
+  "assistant_reply": "Updated Screens 3.5 and 3.6 to integrate Docker, FastAPI, PostgreSQL, and advanced deployment workflows from the reference roadmap.",
+  "edits": [
+    {
+      "screen_num": "3.5",
+      "col_index": 0,
+      "new_content": "**Deployment, Docker, and FastAPI Integration**<br>â€¢ Docker Containers: Package computer vision services, OpenCV, YOLO, and Python applications into isolated, reproducible containers.<br>â€¢ FastAPI Backend: Expose high-performance REST and asynchronous endpoints for real-time video analytics and sensor telemetry.<br>â€¢ PostgreSQL Storage: Store detection events, metrics, and logs in relational databases for analytical dashboards.<br>â€¢ Cloud & Edge Deployment: Deploy containerized AI pipelines to edge hardware or cloud servers for production-ready operation."
+    },
+    {
+      "screen_num": "3.5",
+      "col_index": 1,
+      "new_content": "The final phase of building a professional AI and robotics portfolio involves robust software deployment using Docker, FastAPI, and PostgreSQL. Containerizing your computer vision models and OpenCV-YOLO pipelines ensures reproducibility across different environments. By building asynchronous APIs with FastAPI, you can stream real-time detection data and system telemetry to web dashboards or backend databases like PostgreSQL. Whether deploying to an edge device or a cloud server, mastering these modern software practices makes you highly employable for Computer Vision and AI Engineering roles in Germany."
+    },
+    {
+      "screen_num": "3.5",
+      "col_index": 2,
+      "new_content": "Visual: Show a containerization architecture diagram with Docker encompassing a FastAPI service connected to a PostgreSQL database and a YOLO inference model.<br>Layout: Modern systems architecture flow from left to right.<br>Developer Note: Use clear icons for Docker, FastAPI, PostgreSQL, and Cloud/Edge endpoints."
+    },
+    {
+      "screen_num": "3.6",
+      "col_index": 0,
+      "new_content": "**Knowledge Check: Deployment, Docker, FastAPI, and Computer Vision**<br><br>**Question 1 (Multiple Choice):**<br>Which tool is primarily used to containerize Python-based computer vision applications and ensure reproducible environments?<br>A) Gazebo<br>B) Docker<br>C) RViz<br>D) Colcon<br><br>**Correct Answer:** B<br>**Feedback:** Correct! Docker packages applications and their dependencies into isolated, reproducible containers.<br><br>**Question 2 (True/False):**<br>True or False: FastAPI is used to build high-performance asynchronous REST APIs and web backends for AI services.<br><br>**Correct Answer:** True<br>**Feedback:** Correct. FastAPI provides modern, high-speed asynchronous API endpoints ideal for streaming CV analytics.<br><br>**Question 3 (Scenario-Based):**<br>An engineer needs to store real-time vehicle counting events and detection metadata for a dashboard analytics system. Which database is well-suited for this relational data?<br>A) PostgreSQL<br>B) ROS2 bag<br>C) URDF file<br>D) CMakeLists<br><br>**Correct Answer:** A<br>**Feedback:** Correct! PostgreSQL provides robust relational data storage for application metrics and analytical logs."
+    },
+    {
+      "screen_num": "3.6",
+      "col_index": 1,
+      "new_content": "Now, let's test your understanding of software deployment, containerization, and backend integration for computer vision applications. Review the questions on screen and select the best answers to complete your knowledge check. Click Next when you are finished."
+    },
+    {
+      "screen_num": "3.6",
+      "col_index": 2,
+      "new_content": "Visual: Present an interactive quiz container with multiple-choice and True/False options covering Docker, FastAPI, and PostgreSQL deployment concepts.<br>Layout: Centered quiz card interface with clear feedback text areas below each question block.<br>Developer Note: Ensure immediate visual validation appears upon selecting an answer, highlighting correct and incorrect choices appropriately."
+    }
+  ],
+  "is_edit": true
+}
+======================

@@ -90,11 +90,17 @@ export const api = {
     },
 
     async analyzeSopDocument(formData) {
-        // Call backend /lexai/sop/analyze
+        const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+        const defaultHeaders = { 'Accept': 'application/json' };
+        if (token) defaultHeaders['Authorization'] = `Bearer ${token}`;
+
+        // Call backend /lexai/sop/analyze with a 25s timeout to prevent hanging
         const analyzeResponse = await fetch(`${BASE_URL}/lexai/sop/analyze`, {
             method: 'POST',
             credentials: 'include',
-            body: formData
+            headers: defaultHeaders,
+            body: formData,
+            signal: AbortSignal.timeout(25000)
         });
 
         const data = await analyzeResponse.json().catch(() => ({}));
@@ -115,7 +121,9 @@ export const api = {
                 const suggRes = await fetch(`${BASE_URL}/lexai/sop/suggest-content`, {
                     method: 'POST',
                     credentials: 'include',
-                    body: suggForm
+                    headers: defaultHeaders,
+                    body: suggForm,
+                    signal: AbortSignal.timeout(25000)
                 });
                 if (suggRes.ok) {
                     const suggData = await suggRes.json();
@@ -136,6 +144,10 @@ export const api = {
     },
 
     async formatSopDocument(formData) {
+        const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+        const defaultHeaders = {};
+        if (token) defaultHeaders['Authorization'] = `Bearer ${token}`;
+
         // Map formatting_config to config parameter expected by /lexai/sop/format
         const reqForm = new FormData();
         for (const [key, value] of formData.entries()) {
@@ -149,7 +161,9 @@ export const api = {
         const response = await fetch(`${BASE_URL}/lexai/sop/format`, {
             method: 'POST',
             credentials: 'include',
-            body: reqForm
+            headers: defaultHeaders,
+            body: reqForm,
+            signal: AbortSignal.timeout(45000)
         });
 
         if (!response.ok) {
