@@ -64,8 +64,8 @@ _GEMINI_CONCURRENCY = threading.Semaphore(max(len(_gemini_keys), 1))
 
 class _KeyPool:
     """Round-robin key pool. On 429, rotates to the next key."""
-    def __init__(self, keys: list[str] | None = None):
-        self._keys = [k.strip().strip("'\"") for k in (keys or []) if k.strip().strip("'\"")]
+    def __init__(self, keys: list[str] | None):
+        self._keys = [k.strip().strip("'\"") for k in (keys or []) if k and k.strip().strip("'\"")]
         self._idx = 0
         self._lock = threading.Lock()
 
@@ -90,7 +90,9 @@ def _parse_key_list(env_var: str, single_var: str) -> list[str]:
         single = os.getenv(single_var, "")
         if single.strip():
             keys = [single.strip().strip("'\"")]
-    return keys
+    return keys or []
+
+
 def _parse_json_from_llm(raw_text: str) -> dict:
     """
     Robustly parse JSON returned by LLMs.

@@ -812,9 +812,16 @@ export default function ProjectView({ projectId, onBack }) {
                     const wavBlob = encodeWAV(pcm, audioBuffer.sampleRate);
                     tempCtx.close();
 
-                    const formData = new FormData();
-                    formData.append("audio", wavBlob, "recording.wav");
-                    const res = await fetch('/api/speech-to-text/', { method: "POST", body: formData });
+                    const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+                    const headers = {};
+                    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                    const res = await fetch('/api/speech-to-text/', {
+                        method: "POST",
+                        credentials: 'include',
+                        headers,
+                        body: formData
+                    });
                     const data = await res.json();
                     if (data.text && data.text.trim()) {
                         const clean = data.text.trim();
