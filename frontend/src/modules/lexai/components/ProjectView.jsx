@@ -680,12 +680,15 @@ export default function ProjectView({ projectId, onBack }) {
         setFileUploading(true);
         const formData = new FormData();
         formData.append('file', file);
-
         try {
             const BASE_URL = '/api';
+            const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+            const headers = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
             const response = await fetch(`${BASE_URL}/extraction/extract-text-only`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                credentials: 'include',
+                headers,
                 body: formData
             });
             const data = await response.json();
@@ -811,6 +814,9 @@ export default function ProjectView({ projectId, onBack }) {
                     const pcm = audioBuffer.getChannelData(0);
                     const wavBlob = encodeWAV(pcm, audioBuffer.sampleRate);
                     tempCtx.close();
+
+                    const formData = new FormData();
+                    formData.append("audio", wavBlob, "recording.wav");
 
                     const token = localStorage.getItem('token') || localStorage.getItem('session_token');
                     const headers = {};
