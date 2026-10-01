@@ -683,7 +683,6 @@ def create_tables(schema_name='public'):
 
         # 3.5) Candidate & Talent Vault Performance Indexes
         cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_created_at ON candidates(created_at DESC)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_created_ym ON candidates((TO_CHAR(created_at, 'YYYY-MM')))")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_total_exp ON candidates(total_experience_years)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_location ON candidates(location)")

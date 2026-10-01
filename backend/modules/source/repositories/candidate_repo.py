@@ -1440,7 +1440,7 @@ class CandidateRepository:
             self._set_search_path(cur)
             
             # 1. Total count and untagged count per month (ordered newest first)
-            cur.execute('''
+            cur.execute(r'''
                 SELECT 
                     TO_CHAR(created_at, 'YYYY-MM') AS ym,
                     COUNT(id) AS total_count,
