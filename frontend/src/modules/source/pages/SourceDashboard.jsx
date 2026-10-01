@@ -542,10 +542,11 @@ export default function SourceDashboard() {
     } catch { /* silent */ }
   }, []);
 
-  const fetchCandidates = useCallback(async (customSearch) => {
+  const fetchCandidates = useCallback(async (customSearch, page) => {
     setLoading(true);
     try {
       const activeSearch = customSearch !== undefined ? customSearch : debouncedSearch;
+      const currentPage = page !== undefined ? page : dirPage;
       const params = new URLSearchParams();
       if (filters.pool !== 'all') params.set('pool', filters.pool);
       if (filters.location) params.set('location', filters.location);
@@ -563,7 +564,10 @@ export default function SourceDashboard() {
         params.set('role_id', filters.role_id);
         params.set('limit', filters.limit || 50);
       } else {
-        params.set('limit', 100);
+        params.set('limit', dirPageSize === 'all' ? 500 : Number(dirPageSize));
+        if (currentPage > 1) {
+          params.set('offset', (currentPage - 1) * Number(dirPageSize));
+        }
       }
       if (activeSearch && activeSearch.trim()) {
         params.set('search', activeSearch.trim());
@@ -579,7 +583,7 @@ export default function SourceDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [filters, debouncedSearch]);
+  }, [filters, debouncedSearch, dirPage, dirPageSize]);
 
   const fetchActivities = useCallback(async () => {
     setLoadingActivities(true);
@@ -831,17 +835,31 @@ export default function SourceDashboard() {
     setDirPage(1);
   }, [debouncedSearch, filters]);
 
+  // When page changes (not reset to 1), re-fetch from server
+  useEffect(() => {
+    if (!filters.role_id) {
+      fetchCandidates(undefined, dirPage);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirPage]);
+
   const totalDirPages = useMemo(() => {
     if (dirPageSize === 'all') return 1;
-    return Math.max(1, Math.ceil(filteredCandidates.length / Number(dirPageSize)));
-  }, [filteredCandidates.length, dirPageSize]);
+    return Math.max(1, Math.ceil(totalCandidates / Number(dirPageSize)));
+  }, [totalCandidates, dirPageSize]);
 
+  // For server-side pagination (no role_id): backend already returned the right slice,
+  // so paginatedCandidates = filteredCandidates (which is the backend result).
+  // For role_id mode: still paginate client-side since scores are all fetched at once.
   const paginatedCandidates = useMemo(() => {
-    if (dirPageSize === 'all') return filteredCandidates;
-    const size = Number(dirPageSize);
-    const start = (dirPage - 1) * size;
-    return filteredCandidates.slice(start, start + size);
-  }, [filteredCandidates, dirPage, dirPageSize]);
+    if (filters.role_id) {
+      if (dirPageSize === 'all') return filteredCandidates;
+      const size = Number(dirPageSize);
+      const start = (dirPage - 1) * size;
+      return filteredCandidates.slice(start, start + size);
+    }
+    return filteredCandidates; // server already paginated
+  }, [filteredCandidates, dirPage, dirPageSize, filters.role_id]);
 
   // ── Selection helpers ──────────────────────────────────────────────────────
   const toggle = (id) => setSelectedIds(prev => {
@@ -2752,11 +2770,8 @@ export default function SourceDashboard() {
             <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-t border-gray-100 bg-gray-50/70 text-xs text-gray-600 rounded-b-2xl">
               <div className="flex items-center gap-2">
                 <span>
-                  Showing <strong className="text-gray-800">{dirPageSize === 'all' ? 1 : Math.min((dirPage - 1) * Number(dirPageSize) + 1, filteredCandidates.length)}</strong>–<strong className="text-gray-800">{dirPageSize === 'all' ? filteredCandidates.length : Math.min(dirPage * Number(dirPageSize), filteredCandidates.length)}</strong> of <strong className="text-gray-800">{filteredCandidates.length}</strong> candidates
+                  Showing <strong className="text-gray-800">{dirPageSize === 'all' ? 1 : Math.min((dirPage - 1) * Number(dirPageSize) + 1, totalCandidates)}</strong>–<strong className="text-gray-800">{dirPageSize === 'all' ? totalCandidates : Math.min(dirPage * Number(dirPageSize), totalCandidates)}</strong> of <strong className="text-gray-800">{totalCandidates}</strong> candidates
                 </span>
-                {totalCandidates > filteredCandidates.length && (
-                  <span className="text-gray-400">({totalCandidates} total in pool)</span>
-                )}
               </div>
 
               <div className="flex items-center gap-4">
@@ -3471,73 +3486,141 @@ export default function SourceDashboard() {
     </div>
 
       {/* Global Floating Progress Widget (when not on upload tab) */}
-      {bulkUploadTriggered && (bulkJobId || uploading) && currentTab !== 'upload' && (
-        <div 
-          className="fixed bottom-6 right-6 z-50 w-80 bg-white rounded-xl shadow-xl border border-purple-200 p-4 cursor-pointer hover:shadow-2xl transition-all"
-          onClick={() => setTab('upload')}
-        >
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-              {uploading ? (
-                <><Upload size={12} className="text-purple-600 animate-bounce" /> Uploading ZIP...</>
-              ) : bulkJobProgress?.job?.status === 'paused' ? (
-                <><Pause size={12} className="text-amber-500" /> Paused</>
-              ) : bulkJobProgress?.job?.status === 'extracting' ? (
-                <><Loader2 size={12} className="animate-spin text-purple-600" /> Scanning ZIP</>
-              ) : (
-                <><Loader2 size={12} className="animate-spin text-purple-600" /> Processing Resumes</>
-              )}
-            </h4>
-            {uploading ? (
-              <span className="text-xs font-bold text-purple-600">
-                {Math.round(uploadProgress || 0)}%
-              </span>
-            ) : bulkJobProgress?.job?.status === 'extracting' ? (
-              <span className="text-xs font-semibold text-purple-600">
-                {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : '...'}
-              </span>
-            ) : bulkJobProgress?.job?.total_files > 0 ? (
-              <span className={`text-xs font-bold ${
-                bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
-              }`}>
-                {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
-              </span>
-            ) : null}
-          </div>
-          
-          <div className="w-full bg-purple-100 h-1.5 rounded-full overflow-hidden">
-            {uploading ? (
-              <div 
-                className="h-full bg-purple-600 transition-all duration-300"
-                style={{ width: `${uploadProgress || 0}%` }}
-              ></div>
-            ) : bulkJobProgress?.job?.status === 'extracting' ? (
-              <div className="h-full bg-purple-400 animate-pulse w-full"></div>
-            ) : bulkJobProgress?.job?.total_files > 0 ? (
-              <div 
-                className={`h-full transition-all duration-500 ${
-                  bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
-                }`} 
-                style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
-              ></div>
-            ) : null}
-          </div>
-          <div className="flex justify-between items-center mt-2">
-            <p className="text-[10px] text-gray-400 font-medium">Click to view details</p>
-            {bulkJobId && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCancelQueue();
-                }}
-                className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:underline transition-colors"
+      {bulkUploadTriggered && (bulkJobId || uploading) && currentTab !== 'upload' && (() => {
+        const DraggableWidget = () => {
+          const widgetRef = React.useRef(null);
+          const dragState = React.useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
+          const posRef = React.useRef({ x: null, y: null });
+          const [, forceRender] = React.useState(0);
+
+          const onMouseDown = (e) => {
+            if (e.target.closest('button')) return; // don't drag when clicking Cancel
+            e.preventDefault();
+            const rect = widgetRef.current.getBoundingClientRect();
+            dragState.current = { dragging: true, startX: e.clientX, startY: e.clientY, origX: rect.left, origY: rect.top };
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+          };
+
+          const onMouseMove = (e) => {
+            if (!dragState.current.dragging) return;
+            const dx = e.clientX - dragState.current.startX;
+            const dy = e.clientY - dragState.current.startY;
+            const newX = dragState.current.origX + dx;
+            const newY = dragState.current.origY + dy;
+            // Clamp within viewport
+            const w = widgetRef.current?.offsetWidth || 320;
+            const h = widgetRef.current?.offsetHeight || 120;
+            posRef.current = {
+              x: Math.max(8, Math.min(window.innerWidth - w - 8, newX)),
+              y: Math.max(8, Math.min(window.innerHeight - h - 8, newY)),
+            };
+            if (widgetRef.current) {
+              widgetRef.current.style.left = posRef.current.x + 'px';
+              widgetRef.current.style.top = posRef.current.y + 'px';
+              widgetRef.current.style.right = 'auto';
+              widgetRef.current.style.bottom = 'auto';
+            }
+          };
+
+          const onMouseUp = () => {
+            dragState.current.dragging = false;
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            forceRender(n => n + 1);
+          };
+
+          const style = posRef.current.x !== null
+            ? { left: posRef.current.x, top: posRef.current.y, right: 'auto', bottom: 'auto' }
+            : { bottom: 24, right: 24 };
+
+          return (
+            <div
+              ref={widgetRef}
+              style={style}
+              className="fixed z-50 w-80 bg-white rounded-xl shadow-xl border border-purple-200 p-4 select-none"
+              onClick={(e) => { if (!dragState.current.dragging) setTab('upload'); }}
+            >
+              {/* Drag Handle */}
+              <div
+                onMouseDown={onMouseDown}
+                className="absolute top-0 left-0 right-0 h-7 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-t-xl"
+                title="Drag to move"
               >
-                Cancel Queue
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+                <div className="flex gap-0.5">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="w-0.5 h-3 rounded-full bg-gray-300" />
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                    {uploading ? (
+                      <><Upload size={12} className="text-purple-600 animate-bounce" /> Uploading ZIP...</>
+                    ) : bulkJobProgress?.job?.status === 'paused' ? (
+                      <><Pause size={12} className="text-amber-500" /> Paused</>
+                    ) : bulkJobProgress?.job?.status === 'extracting' ? (
+                      <><Loader2 size={12} className="animate-spin text-purple-600" /> Scanning ZIP</>
+                    ) : (
+                      <><Loader2 size={12} className="animate-spin text-purple-600" /> Processing Resumes</>
+                    )}
+                  </h4>
+                  {uploading ? (
+                    <span className="text-xs font-bold text-purple-600">
+                      {Math.round(uploadProgress || 0)}%
+                    </span>
+                  ) : bulkJobProgress?.job?.status === 'extracting' ? (
+                    <span className="text-xs font-semibold text-purple-600">
+                      {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : '...'}
+                    </span>
+                  ) : bulkJobProgress?.job?.total_files > 0 ? (
+                    <span className={`text-xs font-bold ${
+                      bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+                    }`}>
+                      {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+                    </span>
+                  ) : null}
+                </div>
+                
+                <div className="w-full bg-purple-100 h-1.5 rounded-full overflow-hidden">
+                  {uploading ? (
+                    <div 
+                      className="h-full bg-purple-600 transition-all duration-300"
+                      style={{ width: `${uploadProgress || 0}%` }}
+                    ></div>
+                  ) : bulkJobProgress?.job?.status === 'extracting' ? (
+                    <div className="h-full bg-purple-400 animate-pulse w-full"></div>
+                  ) : bulkJobProgress?.job?.total_files > 0 ? (
+                    <div 
+                      className={`h-full transition-all duration-500 ${
+                        bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+                      }`} 
+                      style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+                    ></div>
+                  ) : null}
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <p className="text-[10px] text-gray-400 font-medium">Click to view details</p>
+                  {bulkJobId && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCancelQueue();
+                      }}
+                      className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:underline transition-colors"
+                    >
+                      Cancel Queue
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        };
+        return <DraggableWidget key="upload-widget" />;
+      })()}
 
     </div>
   );
