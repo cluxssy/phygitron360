@@ -24,7 +24,7 @@ DB_NAME = os.getenv("DB_NAME", "hrms_db")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
-DB_MAX_CONNECTIONS = int(os.getenv("DB_MAX_CONNECTIONS", "20"))
+DB_MAX_CONNECTIONS = int(os.getenv("DB_MAX_CONNECTIONS", "15"))
 
 _pool = None
 
@@ -75,7 +75,7 @@ def get_db_connection():
         try:
             conn = pool.getconn()
             return PooledConnectionWrapper(conn, pool)
-        except PoolError:
+        except (PoolError, psycopg2.OperationalError):
             time.sleep(0.1)
     # If it still fails, let it raise the error naturally
     conn = pool.getconn()

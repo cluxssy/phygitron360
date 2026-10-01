@@ -156,7 +156,8 @@ class DashboardService:
                     "total": total_employees, "active": active_count, "exited": exited_count,
                     "teams": total_teams, "designations": total_designations,
                     "candidates": total_candidates, "jobs": total_jobs, "avg_tenure": avg_tenure,
-                    "present_today": present_today, "attendance_rate": attendance_rate
+                    "present_today": present_today, "attendance_rate": attendance_rate,
+                    "assets": data.get("total_assets", 0)
                 },
                 "charts": {
                     "department": department_distribution, "status": status_distribution,

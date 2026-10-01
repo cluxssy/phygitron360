@@ -935,8 +935,14 @@ export default function SourceDashboard() {
 
     try {
       // Separate archives / large files (which stream directly to S3 to bypass proxy limits) from standard files
-      const archivesOrLarge = validFiles.filter(f => f.name.toLowerCase().endsWith('.zip') || f.size > 35 * 1024 * 1024);
-      const standardFiles = validFiles.filter(f => !f.name.toLowerCase().endsWith('.zip') && f.size <= 35 * 1024 * 1024);
+      // When running on localhost, bypass S3 presigned checks and upload directly to local disk
+      const isLocalHost = typeof window !== 'undefined' && (
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.endsWith('.local')
+      );
+      const archivesOrLarge = isLocalHost ? [] : validFiles.filter(f => f.name.toLowerCase().endsWith('.zip') || f.size > 35 * 1024 * 1024);
+      const standardFiles = isLocalHost ? [...validFiles] : validFiles.filter(f => !f.name.toLowerCase().endsWith('.zip') && f.size <= 35 * 1024 * 1024);
 
       // ── Path 1: Archives and Large Files Direct Cloud Upload ──
       for (let i = 0; i < archivesOrLarge.length; i++) {
@@ -992,6 +998,9 @@ export default function SourceDashboard() {
               const d = await r.json();
               if (r.ok && d.success) setBulkJobProgress(d.data);
             } catch (_) { /* silent */ }
+          } else {
+            // S3 direct upload not active on server, fall back to standard local multipart upload
+            standardFiles.push(largeFile);
           }
         } catch (directErr) {
           if (directErr.response?.status === 400 || largeFile.size > 80 * 1024 * 1024) {
@@ -3486,141 +3495,16 @@ export default function SourceDashboard() {
     </div>
 
       {/* Global Floating Progress Widget (when not on upload tab) */}
-      {bulkUploadTriggered && (bulkJobId || uploading) && currentTab !== 'upload' && (() => {
-        const DraggableWidget = () => {
-          const widgetRef = React.useRef(null);
-          const dragState = React.useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
-          const posRef = React.useRef({ x: null, y: null });
-          const [, forceRender] = React.useState(0);
-
-          const onMouseDown = (e) => {
-            if (e.target.closest('button')) return; // don't drag when clicking Cancel
-            e.preventDefault();
-            const rect = widgetRef.current.getBoundingClientRect();
-            dragState.current = { dragging: true, startX: e.clientX, startY: e.clientY, origX: rect.left, origY: rect.top };
-            window.addEventListener('mousemove', onMouseMove);
-            window.addEventListener('mouseup', onMouseUp);
-          };
-
-          const onMouseMove = (e) => {
-            if (!dragState.current.dragging) return;
-            const dx = e.clientX - dragState.current.startX;
-            const dy = e.clientY - dragState.current.startY;
-            const newX = dragState.current.origX + dx;
-            const newY = dragState.current.origY + dy;
-            // Clamp within viewport
-            const w = widgetRef.current?.offsetWidth || 320;
-            const h = widgetRef.current?.offsetHeight || 120;
-            posRef.current = {
-              x: Math.max(8, Math.min(window.innerWidth - w - 8, newX)),
-              y: Math.max(8, Math.min(window.innerHeight - h - 8, newY)),
-            };
-            if (widgetRef.current) {
-              widgetRef.current.style.left = posRef.current.x + 'px';
-              widgetRef.current.style.top = posRef.current.y + 'px';
-              widgetRef.current.style.right = 'auto';
-              widgetRef.current.style.bottom = 'auto';
-            }
-          };
-
-          const onMouseUp = () => {
-            dragState.current.dragging = false;
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-            forceRender(n => n + 1);
-          };
-
-          const style = posRef.current.x !== null
-            ? { left: posRef.current.x, top: posRef.current.y, right: 'auto', bottom: 'auto' }
-            : { bottom: 24, right: 24 };
-
-          return (
-            <div
-              ref={widgetRef}
-              style={style}
-              className="fixed z-50 w-80 bg-white rounded-xl shadow-xl border border-purple-200 p-4 select-none"
-              onClick={(e) => { if (!dragState.current.dragging) setTab('upload'); }}
-            >
-              {/* Drag Handle */}
-              <div
-                onMouseDown={onMouseDown}
-                className="absolute top-0 left-0 right-0 h-7 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-t-xl"
-                title="Drag to move"
-              >
-                <div className="flex gap-0.5">
-                  {[...Array(6)].map((_, i) => (
-                    <div key={i} className="w-0.5 h-3 rounded-full bg-gray-300" />
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                    {uploading ? (
-                      <><Upload size={12} className="text-purple-600 animate-bounce" /> Uploading ZIP...</>
-                    ) : bulkJobProgress?.job?.status === 'paused' ? (
-                      <><Pause size={12} className="text-amber-500" /> Paused</>
-                    ) : bulkJobProgress?.job?.status === 'extracting' ? (
-                      <><Loader2 size={12} className="animate-spin text-purple-600" /> Scanning ZIP</>
-                    ) : (
-                      <><Loader2 size={12} className="animate-spin text-purple-600" /> Processing Resumes</>
-                    )}
-                  </h4>
-                  {uploading ? (
-                    <span className="text-xs font-bold text-purple-600">
-                      {Math.round(uploadProgress || 0)}%
-                    </span>
-                  ) : bulkJobProgress?.job?.status === 'extracting' ? (
-                    <span className="text-xs font-semibold text-purple-600">
-                      {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : '...'}
-                    </span>
-                  ) : bulkJobProgress?.job?.total_files > 0 ? (
-                    <span className={`text-xs font-bold ${
-                      bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
-                    }`}>
-                      {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
-                    </span>
-                  ) : null}
-                </div>
-                
-                <div className="w-full bg-purple-100 h-1.5 rounded-full overflow-hidden">
-                  {uploading ? (
-                    <div 
-                      className="h-full bg-purple-600 transition-all duration-300"
-                      style={{ width: `${uploadProgress || 0}%` }}
-                    ></div>
-                  ) : bulkJobProgress?.job?.status === 'extracting' ? (
-                    <div className="h-full bg-purple-400 animate-pulse w-full"></div>
-                  ) : bulkJobProgress?.job?.total_files > 0 ? (
-                    <div 
-                      className={`h-full transition-all duration-500 ${
-                        bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
-                      }`} 
-                      style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
-                    ></div>
-                  ) : null}
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <p className="text-[10px] text-gray-400 font-medium">Click to view details</p>
-                  {bulkJobId && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCancelQueue();
-                      }}
-                      className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:underline transition-colors"
-                    >
-                      Cancel Queue
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        };
-        return <DraggableWidget key="upload-widget" />;
-      })()}
+      {bulkUploadTriggered && (bulkJobId || uploading) && currentTab !== 'upload' && (
+        <DraggableUploadWidget
+          uploading={uploading}
+          bulkJobId={bulkJobId}
+          bulkJobProgress={bulkJobProgress}
+          uploadProgress={uploadProgress}
+          onOpenUpload={() => setTab('upload')}
+          onCancelQueue={handleCancelQueue}
+        />
+      )}
 
     </div>
   );
@@ -3648,6 +3532,160 @@ function Field({ label, children, required = false }) {
     <div className="flex flex-col gap-2">
       <label className="text-xs font-medium text-gray-500">{label} {required && <span className="text-red-500">*</span>}</label>
       {children}
+    </div>
+  );
+}
+
+// ── Draggable Progress Widget ───────────────────────────────────────────────
+function DraggableUploadWidget({
+  uploading,
+  bulkJobId,
+  bulkJobProgress,
+  uploadProgress,
+  onOpenUpload,
+  onCancelQueue
+}) {
+  const widgetRef = useRef(null);
+  const [pos, setPos] = useState({ x: null, y: null });
+  const isDragging = useRef(false);
+  const hasMoved = useRef(false);
+  const dragOffset = useRef({ startX: 0, startY: 0, elemX: 0, elemY: 0 });
+
+  const handlePointerDown = (e) => {
+    if (e.target.closest('button')) return;
+    const rect = widgetRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    dragOffset.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      elemX: rect.left,
+      elemY: rect.top,
+    };
+    hasMoved.current = false;
+    isDragging.current = true;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging.current || !widgetRef.current) return;
+    const dx = e.clientX - dragOffset.current.startX;
+    const dy = e.clientY - dragOffset.current.startY;
+
+    if (!hasMoved.current && Math.hypot(dx, dy) < 4) return;
+    hasMoved.current = true;
+
+    const w = widgetRef.current.offsetWidth || 320;
+    const h = widgetRef.current.offsetHeight || 120;
+    const maxX = window.innerWidth - w - 8;
+    const maxY = window.innerHeight - h - 8;
+    const nextX = Math.max(8, Math.min(maxX, dragOffset.current.elemX + dx));
+    const nextY = Math.max(8, Math.min(maxY, dragOffset.current.elemY + dy));
+
+    setPos({ x: nextX, y: nextY });
+  };
+
+  const handlePointerUp = (e) => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+
+  const handleClick = (e) => {
+    if (hasMoved.current) {
+      e.stopPropagation();
+      hasMoved.current = false;
+      return;
+    }
+    onOpenUpload?.();
+  };
+
+  const style = pos.x !== null
+    ? { left: `${pos.x}px`, top: `${pos.y}px`, right: 'auto', bottom: 'auto' }
+    : { right: '24px', bottom: '24px' };
+
+  return (
+    <div
+      ref={widgetRef}
+      style={style}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onClick={handleClick}
+      className="fixed z-50 w-80 bg-white rounded-xl shadow-2xl border border-purple-200 p-3.5 select-none touch-none cursor-grab active:cursor-grabbing hover:border-purple-300 transition-shadow"
+    >
+      {/* Visual Grab Handle Grip */}
+      <div className="w-full flex items-center justify-center pb-2 cursor-grab active:cursor-grabbing">
+        <div className="w-12 h-1 bg-gray-200 rounded-full hover:bg-purple-300 transition-colors" />
+      </div>
+
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+          {uploading ? (
+            <><Upload size={12} className="text-purple-600 animate-bounce" /> Uploading ZIP...</>
+          ) : bulkJobProgress?.job?.status === 'paused' ? (
+            <><Pause size={12} className="text-amber-500" /> Paused</>
+          ) : bulkJobProgress?.job?.status === 'extracting' ? (
+            <><Loader2 size={12} className="animate-spin text-purple-600" /> Scanning ZIP</>
+          ) : (
+            <><Loader2 size={12} className="animate-spin text-purple-600" /> Processing Resumes</>
+          )}
+        </h4>
+        {uploading ? (
+          <span className="text-xs font-bold text-purple-600">
+            {Math.round(uploadProgress || 0)}%
+          </span>
+        ) : bulkJobProgress?.job?.status === 'extracting' ? (
+          <span className="text-xs font-semibold text-purple-600">
+            {bulkJobProgress?.job?.total_files > 0 ? `${bulkJobProgress.job.total_files} queued` : '...'}
+          </span>
+        ) : bulkJobProgress?.job?.total_files > 0 ? (
+          <span className={`text-xs font-bold ${
+            bulkJobProgress?.job?.status === 'paused' ? 'text-amber-600' : 'text-purple-600'
+          }`}>
+            {Math.round(((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100)}%
+          </span>
+        ) : null}
+      </div>
+
+      <div className="w-full bg-purple-100 h-1.5 rounded-full overflow-hidden">
+        {uploading ? (
+          <div 
+            className="h-full bg-purple-600 transition-all duration-300"
+            style={{ width: `${uploadProgress || 0}%` }}
+          />
+        ) : bulkJobProgress?.job?.status === 'extracting' ? (
+          <div className="h-full bg-purple-400 animate-pulse w-full" />
+        ) : bulkJobProgress?.job?.total_files > 0 ? (
+          <div 
+            className={`h-full transition-all duration-500 ${
+              bulkJobProgress?.job?.status === 'paused' ? 'bg-amber-500' : 'bg-purple-600'
+            }`} 
+            style={{ width: `${((bulkJobProgress.items_stats?.filter(s => s.status !== 'pending' && s.status !== 'processing').reduce((a,b)=>a+b.count,0) || 0) / bulkJobProgress.job.total_files) * 100}%` }}
+          />
+        ) : null}
+      </div>
+
+      <div className="flex justify-between items-center mt-2.5">
+        <p className="text-[10px] text-gray-400 font-medium">Click to view details</p>
+        {bulkJobId && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancelQueue?.();
+            }}
+            className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:underline transition-colors"
+          >
+            Cancel Queue
+          </button>
+        )}
+      </div>
     </div>
   );
 }

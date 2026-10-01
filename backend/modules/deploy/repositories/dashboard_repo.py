@@ -26,6 +26,19 @@ class DashboardRepository:
                 cur.execute("SELECT count(*)::int FROM job_roles")
                 job_res = cur.fetchone()
                 total_jobs = job_res[0] if job_res else 0
+
+                cur.execute("""
+                    SELECT COALESCE(SUM(
+                        COALESCE(ob_laptop, 0) + COALESCE(ob_laptop_bag, 0) + 
+                        COALESCE(ob_headphones, 0) + COALESCE(ob_mouse, 0) + 
+                        COALESCE(ob_extra_hardware, 0) + COALESCE(ob_client_assets, 0) + 
+                        COALESCE(ob_id_card, 0) + COALESCE(ob_email_access, 0) + 
+                        COALESCE(ob_groups, 0) + COALESCE(ob_mediclaim, 0) + 
+                        COALESCE(ob_pf, 0)
+                    ), 0)::int FROM assets
+                """)
+                asset_res = cur.fetchone()
+                total_assets = asset_res[0] if asset_res else 0
             
             return {
                 "employees": self._read_sql_as_df("SELECT employee_code, name, team, designation, doj, location, employment_status FROM employees", conn),
@@ -33,6 +46,7 @@ class DashboardRepository:
                 "skills": self._read_sql_as_df("SELECT primary_skillset, experience_years FROM skill_matrix", conn),
                 "total_candidates": total_candidates,
                 "total_jobs": total_jobs,
+                "total_assets": total_assets,
                 "candidates": pd.DataFrame(),
                 "job_roles": pd.DataFrame(),
                 "notifications": self._read_sql_as_df("SELECT * FROM notifications WHERE employee_code IS NULL OR type = 'AdminAlert' ORDER BY created_at DESC LIMIT 5", conn),
