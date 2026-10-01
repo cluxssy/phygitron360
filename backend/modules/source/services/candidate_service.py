@@ -696,9 +696,8 @@ class CandidateService:
     ) -> tuple[List[Dict[str, Any]], int]:
         parsed_query = None
         if search and search.strip():
-            from backend.modules.source.services.candidate_search_parser import parse_search_query
-            ai_svc = getattr(self.ai_agents, 'ai', None) if hasattr(self, 'ai_agents') else None
-            parsed_query = parse_search_query(search.strip(), ai_service=ai_svc)
+            from backend.modules.source.services.candidate_search_parser import parse_search_query_rule_based
+            parsed_query = parse_search_query_rule_based(search.strip())
 
         candidates, total_count = self.repo.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
