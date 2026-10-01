@@ -19,8 +19,8 @@ class DashboardService:
             exited_count = len(df_emp[df_emp['employment_status'].fillna('').str.lower() == 'exited']) if not df_emp.empty and 'employment_status' in df_emp.columns else 0
             total_teams = df_emp['team'].nunique() if not df_emp.empty and 'team' in df_emp.columns else 0
             total_designations = df_emp['designation'].nunique() if not df_emp.empty and 'designation' in df_emp.columns else 0
-            total_candidates = len(data.get('candidates', pd.DataFrame()))
-            total_jobs = len(data.get('job_roles', pd.DataFrame()))
+            total_candidates = data.get('total_candidates', len(data.get('candidates', pd.DataFrame())))
+            total_jobs = data.get('total_jobs', len(data.get('job_roles', pd.DataFrame())))
 
             # Present Today — distinct employees with a clock-in recorded for CURRENT_DATE,
             # rated against active headcount (exited employees aren't expected to clock in).

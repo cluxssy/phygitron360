@@ -13,19 +13,28 @@ class DashboardRepository:
             return pd.DataFrame(data, columns=columns)
 
     def get_all_counts(self, tenant_id: str = 'public') -> Dict[str, Any]:
-        """Fetch raw dataframes for analytics."""
+        """Fetch raw dataframes and lightweight counts for analytics."""
         conn = get_db_connection()
         try:
             # Set search path on the connection itself
             with conn.cursor() as cur:
                 cur.execute(f'SET search_path TO "{tenant_id}", public')
+                cur.execute("SELECT count(*)::int FROM candidates")
+                cand_res = cur.fetchone()
+                total_candidates = cand_res[0] if cand_res else 0
+
+                cur.execute("SELECT count(*)::int FROM job_roles")
+                job_res = cur.fetchone()
+                total_jobs = job_res[0] if job_res else 0
             
             return {
-                "employees": self._read_sql_as_df("SELECT * FROM employees", conn),
-                "assets": self._read_sql_as_df("SELECT * FROM assets", conn),
-                "skills": self._read_sql_as_df("SELECT * FROM skill_matrix", conn),
-                "candidates": self._read_sql_as_df("SELECT * FROM candidates", conn),
-                "job_roles": self._read_sql_as_df("SELECT * FROM job_roles", conn),
+                "employees": self._read_sql_as_df("SELECT employee_code, name, team, designation, doj, location, employment_status FROM employees", conn),
+                "assets": self._read_sql_as_df("SELECT cl_laptop, ob_laptop FROM assets", conn),
+                "skills": self._read_sql_as_df("SELECT primary_skillset, experience_years FROM skill_matrix", conn),
+                "total_candidates": total_candidates,
+                "total_jobs": total_jobs,
+                "candidates": pd.DataFrame(),
+                "job_roles": pd.DataFrame(),
                 "notifications": self._read_sql_as_df("SELECT * FROM notifications WHERE employee_code IS NULL OR type = 'AdminAlert' ORDER BY created_at DESC LIMIT 5", conn),
                 "attendance_today": self._read_sql_as_df("SELECT employee_code, clock_in FROM attendance WHERE date = CAST(CURRENT_DATE AS TEXT)", conn),
             }

@@ -1156,11 +1156,12 @@ class CandidateService:
         import asyncio
         import re
 
-        num_workers = int(os.getenv("BULK_PARSE_WORKERS", "8"))
+        num_workers = int(os.getenv("BULK_PARSE_WORKERS", "3"))
         logger.info(f"[BulkWorker] Starting {num_workers} parallel AI parse workers for tenant {self.tenant_id}")
 
         # Shared tenant-wide backoff timestamp across all workers
         shared_backoff_until = [0.0]
+        last_auto_heal = [0.0]
 
         # Per-job cancel registry: job_id -> asyncio.Event
         cancel_events: Dict[int, asyncio.Event] = {}
@@ -1192,14 +1193,17 @@ class CandidateService:
                     # Fetch up to 50 pending items (SKIP LOCKED)
                     items = self.repo.get_pending_bulk_upload_job_items(limit=50)
                     if not items:
-                        # Auto-heal: Rescue any items stuck in 'processing' for > 300s (5 minutes)
-                        # (Prevents idle workers from stealing items that are actively being parsed by AI)
-                        try:
-                            self.repo.reset_stuck_processing_items(older_than_seconds=300)
-                            self.repo.cleanup_stale_processing_jobs()
-                        except Exception as heal_err:
-                            logger.error(f"[Worker-{worker_id}][{self.tenant_id}] Auto-heal error: {heal_err}")
-                        await asyncio.sleep(5)
+                        # Auto-heal: Only run periodically (every 180s) and ONLY by worker 0
+                        # Prevents idle workers from hammering the DB with lock/update queries
+                        now = time.monotonic()
+                        if worker_id == 0 and (now - last_auto_heal[0] > 180):
+                            last_auto_heal[0] = now
+                            try:
+                                self.repo.reset_stuck_processing_items(older_than_seconds=300)
+                                self.repo.cleanup_stale_processing_jobs()
+                            except Exception as heal_err:
+                                logger.error(f"[Worker-{worker_id}][{self.tenant_id}] Auto-heal error: {heal_err}")
+                        await asyncio.sleep(8 + worker_id * 2)
                         continue
 
                     print(f"[Worker-{worker_id}][{self.tenant_id}] Picked up batch of {len(items)} items", flush=True)

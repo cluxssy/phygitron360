@@ -24,6 +24,8 @@ DB_NAME = os.getenv("DB_NAME", "hrms_db")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
+DB_MAX_CONNECTIONS = int(os.getenv("DB_MAX_CONNECTIONS", "20"))
+
 _pool = None
 
 def get_db_pool():
@@ -31,7 +33,7 @@ def get_db_pool():
     if _pool is None:
         _pool = ThreadedConnectionPool(
             minconn=2,
-            maxconn=10,
+            maxconn=DB_MAX_CONNECTIONS,
             host=DB_HOST,
             port=DB_PORT,
             dbname=DB_NAME,
@@ -1253,6 +1255,10 @@ def create_tables(schema_name='public'):
         # Add extracted_text column to bulk_upload_job_items for pre-extracted resume text
         # This decouples text extraction (fast, CPU) from AI parsing (slow, API)
         cur.execute("ALTER TABLE bulk_upload_job_items ADD COLUMN IF NOT EXISTS extracted_text TEXT")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_bulk_items_status ON bulk_upload_job_items(status)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_bulk_items_job_status ON bulk_upload_job_items(job_id, status)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_bulk_items_file_hash ON bulk_upload_job_items(file_hash)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_bulk_jobs_status ON bulk_upload_jobs(status)")
 
         # --- Verify Module Extensions ---
 

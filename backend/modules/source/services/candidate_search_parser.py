@@ -23,6 +23,7 @@ DEGREE_SYNONYMS = {
 
 # Top colleges/institutions abbreviations to expand
 INSTITUTION_SYNONYMS = {
+    "iim": ["iim", "indian institute of management"],
     "iit": ["iit", "indian institute of technology"],
     "nit": ["nit", "national institute of technology"],
     "iiit": ["iiit", "indian institute of information technology"],
@@ -30,7 +31,10 @@ INSTITUTION_SYNONYMS = {
     "vit": ["vit", "vellore institute of technology"],
     "srm": ["srm", "srm institute of science and technology"],
     "dtu": ["dtu", "delhi technological university"],
-    "nsut": ["nsut", "netaji subhas university of technology"]
+    "nsut": ["nsut", "netaji subhas university of technology"],
+    "iisc": ["iisc", "indian institute of science"],
+    "xlri": ["xlri", "xavier school of management"],
+    "fms": ["fms", "faculty of management studies"]
 }
 
 KNOWN_MASS_RECRUITERS_OR_COMPANIES = {
@@ -148,7 +152,28 @@ def parse_search_query_rule_based(query: str) -> Dict[str, Any]:
             include_degrees.update(DEGREE_SYNONYMS[word])
             used_words.add(word)
 
-    # 4. Extract Institutions
+    # Multi-word institution check first
+    institution_phrases = [
+        ("indian institute of management", "iim"),
+        ("indian institute of technology", "iit"),
+        ("indian institute of information technology", "iiit"),
+        ("national institute of technology", "nit"),
+        ("birla institute of technology", "bits"),
+        ("vellore institute of technology", "vit"),
+        ("srm institute of science and technology", "srm"),
+        ("delhi technological university", "dtu"),
+        ("netaji subhas university of technology", "nsut"),
+        ("indian institute of science", "iisc"),
+        ("xavier school of management", "xlri"),
+        ("faculty of management studies", "fms")
+    ]
+    for phrase, alias in institution_phrases:
+        if phrase in remaining_text:
+            include_institutions.update(INSTITUTION_SYNONYMS.get(alias, [alias, phrase]))
+            remaining_text = remaining_text.replace(phrase, " ")
+
+    # 4. Extract Institutions (single words)
+    words = re.findall(r'[a-zA-Z0-9\.]+', remaining_text)
     for word in words:
         clean_w = word.strip('.').lower()
         if clean_w in INSTITUTION_SYNONYMS:
@@ -160,7 +185,7 @@ def parse_search_query_rule_based(query: str) -> Dict[str, Any]:
         "not", "in", "at", "from", "with", "and", "or", "who", "has", "have", "for",
         "experienced", "experience", "candidate", "candidates", "person", "people",
         "graduated", "graduate", "graduates", "developer", "engineer", "any", "the", "a", "an",
-        "years", "year", "yrs", "yr", "exp", "worked", "working"
+        "years", "year", "yrs", "yr", "exp", "worked", "working", "of", "is", "to", "by", "on", "as"
     }
 
     # Re-tokenize remaining text after phrase replacements
