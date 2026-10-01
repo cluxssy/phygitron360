@@ -561,9 +561,9 @@ export default function SourceDashboard() {
       params.set('sort_by', filters.sort_by);
       if (filters.role_id) {
         params.set('role_id', filters.role_id);
-        params.set('limit', filters.limit);
+        params.set('limit', filters.limit || 50);
       } else {
-        params.set('limit', 5000);
+        params.set('limit', 100);
       }
       if (activeSearch && activeSearch.trim()) {
         params.set('search', activeSearch.trim());

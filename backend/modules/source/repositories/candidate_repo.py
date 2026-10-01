@@ -489,7 +489,7 @@ class CandidateRepository:
 
                 if parsed_query:
                     # 1. Excluded Companies (e.g. "not in wipro")
-                    for comp in parsed_query.get("exclude_companies", []):
+                    for comp in (parsed_query.get("exclude_companies") or []):
                         conditions.append("""
                             NOT EXISTS (
                                 SELECT 1 FROM candidate_experience cx
@@ -500,7 +500,7 @@ class CandidateRepository:
                         params.extend([f"%{comp}%", f"%{comp}%"])
 
                     # 2. Included Companies (e.g. "ex-google")
-                    for comp in parsed_query.get("include_companies", []):
+                    for comp in (parsed_query.get("include_companies") or []):
                         conditions.append("""
                             (
                                 EXISTS (
@@ -513,8 +513,9 @@ class CandidateRepository:
                         params.extend([f"%{comp}%", f"%{comp}%"])
 
                     # 3. Degrees (e.g. "btech", "mba", with synonyms)
-                    if parsed_query.get("degrees"):
-                        deg_patterns = [f"%{d}%" for d in parsed_query["degrees"]]
+                    degrees = parsed_query.get("degrees") or []
+                    if degrees:
+                        deg_patterns = [f"%{d}%" for d in degrees]
                         conditions.append("""
                             (
                                 EXISTS (
@@ -530,9 +531,10 @@ class CandidateRepository:
                         """)
                         params.extend([deg_patterns, deg_patterns, deg_patterns])
 
-                    # 4. Institutions (e.g. "iit", "vit")
-                    if parsed_query.get("institutions"):
-                        inst_patterns = [f"%{inst}%" for inst in parsed_query["institutions"]]
+                    # 4. Institutions (e.g. "iit", "vit", "iim")
+                    institutions = parsed_query.get("institutions") or []
+                    if institutions:
+                        inst_patterns = [f"%{inst}%" for inst in institutions]
                         conditions.append("""
                             EXISTS (
                                 SELECT 1 FROM candidate_education ce
@@ -550,7 +552,7 @@ class CandidateRepository:
                         params.append(parsed_query["max_exp"])
 
                     # 6. General keywords (search across all fields)
-                    terms_to_match = parsed_query.get("general_terms", [])
+                    terms_to_match = parsed_query.get("general_terms") or []
                     if not terms_to_match and not parsed_query.get("is_complex") and search:
                         terms_to_match = [w.strip() for w in search.split() if w.strip()]
 
@@ -1438,7 +1440,7 @@ class CandidateRepository:
             self._set_search_path(cur)
             
             # 1. Total count and untagged count per month (ordered newest first)
-            cur.execute('''
+            cur.execute(r'''
                 SELECT 
                     TO_CHAR(created_at, 'YYYY-MM') AS ym,
                     COUNT(id) AS total_count,

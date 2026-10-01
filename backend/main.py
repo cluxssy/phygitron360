@@ -194,9 +194,9 @@ async def start_background_workers():
     db.main_loop = asyncio.get_running_loop()
     from backend.core.database import create_tables
 
-    # First, ensure the public schema and master tables exist
+    # First, ensure the public schema and master tables exist (non-blocking)
     try:
-        create_tables(schema_name='public')
+        await asyncio.to_thread(create_tables, schema_name='public')
         print("[Startup] Public schema migration OK", flush=True)
     except Exception as e:
         print(f"[Startup] Public schema migration FAILED: {e}", flush=True)
