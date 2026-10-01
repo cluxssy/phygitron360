@@ -542,10 +542,11 @@ export default function SourceDashboard() {
     } catch { /* silent */ }
   }, []);
 
-  const fetchCandidates = useCallback(async (customSearch) => {
+  const fetchCandidates = useCallback(async (customSearch, page) => {
     setLoading(true);
     try {
       const activeSearch = customSearch !== undefined ? customSearch : debouncedSearch;
+      const currentPage = page !== undefined ? page : dirPage;
       const params = new URLSearchParams();
       if (filters.pool !== 'all') params.set('pool', filters.pool);
       if (filters.location) params.set('location', filters.location);
@@ -563,7 +564,10 @@ export default function SourceDashboard() {
         params.set('role_id', filters.role_id);
         params.set('limit', filters.limit || 50);
       } else {
-        params.set('limit', 100);
+        params.set('limit', dirPageSize === 'all' ? 500 : Number(dirPageSize));
+        if (currentPage > 1) {
+          params.set('offset', (currentPage - 1) * Number(dirPageSize));
+        }
       }
       if (activeSearch && activeSearch.trim()) {
         params.set('search', activeSearch.trim());
@@ -579,7 +583,7 @@ export default function SourceDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [filters, debouncedSearch]);
+  }, [filters, debouncedSearch, dirPage, dirPageSize]);
 
   const fetchActivities = useCallback(async () => {
     setLoadingActivities(true);
@@ -831,17 +835,31 @@ export default function SourceDashboard() {
     setDirPage(1);
   }, [debouncedSearch, filters]);
 
+  // When page changes (not reset to 1), re-fetch from server
+  useEffect(() => {
+    if (!filters.role_id) {
+      fetchCandidates(undefined, dirPage);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirPage]);
+
   const totalDirPages = useMemo(() => {
     if (dirPageSize === 'all') return 1;
-    return Math.max(1, Math.ceil(filteredCandidates.length / Number(dirPageSize)));
-  }, [filteredCandidates.length, dirPageSize]);
+    return Math.max(1, Math.ceil(totalCandidates / Number(dirPageSize)));
+  }, [totalCandidates, dirPageSize]);
 
+  // For server-side pagination (no role_id): backend already returned the right slice,
+  // so paginatedCandidates = filteredCandidates (which is the backend result).
+  // For role_id mode: still paginate client-side since scores are all fetched at once.
   const paginatedCandidates = useMemo(() => {
-    if (dirPageSize === 'all') return filteredCandidates;
-    const size = Number(dirPageSize);
-    const start = (dirPage - 1) * size;
-    return filteredCandidates.slice(start, start + size);
-  }, [filteredCandidates, dirPage, dirPageSize]);
+    if (filters.role_id) {
+      if (dirPageSize === 'all') return filteredCandidates;
+      const size = Number(dirPageSize);
+      const start = (dirPage - 1) * size;
+      return filteredCandidates.slice(start, start + size);
+    }
+    return filteredCandidates; // server already paginated
+  }, [filteredCandidates, dirPage, dirPageSize, filters.role_id]);
 
   // ── Selection helpers ──────────────────────────────────────────────────────
   const toggle = (id) => setSelectedIds(prev => {
@@ -2752,11 +2770,8 @@ export default function SourceDashboard() {
             <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-t border-gray-100 bg-gray-50/70 text-xs text-gray-600 rounded-b-2xl">
               <div className="flex items-center gap-2">
                 <span>
-                  Showing <strong className="text-gray-800">{dirPageSize === 'all' ? 1 : Math.min((dirPage - 1) * Number(dirPageSize) + 1, filteredCandidates.length)}</strong>–<strong className="text-gray-800">{dirPageSize === 'all' ? filteredCandidates.length : Math.min(dirPage * Number(dirPageSize), filteredCandidates.length)}</strong> of <strong className="text-gray-800">{filteredCandidates.length}</strong> candidates
+                  Showing <strong className="text-gray-800">{dirPageSize === 'all' ? 1 : Math.min((dirPage - 1) * Number(dirPageSize) + 1, totalCandidates)}</strong>–<strong className="text-gray-800">{dirPageSize === 'all' ? totalCandidates : Math.min(dirPage * Number(dirPageSize), totalCandidates)}</strong> of <strong className="text-gray-800">{totalCandidates}</strong> candidates
                 </span>
-                {totalCandidates > filteredCandidates.length && (
-                  <span className="text-gray-400">({totalCandidates} total in pool)</span>
-                )}
               </div>
 
               <div className="flex items-center gap-4">
