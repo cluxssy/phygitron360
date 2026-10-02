@@ -788,7 +788,7 @@ class CandidateRepository:
                 self._set_search_path(cur)
                 cur.execute(
                     """INSERT INTO bulk_upload_jobs (created_by, total_files, status, override_date, folder_id, tags)
-                       VALUES (%s, %s, 'processing', %s, %s, %s) RETURNING id""",
+                       VALUES (%s, %s, 'extracting', %s, %s, %s) RETURNING id""",
                     (user_id, total_files, override_date, folder_id, tags or [])
                 )
                 job_id = cur.fetchone()[0]
@@ -1035,7 +1035,7 @@ class CandidateRepository:
                                 from datetime import datetime, timezone
                                 now = datetime.now(timezone.utc) if getattr(created_at, 'tzinfo', None) else datetime.now()
                                 age_minutes = (now - created_at).total_seconds() / 60
-                                if age_minutes > 5:
+                                if age_minutes > 60:
                                     cur.execute(
                                         "UPDATE bulk_upload_jobs SET status = 'failed', error_message = 'Job ended with no files.', updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                                         (job['id'],)
@@ -1043,7 +1043,7 @@ class CandidateRepository:
                                     conn.commit()
                                     return None
 
-                # Staleness timeout: extracting jobs stuck with 0 items for >30 minutes
+                # Staleness timeout: extracting jobs stuck with 0 items for >60 minutes
                 if job['status'] == 'extracting':
                     cur.execute(
                         "SELECT COUNT(*) AS cnt FROM bulk_upload_job_items WHERE job_id = %s",
@@ -1055,11 +1055,11 @@ class CandidateRepository:
                         from datetime import datetime, timezone
                         now = datetime.now(timezone.utc) if getattr(created_at, 'tzinfo', None) else datetime.now()
                         age_minutes = (now - created_at).total_seconds() / 60
-                        if age_minutes > 30:
+                        if age_minutes > 60:
                             cur.execute(
                                 """UPDATE bulk_upload_jobs 
                                    SET status = 'failed', 
-                                       error_message = 'Extraction timed out after 30 minutes with no files processed.',
+                                       error_message = 'Extraction timed out after 60 minutes with no files processed.',
                                        updated_at = CURRENT_TIMESTAMP 
                                    WHERE id = %s""",
                                 (job['id'],)

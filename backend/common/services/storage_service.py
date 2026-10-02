@@ -224,6 +224,24 @@ def delete_s3_file(key: str) -> bool:
         return False
 
 
+def list_s3_objects_in_prefix(prefix: str) -> List[Dict[str, Any]]:
+    """List all objects under an S3/Spaces prefix with metadata."""
+    if not _USE_S3:
+        return []
+    try:
+        s3 = _get_s3()
+        resp = s3.list_objects_v2(Bucket=_S3_BUCKET, Prefix=prefix)
+        contents = resp.get('Contents', [])
+        return [{
+            'key': obj['Key'],
+            'size': obj['Size'],
+            'last_modified': obj['LastModified'].isoformat() if hasattr(obj['LastModified'], 'isoformat') else str(obj['LastModified'])
+        } for obj in contents]
+    except Exception as e:
+        logger.error(f"[S3] Failed to list objects in prefix {prefix}: {e}")
+        return []
+
+
 def delete_tenant_directory(tenant_id: str):
     """Permanently delete a tenant's entire storage folder from both S3 and Local Disk."""
     if not tenant_id or tenant_id == "." or tenant_id == "/":

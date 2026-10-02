@@ -459,6 +459,8 @@ export default function SourceDashboard() {
   const [bulkJobId, setBulkJobId] = useState(null);
   const [bulkJobProgress, setBulkJobProgress] = useState(null);
   const [bulkUploadTriggered, setBulkUploadTriggered] = useState(false);
+  const [pendingArchives, setPendingArchives] = useState([]);
+  const [processingArchive, setProcessingArchive] = useState(false);
   const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, required_skills: [] });
   const [availableTags, setAvailableTags] = useState([]);
   const tagOptions = useMemo(() => [
@@ -649,10 +651,15 @@ export default function SourceDashboard() {
       try {
         const res = await fetch('/api/source/candidates/bulk-upload/active', { credentials: 'include' });
         const data = await res.json();
-        if (res.ok && data.success && data.data && data.data.job) {
-          setBulkJobId(data.data.job.id);
-          setBulkJobProgress(data.data);
-          setBulkUploadTriggered(true);
+        if (res.ok && data.success) {
+          if (data.pending_archives && Array.isArray(data.pending_archives)) {
+            setPendingArchives(data.pending_archives);
+          }
+          if (data.data && data.data.job) {
+            setBulkJobId(data.data.job.id);
+            setBulkJobProgress(data.data);
+            setBulkUploadTriggered(true);
+          }
         }
       } catch (err) {
         console.error('Failed to fetch active bulk upload job', err);
@@ -670,6 +677,28 @@ export default function SourceDashboard() {
     window.addEventListener('bulk-job-started', handleJobStarted);
     return () => window.removeEventListener('bulk-job-started', handleJobStarted);
   }, []);
+
+  useEffect(() => {
+    if (currentTab === 'upload') {
+      const checkPending = async () => {
+        try {
+          const res = await fetch('/api/source/candidates/bulk-upload/active', { credentials: 'include' });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            if (data.pending_archives && Array.isArray(data.pending_archives)) {
+              setPendingArchives(data.pending_archives);
+            }
+            if (data.data && data.data.job) {
+              setBulkJobId(data.data.job.id);
+              setBulkJobProgress(data.data);
+              setBulkUploadTriggered(true);
+            }
+          }
+        } catch (_) {}
+      };
+      checkPending();
+    }
+  }, [currentTab]);
 
   const fetchActiveJob = useCallback(async () => {
     if (!bulkJobId) return;
@@ -1271,6 +1300,56 @@ export default function SourceDashboard() {
     }
   };
 
+  const handleProcessPendingArchive = async (s3Key) => {
+    setProcessingArchive(true);
+    try {
+      const res = await fetch('/api/source/candidates/bulk-upload/process-pending-archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ s3_key: s3Key })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success('Unpacking cloud archive in the background!');
+        setPendingArchives(prev => prev.filter(a => a.key !== s3Key));
+        if (data.data?.job_id) {
+          setBulkJobId(data.data.job_id);
+          setBulkJobProgress({ job: { id: data.data.job_id, status: 'extracting', total_files: 0 }, items_stats: [] });
+          setBulkUploadTriggered(true);
+        }
+      } else {
+        toast.error(data.error || data.detail || 'Failed to process archive');
+      }
+    } catch (err) {
+      console.error('Failed to process archive', err);
+      toast.error('Network error while processing archive');
+    } finally {
+      setProcessingArchive(false);
+    }
+  };
+
+  const handleDeletePendingArchive = async (s3Key) => {
+    if (!window.confirm('Are you sure you want to discard this uploaded archive from cloud storage?')) return;
+    try {
+      const res = await fetch('/api/source/candidates/bulk-upload/delete-pending-archive', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ s3_key: s3Key })
+      });
+      if (res.ok) {
+        toast.success('Archive discarded.');
+        setPendingArchives(prev => prev.filter(a => a.key !== s3Key));
+      } else {
+        toast.error('Failed to discard archive');
+      }
+    } catch (err) {
+      console.error('Failed to delete pending archive', err);
+      toast.error('Network error');
+    }
+  };
+
   // ── Create / Edit job role ────────────────────────────────────────────────────────
   const handleSaveRole = async (e) => {
     e.preventDefault();
@@ -1635,7 +1714,14 @@ export default function SourceDashboard() {
           {hasPermission(P.SOURCE_CANDIDATES_VIEW) && <button className={currentTab === 'directory' ? 'active' : ''} onClick={() => setTab('directory')}>Directory</button>}
           {hasPermission(P.SOURCE_CANDIDATES_VIEW) && <button className={currentTab === 'repo' ? 'active' : ''} onClick={() => setTab('repo')}>Resume Repo</button>}
           {hasPermission(P.SOURCE_JOBS_VIEW) && <button className={currentTab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>Jobs</button>}
-          {hasPermission(P.SOURCE_CANDIDATES_MANAGE) && <button className={currentTab === 'upload' ? 'active' : ''} onClick={() => setTab('upload')}>Upload</button>}
+          {hasPermission(P.SOURCE_CANDIDATES_MANAGE) && (
+            <button className={`${currentTab === 'upload' ? 'active' : ''} flex items-center justify-between`} onClick={() => setTab('upload')}>
+              <span>Upload</span>
+              {pendingArchives.length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-white animate-pulse" title="Cloud archive ready to unpack" />
+              )}
+            </button>
+          )}
           {hasPermission(P.SOURCE_OFFERS_VIEW) && <button className={currentTab === 'offers' ? 'active' : ''} onClick={() => setTab('offers')}>Offer Approvals</button>}
           {hasPermission(P.SOURCE_CANDIDATES_VIEW) && <button className={currentTab === 'active' ? 'active' : ''} onClick={() => setTab('active')}>Active Candidates</button>}
           <div className="sidebar-brand">
@@ -2202,6 +2288,59 @@ export default function SourceDashboard() {
         </div>
       ) : currentTab === 'upload' ? (
         <div className="flex-1 flex items-center justify-center flex-col gap-6">
+          {/* Pending Cloud Archive Banner */}
+          {pendingArchives.length > 0 && (
+            <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-6 w-full max-w-xl shadow-sm">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 text-amber-600 mt-0.5">
+                  <Archive size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-amber-900">
+                      Cloud Resume Archive Found
+                    </h3>
+                    <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">
+                      {pendingArchives[0].size_mb} MB
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1 truncate font-mono">
+                    {pendingArchives[0].filename}
+                  </p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    An archive was uploaded directly to cloud storage and is ready to be unpacked into candidates.
+                  </p>
+                  <div className="flex items-center gap-2.5 mt-4">
+                    <button
+                      type="button"
+                      disabled={processingArchive}
+                      onClick={() => handleProcessPendingArchive(pendingArchives[0].key)}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {processingArchive ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" /> Unpacking Archive...
+                        </>
+                      ) : (
+                        <>
+                          <Play size={13} /> Process &amp; Unpack ({pendingArchives[0].size_mb} MB)
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={processingArchive}
+                      onClick={() => handleDeletePendingArchive(pendingArchives[0].key)}
+                      className="px-3 py-2 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Trash2 size={13} /> Discard
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white w-full max-w-xl rounded-2xl p-8 border border-gray-200 shadow-sm relative">
             <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
               <Upload size={24} className="text-purple-600"/> Resume Processing Center
