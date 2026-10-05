@@ -24,7 +24,8 @@ DB_NAME = os.getenv("DB_NAME", "hrms_db")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
-DB_MAX_CONNECTIONS = int(os.getenv("DB_MAX_CONNECTIONS", "20"))
+DB_MAX_CONNECTIONS = int(os.getenv("DB_MAX_CONNECTIONS", "30"))
+DB_MIN_CONNECTIONS = int(os.getenv("DB_MIN_CONNECTIONS", "5"))
 
 _pool = None
 
@@ -32,7 +33,7 @@ def get_db_pool():
     global _pool
     if _pool is None:
         _pool = ThreadedConnectionPool(
-            minconn=2,
+            minconn=DB_MIN_CONNECTIONS,
             maxconn=DB_MAX_CONNECTIONS,
             host=DB_HOST,
             port=DB_PORT,
@@ -54,7 +55,22 @@ class PooledConnectionWrapper:
         
     def close(self):
         if not self._closed:
-            self._pool.putconn(self._conn)
+            is_dead = False
+            try:
+                if self._conn.closed:
+                    is_dead = True
+                else:
+                    if hasattr(self._conn, 'get_transaction_status'):
+                        if self._conn.get_transaction_status() != 0:
+                            self._conn.rollback()
+                    else:
+                        self._conn.rollback()
+            except Exception:
+                is_dead = True
+            try:
+                self._pool.putconn(self._conn, close=is_dead)
+            except Exception:
+                pass
             self._closed = True
             
     def __enter__(self):
@@ -62,8 +78,10 @@ class PooledConnectionWrapper:
         return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._conn.__exit__(exc_type, exc_val, exc_tb)
-        self.close()
+        try:
+            self._conn.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
 
 import time
 from psycopg2.pool import PoolError
@@ -74,8 +92,14 @@ def get_db_connection():
     for _ in range(150):  # Retry for up to 15 seconds
         try:
             conn = pool.getconn()
+            if conn.closed:
+                try:
+                    pool.putconn(conn, close=True)
+                except Exception:
+                    pass
+                continue
             return PooledConnectionWrapper(conn, pool)
-        except PoolError:
+        except (PoolError, psycopg2.OperationalError):
             time.sleep(0.1)
     # If it still fails, let it raise the error naturally
     conn = pool.getconn()

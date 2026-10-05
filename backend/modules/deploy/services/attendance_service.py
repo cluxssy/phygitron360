@@ -1148,42 +1148,35 @@ class AttendanceService:
 
         return {"success": True, "message": f"Correction request has been {action.lower()}"}
 
-    def get_bimonthly_report(self, year: int, month: int, cycle: int, manager_code: Optional[str] = None):
-        # 1. Determine start and end day based on cycle
-        num_days = calendar.monthrange(year, month)[1]
-        if cycle == 1:
-            start_day = 1
-            end_day = 15
-        elif cycle == 2:
-            start_day = 16
-            end_day = num_days
-        else:
-            raise ValueError("Invalid cycle. Must be 1 or 2.")
-            
-        start_date = f"{year}-{month:02d}-{start_day:02d}"
-        end_date = f"{year}-{month:02d}-{end_day:02d}"
-        
-        # 2. Fetch employees based on manager segmentation
+    def get_attendance_report(self, start_date: str, end_date: str, manager_code: Optional[str] = None):
+        """Fetch attendance report for any arbitrary date range (start_date to end_date)."""
+        d_start = datetime.strptime(start_date, '%Y-%m-%d')
+        d_end = datetime.strptime(end_date, '%Y-%m-%d')
+        if d_start > d_end:
+            raise ValueError("start_date cannot be after end_date.")
+
+        # 1. Fetch employees based on manager segmentation
         employees = self.repo.get_employees_for_reporting(manager_code, self.tenant_id)
-        
-        # 3. Fetch attendance and leave records for the date range
+
+        # 2. Fetch attendance, leave, and holiday records for date range
         attendance_rows = self.repo.get_monthly_attendance(start_date, end_date, self.tenant_id)
         leave_rows = self.repo.get_monthly_approved_leaves(start_date, end_date, self.tenant_id)
         holiday_rows = self.holiday_repo.get_holidays_in_range(start_date, end_date, self.tenant_id)
         holidays_map = {h['date']: h for h in holiday_rows}
-        
+
         # Process maps
         att_map = {}
         for row in attendance_rows:
             e_code = row['employee_code']
-            if e_code not in att_map: att_map[e_code] = {}
-            
+            if e_code not in att_map:
+                att_map[e_code] = {}
+
             d_val = row['date']
             d_str = d_val.strftime('%Y-%m-%d') if hasattr(d_val, 'strftime') else str(d_val)
-            
+
             clock_in = row.get('clock_in')
             clock_out = row.get('clock_out')
-            
+
             if clock_in and clock_out:
                 _, status = compute_shift_duration_and_status(
                     clock_in, clock_out, d_str, row.get('clock_out_date')
@@ -1205,24 +1198,21 @@ class AttendanceService:
                         pass
                 att_map[e_code][d_str] = 'Active' if is_active else 'Absent'
             else:
-                 att_map[e_code][d_str] = 'Absent'
-                 
+                att_map[e_code][d_str] = 'Absent'
+
         leave_map = {}
         for row in leave_rows:
             code = row['employee_code']
-            if code not in leave_map: leave_map[code] = {}
-            
+            if code not in leave_map:
+                leave_map[code] = {}
+
             try:
-                # leaves might have string dates YYYY-MM-DD
                 d1 = datetime.strptime(row['start_date'], '%Y-%m-%d')
                 d2 = datetime.strptime(row['end_date'], '%Y-%m-%d')
-                
-                range_start = datetime(year, month, start_day)
-                range_end = datetime(year, month, end_day)
-                
-                curr = max(d1, range_start)
-                end = min(d2, range_end)
-                
+
+                curr = max(d1, d_start)
+                end = min(d2, d_end)
+
                 while curr <= end:
                     d_str = curr.strftime('%Y-%m-%d')
                     l_status = 'Leave'
@@ -1230,12 +1220,18 @@ class AttendanceService:
                         l_status = f"Half Day Leave ({row.get('start_day_type')})"
                     if curr == d2 and row.get('end_day_type') in ['First Half', 'Second Half']:
                         l_status = f"Half Day Leave ({row.get('end_day_type')})"
-                    
+
                     leave_map[code][d_str] = l_status
                     curr += timedelta(days=1)
-            except:
+            except Exception:
                 pass
-                
+
+        date_list = []
+        curr_dt = d_start
+        while curr_dt <= d_end:
+            date_list.append(curr_dt)
+            curr_dt += timedelta(days=1)
+
         report = []
         for emp in employees:
             code = emp['employee_code']
@@ -1245,11 +1241,12 @@ class AttendanceService:
             leave_count = 0
             absent_count = 0
             holiday_count = 0
-            
-            for day in range(start_day, end_day + 1):
-                date_str = f"{year}-{month:02d}-{day:02d}"
+
+            for dt in date_list:
+                date_str = dt.strftime('%Y-%m-%d')
+                day = dt.day
                 status = 'Absent'
-                
+
                 if code in leave_map and date_str in leave_map[code]:
                     status = leave_map[code][date_str]
                     if status == 'Leave':
@@ -1269,28 +1266,29 @@ class AttendanceService:
                     holiday_count += 1
                 else:
                     try:
-                        dt = datetime(year, month, day)
                         dt_date = dt.date()
                         today_date = _today_ist()
-                        
-                        if dt.weekday() >= 5: 
+
+                        if dt.weekday() >= 5:
                             status = 'Weekend'
                         elif dt_date > today_date:
                             status = 'Future'
                         elif dt_date == today_date:
-                            status = 'Not Started' 
+                            status = 'Not Started'
                         else:
                             status = 'Absent'
                             absent_count += 1
-                    except:
+                    except Exception:
                         pass
-                
+
                 h_name = holidays_map[date_str]['name'] if date_str in holidays_map else None
                 days.append({"day": day, "status": status, "date": date_str, "holiday_name": h_name})
-                
+
             report.append({
                 "name": emp['name'],
                 "code": code,
+                "team": emp.get('team', ''),
+                "designation": emp.get('designation', ''),
                 "days": days,
                 "stats": {
                     "present": present_count,
@@ -1300,6 +1298,24 @@ class AttendanceService:
                     "holiday": holiday_count
                 }
             })
-            
+
         return report
+
+    def get_bimonthly_report(self, year: int, month: int, cycle: int, manager_code: Optional[str] = None):
+        num_days = calendar.monthrange(year, month)[1]
+        if cycle == 1:
+            start_day = 1
+            end_day = 15
+        elif cycle == 2:
+            start_day = 16
+            end_day = num_days
+        else:
+            raise ValueError("Invalid cycle. Must be 1 or 2.")
+
+        start_date = f"{year}-{month:02d}-{start_day:02d}"
+        end_date = f"{year}-{month:02d}-{end_day:02d}"
+        return self.get_attendance_report(start_date, end_date, manager_code)
+
+    def get_company_name(self) -> str:
+        return self.repo.get_company_name(self.tenant_id)
 

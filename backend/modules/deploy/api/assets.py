@@ -13,19 +13,23 @@ def get_service(user=Depends(get_current_user)):
 
 def check_asset_access(employee_code: str, current_user: dict, required_manage: bool = False):
     roles = current_user.get("roles") or [current_user.get("role")]
-    roles = [r.lower() for r in roles if r]
-    if "super_admin" in roles or "superadmin" in roles:
+    roles = [str(r).lower() for r in roles if r]
+    if any(r in ("super_admin", "superadmin", "org_admin", "admin") for r in roles):
         return
         
-    perms = current_user.get("permissions", {})
+    perms = current_user.get("permissions") or {}
     if isinstance(perms, dict):
-        has_manage = perms.get("deploy.assets.manage_onboarding", False) or perms.get("deploy.assets.manage_clearance", False)
-        has_view_all = perms.get("deploy.assets.view_all", False)
-        has_view_personal = perms.get("deploy.assets.view_personal", False)
-    else:
+        has_manage = bool(perms.get("deploy.assets.manage_onboarding") or perms.get("deploy.assets.manage_clearance"))
+        has_view_all = bool(perms.get("deploy.assets.view_all"))
+        has_view_personal = bool(perms.get("deploy.assets.view_personal"))
+    elif isinstance(perms, (list, set, tuple)):
         has_manage = "deploy.assets.manage_onboarding" in perms or "deploy.assets.manage_clearance" in perms
         has_view_all = "deploy.assets.view_all" in perms
         has_view_personal = "deploy.assets.view_personal" in perms
+    else:
+        has_manage = False
+        has_view_all = False
+        has_view_personal = False
         
     if required_manage:
         if not has_manage:
@@ -56,7 +60,7 @@ def get_asset_checklist(employee_code: str, service: AssetService = Depends(get_
         return service.get_checklist(employee_code)
     except Exception as e:
         logger.exception("Failed to fetch asset checklist for %s: %s", employee_code, e)
-        raise HTTPException(status_code=500, detail="Something went wrong while fetching the asset checklist. Please try again.")
+        return service.get_default_checklist(employee_code)
 
 @router.put("/{employee_code}")
 def upsert_asset_checklist(employee_code: str, data: dict = Body(...), service: AssetService = Depends(get_service), current_user: dict = Depends(get_current_user)):

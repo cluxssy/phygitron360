@@ -189,64 +189,13 @@ export default function DeployAnalytics() {
 
       const data = await res.json();
       setStats(data);
-
-      await fetchAssetsData();
+      setTotalAssets(data.counts?.assets ?? 0);
 
       setLastRefresh(new Date());
     } catch (e) {
       toast.error('Failed to load analytics');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchAssetsData = async () => {
-    try {
-      const res = await fetch('/api/employees', {
-        credentials: 'include'
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to fetch employees');
-      }
-
-      const employees = await res.json();
-      const employeeList = Array.isArray(employees) ? employees : [];
-
-      let allocatedCount = 0;
-      const assetFields = ['ob_laptop', 'ob_laptop_bag', 'ob_headphones', 'ob_mouse', 
-                          'ob_extra_hardware', 'ob_client_assets', 'ob_id_card', 
-                          'ob_email_access', 'ob_groups', 'ob_mediclaim', 'ob_pf'];
-
-      const assetPromises = employeeList.map(async (emp) => {
-        try {
-          const assetRes = await fetch(`/api/assets/${emp.employee_code}`, {
-            credentials: 'include'
-          });
-          if (assetRes.ok) {
-            const assetData = await assetRes.json();
-            let employeeAllocated = 0;
-            assetFields.forEach(field => {
-              if (assetData[field] === 1 || assetData[field] === true) {
-                employeeAllocated++;
-              }
-            });
-            return employeeAllocated;
-          }
-          return 0;
-        } catch {
-          return 0;
-        }
-      });
-
-      const results = await Promise.all(assetPromises);
-      allocatedCount = results.reduce((sum, count) => sum + count, 0);
-
-      setTotalAssets(allocatedCount);
-
-    } catch (error) {
-      console.error('Error fetching assets data:', error);
-      setTotalAssets(0);
     }
   };
 

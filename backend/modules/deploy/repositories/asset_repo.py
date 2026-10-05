@@ -9,11 +9,17 @@ class AssetRepository:
     def get_asset_checklist(self, employee_code: str, tenant_id: str = 'public') -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         try:
-             cur = conn.cursor(cursor_factory=RealDictCursor)
-             self._set_path(cur, tenant_id)
-             cur.execute("SELECT * FROM assets WHERE employee_code = %s", (employee_code,))
-             row = cur.fetchone()
-             return dict(row) if row else None
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            self._set_path(cur, tenant_id)
+            cur.execute("SELECT * FROM assets WHERE employee_code = %s", (employee_code,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return None
         finally:
             conn.close()
 
@@ -25,6 +31,12 @@ class AssetRepository:
             cur.execute("SELECT pf_included, mediclaim_included FROM employees WHERE employee_code = %s", (employee_code,))
             row = cur.fetchone()
             return dict(row) if row else None
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return None
         finally:
             conn.close()
 
@@ -35,6 +47,12 @@ class AssetRepository:
             self._set_path(cur, tenant_id)
             cur.execute("SELECT 1 FROM assets WHERE employee_code = %s", (employee_code,))
             return cur.fetchone() is not None
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return False
         finally:
             conn.close()
 
@@ -81,6 +99,12 @@ class AssetRepository:
                 employee_code
             ))
             conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
         finally:
             conn.close()
 
@@ -95,6 +119,12 @@ class AssetRepository:
             query = f"UPDATE assets SET {', '.join([f'{f} = %s' for f in fields])} WHERE employee_code = %s"
             cur.execute(query, tuple(values))
             conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
         finally:
             conn.close()
 
@@ -137,6 +167,12 @@ class AssetRepository:
                 data.get('cl_remarks', '')
             ))
             conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
         finally:
             conn.close()
 

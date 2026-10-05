@@ -6,28 +6,40 @@ class AssetService:
         self.repo = AssetRepository()
         self.tenant_id = tenant_id
 
-    def get_checklist(self, employee_code: str) -> Dict[str, Any]:
-        result = self.repo.get_asset_checklist(employee_code, tenant_id=self.tenant_id)
-        
-        if result:
-            return result
-        else:
-            # Default
-            ob_pf = 0
-            ob_mediclaim = 0
-            
+    def get_default_checklist(self, employee_code: str) -> Dict[str, Any]:
+        ob_pf = 0
+        ob_mediclaim = 0
+        try:
             emp_defaults = self.repo.get_employee_defaults(employee_code, tenant_id=self.tenant_id)
             if emp_defaults:
                 pf = emp_defaults.get('pf_included')
                 med = emp_defaults.get('mediclaim_included')
                 if pf and str(pf).lower() in ['yes', 'true', '1', 'on']: ob_pf = 1
                 if med and str(med).lower() in ['yes', 'true', '1', 'on']: ob_mediclaim = 1
-            
-            return {
-                "employee_code": employee_code,
-                "ob_pf": ob_pf,
-                "ob_mediclaim": ob_mediclaim
-            }
+        except Exception:
+            pass
+
+        return {
+            "employee_code": employee_code,
+            "ob_laptop": 0, "ob_laptop_bag": 0, "ob_headphones": 0, "ob_mouse": 0,
+            "ob_extra_hardware": 0, "ob_client_assets": 0, "ob_id_card": 0,
+            "ob_email_access": 0, "ob_groups": 0,
+            "ob_mediclaim": ob_mediclaim, "ob_pf": ob_pf,
+            "ob_remarks": "",
+            "cl_laptop": 0, "cl_laptop_bag": 0, "cl_headphones": 0, "cl_mouse": 0,
+            "cl_extra_hardware": 0, "cl_client_assets": 0, "cl_id_card": 0,
+            "cl_email_access": 0, "cl_groups": 0, "cl_relieving_letter": 0,
+            "cl_remarks": ""
+        }
+
+    def get_checklist(self, employee_code: str) -> Dict[str, Any]:
+        try:
+            result = self.repo.get_asset_checklist(employee_code, tenant_id=self.tenant_id)
+            if result:
+                return result
+        except Exception:
+            pass
+        return self.get_default_checklist(employee_code)
 
     def upsert_checklist(self, employee_code: str, data: Dict[str, Any]):
         if self.repo.check_exists(employee_code, tenant_id=self.tenant_id):

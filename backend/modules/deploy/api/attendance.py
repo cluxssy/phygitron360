@@ -1,7 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, Request, Form
+from fastapi import APIRouter, HTTPException, Depends, Request, Form, Response, Query
 from typing import List, Optional
+import calendar
+from datetime import datetime
 from backend.core.database import get_db_connection
 from backend.core.dependencies import get_current_user, require_permission
+from backend.common.utils.excel_utils import generate_attendance_excel
 from backend.modules.deploy.services.attendance_service import AttendanceService
 from backend.modules.deploy.schemas.attendance import (
     ClockInRequest, ClockOutRequest, LeaveRequest, AttendanceStatus,
@@ -277,4 +280,102 @@ def get_bimonthly_report(
     except Exception as e:
         logger.exception("Failed to fetch bimonthly attendance report: %s", e)
         raise HTTPException(status_code=500, detail="Something went wrong while generating this report. Please try again.")
+
+
+@router.get("/report/download-excel")
+def download_attendance_excel(
+    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    year: Optional[int] = Query(None, description="Year (e.g. 2026)"),
+    month: Optional[int] = Query(None, description="Month (1-12)"),
+    cycle: Optional[int] = Query(None, description="Cycle: 1 (1st-15th), 2 (16th-End), or None (Full Month)"),
+    scope: Optional[str] = Query(None, description="'org' or 'team'"),
+    user=Depends(require_permission(["deploy.attendance.view_all", "deploy.attendance.view_team"])),
+    service: AttendanceService = Depends(get_service)
+):
+    perms = user.get('permissions', {})
+    can_view_all = perms.get('deploy.attendance.view_all', False) or user.get('role') in ('org_admin', 'admin')
+
+    # RBAC check on scope
+    if scope == 'org' and not can_view_all:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied: Organization-wide report requires deploy.attendance.view_all permission."
+        )
+
+    if can_view_all:
+        if scope == 'team':
+            manager_code = user.get('employee_code')
+            is_org_wide = False
+        else:
+            manager_code = None
+            is_org_wide = True
+    else:
+        manager_code = user.get('employee_code')
+        is_org_wide = False
+
+    # Date range parsing & validation
+    if start_date and end_date:
+        try:
+            d_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            d_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+            if d_start > d_end:
+                raise ValueError("start_date cannot be after end_date")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date range: {e}")
+
+        period_label = f"{d_start.strftime('%d %b %Y')} - {d_end.strftime('%d %b %Y')}"
+        file_suffix = f"{start_date}_to_{end_date}"
+    elif year and month:
+        if not (1 <= month <= 12):
+            raise HTTPException(status_code=400, detail="Month must be between 1 and 12")
+        num_days = calendar.monthrange(year, month)[1]
+        m_name = calendar.month_name[month]
+        if cycle == 1:
+            start_date = f"{year}-{month:02d}-01"
+            end_date = f"{year}-{month:02d}-15"
+            period_label = f"1st - 15th {m_name} {year}"
+            file_suffix = f"{year}_{month:02d}_1st_to_15th"
+        elif cycle == 2:
+            start_date = f"{year}-{month:02d}-16"
+            end_date = f"{year}-{month:02d}-{num_days:02d}"
+            period_label = f"16th - {num_days}th {m_name} {year}"
+            file_suffix = f"{year}_{month:02d}_16th_to_end"
+        else:
+            start_date = f"{year}-{month:02d}-01"
+            end_date = f"{year}-{month:02d}-{num_days:02d}"
+            period_label = f"1st - {num_days}th {m_name} {year}"
+            file_suffix = f"{year}_{month:02d}_full_month"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Either start_date and end_date (YYYY-MM-DD) or year and month must be provided."
+        )
+
+    try:
+        company_name = service.get_company_name()
+        report_data = service.get_attendance_report(start_date, end_date, manager_code)
+        excel_bytes = generate_attendance_excel(
+            report_data=report_data,
+            period_label=period_label,
+            company_name=company_name,
+            is_org_wide=is_org_wide
+        )
+
+        scope_prefix = "OrgWide" if is_org_wide else "Team"
+        filename = f"Attendance_Report_{scope_prefix}_{file_suffix}.xlsx"
+
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition"
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to generate Excel attendance report: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to generate attendance report. Please try again.")
 

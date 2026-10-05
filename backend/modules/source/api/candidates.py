@@ -11,7 +11,7 @@ import logging
 from typing import List, Optional, Any, Dict, Union
 from datetime import datetime
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Form
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Form, Body
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 import re
@@ -421,19 +421,66 @@ async def reprocess_candidates(
         "message": result.get("message")
     }
 
+@router.get("/bulk-upload/pending-archives", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def get_pending_s3_archives(
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """List any uploaded resume archives waiting in cloud storage (Spaces)."""
+    try:
+        archives = service.get_pending_s3_archives()
+        return {"success": True, "data": archives}
+    except Exception as e:
+        logger.exception(f"Failed to fetch pending archives: {e}")
+        return {"success": False, "data": [], "error": str(e)}
+
+@router.post("/bulk-upload/process-pending-archive", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def process_pending_s3_archive(
+    payload: Optional[dict] = Body(None),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Trigger background download and unpacking of a cloud archive."""
+    try:
+        s3_key = payload.get("s3_key") if payload else None
+        result = await service.recover_and_process_s3_archive(s3_key=s3_key)
+        return {"success": True, "data": result}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.exception(f"Failed to process pending archive: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/bulk-upload/delete-pending-archive", dependencies=[Depends(require_permission("source.candidates.manage"))])
+async def delete_pending_s3_archive(
+    payload: dict = Body(...),
+    service: CandidateService = Depends(get_candidate_service)
+):
+    """Delete an unwanted or stuck cloud archive."""
+    s3_key = payload.get("s3_key")
+    if not s3_key:
+        raise HTTPException(status_code=400, detail="Missing s3_key")
+    result = service.delete_pending_s3_archive(s3_key)
+    return {"success": True, "data": result}
+
 @router.get("/bulk-upload/active", dependencies=[Depends(require_permission("source.candidates.manage"))])
 async def get_active_bulk_upload(
     service: CandidateService = Depends(get_candidate_service)
 ):
-    """Get the currently active bulk upload job, if any."""
+    """Get the currently active bulk upload job, if any, along with pending cloud archives."""
     job = service.repo.get_active_bulk_upload_job()
+    pending_archives = []
+    try:
+        pending_archives = service.get_pending_s3_archives()
+    except Exception as e:
+        logger.warning(f"Could not check pending S3 archives: {e}")
+
     if not job:
-        return {"success": True, "data": None}
+        return {"success": True, "data": None, "pending_archives": pending_archives}
     
     progress = service.repo.get_bulk_upload_job_progress(job["id"])
     return {
         "success": True,
-        "data": progress
+        "data": progress,
+        "pending_archives": pending_archives
     }
 
 @router.post("/bulk-upload/active/cancel", dependencies=[Depends(require_permission("source.candidates.manage"))])

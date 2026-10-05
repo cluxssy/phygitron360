@@ -1099,20 +1099,108 @@ class CandidateService:
         os.makedirs(job_dir, exist_ok=True)
 
         loop = asyncio.get_running_loop()
-        extraction_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"s3_extraction_job_{job_id}")
-        loop.run_in_executor(
-            extraction_executor,
-            self._sync_process_s3_archive,
-            job_id,
-            s3_key,
-            job_dir
+        asyncio.create_task(
+            asyncio.to_thread(
+                self._sync_process_s3_archive,
+                job_id,
+                s3_key,
+                job_dir
+            )
         )
-        extraction_executor.shutdown(wait=False)
         return {
             "job_id": job_id,
-            "status": "processing",
+            "status": "extracting",
             "message": "Archive received and unpacking started."
         }
+
+    def get_pending_s3_archives(self) -> List[Dict[str, Any]]:
+        """List any archive files sitting in Spaces under this tenant's bulk_uploads prefix."""
+        import re
+        from backend.common.services.storage_service import list_s3_objects_in_prefix, _USE_S3
+        if not _USE_S3:
+            return []
+
+        prefix = f"{self.tenant_id}/bulk_uploads/"
+        objects = list_s3_objects_in_prefix(prefix)
+        archives = []
+        for obj in objects:
+            key = obj["key"]
+            if not key.lower().endswith(".zip"):
+                continue
+            base = os.path.basename(key)
+            match = re.match(r"^job_(\d+)_[a-zA-Z0-9]+_(.+)$", base)
+            job_id = int(match.group(1)) if match else None
+            clean_name = match.group(2) if match else base
+            archives.append({
+                "key": key,
+                "job_id": job_id,
+                "filename": clean_name,
+                "size_bytes": obj["size"],
+                "size_mb": round(obj["size"] / (1024 * 1024), 2),
+                "last_modified": obj["last_modified"]
+            })
+        archives.sort(key=lambda a: a["last_modified"], reverse=True)
+        return archives
+
+    async def recover_and_process_s3_archive(self, s3_key: Optional[str] = None) -> Dict[str, Any]:
+        """Trigger background unpacking for a pending archive sitting in Spaces."""
+        archives = self.get_pending_s3_archives()
+        if not archives:
+            raise ValueError("No pending archives found in cloud storage.")
+
+        target = None
+        if s3_key:
+            target = next((a for a in archives if a["key"] == s3_key), None)
+            if not target:
+                raise ValueError(f"Archive key {s3_key} not found in cloud storage.")
+        else:
+            target = archives[0]
+
+        job_id = target["job_id"]
+        key = target["key"]
+
+        from backend.core.database import get_db_connection
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self.repo._set_search_path(cur)
+                if job_id:
+                    cur.execute("SELECT id FROM bulk_upload_jobs WHERE id = %s", (job_id,))
+                    row = cur.fetchone()
+                    if row:
+                        cur.execute("UPDATE bulk_upload_jobs SET status = 'extracting', error_message = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = %s", (job_id,))
+                    else:
+                        cur.execute("INSERT INTO bulk_upload_jobs (id, created_by, total_files, status) VALUES (%s, 1, 0, 'extracting')", (job_id,))
+                else:
+                    cur.execute("INSERT INTO bulk_upload_jobs (created_by, total_files, status) VALUES (1, 0, 'extracting') RETURNING id")
+                    job_id = cur.fetchone()[0]
+                conn.commit()
+        finally:
+            conn.close()
+
+        # Clean up older duplicate archives for the exact same file
+        from backend.common.services.storage_service import delete_s3_file
+        for a in archives:
+            if a["key"] != key and a["filename"] == target["filename"]:
+                try:
+                    delete_s3_file(a["key"])
+                    logger.info(f"[BulkUpload] Cleaned up duplicate archive {a['key']}")
+                except Exception:
+                    pass
+
+        return await self.process_s3_archive(job_id=job_id, s3_key=key)
+
+    def delete_pending_s3_archive(self, s3_key: str) -> Dict[str, Any]:
+        """Delete an orphaned archive from Spaces."""
+        from backend.common.services.storage_service import delete_s3_file
+        import re
+        success = delete_s3_file(s3_key)
+        base = os.path.basename(s3_key)
+        match = re.match(r"^job_(\d+)_", base)
+        if match:
+            job_id = int(match.group(1))
+            self.cancel_bulk_upload_job(job_id)
+        return {"success": success, "message": "Archive removed from cloud storage."}
 
     def _sync_process_s3_archive(self, job_id: int, s3_key: str, job_dir: str):
         """Worker thread task: download archive from S3, extract via _sync_process_files, then clean up."""

@@ -536,9 +536,15 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
       if (onBulkUpload) {
         await onBulkUpload(stagedFiles, overrideDate, tags);
       } else {
-        const validFiles = stagedFiles;
-        const archivesOrLarge = validFiles.filter(f => f.name.toLowerCase().endsWith('.zip') || f.size > 35 * 1024 * 1024);
-        const standardFiles = validFiles.filter(f => !f.name.toLowerCase().endsWith('.zip') && f.size <= 35 * 1024 * 1024);
+        // Separate archives / large files (which stream directly to S3 to bypass proxy limits) from standard files
+        // When running on localhost, bypass S3 presigned checks and upload directly to local disk
+        const isLocalHost = typeof window !== 'undefined' && (
+          window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1' ||
+          window.location.hostname.endsWith('.local')
+        );
+        const archivesOrLarge = isLocalHost ? [] : validFiles.filter(f => f.name.toLowerCase().endsWith('.zip') || f.size > 35 * 1024 * 1024);
+        const standardFiles = isLocalHost ? [...validFiles] : validFiles.filter(f => !f.name.toLowerCase().endsWith('.zip') && f.size <= 35 * 1024 * 1024);
 
         for (const largeFile of archivesOrLarge) {
           try {
@@ -567,6 +573,9 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
               });
               await api.post('/source/candidates/bulk-upload/confirm-archive', { job_id, s3_key });
               toast.success(`Uploaded ${largeFile.name}! Processing in background.`);
+            } else {
+              // S3 direct upload not active on server, fall back to standard local multipart upload
+              standardFiles.push(largeFile);
             }
           } catch (e) {
             if (e.response?.status === 400 || largeFile.size > 80 * 1024 * 1024) {
