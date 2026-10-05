@@ -513,12 +513,8 @@ def send_bimonthly_report_email(
     company_name: str = "Phygitron 360",
     is_org_wide: bool = False
 ) -> bool:
-    """Attendance Report Email (Template Library #15) with generated ReportLab PDF table"""
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-    import io
+    """Attendance Report Email (Template Library #15) with generated Excel (.xlsx) spreadsheet"""
+    from backend.common.utils.excel_utils import generate_attendance_excel
 
     subject_prefix = "Organization Attendance Report" if is_org_wide else "Attendance Report"
     subject = f"{subject_prefix} — {period_label} ({company_name})"
@@ -536,72 +532,23 @@ def send_bimonthly_report_email(
         ("Reporting Period", period_label),
         ("Scope", scope_label),
         ("Total Records", str(len(report_data))),
-        ("Attachment Format", "PDF Document (.pdf)")
+        ("Attachment Format", "Excel Spreadsheet (.xlsx)")
     ])
     body_html += build_cta_button_html(link, "Access Analytics Dashboard &rarr;")
-    body_html += build_info_box_html("The accompanying PDF report details present shift hours, unexcused absences, half-days, and leaves. Please review exceptions requiring attention.", border_color="#3B82F6")
+    body_html += build_info_box_html("The accompanying Excel report details present shift hours, unexcused absences, half-days, leaves, and daily breakdown. Please review exceptions requiring attention.", border_color="#3B82F6")
 
     html_content = build_white_label_html(subject_prefix, header_title, body_html, f"{company_name} HR Operations", link)
     team_or_org = "organization" if is_org_wide else "team"
-    body_text = f"Hello {manager_name},\n\nPlease find attached the attendance report for your {team_or_org} for the period {period_label}.\n\nThe attached report contains attendance summaries and exceptions requiring attention."
+    body_text = f"Hello {manager_name},\n\nPlease find attached the attendance report spreadsheet for your {team_or_org} for the period {period_label}.\n\nThe attached Excel file contains attendance summaries and exceptions requiring attention."
     text_content = build_white_label_text(subject_prefix, header_title, body_text, f"{company_name} HR Operations", link)
 
-    # Compile ReportLab PDF
-    pdf_buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        pdf_buffer,
-        pagesize=letter,
-        leftMargin=36,
-        rightMargin=36,
-        topMargin=36,
-        bottomMargin=36
+    # Compile Excel workbook bytes
+    excel_bytes = generate_attendance_excel(
+        report_data=report_data,
+        period_label=period_label,
+        company_name=company_name,
+        is_org_wide=is_org_wide
     )
-    styles = getSampleStyleSheet()
-    title_text = f"Organization Attendance Report: {period_label}" if is_org_wide else f"Attendance Report: {period_label}"
-    elements = [
-        Paragraph(title_text, styles['Title']),
-        Spacer(1, 14)
-    ]
-
-    name_style = ParagraphStyle(
-        'EmpNameCell',
-        parent=styles['Normal'],
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor("#1E293B")
-    )
-    
-    data = [["Employee Name", "Code", "Present", "Absent", "Half-Day", "Leave"]]
-    for emp in report_data:
-        stats = emp.get("stats", {})
-        data.append([
-            Paragraph(emp.get("name", ""), name_style),
-            emp.get("code", ""),
-            str(stats.get("present", 0)),
-            str(stats.get("absent", 0)),
-            str(stats.get("half_day", 0)),
-            str(stats.get("leave", 0))
-        ])
-        
-    t = Table(data, colWidths=[170, 95, 68, 68, 68, 68], repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#7000FF")),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('ALIGN', (0, 1), (0, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        ('TOPPADDING', (0, 0), (-1, 0), 10),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F8FAFC")),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-        ('TOPPADDING', (0, 1), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
-    ]))
-    elements.append(t)
-    doc.build(elements)
-    pdf_bytes = pdf_buffer.getvalue()
-    pdf_buffer.close()
 
     host, _, user, _ = _get_smtp_config()
     if not all([host, user]):
@@ -619,11 +566,11 @@ def send_bimonthly_report_email(
         alt.attach(MIMEText(html_content, "html"))
         msg.attach(alt)
 
-        part = MIMEBase("application", "pdf")
-        part.set_payload(pdf_bytes)
+        part = MIMEBase("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        part.set_payload(excel_bytes)
         encoders.encode_base64(part)
         filename_prefix = "Organization_Attendance_Report" if is_org_wide else "Attendance_Report"
-        part.add_header("Content-Disposition", f'attachment; filename="{filename_prefix}_{period_label.replace(" ", "_")}.pdf"')
+        part.add_header("Content-Disposition", f'attachment; filename="{filename_prefix}_{period_label.replace(" ", "_")}.xlsx"')
         msg.attach(part)
 
         if not _send_via_smtp(msg):

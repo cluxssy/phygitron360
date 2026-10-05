@@ -764,3 +764,18 @@ class AttendanceRepository:
             return dict(row) if row else None
         finally:
             conn.close()
+
+    def get_company_name(self, tenant_id: str = 'public') -> str:
+        import os
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT company_name FROM public.tenants WHERE id = %s", (tenant_id,))
+            row = cur.fetchone()
+            if row and row[0]:
+                return row[0]
+            return os.getenv("COMPANY_NAME", "Phygitron 360")
+        except Exception:
+            return os.getenv("COMPANY_NAME", "Phygitron 360")
+        finally:
+            conn.close()

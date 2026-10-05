@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { P } from '../../../core/permissions';
-import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle, Sparkles, Gift } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle, Sparkles, Gift, Download, FileSpreadsheet, X, Loader2 } from 'lucide-react';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
@@ -22,6 +22,8 @@ export default function AttendancePanel({ mode }) {
   const canReqLeave = hasPermission(P.DEPLOY_LEAVES_REQUEST);
   const canAppLeave = hasPermission(P.DEPLOY_LEAVES_APPROVE);
   const canManagePolicies = hasPermission(P.DEPLOY_ATT_MANAGE_POLICIES);
+  const canViewAll = hasPermission(P.DEPLOY_ATT_VIEW_ALL) || user?.role === 'org_admin' || user?.role === 'admin';
+  const canViewTeam = hasPermission(P.DEPLOY_ATT_VIEW_TEAM) || canViewAll;
 
   const isAdmin = mode === 'admin';
   const isEmployee = mode === 'employee';
@@ -48,6 +50,17 @@ export default function AttendancePanel({ mode }) {
   const [editingRecord, setEditingRecord] = useState(null);
   const [editForm, setEditForm] = useState({ employee_code: '', date: new Date().toISOString().split('T')[0], clock_in: '', clock_out: '', work_log: '' });
 
+  // Download Report States
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadPeriodType, setDownloadPeriodType] = useState('cycle'); // 'cycle' or 'custom'
+  const [downloadCycle, setDownloadCycle] = useState(new Date().getDate() > 15 ? 2 : 1);
+  const [downloadYear, setDownloadYear] = useState(new Date().getFullYear());
+  const [downloadMonth, setDownloadMonth] = useState(new Date().getMonth() + 1);
+  const [downloadStartDate, setDownloadStartDate] = useState('');
+  const [downloadEndDate, setDownloadEndDate] = useState('');
+  const [downloadScope, setDownloadScope] = useState('org');
+  const [isDownloading, setIsDownloading] = useState(false);
+
   // New States
   const [selectedLog, setSelectedLog] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +70,7 @@ export default function AttendancePanel({ mode }) {
   useEscapeClose(() => setShowClockOutModal(false), showClockOutModal);
   useEscapeClose(() => setEditingRecord(null), !!editingRecord);
   useEscapeClose(() => setSelectedLog(null), !!selectedLog);
+  useEscapeClose(() => !isDownloading && setShowDownloadModal(false), showDownloadModal);
   const handleTabKeyNav = useTabListKeyNav();
   const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -272,6 +286,130 @@ export default function AttendancePanel({ mode }) {
     }
   };
 
+  const openDownloadModal = (presetMonth = null, presetYear = null) => {
+    const y = presetYear || selectedYear || new Date().getFullYear();
+    const m = presetMonth || selectedMonth || (new Date().getMonth() + 1);
+    setDownloadYear(y);
+    setDownloadMonth(m);
+    
+    const numDays = new Date(y, m, 0).getDate();
+    const mStr = String(m).padStart(2, '0');
+    setDownloadStartDate(`${y}-${mStr}-01`);
+    setDownloadEndDate(`${y}-${mStr}-${String(numDays).padStart(2, '0')}`);
+    
+    if (!canViewAll) {
+      setDownloadScope('team');
+    }
+    setShowDownloadModal(true);
+  };
+
+  const setQuickRange = (rangeType) => {
+    const today = new Date();
+    const formatDate = (d) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    if (rangeType === 'last7') {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 6);
+      setDownloadStartDate(formatDate(start));
+      setDownloadEndDate(formatDate(today));
+    } else if (rangeType === 'last14') {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 13);
+      setDownloadStartDate(formatDate(start));
+      setDownloadEndDate(formatDate(today));
+    } else if (rangeType === 'thisMonth') {
+      const y = today.getFullYear();
+      const m = today.getMonth() + 1;
+      const numDays = new Date(y, m, 0).getDate();
+      setDownloadStartDate(`${y}-${String(m).padStart(2, '0')}-01`);
+      setDownloadEndDate(`${y}-${String(m).padStart(2, '0')}-${String(numDays).padStart(2, '0')}`);
+    } else if (rangeType === 'lastMonth') {
+      const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      const numDays = new Date(y, m, 0).getDate();
+      setDownloadStartDate(`${y}-${String(m).padStart(2, '0')}-01`);
+      setDownloadEndDate(`${y}-${String(m).padStart(2, '0')}-${String(numDays).padStart(2, '0')}`);
+    }
+  };
+
+  const handleDownloadExcel = async () => {
+    setIsDownloading(true);
+    try {
+      const params = new URLSearchParams();
+
+      if (downloadPeriodType === 'custom') {
+        if (!downloadStartDate || !downloadEndDate) {
+          toast.error('Please select both Start Date and End Date');
+          setIsDownloading(false);
+          return;
+        }
+        if (downloadStartDate > downloadEndDate) {
+          toast.error('Start date cannot be after end date');
+          setIsDownloading(false);
+          return;
+        }
+        params.set('start_date', downloadStartDate);
+        params.set('end_date', downloadEndDate);
+      } else {
+        params.set('year', downloadYear.toString());
+        params.set('month', downloadMonth.toString());
+        if (downloadCycle === 1 || downloadCycle === 2) {
+          params.set('cycle', downloadCycle.toString());
+        }
+      }
+
+      const scopeToUse = canViewAll ? downloadScope : 'team';
+      params.set('scope', scopeToUse);
+
+      const res = await fetch(`/api/attendance/report/download-excel?${params.toString()}`, {
+        credentials: 'include'
+      });
+
+      if (!res.ok) {
+        let errMessage = 'Failed to generate Excel report';
+        try {
+          const errData = await res.json();
+          errMessage = errData.detail || errMessage;
+        } catch {
+          // fallback
+        }
+        throw new Error(errMessage);
+      }
+
+      const blob = await res.blob();
+      
+      let filename = 'Attendance_Report.xlsx';
+      const disposition = res.headers.get('content-disposition');
+      if (disposition && disposition.includes('filename=')) {
+        const match = disposition.match(/filename=["']?([^"';]+)["']?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+
+      toast.success('Attendance report (.xlsx) downloaded successfully!');
+      setShowDownloadModal(false);
+    } catch (err) {
+      toast.error(err.message || 'Failed to download report');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const isWithinLast7Days = (dateStr) => {
       const today = new Date();
       today.setHours(0,0,0,0);
@@ -450,6 +588,18 @@ export default function AttendancePanel({ mode }) {
                 </button>
                 ))}
             </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => openDownloadModal()}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 shadow-sm transition-all active:scale-95 group"
+                title="Download Attendance Report as Excel (.xlsx)"
+              >
+                <FileSpreadsheet size={15} className="text-emerald-600 group-hover:scale-110 transition-transform" />
+                <span>Download Report</span>
+              </button>
+            </div>
           </div>
 
           {adminTab === 'today' && (
@@ -571,22 +721,33 @@ export default function AttendancePanel({ mode }) {
                       ))}
                   </div>
 
-                  <div className="flex gap-2">
-                      <select
-                          value={selectedMonth}
-                          onChange={e => setSelectedMonth(Number(e.target.value))}
-                          className="bg-[#faf7ff] border border-[#ebe4ff] shadow-[0_4px_12px_rgba(0,0,0,0.12)] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex gap-2">
+                          <select
+                              value={selectedMonth}
+                              onChange={e => setSelectedMonth(Number(e.target.value))}
+                              className="bg-[#faf7ff] border border-[#ebe4ff] shadow-[0_4px_12px_rgba(0,0,0,0.12)] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
+                          >
+                              {Array.from({length: 12}, (_, i) => (
+                                  <option key={i+1} value={i+1}>{new Date(2000, i).toLocaleString('default', { month: 'long' })}</option>
+                              ))}
+                          </select>
+                          <input
+                              type="number"
+                              value={selectedYear}
+                              onChange={e => setSelectedYear(Number(e.target.value))}
+                              className="w-24 bg-[#faf7ff] border border-[#ebe4ff] shadow-[0_4px_12px_rgba(0,0,0,0.12)] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
+                          />
+                      </div>
+                      <button
+                          type="button"
+                          onClick={() => openDownloadModal(selectedMonth, selectedYear)}
+                          className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-95"
+                          title="Export this month's attendance to Excel (.xlsx)"
                       >
-                          {Array.from({length: 12}, (_, i) => (
-                              <option key={i+1} value={i+1}>{new Date(2000, i).toLocaleString('default', { month: 'long' })}</option>
-                          ))}
-                      </select>
-                      <input
-                          type="number"
-                          value={selectedYear}
-                          onChange={e => setSelectedYear(Number(e.target.value))}
-                          className="w-24 bg-[#faf7ff] border border-[#ebe4ff] shadow-[0_4px_12px_rgba(0,0,0,0.12)] text-black text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl focus:outline-none"
-                      />
+                          <FileSpreadsheet size={14} className="text-emerald-600" />
+                          <span>Export Excel</span>
+                      </button>
                   </div>
 
                   <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-x-auto">
@@ -1173,6 +1334,295 @@ export default function AttendancePanel({ mode }) {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* ── DOWNLOAD ATTENDANCE REPORT MODAL ── */}
+      {showDownloadModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-[#060b19]/80 backdrop-blur-sm transition-opacity"
+            onClick={() => !isDownloading && setShowDownloadModal(false)}
+          />
+          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_20px_60px_rgba(180,140,255,0.2)] w-full max-w-lg relative z-10 animate-fade-in-up overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-[#ece2ff] bg-gradient-to-r from-[#faf7ff] to-[#f4efff] flex justify-between items-center relative">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-sm">
+                  <FileSpreadsheet size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-black tracking-tight">
+                    Download Attendance Report
+                  </h3>
+                  <p className="text-[11px] text-[#6b7280]">
+                    Export workforce attendance data to Excel spreadsheet
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDownloading && setShowDownloadModal(false)}
+                disabled={isDownloading}
+                className="p-2 text-[#8b8ba3] hover:text-black rounded-xl hover:bg-white/60 transition-colors disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Format Badge Callout */}
+              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-2.5 w-2.5 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs font-bold text-emerald-900">Format: Microsoft Excel (.xlsx)</span>
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  2 Sheets Included
+                </span>
+              </div>
+
+              {/* Time Period Type Selector */}
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-[#7c3aed] mb-2 block">
+                  Reporting Period Type
+                </label>
+                <div className="grid grid-cols-2 gap-2 bg-[#faf7ff] p-1.5 rounded-2xl border border-[#ebe4ff]">
+                  <button
+                    type="button"
+                    onClick={() => setDownloadPeriodType('cycle')}
+                    className={`py-2 px-3 rounded-xl text-xs font-black transition-all ${
+                      downloadPeriodType === 'cycle'
+                        ? 'bg-white text-purple-900 shadow-sm border border-[#ece2ff]'
+                        : 'text-gray-500 hover:text-black'
+                    }`}
+                  >
+                    Preset Cycle / Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDownloadPeriodType('custom');
+                      if (!downloadStartDate || !downloadEndDate) {
+                        setQuickRange('thisMonth');
+                      }
+                    }}
+                    className={`py-2 px-3 rounded-xl text-xs font-black transition-all ${
+                      downloadPeriodType === 'custom'
+                        ? 'bg-white text-purple-900 shadow-sm border border-[#ece2ff]'
+                        : 'text-gray-500 hover:text-black'
+                    }`}
+                  >
+                    Custom Date Range
+                  </button>
+                </div>
+              </div>
+
+              {/* PRESET PERIOD CONTROLS */}
+              {downloadPeriodType === 'cycle' && (
+                <div className="space-y-3 bg-[#faf7ff] p-4 rounded-2xl border border-[#ebe4ff]">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1.5 block">
+                        Select Month
+                      </label>
+                      <select
+                        value={downloadMonth}
+                        onChange={(e) => setDownloadMonth(Number(e.target.value))}
+                        className="w-full bg-white border border-[#ebe4ff] text-black text-xs font-semibold px-3 py-2.5 rounded-xl focus:outline-none focus:border-purple-400"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => (
+                          <option key={i + 1} value={i + 1}>
+                            {new Date(2000, i).toLocaleString('default', { month: 'long' })}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1.5 block">
+                        Select Year
+                      </label>
+                      <input
+                        type="number"
+                        value={downloadYear}
+                        onChange={(e) => setDownloadYear(Number(e.target.value))}
+                        className="w-full bg-white border border-[#ebe4ff] text-black text-xs font-semibold px-3 py-2.5 rounded-xl focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1.5 block">
+                      Cycle Breakdown
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 1, label: '1st – 15th', sub: 'Mid-Month' },
+                        { id: 2, label: '16th – End', sub: 'Month-End' },
+                        { id: 0, label: 'Full Month', sub: '1st – End' }
+                      ].map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setDownloadCycle(c.id)}
+                          className={`p-2.5 rounded-xl border text-center transition-all ${
+                            downloadCycle === c.id
+                              ? 'bg-purple-50 border-purple-400 text-purple-900 shadow-sm'
+                              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">{c.label}</div>
+                          <div className="text-[9px] text-gray-400 font-medium">{c.sub}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CUSTOM DATE RANGE CONTROLS */}
+              {downloadPeriodType === 'custom' && (
+                <div className="space-y-3 bg-[#faf7ff] p-4 rounded-2xl border border-[#ebe4ff]">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1.5 block">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={downloadStartDate}
+                        onChange={(e) => setDownloadStartDate(e.target.value)}
+                        className="w-full bg-white border border-[#ebe4ff] text-black text-xs font-semibold px-3 py-2.5 rounded-xl focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1.5 block">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={downloadEndDate}
+                        onChange={(e) => setDownloadEndDate(e.target.value)}
+                        className="w-full bg-white border border-[#ebe4ff] text-black text-xs font-semibold px-3 py-2.5 rounded-xl focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1.5 block">
+                      Quick Shortcuts
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { id: 'last7', label: 'Last 7 Days' },
+                        { id: 'last14', label: 'Last 14 Days' },
+                        { id: 'thisMonth', label: 'This Month' },
+                        { id: 'lastMonth', label: 'Last Month' }
+                      ].map((q) => (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => setQuickRange(q.id)}
+                          className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+                        >
+                          {q.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* REPORT SCOPE (IF ADMIN) */}
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-[#7c3aed] mb-2 block">
+                  Report Scope
+                </label>
+                {canViewAll ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDownloadScope('org')}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        downloadScope === 'org'
+                          ? 'bg-purple-50 border-purple-400 shadow-sm'
+                          : 'bg-[#faf7ff] border-[#ebe4ff] hover:bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-black">Organization-Wide</span>
+                        {downloadScope === 'org' && <div className="w-2 h-2 rounded-full bg-purple-600" />}
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        All active employees across the entire organization
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDownloadScope('team')}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        downloadScope === 'team'
+                          ? 'bg-purple-50 border-purple-400 shadow-sm'
+                          : 'bg-[#faf7ff] border-[#ebe4ff] hover:bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-black">My Team Only</span>
+                        {downloadScope === 'team' && <div className="w-2 h-2 rounded-full bg-purple-600" />}
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        Direct reports assigned to you
+                      </p>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-[#faf7ff] border border-[#ebe4ff] rounded-xl flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-gray-800">My Team (Direct Reports)</p>
+                      <p className="text-[10px] text-gray-500">Report will include your team direct reports.</p>
+                    </div>
+                    <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                      Team Scope
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-[#ece2ff] bg-[#faf7ff] flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => !isDownloading && setShowDownloadModal(false)}
+                disabled={isDownloading}
+                className="px-5 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-white hover:text-black transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadExcel}
+                disabled={isDownloading}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-500/25 transition-all disabled:opacity-50 active:scale-95"
+              >
+                {isDownloading ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    <span>Generating Excel...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={15} />
+                    <span>Download Excel (.xlsx)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
