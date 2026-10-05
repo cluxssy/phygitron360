@@ -11,7 +11,7 @@ import logging
 from typing import List, Optional, Any, Dict, Union
 from datetime import datetime
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Form
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Form, Body
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 import re

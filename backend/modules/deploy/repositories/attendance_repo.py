@@ -617,8 +617,8 @@ class AttendanceRepository:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
             cur.execute(
-                "SELECT email_id FROM employees WHERE employee_code = %s",
-                (employee_code,)
+                "SELECT email_id FROM employees WHERE employee_code = %s OR name ILIKE %s OR email_id = %s LIMIT 1",
+                (employee_code, employee_code, employee_code)
             )
             row = cur.fetchone()
             return row[0] if row else None
@@ -631,8 +631,8 @@ class AttendanceRepository:
             cur = conn.cursor()
             self._set_path(cur, tenant_id)
             cur.execute(
-                "SELECT name FROM employees WHERE employee_code = %s",
-                (employee_code,)
+                "SELECT name FROM employees WHERE employee_code = %s OR name ILIKE %s OR email_id = %s LIMIT 1",
+                (employee_code, employee_code, employee_code)
             )
             row = cur.fetchone()
             return row[0] if row else None
@@ -648,8 +648,12 @@ class AttendanceRepository:
                 cur.execute('''
                     SELECT employee_code, name, email_id, reporting_manager, employment_status
                     FROM employees
-                    WHERE reporting_manager = %s AND employment_status = 'Active'
-                ''', (manager_code,))
+                    WHERE (reporting_manager = %s OR reporting_manager IN (
+                        SELECT name FROM employees WHERE employee_code = %s
+                    ) OR reporting_manager IN (
+                        SELECT employee_code FROM employees WHERE name ILIKE %s
+                    )) AND employment_status = 'Active'
+                ''', (manager_code, manager_code, manager_code))
             else:
                 cur.execute('''
                     SELECT employee_code, name, email_id, reporting_manager, employment_status
@@ -658,6 +662,66 @@ class AttendanceRepository:
                 ''')
             rows = cur.fetchall()
             return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def get_tenant_org_admins(self, tenant_id: str = 'public') -> List[Dict[str, Any]]:
+        """
+        Fetch all Organization Administrators for a given tenant.
+        Returns deduplicated dicts with keys: email, name, employee_code.
+        """
+        conn = get_db_connection()
+        admins_dict = {}
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            # 1. Fetch admin_email and company_name from public.tenants
+            cur.execute("SELECT admin_email, company_name FROM public.tenants WHERE id = %s", (tenant_id,))
+            tenant_row = cur.fetchone()
+            company_name = tenant_row['company_name'] if tenant_row and tenant_row.get('company_name') else "Organization"
+            if tenant_row and tenant_row.get('admin_email'):
+                raw_email = tenant_row['admin_email'].strip()
+                if raw_email:
+                    admins_dict[raw_email.lower()] = {
+                        "email": raw_email,
+                        "name": f"{company_name} Administrator",
+                        "employee_code": None
+                    }
+
+            # 2. Query tenant schema's users table for org_admin accounts
+            self._set_path(cur, tenant_id)
+            cur.execute("""
+                SELECT u.username, u.employee_code, e.name, e.email_id
+                FROM users u
+                LEFT JOIN employees e ON u.employee_code = e.employee_code
+                WHERE u.is_active = 1 
+                  AND (u.role = 'org_admin' OR 'org_admin' = ANY(u.roles))
+            """)
+            rows = cur.fetchall()
+            for r in rows:
+                email = (r.get('email_id') or r.get('username') or '').strip()
+                if not email or '@' not in email:
+                    continue
+                name = r.get('name') or f"{company_name} Administrator"
+                admins_dict[email.lower()] = {
+                    "email": email,
+                    "name": name,
+                    "employee_code": r.get('employee_code')
+                }
+
+            # 3. If admin_email from public.tenants exists, check if it matches an employee record for full name/code
+            if tenant_row and tenant_row.get('admin_email'):
+                t_email = tenant_row['admin_email'].strip().lower()
+                if t_email in admins_dict and not admins_dict[t_email].get('employee_code'):
+                    cur.execute("SELECT employee_code, name FROM employees WHERE LOWER(email_id) = %s LIMIT 1", (t_email,))
+                    emp = cur.fetchone()
+                    if emp:
+                        admins_dict[t_email]["name"] = emp['name']
+                        admins_dict[t_email]["employee_code"] = emp['employee_code']
+
+            return list(admins_dict.values())
+        except Exception as e:
+            print(f"Error fetching org admins for {tenant_id}: {e}")
+            return list(admins_dict.values())
         finally:
             conn.close()
 

@@ -73,24 +73,52 @@ def run_bimonthly_report():
         try:
             service = AttendanceService(tenant_id=tenant_id)
             repo = AttendanceRepository()
+            sent_emails = set()
+
+            # 1. Send Organization-Wide Report to Org Admin(s)
+            org_admins = repo.get_tenant_org_admins(tenant_id)
+            if org_admins:
+                org_report_data = service.get_bimonthly_report(year, month, cycle_num, manager_code=None)
+                if org_report_data:
+                    for admin in org_admins:
+                        admin_email = admin.get('email')
+                        admin_name = admin.get('name') or f"{company_name} Administrator"
+                        if not admin_email:
+                            continue
+                        send_bimonthly_report_email(
+                            to_email=admin_email,
+                            manager_name=admin_name,
+                            report_data=org_report_data,
+                            period_label=period_label,
+                            company_name=company_name,
+                            is_org_wide=True
+                        )
+                        sent_emails.add(admin_email.strip().lower())
+
+            # 2. Send Team-Specific Attendance Reports to Line Managers
             managers = repo.get_all_managers(tenant_id)
-            
             for manager_code in managers:
                 manager_email = repo.get_employee_email(manager_code, tenant_id)
                 manager_name = repo.get_employee_name(manager_code, tenant_id)
                 if not manager_email:
                     continue
-                    
-                report_data = service.get_bimonthly_report(year, month, cycle_num, manager_code)
+
+                # Skip if this manager is an Org Admin who already received the full organization-wide report
+                if manager_email.strip().lower() in sent_emails:
+                    continue
+
+                report_data = service.get_bimonthly_report(year, month, cycle_num, manager_code=manager_code)
                 if not report_data:
                     continue
-                    
+
                 send_bimonthly_report_email(
                     to_email=manager_email,
                     manager_name=manager_name,
                     report_data=report_data,
                     period_label=period_label,
-                    company_name=company_name
+                    company_name=company_name,
+                    is_org_wide=False
                 )
+                sent_emails.add(manager_email.strip().lower())
         except Exception as e:
             print(f"Error sending bimonthly report for tenant {tenant_id}: {e}")

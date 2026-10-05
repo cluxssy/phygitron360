@@ -6,39 +6,66 @@ from psycopg2.extras import RealDictCursor
 class DashboardRepository:
     def _read_sql_as_df(self, query: str, conn):
         """Helper to read SQL directly into a DataFrame using raw cursor to avoid pandas warnings."""
-        with conn.cursor() as cur:
-            cur.execute(query)
-            columns = [desc[0] for desc in cur.description]
-            data = cur.fetchall()
-            return pd.DataFrame(data, columns=columns)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                columns = [desc[0] for desc in cur.description]
+                data = cur.fetchall()
+                return pd.DataFrame(data, columns=columns)
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return pd.DataFrame()
 
     def get_all_counts(self, tenant_id: str = 'public') -> Dict[str, Any]:
         """Fetch raw dataframes and lightweight counts for analytics."""
         conn = get_db_connection()
         try:
+            total_candidates = 0
+            total_jobs = 0
+            total_assets = 0
+
             # Set search path on the connection itself
-            with conn.cursor() as cur:
-                cur.execute(f'SET search_path TO "{tenant_id}", public')
-                cur.execute("SELECT count(*)::int FROM candidates")
-                cand_res = cur.fetchone()
-                total_candidates = cand_res[0] if cand_res else 0
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(f'SET search_path TO "{tenant_id}", public')
 
-                cur.execute("SELECT count(*)::int FROM job_roles")
-                job_res = cur.fetchone()
-                total_jobs = job_res[0] if job_res else 0
+                    try:
+                        cur.execute("SELECT count(*)::int FROM candidates")
+                        cand_res = cur.fetchone()
+                        total_candidates = cand_res[0] if cand_res else 0
+                    except Exception:
+                        conn.rollback()
 
-                cur.execute("""
-                    SELECT COALESCE(SUM(
-                        COALESCE(ob_laptop, 0) + COALESCE(ob_laptop_bag, 0) + 
-                        COALESCE(ob_headphones, 0) + COALESCE(ob_mouse, 0) + 
-                        COALESCE(ob_extra_hardware, 0) + COALESCE(ob_client_assets, 0) + 
-                        COALESCE(ob_id_card, 0) + COALESCE(ob_email_access, 0) + 
-                        COALESCE(ob_groups, 0) + COALESCE(ob_mediclaim, 0) + 
-                        COALESCE(ob_pf, 0)
-                    ), 0)::int FROM assets
-                """)
-                asset_res = cur.fetchone()
-                total_assets = asset_res[0] if asset_res else 0
+                    try:
+                        cur.execute("SELECT count(*)::int FROM job_roles")
+                        job_res = cur.fetchone()
+                        total_jobs = job_res[0] if job_res else 0
+                    except Exception:
+                        conn.rollback()
+
+                    try:
+                        cur.execute("""
+                            SELECT COALESCE(SUM(
+                                COALESCE(ob_laptop, 0) + COALESCE(ob_laptop_bag, 0) + 
+                                COALESCE(ob_headphones, 0) + COALESCE(ob_mouse, 0) + 
+                                COALESCE(ob_extra_hardware, 0) + COALESCE(ob_client_assets, 0) + 
+                                COALESCE(ob_id_card, 0) + COALESCE(ob_email_access, 0) + 
+                                COALESCE(ob_groups, 0) + COALESCE(ob_mediclaim, 0) + 
+                                COALESCE(ob_pf, 0)
+                            ), 0)::int FROM assets
+                        """)
+                        asset_res = cur.fetchone()
+                        total_assets = asset_res[0] if asset_res else 0
+                    except Exception:
+                        conn.rollback()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             
             return {
                 "employees": self._read_sql_as_df("SELECT employee_code, name, team, designation, doj, location, employment_status FROM employees", conn),

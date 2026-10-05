@@ -171,7 +171,22 @@ class DashboardService:
             import traceback
             print(f"CRITICAL ANALYTICS ERROR: {e}")
             traceback.print_exc()
-            raise e
+            return {
+                "counts": {
+                    "total": 0, "active": 0, "exited": 0,
+                    "teams": 0, "designations": 0,
+                    "candidates": 0, "jobs": 0, "avg_tenure": 0,
+                    "present_today": 0, "attendance_rate": 0,
+                    "assets": 0
+                },
+                "charts": {
+                    "department": [], "status": [],
+                    "hiring_trend": [], "assets": [],
+                    "skills": [], "experience": [],
+                    "tenure": [], "location": []
+                },
+                "recent_hires": [], "notifications": []
+            }
 
     def get_employee_stats(self, employee_code: str, tenant_id: str = 'public') -> Dict[str, Any]:
         data = self.repo.get_employee_dashboard_data(employee_code, tenant_id=tenant_id)
