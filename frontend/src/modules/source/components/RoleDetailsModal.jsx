@@ -26,8 +26,9 @@ export default function RoleDetailsModal({
 
   if (!isOpen || !role) return null;
 
-  // Separate skills into required and preferred
+  // Separate skills into critical, required, and preferred
   const rawSkills = Array.isArray(role.required_skills) ? role.required_skills : [];
+  const criticalSkills = [];
   const requiredSkills = [];
   const preferredSkills = [];
 
@@ -35,8 +36,9 @@ export default function RoleDetailsModal({
     const name = s.name || s.skill || (typeof s === 'string' ? s : '');
     if (!name) return;
     const rawLvl = (s.level || 'required').toLowerCase();
-    const isReq = rawLvl === 'required' || rawLvl === 'critical' || rawLvl === 'expert' || rawLvl === 'advanced';
-    if (isReq) {
+    if (rawLvl === 'critical') {
+      criticalSkills.push(name);
+    } else if (rawLvl === 'required' || rawLvl === 'expert' || rawLvl === 'advanced') {
       requiredSkills.push(name);
     } else {
       preferredSkills.push(name);
@@ -135,7 +137,10 @@ export default function RoleDetailsModal({
               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
                 <Sparkles size={14} className="text-purple-600" /> Role Skills ({rawSkills.length})
               </h3>
-              <div className="flex items-center gap-2 text-xs font-semibold">
+              <div className="flex items-center gap-2 text-xs font-semibold flex-wrap">
+                <span className="text-violet-700 bg-violet-50 border border-violet-200 px-2.5 py-0.5 rounded-lg font-bold">
+                  {criticalSkills.length} Critical
+                </span>
                 <span className="text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg font-bold">
                   {requiredSkills.length} Required
                 </span>
@@ -149,6 +154,28 @@ export default function RoleDetailsModal({
               <p className="text-xs text-gray-400 italic">No skills defined for this job role.</p>
             ) : (
               <div className="space-y-4">
+                {/* Critical Skills */}
+                {criticalSkills.length > 0 && (
+                  <div>
+                    <h4 className="text-[11px] font-bold text-violet-800 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-500" /> Critical Skills (Must Have)
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {criticalSkills.map((skill, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-violet-50/80 border border-violet-200 rounded-xl text-xs font-bold text-gray-900 shadow-2xs"
+                        >
+                          <span>{skill}</span>
+                          <span className="bg-violet-100 text-violet-800 border border-violet-300 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md">
+                            Critical
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Required Skills */}
                 {requiredSkills.length > 0 && (
                   <div>

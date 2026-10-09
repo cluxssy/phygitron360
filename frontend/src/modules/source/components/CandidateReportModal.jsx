@@ -71,6 +71,7 @@ export default function CandidateReportModal({
 
   // Sort label display
   const sortLabels = {
+    critical_score: 'Critical Fit (High → Low)',
     required_score: 'Required Fit (High → Low)',
     preferred_score: 'Preferred Fit (High → Low)',
     newest: 'Newest Added',
@@ -253,6 +254,7 @@ export default function CandidateReportModal({
                   </div>
                 ) : (
                   topCandidates.map((c, idx) => {
+                    const critPct = c.critical_score != null ? Math.round(c.critical_score) : null;
                     const reqPct = c.required_score != null ? Math.round(c.required_score) : null;
                     const prefPct = c.preferred_score != null ? Math.round(c.preferred_score) : null;
 
@@ -266,7 +268,12 @@ export default function CandidateReportModal({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
+                          {critPct != null && (
+                            <span className="px-2 py-0.5 rounded-md font-bold bg-violet-50 text-violet-700 border border-violet-200 text-[11px]">
+                              Crit: {critPct}%
+                            </span>
+                          )}
                           {reqPct != null && (
                             <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200 text-[11px]">
                               Req: {reqPct}%

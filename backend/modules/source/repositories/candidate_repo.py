@@ -607,7 +607,11 @@ class CandidateRepository:
 
                 where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
                 
-                if sort_by == "required_score" and role_id:
+                if sort_by == "critical_score" and role_id:
+                    order_clause = """ORDER BY 
+                        COALESCE(NULLIF(SUBSTRING(a.reasoning FROM '"critical_score":\\s*([0-9.]+)'), '')::numeric, a.score, 0) DESC NULLS LAST,
+                        c.created_at DESC"""
+                elif sort_by == "required_score" and role_id:
                     order_clause = """ORDER BY 
                         COALESCE(NULLIF(SUBSTRING(a.reasoning FROM '"required_score":\\s*([0-9.]+)'), '')::numeric, a.score, 0) DESC NULLS LAST,
                         c.created_at DESC"""

@@ -199,6 +199,7 @@ def generate_candidate_report_pdf(
             filter_desc_parts.append(f"Loc: {filters_summary['location']}")
         if filters_summary.get("sort_by"):
             sort_lbl = {
+                "critical_score": "Critical Fit (High → Low)",
                 "required_score": "Required Fit (High → Low)",
                 "preferred_score": "Preferred Fit (High → Low)",
                 "newest": "Newest Added",
@@ -234,9 +235,11 @@ def generate_candidate_report_pdf(
 
     # 2. Executive KPI Cards Strip
     total_cand = len(candidates)
+    crit_scores = [c.get("critical_score") for c in candidates if c.get("critical_score") is not None]
     req_scores = [c.get("required_score") for c in candidates if c.get("required_score") is not None]
     pref_scores = [c.get("preferred_score") for c in candidates if c.get("preferred_score") is not None]
 
+    avg_crit = f"{round(sum(crit_scores) / len(crit_scores), 1)}%" if crit_scores else "N/A"
     avg_req = f"{round(sum(req_scores) / len(req_scores), 1)}%" if req_scores else "N/A"
     avg_pref = f"{round(sum(pref_scores) / len(pref_scores), 1)}%" if pref_scores else "N/A"
 
@@ -245,18 +248,21 @@ def generate_candidate_report_pdf(
     if candidates:
         top_c = candidates[0]
         top_cand_name = top_c.get("full_name") or "Candidate #1"
-        if top_c.get("required_score") is not None:
+        if top_c.get("critical_score") is not None:
+            top_cand_score = f" ({round(top_c['critical_score'])}% Crit)"
+        elif top_c.get("required_score") is not None:
             top_cand_score = f" ({round(top_c['required_score'])}% Req)"
 
     kpi_data = [
         [
             Paragraph(f"<font size='7' color='#64748B'><b>TOTAL EVALUATED</b></font><br/><font size='12' color='#1E1B4B'><b>{total_cand} Candidates</b></font><br/><font size='7' color='#94A3B8'>Ranked Shortlist</font>", styles['Normal']),
+            Paragraph(f"<font size='7' color='#64748B'><b>AVG CRITICAL FIT</b></font><br/><font size='12' color='#6D28D9'><b>{avg_crit}</b></font><br/><font size='7' color='#94A3B8'>Must-Have Skills</font>", styles['Normal']),
             Paragraph(f"<font size='7' color='#64748B'><b>AVG REQUIRED FIT</b></font><br/><font size='12' color='#4338CA'><b>{avg_req}</b></font><br/><font size='7' color='#94A3B8'>Strict Role Match</font>", styles['Normal']),
             Paragraph(f"<font size='7' color='#64748B'><b>AVG PREFERRED FIT</b></font><br/><font size='12' color='#7C3AED'><b>{avg_pref}</b></font><br/><font size='7' color='#94A3B8'>Bonus Competencies</font>", styles['Normal']),
-            Paragraph(f"<font size='7' color='#64748B'><b>TOP RANKED CANDIDATE</b></font><br/><font size='10' color='#0F172A'><b>{top_cand_name[:22]}</b></font><br/><font size='7' color='#059669'><b>{top_cand_score}</b></font>", styles['Normal']),
+            Paragraph(f"<font size='7' color='#64748B'><b>TOP RANKED CANDIDATE</b></font><br/><font size='10' color='#0F172A'><b>{top_cand_name[:20]}</b></font><br/><font size='7' color='#059669'><b>{top_cand_score}</b></font>", styles['Normal']),
         ]
     ]
-    kpi_table = Table(kpi_data, colWidths=[195, 195, 195, 196])
+    kpi_table = Table(kpi_data, colWidths=[156, 156, 156, 156, 157])
     kpi_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
         ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor("#E2E8F0")),
@@ -271,7 +277,7 @@ def generate_candidate_report_pdf(
 
     # 3. Main Candidates Table
     # Widths sum to 781 pt (landscape A4 width 841.89 - margins 60 = 781.89)
-    col_widths = [26, 145, 110, 78, 78, 78, 134, 132]
+    col_widths = [24, 134, 100, 72, 65, 65, 65, 128, 128]
 
     table_rows = [
         [
@@ -279,6 +285,7 @@ def generate_candidate_report_pdf(
             Paragraph("CANDIDATE", th_left_style),
             Paragraph("ROLE & EXP", th_left_style),
             Paragraph("STATUS & LOC", th_style),
+            Paragraph("CRITICAL", th_style),
             Paragraph("REQUIRED", th_style),
             Paragraph("PREFERRED", th_style),
             Paragraph("MATCHED SKILLS", th_left_style),
@@ -313,6 +320,19 @@ def generate_candidate_report_pdf(
             Paragraph(f"<b>{status}</b>", td_center),
             Paragraph(loc, td_sub)
         ]
+
+        # Critical Score & Ratio
+        crit_tot = c.get("critical_total") or 0
+        crit_mat = c.get("critical_matched") or 0
+        crit_pct = c.get("critical_score")
+        if crit_pct is not None:
+            crit_pct_val = round(float(crit_pct))
+            color_hex = "#6D28D9" if crit_pct_val >= 75 else ("#B45309" if crit_pct_val >= 40 else "#6B7280")
+            crit_score_p = Paragraph(f"<font color='{color_hex}'><b>{crit_pct_val}%</b></font>", td_score)
+            crit_ratio_p = Paragraph(f"{crit_mat}/{crit_tot} matched" if crit_tot > 0 else "—", td_ratio)
+        else:
+            crit_score_p = Paragraph("—", td_score)
+            crit_ratio_p = Paragraph("Not Scored", td_ratio)
 
         # Required Score & Ratio
         req_tot = c.get("required_total") or 0
@@ -353,6 +373,7 @@ def generate_candidate_report_pdf(
             cand_info_flowables,
             role_flowables,
             loc_flowables,
+            [crit_score_p, crit_ratio_p],
             [req_score_p, req_ratio_p],
             [pref_score_p, pref_ratio_p],
             Paragraph(matched_txt, td_skills_match),

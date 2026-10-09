@@ -547,8 +547,8 @@ export default function SourceDashboard() {
   const fetchCandidates = useCallback(async (customSearch, page) => {
     setLoading(true);
     try {
-      const activeSearch = customSearch !== undefined ? customSearch : debouncedSearch;
-      const currentPage = page !== undefined ? page : dirPage;
+      const activeSearch = typeof customSearch === 'string' ? customSearch : (typeof debouncedSearch === 'string' ? debouncedSearch : '');
+      const currentPage = typeof page === 'number' ? page : dirPage;
       const params = new URLSearchParams();
       if (filters.pool !== 'all') params.set('pool', filters.pool);
       if (filters.location) params.set('location', filters.location);
@@ -576,11 +576,15 @@ export default function SourceDashboard() {
       }
 
       const r = await fetch(`/api/source/candidates/search?${params}`, { credentials: 'include' });
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}`);
+      }
       const d = await r.json();
       setCandidates(d.data || []);
       setTotalCandidates(d.total_count ?? (d.data || []).length);
       setSearchBreakdown(d.query_breakdown || null);
-    } catch {
+    } catch (err) {
+      console.error('Failed to load candidates:', err);
       toast.error('Failed to load candidates');
     } finally {
       setLoading(false);
@@ -1382,9 +1386,17 @@ export default function SourceDashboard() {
       parsedSkills = r.required_skills.map(s => {
         if (typeof s === 'string') return { skill: s, level: 'required' };
         const lvl = (s.level || 'required').toLowerCase();
+        let normalizedLevel = 'required';
+        if (lvl === 'critical') {
+          normalizedLevel = 'critical';
+        } else if (lvl === 'preferred' || lvl === 'optional' || lvl === 'intermediate' || lvl === 'beginner') {
+          normalizedLevel = 'preferred';
+        } else {
+          normalizedLevel = 'required';
+        }
         return {
           skill: s.skill || s.name || '',
-          level: (lvl === 'preferred' || lvl === 'optional' || lvl === 'intermediate' || lvl === 'beginner') ? 'preferred' : 'required'
+          level: normalizedLevel
         };
       });
     }
@@ -1397,7 +1409,7 @@ export default function SourceDashboard() {
     });
     setEditingSkillIdx(null);
     setEditingSkillName('');
-    setNewSkillInput({ name: '', level: 'required' });
+    setNewSkillInput({ name: '', level: 'critical' });
     setShowNewRole(true);
   };
 
@@ -1426,7 +1438,7 @@ export default function SourceDashboard() {
     if (!name) return;
     const already = newRole.required_skills.some(s => (s.name || s.skill || '').toLowerCase() === name.toLowerCase());
     if (already) { toast.error('Skill already added'); return; }
-    setNewRole(r => ({ ...r, required_skills: [...r.required_skills, { skill: name, level: newSkillInput.level || 'required' }] }));
+    setNewRole(r => ({ ...r, required_skills: [...r.required_skills, { skill: name, level: newSkillInput.level || 'critical' }] }));
     setNewSkillInput(s => ({ ...s, name: '' }));
   };
 
@@ -1436,7 +1448,14 @@ export default function SourceDashboard() {
       required_skills: r.required_skills.map((s, i) => {
         if (i !== idx) return s;
         const currentLvl = (s.level || 'required').toLowerCase();
-        const nextLvl = (currentLvl === 'preferred' || currentLvl === 'optional' || currentLvl === 'intermediate' || currentLvl === 'beginner') ? 'required' : 'preferred';
+        let nextLvl = 'critical';
+        if (currentLvl === 'critical') {
+          nextLvl = 'required';
+        } else if (currentLvl === 'required' || currentLvl === 'expert' || currentLvl === 'advanced') {
+          nextLvl = 'preferred';
+        } else {
+          nextLvl = 'critical';
+        }
         return { ...s, level: nextLvl };
       })
     }));
@@ -2652,6 +2671,7 @@ export default function SourceDashboard() {
                   <option value="experience">Experience</option>
                   {filters.role_id && (
                     <>
+                      <option value="critical_score">Critical Skills Score</option>
                       <option value="required_score">Required Skills Score</option>
                       <option value="preferred_score">Preferred Skills Score</option>
                     </>
@@ -2673,13 +2693,20 @@ export default function SourceDashboard() {
               )}
 
               <button
-                onClick={fetchCandidates}
+                onClick={() => {
+                  setDirPage(1);
+                  fetchCandidates(searchTerm, 1);
+                }}
                 className="px-6 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors duration-150 shadow-sm"
               >
                 Apply
               </button>
               <button
-                onClick={() => setFilters(initFilters)}
+                onClick={() => {
+                  setFilters(initFilters);
+                  setSearchTerm('');
+                  setDirPage(1);
+                }}
                 className="px-5 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:text-gray-700 transition-colors duration-150"
               >
                 Reset
@@ -2736,7 +2763,7 @@ export default function SourceDashboard() {
           {/* ── Candidate Table ── */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col overflow-hidden min-h-0">
           {/* Table header */}
-          <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_95px_95px_90px_110px_100px_56px]' : 'grid-cols-[40px_1fr_90px_110px_100px_56px]'} gap-4 px-6 py-3 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0 items-center bg-gray-50/50`}>
+          <div className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_95px_95px_95px_90px_110px_100px_56px]' : 'grid-cols-[40px_1fr_90px_110px_100px_56px]'} gap-4 px-6 py-3 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0 items-center bg-gray-50/50`}>
             <div className="flex items-center justify-center" onClick={toggleAll}>
               <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors cursor-pointer ${allSelected ? 'bg-purple-600 border-purple-600' : 'border-gray-300 hover:border-purple-400'}`}>
                 {allSelected && <span className="text-white text-xs font-bold">✓</span>}
@@ -2745,6 +2772,7 @@ export default function SourceDashboard() {
             <div>Candidate</div>
             {filters.role_id && (
               <>
+                <div className="text-center font-bold text-violet-700">Critical</div>
                 <div className="text-center font-bold text-rose-700">Required</div>
                 <div className="text-center font-bold text-emerald-700">Preferred</div>
               </>
@@ -2790,7 +2818,7 @@ export default function SourceDashboard() {
                 <div
                   key={c.id}
                   onClick={() => setDrawerCandidate(c)}
-                  className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_95px_95px_90px_110px_100px_56px]' : 'grid-cols-[40px_1fr_90px_110px_100px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
+                  className={`grid ${filters.role_id ? 'grid-cols-[40px_1fr_95px_95px_95px_90px_110px_100px_56px]' : 'grid-cols-[40px_1fr_90px_110px_100px_56px]'} gap-4 px-6 py-4 items-center cursor-pointer transition-colors duration-150 group ${drawerCandidate?.id === c.id ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
                 >
                   {/* Checkbox */}
                   <div className="flex items-center justify-center" onClick={e => { e.stopPropagation(); toggle(c.id); }}>
@@ -2839,8 +2867,12 @@ export default function SourceDashboard() {
                     </div>
                   </div>
 
-                  {/* Required & Preferred Scores */}
+                  {/* Critical, Required & Preferred Scores */}
                   {filters.role_id && (() => {
+                    const critTot = c.critical_total || 0;
+                    const critMat = c.critical_matched || 0;
+                    const critPct = critTot > 0 ? Math.round((critMat / critTot) * 100) : (c.critical_score != null ? Math.round(c.critical_score) : null);
+
                     const reqTot = c.required_total || 0;
                     const reqMat = c.required_matched || 0;
                     const reqPct = reqTot > 0 ? Math.round((reqMat / reqTot) * 100) : (c.required_score != null ? Math.round(c.required_score) : null);
@@ -2851,6 +2883,21 @@ export default function SourceDashboard() {
 
                     return (
                       <>
+                        {/* Critical */}
+                        <div className="flex flex-col items-center justify-center">
+                          <span 
+                            className={`px-2.5 py-1 rounded-lg border text-xs font-bold ${SCORE_COLOR(critPct)}`}
+                            title={critTot > 0 ? `${critMat}/${critTot} critical skills matched` : 'No critical skills'}
+                          >
+                            {critPct != null ? `${critPct}%` : '—'}
+                          </span>
+                          {critTot > 0 && (
+                            <span className="text-[10px] text-gray-400 font-medium mt-0.5">
+                              {critMat}/{critTot}
+                            </span>
+                          )}
+                        </div>
+
                         {/* Required */}
                         <div className="flex flex-col items-center justify-center">
                           <span 
@@ -3236,11 +3283,17 @@ export default function SourceDashboard() {
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Role Skills ({newRole.required_skills.length})
                 </label>
-                <span className="text-[11px] font-semibold flex items-center gap-2">
+                <span className="text-[11px] font-semibold flex items-center gap-1.5 flex-wrap">
+                  <span className="text-violet-700 bg-violet-50 border border-violet-200 px-2.5 py-0.5 rounded-lg font-bold">
+                    {newRole.required_skills.filter(s => {
+                      const l = (s.level || 'required').toLowerCase();
+                      return l === 'critical';
+                    }).length} Critical
+                  </span>
                   <span className="text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg font-bold">
                     {newRole.required_skills.filter(s => {
                       const l = (s.level || 'required').toLowerCase();
-                      return l === 'required' || l === 'critical' || l === 'expert' || l === 'advanced';
+                      return l === 'required' || l === 'expert' || l === 'advanced';
                     }).length} Required
                   </span>
                   <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg font-bold">
@@ -3258,7 +3311,8 @@ export default function SourceDashboard() {
                   {newRole.required_skills.map((s, i) => {
                     const skillName = s.name || s.skill || (typeof s === 'string' ? s : '');
                     const rawLvl = (s.level || 'required').toLowerCase();
-                    const isReq = rawLvl === 'required' || rawLvl === 'critical' || rawLvl === 'expert' || rawLvl === 'advanced';
+                    const isCrit = rawLvl === 'critical';
+                    const isReq = rawLvl === 'required' || rawLvl === 'expert' || rawLvl === 'advanced';
                     const isEditingThis = editingSkillIdx === i;
 
                     if (isEditingThis) {
@@ -3286,11 +3340,15 @@ export default function SourceDashboard() {
                             type="button"
                             onClick={() => toggleSkillLevel(i)}
                             className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                              isReq ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              isCrit
+                                ? 'bg-violet-100 text-violet-800 border border-violet-300'
+                                : isReq
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                             }`}
-                            title="Click to toggle level"
+                            title="Click to toggle level (Critical → Required → Preferred)"
                           >
-                            {isReq ? 'Required' : 'Preferred'}
+                            {isCrit ? 'Critical' : isReq ? 'Required' : 'Preferred'}
                           </button>
                           <button
                             type="button"
@@ -3321,7 +3379,9 @@ export default function SourceDashboard() {
                       <div
                         key={i}
                         className={`group flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                          isReq
+                          isCrit
+                            ? 'bg-violet-50/80 border-violet-200 hover:border-violet-300 text-gray-900'
+                            : isReq
                             ? 'bg-rose-50/80 border-rose-200 hover:border-rose-300 text-gray-900'
                             : 'bg-emerald-50/80 border-emerald-200 hover:border-emerald-300 text-gray-900'
                         }`}
@@ -3340,13 +3400,15 @@ export default function SourceDashboard() {
                           type="button"
                           onClick={() => toggleSkillLevel(i)}
                           className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider cursor-pointer transition-transform active:scale-95 shadow-2xs ${
-                            isReq
+                            isCrit
+                              ? 'bg-violet-100 text-violet-800 border border-violet-300 hover:bg-violet-200'
+                              : isReq
                               ? 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
                               : 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
                           }`}
-                          title="Click to toggle between Required and Preferred"
+                          title="Click to toggle level (Critical → Required → Preferred)"
                         >
-                          {isReq ? 'Required' : 'Preferred'}
+                          {isCrit ? 'Critical' : isReq ? 'Required' : 'Preferred'}
                         </button>
 
                         {/* Edit button */}
@@ -3354,7 +3416,7 @@ export default function SourceDashboard() {
                           type="button"
                           onClick={() => { setEditingSkillIdx(i); setEditingSkillName(skillName); }}
                           className={`p-0.5 rounded cursor-pointer ${
-                            isReq ? 'text-gray-400 hover:text-rose-700' : 'text-gray-400 hover:text-emerald-700'
+                            isCrit ? 'text-gray-400 hover:text-violet-700' : isReq ? 'text-gray-400 hover:text-rose-700' : 'text-gray-400 hover:text-emerald-700'
                           }`}
                           title="Edit skill name"
                         >
@@ -3393,6 +3455,7 @@ export default function SourceDashboard() {
                   value={newSkillInput.level}
                   onChange={e => setNewSkillInput(s => ({ ...s, level: e.target.value }))}
                 >
+                  <option value="critical">Critical</option>
                   <option value="required">Required</option>
                   <option value="preferred">Preferred</option>
                 </select>
@@ -3405,7 +3468,7 @@ export default function SourceDashboard() {
                 </button>
               </div>
               <p className="text-[10px] text-gray-400 mt-1.5">
-                Click a skill's badge to toggle between <strong className="text-rose-700 font-bold">Required</strong> and <strong className="text-emerald-700 font-bold">Preferred</strong>, or click the name to edit.
+                Click a skill's badge to toggle between <strong className="text-violet-700 font-bold">Critical</strong>, <strong className="text-rose-700 font-bold">Required</strong>, and <strong className="text-emerald-700 font-bold">Preferred</strong>, or click the name to edit.
               </p>
             </div>
 
