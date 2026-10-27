@@ -544,6 +544,35 @@ export default function SourceDashboard() {
     } catch { /* silent */ }
   }, []);
 
+  const getJobRoleCandidateCount = useCallback((role) => {
+    if (!role) return 0;
+    // 1. Direct candidate_count from API
+    if (typeof role.candidate_count === 'number') {
+      return role.candidate_count;
+    }
+    const roleTitle = (role.title || '').trim().toLowerCase();
+    if (!roleTitle) return 0;
+
+    // 2. Lookup in availableTags (from /api/source/candidates/tags)
+    const tagMatch = availableTags.find(t => {
+      const name = (t?.name || t?.tag || (typeof t === 'string' ? t : '')).trim().toLowerCase();
+      return name === roleTitle;
+    });
+    if (tagMatch && typeof tagMatch.count === 'number') {
+      return tagMatch.count;
+    }
+
+    // 3. Fallback: match in loaded candidates array
+    if (Array.isArray(candidates) && candidates.length > 0) {
+      return candidates.filter(c =>
+        (Array.isArray(c.tags) && c.tags.some(t => (t || '').trim().toLowerCase() === roleTitle)) ||
+        c.role_id === role.id
+      ).length;
+    }
+
+    return 0;
+  }, [availableTags, candidates]);
+
   const fetchCandidates = useCallback(async (customSearch, page) => {
     setLoading(true);
     try {
@@ -626,8 +655,11 @@ export default function SourceDashboard() {
   useEffect(() => {
     if (currentTab === 'directory') {
       fetchRepoFolders();
+    } else if (currentTab === 'jobs' || currentTab === 'home') {
+      fetchJobRoles();
+      fetchAvailableTags();
     }
-  }, [currentTab, fetchRepoFolders]);
+  }, [currentTab, fetchRepoFolders, fetchJobRoles, fetchAvailableTags]);
 
   // ── Prevent Accidental Tab Closure During Upload ───────────────────────────
   useEffect(() => {
@@ -2147,7 +2179,7 @@ export default function SourceDashboard() {
                       <p className="text-xs text-gray-500 mt-0.5">Min Exp: {role.min_experience} yrs</p>
                     </div>
                     <span className="text-sm font-medium text-purple-600">
-                      {candidates.filter(c => c.role_id === role.id).length} candidates
+                      {getJobRoleCandidateCount(role)} candidates
                     </span>
                   </div>
                 ))}
@@ -2200,7 +2232,7 @@ export default function SourceDashboard() {
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 pb-4 mt-4">
               {jobRoles.slice().sort((a, b) => new Date(a.created_at || a.updated_at || 0) - new Date(b.created_at || b.updated_at || 0)).map((r, index) => {
                 const colors = TAG_COLORS[index % TAG_COLORS.length];
-                const candidateCount = candidates.filter(c => c.role_id === r.id).length;
+                const candidateCount = getJobRoleCandidateCount(r);
                 
                 return (
                   <div 
@@ -2286,10 +2318,25 @@ export default function SourceDashboard() {
                     <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${candidateCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm font-medium text-gray-600">
                           {candidateCount > 0 ? `${candidateCount} assigned` : '0 assigned'}
                         </span>
                       </div>
+                      {candidateCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFilters(f => ({ ...initFilters, role_id: String(r.id), tags: r.title ? [r.title] : [] }));
+                            setTab('directory');
+                          }}
+                          className="text-xs text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+                          title={`View ${candidateCount} candidates tagged with ${r.title}`}
+                        >
+                          <span>View</span>
+                          <ArrowUpRight size={12} />
+                        </button>
+                      )}
                     </div>
                     
                     {scoreStatus[r.id] && (
@@ -3682,12 +3729,17 @@ export default function SourceDashboard() {
             setViewingRole(null);
             openEditRole(role);
           }}
-          onViewCandidates={(roleId) => {
+          onViewCandidates={(role) => {
             setViewingRole(null);
-            setFilters(prev => ({ ...prev, role_id: String(roleId) }));
+            const targetRole = role && role.id ? role : viewingRole;
+            setFilters(prev => ({ 
+              ...initFilters, 
+              role_id: String(targetRole.id),
+              tags: targetRole.title ? [targetRole.title] : []
+            }));
             setTab('directory');
           }}
-          candidateCount={candidates.filter(c => c.role_id === viewingRole.id).length}
+          candidateCount={getJobRoleCandidateCount(viewingRole)}
           scoreStatus={scoreStatus[viewingRole.id]}
         />
       )}

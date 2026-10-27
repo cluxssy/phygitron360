@@ -38,9 +38,23 @@ class JobRoleRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute('''
-                    SELECT *
-                    FROM job_roles
-                    ORDER BY created_at DESC
+                    SELECT 
+                        jr.*,
+                        rf.name AS folder_name,
+                        rf.month_year AS folder_month_year,
+                        COALESCE(
+                            (
+                                SELECT COUNT(DISTINCT c.id)
+                                FROM candidates c
+                                WHERE EXISTS (
+                                    SELECT 1 FROM unnest(COALESCE(c.tags, '{}'::text[])) _t
+                                    WHERE LOWER(TRIM(_t)) = LOWER(TRIM(jr.title))
+                                )
+                            ), 0
+                        ) AS candidate_count
+                    FROM job_roles jr
+                    LEFT JOIN resume_folders rf ON jr.folder_id = rf.id
+                    ORDER BY jr.created_at DESC
                 ''')
                 return [dict(r) for r in cur.fetchall()]
         finally:
@@ -52,9 +66,23 @@ class JobRoleRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute('''
-                    SELECT *
-                    FROM job_roles
-                    WHERE id = %s
+                    SELECT 
+                        jr.*,
+                        rf.name AS folder_name,
+                        rf.month_year AS folder_month_year,
+                        COALESCE(
+                            (
+                                SELECT COUNT(DISTINCT c.id)
+                                FROM candidates c
+                                WHERE EXISTS (
+                                    SELECT 1 FROM unnest(COALESCE(c.tags, '{}'::text[])) _t
+                                    WHERE LOWER(TRIM(_t)) = LOWER(TRIM(jr.title))
+                                )
+                            ), 0
+                        ) AS candidate_count
+                    FROM job_roles jr
+                    LEFT JOIN resume_folders rf ON jr.folder_id = rf.id
+                    WHERE jr.id = %s
                 ''', (role_id,))
                 row = cur.fetchone()
                 return dict(row) if row else None

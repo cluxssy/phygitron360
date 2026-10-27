@@ -93,7 +93,11 @@ export default function RoleDetailsModal({
             Min Experience: <strong className="text-gray-900">{role.min_experience || 0} yrs</strong>
           </span>
 
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-xl font-semibold text-gray-800 shadow-2xs">
+          <span 
+            onClick={() => onViewCandidates && onViewCandidates(role)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-xl font-semibold text-gray-800 shadow-2xs ${onViewCandidates ? 'cursor-pointer hover:border-purple-300 hover:text-purple-700 transition-colors' : ''}`}
+            title={onViewCandidates ? "Click to view candidates with this job tag" : undefined}
+          >
             <Users size={13} className="text-indigo-600" />
             Assigned: <strong className="text-gray-900">{candidateCount} {candidateCount === 1 ? 'candidate' : 'candidates'}</strong>
           </span>
@@ -225,7 +229,18 @@ export default function RoleDetailsModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/60 flex items-center justify-end">
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between">
+          <div>
+            {onViewCandidates && candidateCount > 0 && (
+              <button
+                type="button"
+                onClick={() => onViewCandidates(role)}
+                className="px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Users size={13} /> View Candidates ({candidateCount})
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2.5">
             <button
               type="button"
