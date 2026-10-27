@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { usePermissions } from '../../../core/auth/usePermissions';
 import { P } from '../../../core/permissions';
-import { Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, Edit, Save, Plus, Search, AlertCircle, Sparkles, Gift, Download, FileSpreadsheet, X, Loader2 } from 'lucide-react';
+import { 
+  Clock, CheckCircle, XCircle, LogIn, LogOut, Calendar, Users, BarChart3, Activity, Zap, Shield, 
+  Edit, Save, Plus, Search, AlertCircle, Sparkles, Gift, Download, FileSpreadsheet, X, Loader2,
+  CheckCircle2, Clock3, Award, TrendingUp, CalendarOff, Filter, ChevronDown, ArrowUpRight, 
+  Sun, Moon, Briefcase, Mail, Phone, Building2, UserCheck, Layers, PieChart, ChevronRight, FileText, Info
+} from 'lucide-react';
 import HorizontalLoader from '../../../core/components/HorizontalLoader';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 import useTabListKeyNav from '../../../core/hooks/useTabListKeyNav';
@@ -73,6 +78,11 @@ export default function AttendancePanel({ mode }) {
   useEscapeClose(() => !isDownloading && setShowDownloadModal(false), showDownloadModal);
   const handleTabKeyNav = useTabListKeyNav();
   const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
+  const [searchedEmployeeBalance, setSearchedEmployeeBalance] = useState(null);
+  const [employeeDetailTab, setEmployeeDetailTab] = useState('attendance'); // 'attendance', 'leaves', 'quota'
+  const [recordFilterPeriod, setRecordFilterPeriod] = useState('all'); // 'all', 'this_month', '30d', '90d'
+  const [leaveStatusFilter, setLeaveStatusFilter] = useState('all'); // 'all', 'half_day', 'Approved', 'Pending', 'Rejected'
+  const [attendanceStatusFilter, setAttendanceStatusFilter] = useState('all'); // 'all', 'Present', 'Half Day', 'Absent', 'Leave'
   const [isSearching, setIsSearching] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [query, setQuery] = useState('');
@@ -424,18 +434,172 @@ export default function AttendancePanel({ mode }) {
     if (!code) return;
     setIsSearching(true);
     try {
-      const [h, l] = await Promise.all([
-        fetch(`/api/attendance/admin/employee/${code}/history`, { credentials: 'include' }).then(r => r.json()),
-        fetch(`/api/attendance/admin/employee/${code}/leaves`, { credentials: 'include' }).then(r => r.json())
+      const [h, l, b] = await Promise.all([
+        fetch(`/api/attendance/admin/employee/${code}/history?limit=365`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
+        fetch(`/api/attendance/admin/employee/${code}/leaves`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
+        fetch(`/api/attendance/admin/employee/${code}/balance`, { credentials: 'include' }).then(r => r.ok ? r.json() : null)
       ]);
       setSearchedEmployeeHistory(Array.isArray(h) ? h : []);
       setSearchedEmployeeLeaves(Array.isArray(l) ? l : []);
+      setSearchedEmployeeBalance(b && typeof b === 'object' ? b : null);
     } catch (e) {
       toast.error(e.message || 'Failed to load employee records');
     } finally {
       setIsSearching(false);
     }
   };
+
+  const formatTimeAMPM = (timeStr) => {
+    if (!timeStr) return '--:--';
+    try {
+      const parts = timeStr.split(':');
+      if (parts.length < 2) return timeStr;
+      let hours = parseInt(parts[0], 10);
+      const minutes = parts[1];
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${hours}:${minutes} ${ampm}`;
+    } catch {
+      return timeStr;
+    }
+  };
+
+  const formatDateDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Calculations for the inspected employee
+  const employeeStats = useMemo(() => {
+    if (!selectedEmployee) return null;
+
+    // Filter by period if needed
+    const filterByDate = (dateStr) => {
+      if (!dateStr || recordFilterPeriod === 'all') return true;
+      const d = new Date(dateStr);
+      const now = new Date();
+      if (recordFilterPeriod === 'this_month') {
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }
+      if (recordFilterPeriod === '30d') {
+        const diffDays = (now - d) / (1000 * 60 * 60 * 24);
+        return diffDays >= 0 && diffDays <= 30;
+      }
+      if (recordFilterPeriod === '90d') {
+        const diffDays = (now - d) / (1000 * 60 * 60 * 24);
+        return diffDays >= 0 && diffDays <= 90;
+      }
+      return true;
+    };
+
+    const filteredLogs = searchedEmployeeHistory.filter(h => filterByDate(h.date));
+    const filteredLeaves = searchedEmployeeLeaves.filter(l => filterByDate(l.start_date) || filterByDate(l.end_date));
+
+    // Attendance Log metrics
+    const presentLogs = filteredLogs.filter(h => {
+      const s = (h.status || '').toLowerCase();
+      return s === 'present' || s === 'on time' || s.includes('present');
+    });
+    const halfDayLogs = filteredLogs.filter(h => {
+      const s = (h.status || '').toLowerCase();
+      return s === 'half day' || s.includes('half');
+    });
+    const absentLogs = filteredLogs.filter(h => {
+      const s = (h.status || '').toLowerCase();
+      return s === 'absent';
+    });
+    const leaveLogs = filteredLogs.filter(h => {
+      const s = (h.status || '').toLowerCase();
+      return s === 'leave';
+    });
+
+    const totalHoursWorked = filteredLogs.reduce((acc, h) => {
+      if (typeof h.duration_hours === 'number') return acc + h.duration_hours;
+      if (h.clock_in && h.clock_out) {
+        try {
+          const t1 = new Date(`1970-01-01T${h.clock_in}`);
+          const t2 = new Date(`1970-01-01T${h.clock_out}`);
+          let diff = (t2 - t1) / (1000 * 3600);
+          if (diff < 0) diff += 24;
+          return acc + Math.max(0, diff);
+        } catch {
+          return acc;
+        }
+      }
+      return acc;
+    }, 0);
+
+    // Leave metrics (with explicit Half-Day detection)
+    const approvedLeaves = filteredLeaves.filter(l => l.status === 'Approved');
+    const pendingLeaves = filteredLeaves.filter(l => (l.status || 'Pending') === 'Pending');
+    const rejectedLeaves = filteredLeaves.filter(l => l.status === 'Rejected');
+
+    // Total leaves taken (in days)
+    const totalLeaveDays = approvedLeaves.reduce((acc, l) => acc + (parseFloat(l.duration_days) || 1), 0);
+
+    // Half days in leaves: duration_days === 0.5 or start/end day type != Full Day
+    const isHalfDayLeave = (l) => {
+      const dur = parseFloat(l.duration_days);
+      const sType = (l.start_day_type || '').toLowerCase();
+      const eType = (l.end_day_type || '').toLowerCase();
+      return dur === 0.5 || sType.includes('half') || eType.includes('half') || (dur > 0 && dur % 1 !== 0);
+    };
+
+    const halfDayLeavesList = filteredLeaves.filter(isHalfDayLeave);
+    const approvedHalfDayLeaves = approvedLeaves.filter(isHalfDayLeave);
+    const totalHalfDayLeavesCount = approvedHalfDayLeaves.length;
+    const totalHalfDayLeaveDays = approvedHalfDayLeaves.reduce((acc, l) => acc + (parseFloat(l.duration_days) || 0.5), 0);
+
+    // Full day leaves
+    const fullDayLeavesCount = approvedLeaves.filter(l => !isHalfDayLeave(l)).length;
+
+    // Combined half-days (Half-day attendance logs + Half-day leaves)
+    const totalCombinedHalfDays = halfDayLogs.length + totalHalfDayLeavesCount;
+
+    // Leave Balance
+    const quotaTotal = searchedEmployeeBalance?.total_leaves ?? 18;
+    const quotaUsed = searchedEmployeeBalance?.used_leaves ?? totalLeaveDays;
+    const quotaAvailable = Math.max(0, quotaTotal - quotaUsed);
+    const quotaExtended = searchedEmployeeBalance?.extended_leaves ?? 0;
+
+    // Attendance Rate
+    const effectiveDays = presentLogs.length + (halfDayLogs.length * 0.5);
+    const attendanceRate = (presentLogs.length + halfDayLogs.length + absentLogs.length) > 0 
+      ? Math.min(100, Math.round((effectiveDays / Math.max(1, effectiveDays + absentLogs.length)) * 100))
+      : 100;
+
+    return {
+      filteredLogs,
+      filteredLeaves,
+      presentCount: presentLogs.length,
+      halfDayLogsCount: halfDayLogs.length,
+      absentCount: absentLogs.length,
+      leaveLogsCount: leaveLogs.length,
+      totalHoursWorked: Math.round(totalHoursWorked * 10) / 10,
+      avgHoursPerDay: (presentLogs.length + halfDayLogs.length) > 0 
+        ? (Math.round((totalHoursWorked / (presentLogs.length + halfDayLogs.length)) * 10) / 10)
+        : 0,
+      totalLeaveDays: Math.round(totalLeaveDays * 10) / 10,
+      totalHalfDayLeavesCount,
+      totalHalfDayLeaveDays: Math.round(totalHalfDayLeaveDays * 10) / 10,
+      halfDayLeavesList,
+      fullDayLeavesCount,
+      totalCombinedHalfDays,
+      approvedLeavesCount: approvedLeaves.length,
+      pendingLeavesCount: pendingLeaves.length,
+      rejectedLeavesCount: rejectedLeaves.length,
+      quotaTotal,
+      quotaUsed: Math.round(quotaUsed * 10) / 10,
+      quotaAvailable: Math.round(quotaAvailable * 10) / 10,
+      quotaExtended,
+      attendanceRate
+    };
+  }, [selectedEmployee, searchedEmployeeHistory, searchedEmployeeLeaves, searchedEmployeeBalance, recordFilterPeriod]);
 
   // Compute frontend matrix dashboard stats from existing data safely
   let totalPresent = 0;
@@ -843,150 +1007,787 @@ export default function AttendancePanel({ mode }) {
           )}
 
           {adminTab === 'search' && (
-            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden animate-fade-in-up p-8">
-                <div className="max-w-xl mx-auto space-y-6">
-                <div className="relative max-w-md" ref={dropdownRef}>
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#8b8ba3]">
+            <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-none border-[#ece2ff] overflow-hidden animate-fade-in-up p-6 md:p-8 space-y-6">
+              {/* Top Search & Filter Bar */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-[#ece2ff]">
+                <div className="relative w-full lg:max-w-md" ref={dropdownRef}>
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#8b8ba3]">
                     <Search size={16} />
-                    </div>
-                    <input
+                  </div>
+                  <input
                     type="text"
                     value={query}
                     onChange={(e) => {
-                        setQuery(e.target.value);
-                        setIsOpen(true);
+                      setQuery(e.target.value);
+                      setIsOpen(true);
                     }}
                     onFocus={() => {
-                        setQuery('');
-                        setIsOpen(true);
+                      setQuery('');
+                      setIsOpen(true);
                     }}
-                    placeholder={selectedEmployee ? `${selectedEmployee.name || selectedEmployee.full_name} (${selectedEmployee.employee_code})` : "Select personnel to inspect..."}
-                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm pl-12 pr-10 py-3 rounded-2xl focus:outline-none focus:border-[#c084fc] transition-all cursor-pointer"
-                    />
-                    <button
+                    placeholder={selectedEmployee ? `Selected: ${selectedEmployee.name || selectedEmployee.full_name} (${selectedEmployee.employee_code})` : "Search employee by name, code or department..."}
+                    className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-sm pl-11 pr-10 py-3 rounded-2xl focus:outline-none focus:border-[#c084fc] focus:bg-white transition-all shadow-2xs"
+                  />
+                  <button
                     type="button"
                     onClick={() => {
-                        if (!isOpen) setQuery('');
-                        setIsOpen(o => !o);
+                      if (!isOpen) setQuery('');
+                      setIsOpen(o => !o);
                     }}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#8b8ba3]"
-                    >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                    </button>
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#8b8ba3] hover:text-purple-600 transition-colors cursor-pointer"
+                  >
+                    <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                    {isOpen && (
-                    <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-[#ebe4ff] rounded-2xl shadow-lg max-h-64 overflow-y-auto z-50">
-                        {activeEmployees
+                  {isOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-[#ebe4ff] rounded-2xl shadow-xl max-h-72 overflow-y-auto z-50 divide-y divide-[#faf7ff]">
+                      {activeEmployees
                         .filter(e => {
-                            if (!query.trim()) return true;
-                            const matchesSearch = 
-                            (e.name || e.full_name || '').toLowerCase().includes(query.toLowerCase()) ||
-                            (e.employee_code || '').toLowerCase().includes(query.toLowerCase());
-                            return matchesSearch;
+                          if (!query.trim()) return true;
+                          const q = query.toLowerCase();
+                          return (
+                            (e.name || e.full_name || '').toLowerCase().includes(q) ||
+                            (e.employee_code || '').toLowerCase().includes(q) ||
+                            (e.designation || '').toLowerCase().includes(q) ||
+                            (e.department || '').toLowerCase().includes(q)
+                          );
                         })
                         .sort((a, b) => (a.name || a.full_name || '').localeCompare(b.name || b.full_name || ''))
                         .map(e => (
-                            <div
+                          <div
                             key={e.employee_code || e.id}
                             onClick={() => {
-                                setSelectedEmployee(e);
-                                searchEmployeeRecords(e.employee_code);
-                                setQuery('');
-                                setIsOpen(false);
+                              setSelectedEmployee(e);
+                              searchEmployeeRecords(e.employee_code);
+                              setQuery('');
+                              setIsOpen(false);
                             }}
-                            className="px-4 py-2 text-sm text-black hover:bg-[#faf7ff] cursor-pointer"
-                            >
-                            {e.name || e.full_name} ({e.employee_code})
+                            className={`px-4 py-3 flex items-center justify-between text-sm text-black hover:bg-[#f5efff] cursor-pointer transition-colors ${
+                              selectedEmployee?.employee_code === e.employee_code ? 'bg-[#faf7ff] font-bold text-purple-700' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                {getInitials(e.name || e.full_name)}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-900 leading-tight">{e.name || e.full_name}</p>
+                                <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                                  {e.employee_code} {e.designation ? `· ${e.designation}` : ''}
+                                </p>
+                              </div>
                             </div>
+                            <span className="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                              Inspect
+                            </span>
+                          </div>
                         ))}
-                        {activeEmployees.filter(e => {
+                      {activeEmployees.filter(e => {
                         if (!query.trim()) return true;
-                        const matchesSearch = 
-                            (e.name || e.full_name || '').toLowerCase().includes(query.toLowerCase()) ||
-                            (e.employee_code || '').toLowerCase().includes(query.toLowerCase());
-                        return matchesSearch;
-                        }).length === 0 && (
-                        <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                            No active employees found
+                        const q = query.toLowerCase();
+                        return (
+                          (e.name || e.full_name || '').toLowerCase().includes(q) ||
+                          (e.employee_code || '').toLowerCase().includes(q) ||
+                          (e.designation || '').toLowerCase().includes(q)
+                        );
+                      }).length === 0 && (
+                        <div className="px-4 py-6 text-sm text-gray-400 text-center italic">
+                          No matching active employees found
                         </div>
-                        )}
+                      )}
                     </div>
-                    )}
+                  )}
                 </div>
 
-                {isSearching ? (
-                    <div className="flex justify-center p-10">
-                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                {/* Right controls: Period Selector */}
+                {selectedEmployee && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                      <Filter size={12} /> Period:
+                    </span>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 font-bold bg-[#faf7ff] p-1 rounded-2xl border border-[#ebe4ff]">
+                      {[
+                        { id: 'all', label: 'All Records' },
+                        { id: 'this_month', label: 'This Month' },
+                        { id: '30d', label: 'Last 30 Days' },
+                        { id: '90d', label: 'Last 90 Days' },
+                      ].map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setRecordFilterPeriod(p.id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            recordFilterPeriod === p.id
+                              ? 'bg-purple-600 text-white shadow-xs'
+                              : 'text-gray-600 hover:text-black hover:bg-white'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
                     </div>
-                ) : selectedEmployee ? (
-                    <div className="grid grid-cols-1 gap-6 mt-8">
-                    <div className="flex items-center gap-4 bg-[#f5efff] p-4 rounded-2xl border border-[#ece2ff]">
-                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-primary font-black text-xl">
-                        {getInitials(selectedEmployee.name)}
-                        </div>
-                        <div>
-                        <h3 className="font-bold text-black uppercase italic">{selectedEmployee.name}</h3>
-                        <p className="text-[10px] text-[#8b8ba3] font-mono">{selectedEmployee.employee_code}</p>
-                        </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-white border border-[#ece2ff] rounded-2xl overflow-hidden flex flex-col h-80">
-                        <div className="px-5 py-4 border-b border-[#ece2ff] bg-[#faf7ff]">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Log History</h4>
-                        </div>
-                        <div className="overflow-y-auto divide-y divide-[#ece2ff] flex-1">
-                            {searchedEmployeeHistory.length === 0 ? 
-                            <p className="p-6 text-center text-[10px] text-[#b6b6c7] font-black uppercase italic">No records</p> : 
-                            searchedEmployeeHistory.map((h, i) => (
-                                <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog(h)}>
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                    <p className="text-[11px] font-bold text-black">{new Date(h.date).toLocaleDateString()}</p>
-                                    <p className="text-[9px] text-[#8b8ba3] font-mono">{h.clock_in} - {h.clock_out || '??'}</p>
-                                    </div>
-                                    <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${h.status === 'Present' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{h.status}</span>
-                                </div>
-                                </div>
-                            ))
-                            }
-                        </div>
-                        </div>
-                        
-                        <div className="bg-white border border-[#ece2ff] rounded-2xl overflow-hidden flex flex-col h-80">
-                        <div className="px-5 py-4 border-b border-[#ece2ff] bg-[#faf7ff]">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Leave History</h4>
-                        </div>
-                        <div className="overflow-y-auto divide-y divide-[#ece2ff] flex-1">
-                            {searchedEmployeeLeaves.length === 0 ? 
-                            <p className="p-6 text-center text-[10px] text-[#b6b6c7] font-black uppercase italic">No records</p> : 
-                            searchedEmployeeLeaves.map((l, i) => (
-                                <div key={i} className="px-5 py-3 hover:bg-[#faf7ff] transition-colors cursor-pointer" onClick={() => setSelectedLog({ type: 'leave', ...l })}>
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                    <p className="text-[11px] font-bold text-black">{l.leave_type} {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
-                                    <p className="text-[9px] text-[#8b8ba3] font-mono">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
-                                    </div>
-                                    <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500' : l.status === 'Rejected' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>{l.status || 'Pending'}</span>
-                                </div>
-                                </div>
-                            ))
-                            }
-                        </div>
-                        </div>
-                    </div>
-                    </div>
-                ) : (
-                    <div className="text-center py-10 opacity-30">
-                    <Search size={48} className="mx-auto mb-4 text-[#8b8ba3]" />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#6b7280]">Select personnel to view matrix</p>
-                    </div>
+                  </div>
                 )}
+              </div>
+
+              {isSearching ? (
+                <div className="flex flex-col items-center justify-center p-16 gap-3">
+                  <div className="w-10 h-10 border-3 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading Employee Records...</p>
                 </div>
+              ) : selectedEmployee && employeeStats ? (
+                <div className="space-y-6">
+                  {/* ── Employee Header Banner ── */}
+                  <div className="bg-gradient-to-r from-purple-50/90 via-white to-purple-50/50 p-6 rounded-3xl border border-purple-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-2xl shadow-sm flex items-center justify-center text-white font-black text-xl tracking-wider shrink-0">
+                        {getInitials(selectedEmployee.name || selectedEmployee.full_name)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <h3 className="text-lg font-black text-gray-900 tracking-tight">
+                            {selectedEmployee.name || selectedEmployee.full_name}
+                          </h3>
+                          <span className="font-mono text-xs font-bold bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-lg border border-purple-200">
+                            {selectedEmployee.employee_code}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Active Personnel
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3.5 mt-2 text-xs text-gray-500 flex-wrap">
+                          {selectedEmployee.designation && (
+                            <span className="flex items-center gap-1 font-medium text-gray-700">
+                              <Briefcase size={13} className="text-purple-600" /> {selectedEmployee.designation}
+                            </span>
+                          )}
+                          {selectedEmployee.department && (
+                            <span className="flex items-center gap-1 font-medium text-gray-700">
+                              <Building2 size={13} className="text-purple-600" /> {selectedEmployee.department}
+                            </span>
+                          )}
+                          {selectedEmployee.email && (
+                            <span className="flex items-center gap-1 text-gray-500">
+                              <Mail size={13} className="text-gray-400" /> {selectedEmployee.email}
+                            </span>
+                          )}
+                          {selectedEmployee.reporting_manager && (
+                            <span className="flex items-center gap-1 text-gray-500">
+                              <Users size={13} className="text-gray-400" /> Manager: {selectedEmployee.reporting_manager}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEmployee(null);
+                        setSearchedEmployeeHistory([]);
+                        setSearchedEmployeeLeaves([]);
+                        setSearchedEmployeeBalance(null);
+                        setQuery('');
+                      }}
+                      className="self-start md:self-auto px-4 py-2 text-xs font-bold text-gray-600 hover:text-purple-700 hover:bg-white bg-gray-50 border border-gray-200 rounded-xl transition-all shadow-2xs cursor-pointer"
+                    >
+                      Change Personnel
+                    </button>
+                  </div>
+
+                  {/* ── 5 KPI Stat Cards ── */}
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                    {/* 1. Total Attendance */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs hover:shadow-sm transition-all border-l-4 border-l-emerald-500">
+                      <div className="flex items-center justify-between text-gray-500 mb-2">
+                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Total Attendance</span>
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                          <CheckCircle2 size={16} />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-black text-gray-900">
+                        {employeeStats.presentCount} <span className="text-xs font-bold text-gray-500">Days</span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        {employeeStats.totalHoursWorked > 0 
+                          ? `${employeeStats.totalHoursWorked} hrs logged (${employeeStats.avgHoursPerDay}h/day)` 
+                          : 'Full days present'}
+                      </p>
+                    </div>
+
+                    {/* 2. Half Days */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs hover:shadow-sm transition-all border-l-4 border-l-amber-500">
+                      <div className="flex items-center justify-between text-gray-500 mb-2">
+                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Half Days</span>
+                        <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                          <Clock3 size={16} />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-black text-gray-900">
+                        {employeeStats.totalCombinedHalfDays} <span className="text-xs font-bold text-gray-500">Total</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700 font-medium mt-1">
+                        {employeeStats.halfDayLogsCount} work logs · {employeeStats.totalHalfDayLeavesCount} leave (0.5d)
+                      </p>
+                    </div>
+
+                    {/* 3. Total Leaves Taken */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs hover:shadow-sm transition-all border-l-4 border-l-blue-500">
+                      <div className="flex items-center justify-between text-gray-500 mb-2">
+                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Total Leaves</span>
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                          <CalendarOff size={16} />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-black text-gray-900">
+                        {employeeStats.totalLeaveDays} <span className="text-xs font-bold text-gray-500">Days</span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        {employeeStats.approvedLeavesCount} approved ({employeeStats.totalHalfDayLeavesCount} half-day requests)
+                      </p>
+                    </div>
+
+                    {/* 4. Leave Balance Quota */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs hover:shadow-sm transition-all border-l-4 border-l-purple-500">
+                      <div className="flex items-center justify-between text-gray-500 mb-2">
+                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Leave Balance</span>
+                        <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                          <Award size={16} />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-black text-gray-900">
+                        {employeeStats.quotaAvailable} <span className="text-xs font-bold text-gray-500">/ {employeeStats.quotaTotal} Days</span>
+                      </div>
+                      <p className="text-[11px] text-purple-700 font-medium mt-1">
+                        {employeeStats.quotaUsed} days used · {employeeStats.pendingLeavesCount} pending
+                      </p>
+                    </div>
+
+                    {/* 5. Attendance Rate */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs hover:shadow-sm transition-all border-l-4 border-l-teal-500 col-span-2 lg:col-span-1">
+                      <div className="flex items-center justify-between text-gray-500 mb-2">
+                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Attendance Rate</span>
+                        <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+                          <TrendingUp size={16} />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-black text-gray-900">
+                        {employeeStats.attendanceRate}%
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2.5 overflow-hidden">
+                        <div className="bg-teal-500 h-1.5 rounded-full transition-all" style={{ width: `${employeeStats.attendanceRate}%` }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Section Navigation Tabs ── */}
+                  <div className="flex items-center justify-between border-b border-gray-200 pt-2 flex-wrap gap-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEmployeeDetailTab('attendance')}
+                        className={`px-5 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                          employeeDetailTab === 'attendance'
+                            ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-xl'
+                            : 'border-transparent text-gray-500 hover:text-gray-800'
+                        }`}
+                      >
+                        <Clock size={14} />
+                        <span>Attendance Logs</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600">
+                          {employeeStats.filteredLogs.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEmployeeDetailTab('leaves')}
+                        className={`px-5 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                          employeeDetailTab === 'leaves'
+                            ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-xl'
+                            : 'border-transparent text-gray-500 hover:text-gray-800'
+                        }`}
+                      >
+                        <Calendar size={14} />
+                        <span>Leave History & Half Days</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600">
+                          {employeeStats.filteredLeaves.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEmployeeDetailTab('quota')}
+                        className={`px-5 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                          employeeDetailTab === 'quota'
+                            ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-xl'
+                            : 'border-transparent text-gray-500 hover:text-gray-800'
+                        }`}
+                      >
+                        <Award size={14} />
+                        <span>Leave Quota & Balances</span>
+                      </button>
+                    </div>
+
+                    {/* Filter pills depending on active tab */}
+                    {employeeDetailTab === 'attendance' && (
+                      <div className="flex items-center gap-1.5 pb-2 flex-wrap">
+                        {[
+                          { id: 'all', label: 'All Status' },
+                          { id: 'Present', label: 'Present' },
+                          { id: 'Half Day', label: 'Half Day' },
+                          { id: 'Absent', label: 'Absent' },
+                          { id: 'Leave', label: 'Leave' },
+                        ].map(f => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setAttendanceStatusFilter(f.id)}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              attendanceStatusFilter === f.id
+                                ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                                : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {employeeDetailTab === 'leaves' && (
+                      <div className="flex items-center gap-1.5 pb-2 flex-wrap">
+                        {[
+                          { id: 'all', label: 'All Leaves' },
+                          { id: 'half_day', label: 'Half Days Only' },
+                          { id: 'Approved', label: 'Approved' },
+                          { id: 'Pending', label: 'Pending' },
+                          { id: 'Rejected', label: 'Rejected' },
+                        ].map(f => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setLeaveStatusFilter(f.id)}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              leaveStatusFilter === f.id
+                                ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                                : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── TAB 1: ATTENDANCE LOGS ── */}
+                  {employeeDetailTab === 'attendance' && (
+                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+                      {employeeStats.filteredLogs.length === 0 ? (
+                        <div className="text-center py-16 px-4">
+                          <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
+                            <Clock size={24} />
+                          </div>
+                          <h4 className="text-sm font-bold text-gray-800">No Attendance Records</h4>
+                          <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                            No clock-in/clock-out records have been logged for {selectedEmployee.name || selectedEmployee.full_name} during the selected period.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-gray-50/75 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                <th className="px-6 py-3.5">Date</th>
+                                <th className="px-6 py-3.5">Clock In</th>
+                                <th className="px-6 py-3.5">Clock Out</th>
+                                <th className="px-6 py-3.5">Duration</th>
+                                <th className="px-6 py-3.5">Status</th>
+                                <th className="px-6 py-3.5">Work Summary</th>
+                                <th className="px-6 py-3.5 text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-xs">
+                              {employeeStats.filteredLogs
+                                .filter(h => {
+                                  if (attendanceStatusFilter === 'all') return true;
+                                  const s = (h.status || '').toLowerCase();
+                                  return s === attendanceStatusFilter.toLowerCase() || s.includes(attendanceStatusFilter.toLowerCase());
+                                })
+                                .map((h, i) => {
+                                  const rawStatus = (h.status || 'Present').toLowerCase();
+                                  const isHalf = rawStatus.includes('half');
+                                  const isAbsent = rawStatus === 'absent';
+                                  const isLeave = rawStatus === 'leave';
+                                  const isPresent = !isHalf && !isAbsent && !isLeave;
+
+                                  return (
+                                    <tr 
+                                      key={i} 
+                                      onClick={() => setSelectedLog(h)}
+                                      className="hover:bg-purple-50/40 transition-colors cursor-pointer group"
+                                    >
+                                      <td className="px-6 py-3.5 font-semibold text-gray-900 whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                          <Calendar size={13} className="text-gray-400" />
+                                          <span>{formatDateDisplay(h.date)}</span>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-3.5 font-mono text-gray-700 whitespace-nowrap">
+                                        <span className="inline-flex items-center gap-1">
+                                          <LogIn size={12} className="text-emerald-500" />
+                                          {formatTimeAMPM(h.clock_in)}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-3.5 font-mono text-gray-700 whitespace-nowrap">
+                                        <span className="inline-flex items-center gap-1">
+                                          <LogOut size={12} className="text-amber-500" />
+                                          {formatTimeAMPM(h.clock_out)}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-3.5 whitespace-nowrap font-medium text-gray-700">
+                                        {typeof h.duration_hours === 'number' && h.duration_hours > 0 ? (
+                                          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                                            {Math.floor(h.duration_hours)}h {Math.round((h.duration_hours % 1) * 60)}m
+                                          </span>
+                                        ) : h.clock_in && h.clock_out ? (
+                                          <span className="text-gray-400">—</span>
+                                        ) : (
+                                          <span className="text-gray-300">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-6 py-3.5 whitespace-nowrap">
+                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1 border ${
+                                          isPresent ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                          isHalf ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                          isLeave ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                          'bg-red-50 text-red-700 border-red-200'
+                                        }`}>
+                                          <span className={`w-1.5 h-1.5 rounded-full ${
+                                            isPresent ? 'bg-emerald-500' :
+                                            isHalf ? 'bg-amber-500' :
+                                            isLeave ? 'bg-blue-500' :
+                                            'bg-red-500'
+                                          }`} />
+                                          {h.status || 'Present'}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-3.5 text-gray-500 max-w-xs truncate">
+                                        {h.work_log ? (
+                                          <span className="truncate block" title={h.work_log}>{h.work_log}</span>
+                                        ) : (
+                                          <span className="text-gray-300 italic">No notes</span>
+                                        )}
+                                      </td>
+                                      <td className="px-6 py-3.5 text-right whitespace-nowrap">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setSelectedLog(h); }}
+                                          className="text-xs text-purple-600 hover:text-purple-800 font-bold group-hover:underline inline-flex items-center gap-1"
+                                        >
+                                          <span>Details</span>
+                                          <ChevronRight size={13} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── TAB 2: LEAVE HISTORY & HALF DAYS ── */}
+                  {employeeDetailTab === 'leaves' && (
+                    <div className="space-y-4">
+                      {/* Summary Banner */}
+                      <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-3">
+                        <div className="flex items-center gap-4 text-xs font-semibold text-gray-700 flex-wrap">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-purple-600" />
+                            Full Day Leaves: <strong className="text-purple-900">{employeeStats.fullDayLeavesCount}</strong>
+                          </span>
+                          <span className="text-gray-300">|</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-500" />
+                            Half Day Leaves: <strong className="text-amber-900">{employeeStats.totalHalfDayLeavesCount} ({employeeStats.totalHalfDayLeaveDays} days)</strong>
+                          </span>
+                          <span className="text-gray-300">|</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-600" />
+                            Total Approved Days: <strong className="text-blue-900">{employeeStats.totalLeaveDays} Days</strong>
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-400 font-medium">
+                          Showing {employeeStats.filteredLeaves.length} total request{employeeStats.filteredLeaves.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+
+                      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+                        {employeeStats.filteredLeaves.length === 0 ? (
+                          <div className="text-center py-16 px-4">
+                            <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
+                              <CalendarOff size={24} />
+                            </div>
+                            <h4 className="text-sm font-bold text-gray-800">No Leave Requests</h4>
+                            <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                              No leave requests (including half days) found for {selectedEmployee.name || selectedEmployee.full_name} in this period.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-gray-50/75 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                  <th className="px-6 py-3.5">Leave Type</th>
+                                  <th className="px-6 py-3.5">Day Category</th>
+                                  <th className="px-6 py-3.5">Duration</th>
+                                  <th className="px-6 py-3.5">Date Range</th>
+                                  <th className="px-6 py-3.5">Status</th>
+                                  <th className="px-6 py-3.5">Reason</th>
+                                  <th className="px-6 py-3.5 text-right">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100 text-xs">
+                                {employeeStats.filteredLeaves
+                                  .filter(l => {
+                                    if (leaveStatusFilter === 'all') return true;
+                                    if (leaveStatusFilter === 'half_day') {
+                                      const dur = parseFloat(l.duration_days);
+                                      const sType = (l.start_day_type || '').toLowerCase();
+                                      const eType = (l.end_day_type || '').toLowerCase();
+                                      return dur === 0.5 || sType.includes('half') || eType.includes('half') || (dur > 0 && dur % 1 !== 0);
+                                    }
+                                    return (l.status || 'Pending').toLowerCase() === leaveStatusFilter.toLowerCase();
+                                  })
+                                  .map((l, i) => {
+                                    const dur = parseFloat(l.duration_days) || 1;
+                                    const sType = (l.start_day_type || '').toLowerCase();
+                                    const eType = (l.end_day_type || '').toLowerCase();
+                                    const isHalf = dur === 0.5 || sType.includes('half') || eType.includes('half') || (dur > 0 && dur % 1 !== 0);
+
+                                    return (
+                                      <tr 
+                                        key={i} 
+                                        onClick={() => setSelectedLog({ type: 'leave', ...l })}
+                                        className="hover:bg-purple-50/40 transition-colors cursor-pointer group"
+                                      >
+                                        <td className="px-6 py-3.5 font-bold text-gray-900 whitespace-nowrap">
+                                          <div className="flex items-center gap-2">
+                                            <Calendar size={13} className="text-purple-600" />
+                                            <span>{l.leave_type || 'Leave'}</span>
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-3.5 whitespace-nowrap">
+                                          {isHalf ? (
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
+                                              <span>🌗 Half Day</span>
+                                              {l.start_day_type && l.start_day_type !== 'Full Day' && (
+                                                <span className="font-normal">({l.start_day_type})</span>
+                                              )}
+                                            </span>
+                                          ) : (
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                              Full Day
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="px-6 py-3.5 font-mono font-bold text-gray-800 whitespace-nowrap">
+                                          {dur} {dur === 1 ? 'Day' : 'Days'}
+                                        </td>
+                                        <td className="px-6 py-3.5 text-gray-600 whitespace-nowrap">
+                                          <span className="font-mono text-[11px]">
+                                            {l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} 
+                                            {l.end_date && l.end_date !== l.start_date ? ` → ${l.end_date}` : ''}
+                                          </span>
+                                        </td>
+                                        <td className="px-6 py-3.5 whitespace-nowrap">
+                                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1 border ${
+                                            l.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                            l.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                                            'bg-amber-50 text-amber-700 border-amber-200'
+                                          }`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${
+                                              l.status === 'Approved' ? 'bg-emerald-500' :
+                                              l.status === 'Rejected' ? 'bg-red-500' :
+                                              'bg-amber-500 animate-pulse'
+                                            }`} />
+                                            {l.status || 'Pending'}
+                                          </span>
+                                        </td>
+                                        <td className="px-6 py-3.5 text-gray-500 max-w-xs truncate">
+                                          {l.reason ? (
+                                            <span className="truncate block" title={l.reason}>{l.reason}</span>
+                                          ) : (
+                                            <span className="text-gray-300 italic">No reason specified</span>
+                                          )}
+                                        </td>
+                                        <td className="px-6 py-3.5 text-right whitespace-nowrap">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setSelectedLog({ type: 'leave', ...l }); }}
+                                            className="text-xs text-purple-600 hover:text-purple-800 font-bold group-hover:underline inline-flex items-center gap-1"
+                                          >
+                                            <span>Details</span>
+                                            <ChevronRight size={13} />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── TAB 3: LEAVE QUOTA & BALANCES ── */}
+                  {employeeDetailTab === 'quota' && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-sm font-bold text-gray-900">Annual Leave Quota</h4>
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                              Year {new Date().getFullYear()}
+                            </span>
+                          </div>
+                          <div className="space-y-4">
+                            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                              <span className="text-xs text-gray-500 font-medium">Total Entitled Leaves:</span>
+                              <span className="text-sm font-black text-gray-900">{employeeStats.quotaTotal} Days</span>
+                            </div>
+                            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                              <span className="text-xs text-gray-500 font-medium">Used / Approved Leaves:</span>
+                              <span className="text-sm font-black text-purple-600">{employeeStats.quotaUsed} Days</span>
+                            </div>
+                            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                              <span className="text-xs text-gray-500 font-medium">Pending Requests:</span>
+                              <span className="text-sm font-black text-amber-600">{employeeStats.pendingLeavesCount}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-2">
+                              <span className="text-xs text-gray-500 font-medium">Remaining Available:</span>
+                              <span className="text-base font-black text-emerald-600">{employeeStats.quotaAvailable} Days</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-gray-100">
+                          <div className="flex justify-between text-xs text-gray-500 mb-1.5 font-medium">
+                            <span>Quota Utilization</span>
+                            <span>{Math.round((employeeStats.quotaUsed / Math.max(1, employeeStats.quotaTotal)) * 100)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className="bg-purple-600 h-2 rounded-full transition-all" 
+                              style={{ width: `${Math.min(100, Math.round((employeeStats.quotaUsed / Math.max(1, employeeStats.quotaTotal)) * 100))}%` }} 
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-sm font-bold text-gray-900">Half Day Summary</h4>
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              0.5x Factor
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mb-4">
+                            Half-day leaves consume exactly 0.5 days of quota entitlement and allow morning or afternoon shifts.
+                          </p>
+                          <div className="space-y-3">
+                            <div className="p-3 bg-amber-50/70 border border-amber-100 rounded-xl flex items-center justify-between">
+                              <span className="text-xs font-bold text-amber-900">Half-Day Leaves (0.5d)</span>
+                              <span className="text-sm font-black text-amber-700">{employeeStats.totalHalfDayLeavesCount} requests ({employeeStats.totalHalfDayLeaveDays}d)</span>
+                            </div>
+                            <div className="p-3 bg-purple-50/70 border border-purple-100 rounded-xl flex items-center justify-between">
+                              <span className="text-xs font-bold text-purple-900">Half-Day Shift Logs</span>
+                              <span className="text-sm font-black text-purple-700">{employeeStats.halfDayLogsCount} logs</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-sm font-bold text-gray-900">Attendance Overview</h4>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {employeeStats.attendanceRate}% Presence
+                          </span>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                            <span className="text-xs text-gray-600 font-medium">Full Days Present</span>
+                            <span className="text-xs font-bold text-emerald-700">{employeeStats.presentCount} days</span>
+                          </div>
+                          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                            <span className="text-xs text-gray-600 font-medium">Half Day Logs</span>
+                            <span className="text-xs font-bold text-amber-700">{employeeStats.halfDayLogsCount} days</span>
+                          </div>
+                          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                            <span className="text-xs text-gray-600 font-medium">Total Hours Logged</span>
+                            <span className="text-xs font-bold text-gray-800">{employeeStats.totalHoursWorked} hrs</span>
+                          </div>
+                          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                            <span className="text-xs text-gray-600 font-medium">Average Shift Length</span>
+                            <span className="text-xs font-bold text-gray-800">{employeeStats.avgHoursPerDay} hrs/day</span>
+                          </div>
+                          <div className="flex items-center justify-between py-2">
+                            <span className="text-xs text-gray-600 font-medium">Unexcused Absences</span>
+                            <span className="text-xs font-bold text-red-600">{employeeStats.absentCount} days</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* ── No Employee Selected Prompt ── */
+                <div className="text-center py-16 px-6 max-w-xl mx-auto space-y-4">
+                  <div className="w-16 h-16 rounded-3xl bg-purple-50 text-purple-600 border border-purple-200 flex items-center justify-center mx-auto shadow-2xs">
+                    <Search size={28} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900">Select an Employee to Inspect</h3>
+                    <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto leading-relaxed">
+                      Search above by name, employee code, or department to view total attendance, complete leave records with half-day breakdown, and annual quota balances.
+                    </p>
+                  </div>
+                  {activeEmployees.length > 0 && (
+                    <div className="pt-4 border-t border-gray-100">
+                      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">Quick Select Personnel</p>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {activeEmployees.slice(0, 8).map(e => (
+                          <button
+                            key={e.employee_code || e.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedEmployee(e);
+                              searchEmployeeRecords(e.employee_code);
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#faf7ff] border border-[#ebe4ff] text-xs font-semibold text-gray-700 hover:border-purple-300 hover:text-purple-700 hover:bg-white transition-all shadow-2xs cursor-pointer"
+                          >
+                            <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-bold">
+                              {getInitials(e.name || e.full_name)}
+                            </span>
+                            <span>{e.name || e.full_name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            )}
+          )}
         </div>
       )}
 
