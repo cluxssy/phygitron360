@@ -178,6 +178,20 @@ def get_employee_leaves_admin(
     return service.get_leaves_for_employee(employee_code, manager_code)
 
 
+@router.get("/admin/employee/{employee_code}/balance")
+def get_employee_balance_admin(
+    employee_code: str,
+    user=Depends(require_permission(["deploy.leaves.view_all", "deploy.leaves.view_team", "deploy.attendance.view_all", "deploy.attendance.view_team"])),
+    service: AttendanceService = Depends(get_service)
+):
+    """Admin/Manager: get leave balance and quota for any employee."""
+    perms = user.get('permissions', {})
+    manager_code = None if perms.get('deploy.leaves.view_all') or perms.get('deploy.attendance.view_all') else user.get('employee_code')
+    if manager_code and service.repo.get_manager_code(employee_code, service.tenant_id) != manager_code:
+        raise HTTPException(status_code=403, detail="Unauthorized to view this employee's leave balance")
+    return service.get_leave_balance(employee_code)
+
+
 @router.post("/admin/trigger-reminders")
 def trigger_missed_clockout_reminders(
     user=Depends(require_permission("deploy.attendance.manage_policies")), 

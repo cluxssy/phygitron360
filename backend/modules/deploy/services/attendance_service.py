@@ -552,7 +552,20 @@ class AttendanceService:
         """Admin/Manager: retrieve full attendance history for a given employee."""
         if manager_code and self.repo.get_manager_code(employee_code, self.tenant_id) != manager_code:
             raise ValueError("Unauthorized to view this employee's history")
-        return self.repo.get_history(employee_code, limit, self.tenant_id)
+        history = self.repo.get_history(employee_code, limit, self.tenant_id)
+        for log in history:
+            clock_in = log.get('clock_in')
+            clock_out = log.get('clock_out')
+            shift_date = log.get('date')
+            clock_out_date = log.get('clock_out_date')
+            if clock_in and clock_out:
+                try:
+                    duration, status = compute_shift_duration_and_status(clock_in, clock_out, shift_date, clock_out_date)
+                    log['status'] = log.get('status') or status
+                    log['duration_hours'] = round(duration, 2)
+                except Exception:
+                    pass
+        return history
 
     def get_leaves_for_employee(self, employee_code: str, manager_code: Optional[str] = None):
         """Admin/Manager: retrieve all leaves for a given employee."""
