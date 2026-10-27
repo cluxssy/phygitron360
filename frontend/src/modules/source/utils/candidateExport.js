@@ -28,6 +28,7 @@ function getFilterSummaryText(filtersSummary) {
   if (filtersSummary.location) parts.push(`Location: ${filtersSummary.location}`);
   if (filtersSummary.sort_by) {
     const sortLabels = {
+      critical_score: 'Critical Fit (High → Low)',
       required_score: 'Required Fit (High → Low)',
       preferred_score: 'Preferred Fit (High → Low)',
       newest: 'Newest Added',
@@ -43,6 +44,11 @@ function getFilterSummaryText(filtersSummary) {
  */
 function prepareCandidateExportRows(candidates) {
   return candidates.map((c, idx) => {
+    const critTot = c.critical_total || 0;
+    const critMat = c.critical_matched || 0;
+    const critPct = c.critical_score != null ? `${Math.round(c.critical_score)}%` : '—';
+    const critRatio = critTot > 0 ? `${critMat}/${critTot}` : '—';
+
     const reqTot = c.required_total || 0;
     const reqMat = c.required_matched || 0;
     const reqPct = c.required_score != null ? `${Math.round(c.required_score)}%` : '—';
@@ -74,6 +80,8 @@ function prepareCandidateExportRows(candidates) {
       location: c.location || '—',
       status: c.status || 'New',
       tags: tagsStr,
+      critical_score: critPct,
+      critical_ratio: critRatio,
       required_score: reqPct,
       required_ratio: reqRatio,
       preferred_score: prefPct,
@@ -114,6 +122,8 @@ export function exportCandidatesToExcel({ candidates = [], roleTitle = '', filte
       'Location',
       'Status',
       'Tags / Pool',
+      'Critical Fit (%)',
+      'Critical Ratio',
       'Required Fit (%)',
       'Required Ratio',
       'Preferred Fit (%)',
@@ -135,6 +145,8 @@ export function exportCandidatesToExcel({ candidates = [], roleTitle = '', filte
       r.location,
       r.status,
       r.tags,
+      r.critical_score,
+      r.critical_ratio,
       r.required_score,
       r.required_ratio,
       r.preferred_score,
@@ -196,6 +208,8 @@ export function exportCandidatesToCSV({ candidates = [], roleTitle = '', filters
     'Location',
     'Status',
     'Tags',
+    'Critical Fit (%)',
+    'Critical Ratio',
     'Required Fit (%)',
     'Required Ratio',
     'Preferred Fit (%)',
@@ -225,6 +239,8 @@ export function exportCandidatesToCSV({ candidates = [], roleTitle = '', filters
       escapeCSV(r.location),
       escapeCSV(r.status),
       escapeCSV(r.tags),
+      escapeCSV(r.critical_score),
+      escapeCSV(r.critical_ratio),
       escapeCSV(r.required_score),
       escapeCSV(r.required_ratio),
       escapeCSV(r.preferred_score),

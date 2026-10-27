@@ -34,12 +34,14 @@ LEVEL_WEIGHTS = {
 }
 
 _COMPAT_MAP = {
+    "critical":  "critical",
     "required":  "expert",
     "optional":  "intermediate",
     "preferred": "intermediate",
 }
 
-REQUIRED_LEVELS = {"critical", "expert", "advanced"}
+CRITICAL_LEVELS = {"critical"}
+REQUIRED_LEVELS = {"critical", "expert", "advanced", "required"}
 
 NOISE_TOKENS = {"and", "or", "the", "of", "for", "with", "in", "at", "a", "an", "to", "on", "is", "are"}
 MIN_TOKEN_LEN  = 2
@@ -511,21 +513,46 @@ def calculate_role_fit(
     if not req_skills:
         return {
             "score": 0.0,
+            "critical_score": 0.0,
             "required_score": 0.0,
             "preferred_score": 0.0,
+            "critical_matched": 0,
+            "critical_total": 0,
+            "required_matched": 0,
+            "required_total": 0,
+            "preferred_matched": 0,
+            "preferred_total": 0,
             "matched_skills": [],
             "missing_skills": [],
             "partial_skills": [],
         }
 
-    # Split job-role skills into two buckets
-    required_reqs  = [r for r in req_skills if _normalise_level(r.get("level")) in REQUIRED_LEVELS]
-    preferred_reqs = [r for r in req_skills if _normalise_level(r.get("level")) not in REQUIRED_LEVELS]
+    # Split job-role skills into three buckets: Critical, Required, Preferred
+    def _is_crit(lvl):
+        raw = str(lvl or "").lower().strip()
+        norm = _normalise_level(lvl)
+        return raw in CRITICAL_LEVELS or norm in CRITICAL_LEVELS
+
+    def _is_req(lvl):
+        if _is_crit(lvl):
+            return False
+        raw = str(lvl or "").lower().strip()
+        norm = _normalise_level(lvl)
+        return raw in REQUIRED_LEVELS or norm in {"expert", "advanced"}
+
+    critical_reqs  = [r for r in req_skills if isinstance(r, dict) and _is_crit(r.get("level"))]
+    required_reqs  = [r for r in req_skills if isinstance(r, dict) and _is_req(r.get("level"))]
+    preferred_reqs = [r for r in req_skills if not (isinstance(r, dict) and (_is_crit(r.get("level")) or _is_req(r.get("level"))))]
 
     # Build candidate skill lookup: name → normalized name (for experience-text boost)
     cand_names: List[str] = []
     for s in cand_skills:
-        raw = _clean_skill_name(s.get("name") or s.get("skill"))
+        if isinstance(s, dict):
+            raw = _clean_skill_name(s.get("name") or s.get("skill"))
+        elif isinstance(s, str):
+            raw = _clean_skill_name(s)
+        else:
+            raw = ""
         if raw:
             cand_names.append(raw)
 
@@ -534,7 +561,12 @@ def calculate_role_fit(
         effective_matches = 0.0
 
         for req in req_group:
-            req_name = _clean_skill_name(req.get("skill") or req.get("name"))
+            if isinstance(req, dict):
+                req_name = _clean_skill_name(req.get("skill") or req.get("name"))
+            elif isinstance(req, str):
+                req_name = _clean_skill_name(req)
+            else:
+                req_name = ""
             if not req_name:
                 continue
 
@@ -565,36 +597,51 @@ def calculate_role_fit(
         effective_matches = float(len(matched))
         return matched, missing, partial, effective_matches
 
+    crit_matched, crit_missing, crit_partial, crit_eff = _match_group(critical_reqs)
     req_matched,  req_missing,  req_partial,  req_eff  = _match_group(required_reqs)
     pref_matched, pref_missing, pref_partial, pref_eff = _match_group(preferred_reqs)
 
+    total_critical  = len(critical_reqs)
     total_required  = len(required_reqs)
     total_preferred = len(preferred_reqs)
 
-    # Strictly: (Actual Skills Candidate has / Total Skills Required) * 100
+    # Strictly: (Actual Skills Candidate has / Total Skills in Category) * 100
+    critical_score  = round((len(crit_matched) / total_critical) * 100.0, 1) if total_critical > 0 else None
     required_score  = round((len(req_matched) / total_required) * 100.0, 1) if total_required > 0 else None
     preferred_score = round((len(pref_matched) / total_preferred) * 100.0, 1) if total_preferred > 0 else None
 
-    if total_required > 0 and total_preferred > 0:
+    # Weighted composite total score (0–100)
+    if critical_score is not None and required_score is not None and preferred_score is not None:
+        total_score = round(min(critical_score * 0.50 + required_score * 0.35 + preferred_score * 0.15, 100.0), 1)
+    elif critical_score is not None and required_score is not None:
+        total_score = round(min(critical_score * 0.60 + required_score * 0.40, 100.0), 1)
+    elif critical_score is not None and preferred_score is not None:
+        total_score = round(min(critical_score * 0.75 + preferred_score * 0.25, 100.0), 1)
+    elif required_score is not None and preferred_score is not None:
         total_score = round(min(required_score * 0.75 + preferred_score * 0.25, 100.0), 1)
-    elif total_required > 0:
+    elif critical_score is not None:
+        total_score = critical_score
+    elif required_score is not None:
         total_score = required_score
-    elif total_preferred > 0:
+    elif preferred_score is not None:
         total_score = preferred_score
     else:
         total_score = 0.0
 
     return {
         "score":             total_score,
+        "critical_score":    critical_score,
         "required_score":    required_score,
         "preferred_score":   preferred_score,
+        "critical_matched":  len(crit_matched),
+        "critical_total":    total_critical,
         "required_matched":  len(req_matched),
         "required_total":    total_required,
         "preferred_matched": len(pref_matched),
         "preferred_total":   total_preferred,
-        "matched_skills":    req_matched  + pref_matched,
-        "missing_skills":    req_missing  + pref_missing,
-        "partial_skills":    req_partial  + pref_partial,
+        "matched_skills":    crit_matched + req_matched + pref_matched,
+        "missing_skills":    crit_missing + req_missing + pref_missing,
+        "partial_skills":    crit_partial + req_partial + pref_partial,
     }
 
 

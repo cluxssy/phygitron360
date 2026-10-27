@@ -745,6 +745,11 @@ class CandidateService:
                     cand["ats_detail"] = fit
 
                 if cand.get("ats_detail"):
+                    crit_tot = cand["ats_detail"].get("critical_total") or 0
+                    crit_mat = cand["ats_detail"].get("critical_matched", 0)
+                    if crit_tot > 0:
+                        cand["ats_detail"]["critical_score"] = round((crit_mat / crit_tot) * 100.0, 1)
+
                     req_tot = cand["ats_detail"].get("required_total") or 0
                     req_mat = cand["ats_detail"].get("required_matched", 0)
                     if req_tot > 0:
@@ -755,8 +760,11 @@ class CandidateService:
                     if pref_tot > 0:
                         cand["ats_detail"]["preferred_score"] = round((pref_mat / pref_tot) * 100.0, 1)
 
+                cand["critical_score"] = cand["ats_detail"].get("critical_score")
                 cand["required_score"] = cand["ats_detail"].get("required_score")
                 cand["preferred_score"] = cand["ats_detail"].get("preferred_score")
+                cand["critical_matched"] = cand["ats_detail"].get("critical_matched", 0)
+                cand["critical_total"] = cand["ats_detail"].get("critical_total", 0)
                 cand["required_matched"] = cand["ats_detail"].get("required_matched", 0)
                 cand["required_total"] = cand["ats_detail"].get("required_total", 0)
                 cand["preferred_matched"] = cand["ats_detail"].get("preferred_matched", 0)
@@ -775,11 +783,14 @@ class CandidateService:
                 )
             else:
                 cand["fit_score"] = compute_resume_ats_score(cand)
+                cand["critical_score"] = None
                 cand["required_score"] = None
                 cand["preferred_score"] = None
 
         if sort_by == "fit_score":
             candidates.sort(key=lambda c: c.get("fit_score") or 0, reverse=True)
+        elif sort_by == "critical_score":
+            candidates.sort(key=lambda c: c.get("critical_score") or 0, reverse=True)
         elif sort_by == "required_score":
             candidates.sort(key=lambda c: c.get("required_score") or 0, reverse=True)
         elif sort_by == "preferred_score":

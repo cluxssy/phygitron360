@@ -127,12 +127,17 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   try { fitData = fitScore ? JSON.parse(fitScore.reasoning) : null; } catch { /* ignore */ }
 
   const activeRoleFit = activeEvalRoleId ? (profile?.role_fit || candidate?.ats_detail || fitData || null) : null;
+  const critMatchedCount = activeRoleFit?.critical_matched ?? candidate?.critical_matched ?? fitData?.critical_matched ?? 0;
+  const critTotalCount = activeRoleFit?.critical_total ?? candidate?.critical_total ?? fitData?.critical_total ?? 0;
   const reqMatchedCount = activeRoleFit?.required_matched ?? candidate?.required_matched ?? fitData?.required_matched ?? 0;
   const reqTotalCount = activeRoleFit?.required_total ?? candidate?.required_total ?? fitData?.required_total ?? 0;
   const prefMatchedCount = activeRoleFit?.preferred_matched ?? candidate?.preferred_matched ?? fitData?.preferred_matched ?? 0;
   const prefTotalCount = activeRoleFit?.preferred_total ?? candidate?.preferred_total ?? fitData?.preferred_total ?? 0;
 
   // Strictly (matched / total) * 100
+  const critScore = critTotalCount > 0 
+    ? Math.round((critMatchedCount / critTotalCount) * 100) 
+    : (activeRoleFit?.critical_score != null ? Math.round(activeRoleFit.critical_score) : null);
   const reqScore = reqTotalCount > 0 
     ? Math.round((reqMatchedCount / reqTotalCount) * 100) 
     : (activeRoleFit?.required_score != null ? Math.round(activeRoleFit.required_score) : null);
@@ -784,7 +789,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                 </section>
 
                 {/* ATS Role-Fit Analysis - Strictly rendered when a specific job role is selected */}
-                {Boolean(activeEvalRoleId) && Boolean(activeRoleFit) && (reqScore != null || prefScore != null || matchedSkills.length > 0 || missingSkills.length > 0) && (
+                {Boolean(activeEvalRoleId) && Boolean(activeRoleFit) && (critScore != null || reqScore != null || prefScore != null || matchedSkills.length > 0 || missingSkills.length > 0) && (
                   <section className="space-y-3">
                     <SectionLabel 
                       icon={<Target size={13} />} 
@@ -793,9 +798,32 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                     />
                     
                     {/* Score Cards Grid */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {/* Critical Score Card */}
+                      <div className="glass-panel p-3.5 flex flex-col justify-between border-white/10 bg-white/[0.02]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-violet-300">Critical</span>
+                          {critTotalCount > 0 && (
+                            <span className="text-[10px] font-bold text-violet-400">
+                              {critMatchedCount}/{critTotalCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className={`text-2xl font-black ${critScore >= 70 ? 'text-violet-400' : critScore >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
+                            {critScore != null ? `${Math.round(critScore)}%` : '—'}
+                          </span>
+                        </div>
+                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mt-3">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${critScore >= 70 ? 'bg-violet-400' : critScore >= 40 ? 'bg-amber-400' : 'bg-rose-400'}`}
+                            style={{ width: `${Math.min(critScore || 0, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
                       {/* Required Score Card */}
-                      <div className="glass-panel p-4 flex flex-col justify-between border-white/10 bg-white/[0.02]">
+                      <div className="glass-panel p-3.5 flex flex-col justify-between border-white/10 bg-white/[0.02]">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black uppercase tracking-widest text-rose-300">Required</span>
                           {reqTotalCount > 0 && (
@@ -818,7 +846,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                       </div>
 
                       {/* Preferred Score Card */}
-                      <div className="glass-panel p-4 flex flex-col justify-between border-white/10 bg-white/[0.02]">
+                      <div className="glass-panel p-3.5 flex flex-col justify-between border-white/10 bg-white/[0.02]">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Preferred</span>
                           {prefTotalCount > 0 && (
