@@ -80,7 +80,9 @@ export default function AttendancePanel({ mode }) {
   const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
   const [searchedEmployeeBalance, setSearchedEmployeeBalance] = useState(null);
   const [employeeDetailTab, setEmployeeDetailTab] = useState('attendance'); // 'attendance', 'leaves', 'quota'
-  const [recordFilterPeriod, setRecordFilterPeriod] = useState('all'); // 'all', 'this_month', '30d', '90d'
+  const [recordFilterPeriod, setRecordFilterPeriod] = useState('this_month'); // 'this_month', 'all', 'month', '30d', '90d'
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
   const [leaveStatusFilter, setLeaveStatusFilter] = useState('all'); // 'all', 'half_day', 'Approved', 'Pending', 'Rejected'
   const [attendanceStatusFilter, setAttendanceStatusFilter] = useState('all'); // 'all', 'Present', 'Half Day', 'Absent', 'Leave'
   const [isSearching, setIsSearching] = useState(false);
@@ -478,32 +480,87 @@ export default function AttendancePanel({ mode }) {
   const employeeStats = useMemo(() => {
     if (!selectedEmployee) return null;
 
-    // Filter by period if needed
-    const filterByDate = (dateStr) => {
-      if (!dateStr || recordFilterPeriod === 'all') return true;
-      const d = new Date(dateStr);
-      const now = new Date();
-      if (recordFilterPeriod === 'this_month') {
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1; // 1-12
+
+    // Map holidays for fast O(1) lookup
+    const holidayDatesMap = {};
+    if (Array.isArray(holidaysList)) {
+      holidaysList.forEach(h => {
+        if (h && h.date) holidayDatesMap[h.date] = h;
+      });
+    }
+
+    // Determine the exact date range [periodStartDate, periodEndDate] and friendly label
+    let periodStartDate = null;
+    let periodEndDate = null;
+    let periodLabel = 'All Time';
+
+    if (recordFilterPeriod === 'this_month') {
+      periodStartDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+      periodEndDate = todayStr; // current month up to today
+      const monthName = today.toLocaleString('default', { month: 'short' });
+      periodLabel = `${monthName} ${currentYear}`;
+    } else if (recordFilterPeriod === 'month') {
+      const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
+      const monthStartStr = `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`;
+      const monthEndStr = `${filterYear}-${String(filterMonth).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+      const monthName = new Date(filterYear, filterMonth - 1, 1).toLocaleString('default', { month: 'short' });
+
+      // If it's the current month, cap periodEndDate to today
+      if (filterYear === currentYear && filterMonth === currentMonth) {
+        periodStartDate = monthStartStr;
+        periodEndDate = todayStr;
+        periodLabel = `${monthName} ${filterYear}`;
+      } else {
+        periodStartDate = monthStartStr;
+        periodEndDate = monthEndStr;
+        periodLabel = `${monthName} ${filterYear}`;
       }
-      if (recordFilterPeriod === '30d') {
-        const diffDays = (now - d) / (1000 * 60 * 60 * 24);
-        return diffDays >= 0 && diffDays <= 30;
-      }
-      if (recordFilterPeriod === '90d') {
-        const diffDays = (now - d) / (1000 * 60 * 60 * 24);
-        return diffDays >= 0 && diffDays <= 90;
-      }
+    } else if (recordFilterPeriod === '30d') {
+      const d30 = new Date(today);
+      d30.setDate(today.getDate() - 29); // 30 days inclusive of today
+      periodStartDate = `${d30.getFullYear()}-${String(d30.getMonth() + 1).padStart(2, '0')}-${String(d30.getDate()).padStart(2, '0')}`;
+      periodEndDate = todayStr;
+      periodLabel = 'Last 30 Days';
+    } else if (recordFilterPeriod === '90d') {
+      const d90 = new Date(today);
+      d90.setDate(today.getDate() - 89); // 90 days inclusive of today
+      periodStartDate = `${d90.getFullYear()}-${String(d90.getMonth() + 1).padStart(2, '0')}-${String(d90.getDate()).padStart(2, '0')}`;
+      periodEndDate = todayStr;
+      periodLabel = 'Last 90 Days';
+    }
+
+    // Filter by period helper
+    const isDateInPeriod = (dateStr) => {
+      if (!dateStr) return false;
+      const cleanDate = dateStr.split('T')[0];
+      if (!periodStartDate && !periodEndDate) return true; // 'all'
+      if (periodStartDate && cleanDate < periodStartDate) return false;
+      if (periodEndDate && cleanDate > periodEndDate) return false;
       return true;
     };
 
-    const filteredLogs = searchedEmployeeHistory.filter(h => filterByDate(h.date));
-    const filteredLeaves = searchedEmployeeLeaves.filter(l => filterByDate(l.start_date) || filterByDate(l.end_date));
+    // Filter leaves helper: range overlap test
+    const isLeaveInPeriod = (leave) => {
+      if (!leave) return false;
+      const s = (leave.start_date || '').split('T')[0];
+      const e = (leave.end_date || s).split('T')[0];
+      if (!periodStartDate && !periodEndDate) return true;
+      if (periodEndDate && s > periodEndDate) return false;
+      if (periodStartDate && e < periodStartDate) return false;
+      return true;
+    };
+
+    const filteredLogs = searchedEmployeeHistory.filter(h => isDateInPeriod(h.date));
+    const filteredLeaves = searchedEmployeeLeaves.filter(isLeaveInPeriod);
 
     // Attendance Log metrics
     const presentLogs = filteredLogs.filter(h => {
       const s = (h.status || '').toLowerCase();
-      return s === 'present' || s === 'on time' || s.includes('present');
+      return s === 'present' || s === 'on time' || s === 'active' || s.includes('present');
     });
     const halfDayLogs = filteredLogs.filter(h => {
       const s = (h.status || '').toLowerCase();
@@ -567,11 +624,81 @@ export default function AttendancePanel({ mode }) {
     const quotaAvailable = Math.max(0, quotaTotal - quotaUsed);
     const quotaExtended = searchedEmployeeBalance?.extended_leaves ?? 0;
 
-    // Attendance Rate
+    // Effective Days Worked (Full day = 1.0, Half day = 0.5)
     const effectiveDays = presentLogs.length + (halfDayLogs.length * 0.5);
-    const attendanceRate = (presentLogs.length + halfDayLogs.length + absentLogs.length) > 0 
-      ? Math.min(100, Math.round((effectiveDays / Math.max(1, effectiveDays + absentLogs.length)) * 100))
-      : 100;
+
+    // Calculate expected working days (Monday-Friday, excluding weekends & holidays)
+    let expectedWorkingDays = 0;
+    if (periodStartDate && periodEndDate) {
+      // If employee joined after periodStartDate, start from their joining date
+      let effectiveStart = periodStartDate;
+      const doj = selectedEmployee.doj || selectedEmployee.date_of_joining;
+      if (doj && typeof doj === 'string' && doj.length >= 10) {
+        const cleanDoj = doj.split('T')[0];
+        if (cleanDoj > effectiveStart && cleanDoj <= periodEndDate) {
+          effectiveStart = cleanDoj;
+        }
+      }
+
+      if (effectiveStart <= periodEndDate) {
+        const [sY, sM, sD] = effectiveStart.split('-').map(Number);
+        const [eY, eM, eD] = periodEndDate.split('-').map(Number);
+        const curr = new Date(sY, sM - 1, sD, 12, 0, 0);
+        const end = new Date(eY, eM - 1, eD, 12, 0, 0);
+
+        while (curr <= end) {
+          const dayOfWeek = curr.getDay(); // 0 = Sun, 6 = Sat
+          const y = curr.getFullYear();
+          const m = String(curr.getMonth() + 1).padStart(2, '0');
+          const d = String(curr.getDate()).padStart(2, '0');
+          const dStr = `${y}-${m}-${d}`;
+
+          const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+          const isHoliday = !!holidayDatesMap[dStr];
+
+          if (!isWeekend && !isHoliday) {
+            expectedWorkingDays++;
+          }
+          curr.setDate(curr.getDate() + 1);
+        }
+      }
+    } else {
+      // For 'all': calculate working days from earliest activity/log to today
+      if (filteredLogs.length > 0) {
+        const logDates = filteredLogs.map(h => (h.date || '').split('T')[0]).filter(Boolean).sort();
+        const earliest = logDates[0];
+        if (earliest && earliest <= todayStr) {
+          const [sY, sM, sD] = earliest.split('-').map(Number);
+          const [eY, eM, eD] = todayStr.split('-').map(Number);
+          const curr = new Date(sY, sM - 1, sD, 12, 0, 0);
+          const end = new Date(eY, eM - 1, eD, 12, 0, 0);
+          let count = 0;
+          while (curr <= end) {
+            const dayOfWeek = curr.getDay();
+            const y = curr.getFullYear();
+            const m = String(curr.getMonth() + 1).padStart(2, '0');
+            const d = String(curr.getDate()).padStart(2, '0');
+            const dStr = `${y}-${m}-${d}`;
+            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidayDatesMap[dStr]) {
+              count++;
+            }
+            curr.setDate(curr.getDate() + 1);
+          }
+          expectedWorkingDays = Math.max(filteredLogs.length, count);
+        } else {
+          expectedWorkingDays = filteredLogs.length;
+        }
+      } else {
+        expectedWorkingDays = 0;
+      }
+    }
+
+    // Attendance Rate:
+    // If effectiveDays is 0 or expectedWorkingDays is 0, rate is 0%.
+    // Otherwise: (effectiveDays / expectedWorkingDays) * 100, capped at 100%.
+    const attendanceRate = (effectiveDays > 0 && expectedWorkingDays > 0)
+      ? Math.min(100, Math.round((effectiveDays / expectedWorkingDays) * 100))
+      : 0;
 
     return {
       filteredLogs,
@@ -597,9 +724,12 @@ export default function AttendancePanel({ mode }) {
       quotaUsed: Math.round(quotaUsed * 10) / 10,
       quotaAvailable: Math.round(quotaAvailable * 10) / 10,
       quotaExtended,
+      effectiveDays: Math.round(effectiveDays * 10) / 10,
+      expectedWorkingDays,
+      periodLabel,
       attendanceRate
     };
-  }, [selectedEmployee, searchedEmployeeHistory, searchedEmployeeLeaves, searchedEmployeeBalance, recordFilterPeriod]);
+  }, [selectedEmployee, searchedEmployeeHistory, searchedEmployeeLeaves, searchedEmployeeBalance, recordFilterPeriod, filterMonth, filterYear, holidaysList]);
 
   // Compute frontend matrix dashboard stats from existing data safely
   let totalPresent = 0;
@@ -1101,16 +1231,17 @@ export default function AttendancePanel({ mode }) {
 
                 {/* Right controls: Period Selector */}
                 {selectedEmployee && (
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
                       <Filter size={12} /> Period:
                     </span>
                     <div className="flex items-center gap-1 text-xs text-gray-500 font-bold bg-[#faf7ff] p-1 rounded-2xl border border-[#ebe4ff]">
                       {[
-                        { id: 'all', label: 'All Records' },
                         { id: 'this_month', label: 'This Month' },
+                        { id: 'month', label: 'Select Month' },
                         { id: '30d', label: 'Last 30 Days' },
                         { id: '90d', label: 'Last 90 Days' },
+                        { id: 'all', label: 'All Records' },
                       ].map(p => (
                         <button
                           key={p.id}
@@ -1126,6 +1257,30 @@ export default function AttendancePanel({ mode }) {
                         </button>
                       ))}
                     </div>
+
+                    {recordFilterPeriod === 'month' && (
+                      <div className="flex items-center gap-1.5 bg-[#faf7ff] border border-[#ebe4ff] p-1 rounded-2xl animate-fade-in">
+                        <select
+                          value={filterMonth}
+                          onChange={(e) => setFilterMonth(Number(e.target.value))}
+                          className="bg-white border border-[#ebe4ff] text-purple-900 text-xs font-bold px-3 py-1.5 rounded-xl focus:outline-none focus:border-purple-400 shadow-2xs cursor-pointer"
+                        >
+                          {Array.from({ length: 12 }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>
+                              {new Date(2000, i).toLocaleString('default', { month: 'long' })}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          value={filterYear}
+                          onChange={(e) => setFilterYear(Math.max(2000, Math.min(2100, Number(e.target.value) || 2026)))}
+                          min="2020"
+                          max="2035"
+                          className="w-20 bg-white border border-[#ebe4ff] text-purple-900 text-xs font-bold px-2 py-1.5 rounded-xl focus:outline-none focus:border-purple-400 shadow-2xs text-center"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1278,6 +1433,11 @@ export default function AttendancePanel({ mode }) {
                       <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2.5 overflow-hidden">
                         <div className="bg-teal-500 h-1.5 rounded-full transition-all" style={{ width: `${employeeStats.attendanceRate}%` }} />
                       </div>
+                      <p className="text-[11px] text-gray-400 mt-2 truncate">
+                        {employeeStats.expectedWorkingDays > 0 
+                          ? `${employeeStats.effectiveDays} of ${employeeStats.expectedWorkingDays} work days (${employeeStats.periodLabel})`
+                          : (employeeStats.periodLabel || 'No work days logged')}
+                      </p>
                     </div>
                   </div>
 
@@ -1719,7 +1879,13 @@ export default function AttendancePanel({ mode }) {
                       <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs">
                         <div className="flex items-center justify-between mb-4">
                           <h4 className="text-sm font-bold text-gray-900">Attendance Overview</h4>
-                          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                            employeeStats.attendanceRate >= 80 
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                              : employeeStats.attendanceRate >= 50
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}>
                             {employeeStats.attendanceRate}% Presence
                           </span>
                         </div>
@@ -1731,6 +1897,12 @@ export default function AttendancePanel({ mode }) {
                           <div className="flex items-center justify-between py-2 border-b border-gray-100">
                             <span className="text-xs text-gray-600 font-medium">Half Day Logs</span>
                             <span className="text-xs font-bold text-amber-700">{employeeStats.halfDayLogsCount} days</span>
+                          </div>
+                          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                            <span className="text-xs text-gray-600 font-medium">Expected Working Days</span>
+                            <span className="text-xs font-bold text-purple-700">
+                              {employeeStats.expectedWorkingDays} days ({employeeStats.periodLabel})
+                            </span>
                           </div>
                           <div className="flex items-center justify-between py-2 border-b border-gray-100">
                             <span className="text-xs text-gray-600 font-medium">Total Hours Logged</span>
