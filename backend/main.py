@@ -49,6 +49,14 @@ from backend.modules.lexai.api.files import router as lexai_files_router, alias_
 from backend.modules.lexai.api.voice import router as lexai_voice_router, alias_voice_router
 from backend.modules.lexai.api.sop import router as lexai_sop_router, alias_sop_router as lexai_alias_sop_router
 
+# Set up Forge (Learning Central) & Journey modules
+from backend.modules.forge.api.courses import router as forge_courses_router
+from backend.modules.forge.api.domains import router as forge_domains_router
+from backend.modules.forge.api.scorm import router as forge_scorm_router
+from backend.modules.forge.api.certificates import router as forge_certificates_router
+from backend.modules.forge.api.analytics import router as forge_analytics_router
+from backend.modules.forge.api.journey import router as journey_router
+
 app = FastAPI(
     title="PHYGITRON 360",
     description="Multi-tenant Modular Talent Intelligence Platform API",
@@ -266,6 +274,14 @@ app.include_router(lexai_voice_router, dependencies=[Depends(require_module("lex
 app.include_router(alias_voice_router, dependencies=[Depends(require_module("lexai"))])
 app.include_router(lexai_sop_router, dependencies=[Depends(require_module("lexai"))])
 app.include_router(lexai_alias_sop_router, dependencies=[Depends(require_module("lexai"))])
+
+# Forge (Learning Central) & Journey Routers
+app.include_router(forge_courses_router, dependencies=[Depends(require_module("forge"))])
+app.include_router(forge_domains_router, dependencies=[Depends(require_module("forge"))])
+app.include_router(forge_scorm_router, dependencies=[Depends(require_module("forge"))])
+app.include_router(forge_certificates_router)
+app.include_router(forge_analytics_router, dependencies=[Depends(require_module("forge"))])
+app.include_router(journey_router, dependencies=[Depends(require_module("forge"))])
 
 
 if __name__ == "__main__":

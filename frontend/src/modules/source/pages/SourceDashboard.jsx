@@ -486,6 +486,24 @@ export default function SourceDashboard() {
   const [showUploadTagModal, setShowUploadTagModal] = useState(false);
   const [uploadSelectedTags, setUploadSelectedTags] = useState([]);
   const [uploadTargetMonth, setUploadTargetMonth] = useState('');
+  const [uploadCustomTagInput, setUploadCustomTagInput] = useState('');
+  const [bulkCustomTagInput, setBulkCustomTagInput] = useState('');
+
+  // Job Role titles set for fast distinguishing between job role tags & manual tags
+  const jobRoleTitlesSet = useMemo(() => {
+    const s = new Set();
+    if (Array.isArray(jobRoles)) {
+      jobRoles.forEach(r => {
+        if (r.title) s.add(r.title.trim().toLowerCase());
+      });
+    }
+    return s;
+  }, [jobRoles]);
+
+  const isJobTag = useCallback((tagName) => {
+    if (!tagName) return false;
+    return jobRoleTitlesSet.has(tagName.trim().toLowerCase());
+  }, [jobRoleTitlesSet]);
 
   // Tags strictly derived from active Job Roles
   const jobRoleTagOptions = useMemo(() => {
@@ -500,6 +518,24 @@ export default function SourceDashboard() {
     }));
   }, [jobRoles]);
 
+  const handleAddUploadCustomTag = () => {
+    const tag = uploadCustomTagInput.trim();
+    if (!tag) return;
+    if (!uploadSelectedTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+      setUploadSelectedTags(prev => [...prev, tag]);
+    }
+    setUploadCustomTagInput('');
+  };
+
+  const handleAddBulkCustomTag = () => {
+    const tag = bulkCustomTagInput.trim();
+    if (!tag) return;
+    if (!bulkSelectedTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+      setBulkSelectedTags(prev => [...prev, tag]);
+    }
+    setBulkCustomTagInput('');
+  };
+
   const handleRemoveUploadTag = (tagToRemove) => {
     setUploadSelectedTags(prev => prev.filter(t => t.toLowerCase() !== tagToRemove.toLowerCase()));
   };
@@ -509,6 +545,7 @@ export default function SourceDashboard() {
     setStagedUploadFiles([]);
     setUploadSelectedTags([]);
     setUploadTargetMonth('');
+    setUploadCustomTagInput('');
   };
   const [newSkillInput, setNewSkillInput] = useState({ name: '', level: 'required' });
   const [editingSkillIdx, setEditingSkillIdx] = useState(null);
@@ -2883,11 +2920,22 @@ export default function SourceDashboard() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-gray-800 text-sm truncate m-0">{c.full_name || '—'}</p>
                         {c.tags && Array.isArray(c.tags) && c.tags.length > 0 ? (
-                          c.tags.slice(0, 3).map((t, idx) => (
-                            <span key={idx} className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded font-medium">
-                              <Tag size={10} /> {t}
-                            </span>
-                          ))
+                          c.tags.slice(0, 3).map((t, idx) => {
+                            const isJob = isJobTag(t);
+                            return (
+                              <span 
+                                key={idx} 
+                                className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                  isJob 
+                                    ? 'text-purple-700 bg-purple-50 border border-purple-200' 
+                                    : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                                }`}
+                                title={isJob ? `Job Role Tag: ${t}` : `Manual Tag: ${t}`}
+                              >
+                                {isJob ? <Briefcase size={10} className="text-purple-600" /> : <Tag size={10} className="text-emerald-600" />} {t}
+                              </span>
+                            );
+                          })
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded font-medium">
                             General Pool
@@ -3230,14 +3278,14 @@ export default function SourceDashboard() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="block text-xs font-bold text-gray-800 mb-1">
-                  Assign Job Role Tag(s)
+                  Assign Tags (Job Roles & Manual Tags)
                 </label>
                 <p className="text-[11px] text-gray-500 mb-2">
-                  Select job roles to categorize these resumes. You can filter and score candidates by these tags.
+                  Select active job roles or type custom manual tags to categorize these resumes.
                 </p>
 
-                {/* Multi-Select Dropdown with Search */}
-                <div className="mb-2.5">
+                {/* Multi-Select Dropdown for Job Roles */}
+                <div className="mb-2">
                   <MultiSelectDropdown
                     options={jobRoleTagOptions}
                     selected={uploadSelectedTags}
@@ -3250,28 +3298,62 @@ export default function SourceDashboard() {
                   />
                 </div>
 
+                {/* Custom Manual Tag Input */}
+                <div className="flex items-center gap-2 mb-2.5">
+                  <input
+                    type="text"
+                    placeholder="Or type custom manual tag (e.g. Referral, Immediate Joiner, Campus)..."
+                    value={uploadCustomTagInput}
+                    onChange={e => setUploadCustomTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddUploadCustomTag();
+                      }
+                    }}
+                    className="form-input text-xs flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddUploadCustomTag}
+                    disabled={!uploadCustomTagInput.trim()}
+                    className="px-3.5 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-1 transition-colors disabled:opacity-40 cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    <Plus size={13} /> Add Tag
+                  </button>
+                </div>
+
                 {/* Selected Tags Display */}
-                <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-purple-50/50 border border-purple-100 rounded-xl items-center">
+                <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-gray-50/80 border border-gray-200 rounded-xl items-center">
                   {uploadSelectedTags.length === 0 ? (
-                    <span className="text-xs text-purple-500 italic flex items-center gap-1">
-                      No job roles selected → Will be stored in <strong>General Pool (Untagged)</strong>
+                    <span className="text-xs text-gray-400 italic flex items-center gap-1">
+                      No tags selected → Will be stored in <strong>General Pool (Untagged)</strong>
                     </span>
                   ) : (
-                    uploadSelectedTags.map(tag => (
-                      <span 
-                        key={tag} 
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-600 text-white shadow-xs"
-                      >
-                        💼 {tag}
-                        <button 
-                          type="button" 
-                          onClick={() => handleRemoveUploadTag(tag)}
-                          className="hover:text-red-200 ml-1 transition-colors cursor-pointer"
+                    uploadSelectedTags.map(tag => {
+                      const isJob = isJobTag(tag);
+                      return (
+                        <span 
+                          key={tag} 
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs border ${
+                            isJob 
+                              ? 'bg-purple-100 text-purple-800 border-purple-200' 
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          }`}
                         >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))
+                          {isJob ? <Briefcase size={12} className="text-purple-700" /> : <Tag size={12} className="text-emerald-700" />}
+                          <span>{tag}</span>
+                          <span className="text-[10px] font-normal opacity-70">({isJob ? 'Job Role' : 'Manual'})</span>
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveUploadTag(tag)}
+                            className="hover:text-red-500 ml-1 transition-colors cursor-pointer"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -3580,14 +3662,14 @@ export default function SourceDashboard() {
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Job Role Tag(s) to {bulkTagAction === 'remove' ? 'Remove' : bulkTagAction === 'set' ? 'Set' : 'Add'}
+                Tag(s) to {bulkTagAction === 'remove' ? 'Remove' : bulkTagAction === 'set' ? 'Set' : 'Add'}
               </label>
               <p className="text-[11px] text-gray-500 mb-2">
-                Select active job roles to {bulkTagAction === 'remove' ? 'remove from' : bulkTagAction === 'set' ? 'assign as sole tags to' : 'add to'} the {selectedIds.size} selected candidate(s).
+                Select active job roles or add custom manual tags to {bulkTagAction === 'remove' ? 'remove from' : bulkTagAction === 'set' ? 'assign as sole tags to' : 'add to'} the {selectedIds.size} selected candidate(s).
               </p>
 
               {/* Multi-Select Dropdown with Search */}
-              <div className="mb-2.5">
+              <div className="mb-2">
                 <MultiSelectDropdown
                   options={jobRoleTagOptions}
                   selected={bulkSelectedTags}
@@ -3600,28 +3682,62 @@ export default function SourceDashboard() {
                 />
               </div>
 
+              {/* Custom Manual Tag Input */}
+              <div className="flex items-center gap-2 mb-2.5">
+                <input
+                  type="text"
+                  placeholder="Or type custom manual tag..."
+                  value={bulkCustomTagInput}
+                  onChange={e => setBulkCustomTagInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddBulkCustomTag();
+                    }
+                  }}
+                  className="form-input text-xs flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddBulkCustomTag}
+                  disabled={!bulkCustomTagInput.trim()}
+                  className="px-3.5 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-1 transition-colors disabled:opacity-40 cursor-pointer shrink-0 shadow-2xs"
+                >
+                  <Plus size={13} /> Add Tag
+                </button>
+              </div>
+
               {/* Selected Tags Display */}
               <div className="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-gray-50 border border-gray-200 rounded-xl items-center">
                 {bulkSelectedTags.length === 0 ? (
-                  <span className="text-xs text-gray-400 italic">No job roles chosen yet</span>
+                  <span className="text-xs text-gray-400 italic">No tags chosen yet</span>
                 ) : (
-                  bulkSelectedTags.map(tag => (
-                    <span 
-                      key={tag} 
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        bulkTagAction === 'remove' ? 'bg-red-600 text-white' : 'bg-purple-600 text-white'
-                      }`}
-                    >
-                      💼 {tag}
-                      <button 
-                        type="button" 
-                        onClick={() => setBulkSelectedTags(prev => prev.filter(t => t !== tag))}
-                        className="hover:text-red-200 ml-0.5 cursor-pointer"
+                  bulkSelectedTags.map(tag => {
+                    const isJob = isJobTag(tag);
+                    return (
+                      <span 
+                        key={tag} 
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs border ${
+                          bulkTagAction === 'remove' 
+                            ? 'bg-red-100 text-red-800 border-red-200'
+                            : isJob 
+                              ? 'bg-purple-100 text-purple-800 border-purple-200' 
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        }`}
                       >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))
+                        {isJob ? <Briefcase size={12} className="text-purple-700" /> : <Tag size={12} className="text-emerald-700" />}
+                        <span>{tag}</span>
+                        <span className="text-[10px] font-normal opacity-70">({isJob ? 'Job Role' : 'Manual'})</span>
+                        <button 
+                          type="button" 
+                          onClick={() => setBulkSelectedTags(prev => prev.filter(t => t !== tag))}
+                          className="hover:text-red-500 ml-1 cursor-pointer transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    );
+                  })
                 )}
               </div>
             </div>

@@ -621,6 +621,179 @@ def create_tables(schema_name='public'):
             )
         ''')
 
+        # 28.1) Forge Domains / Categories
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS course_domains (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                color TEXT DEFAULT '#7C3AED',
+                icon TEXT DEFAULT 'Layers',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Seed default domains if empty
+        cur.execute("SELECT COUNT(*) FROM course_domains")
+        if cur.fetchone()[0] == 0:
+            default_domains = [
+                ('Security & Compliance', 'Corporate compliance, GDPR, and security standards', '#EF4444', 'ShieldCheck'),
+                ('Engineering & Technology', 'Software development, cloud architecture, and systems', '#3B82F6', 'Cpu'),
+                ('Leadership & Management', 'Executive management, leadership tracks, and strategy', '#10B981', 'Users'),
+                ('Design & Product', 'UX/UI, product design, and creative workflows', '#8B5CF6', 'Layers'),
+            ]
+            for d_name, d_desc, d_color, d_icon in default_domains:
+                cur.execute(
+                    "INSERT INTO course_domains (name, description, color, icon) VALUES (%s, %s, %s, %s)",
+                    (d_name, d_desc, d_color, d_icon)
+                )
+
+        # 28.2) Upgrade forge_courses with full Learning Central schema
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'draft'")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS instructor_id INTEGER REFERENCES users(id) ON DELETE SET NULL")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS domain_id INTEGER REFERENCES course_domains(id) ON DELETE SET NULL")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General'")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS scorm_package_path TEXT")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS scorm_entry_url TEXT")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS scorm_version TEXT DEFAULT '1.2'")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS scorm_mastery_score DECIMAL(5,2) DEFAULT 70.0")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS is_scorm BOOLEAN DEFAULT TRUE")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS estimated_hours DECIMAL(5,1)")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS thumbnail_url TEXT")
+        cur.execute("ALTER TABLE forge_courses ADD COLUMN IF NOT EXISTS skill_ids JSONB DEFAULT '[]'::jsonb")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_fc_domain ON forge_courses(domain_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_fc_status ON forge_courses(status)")
+
+        # 28.3) Upgrade forge_enrollments with full Learning Central schema
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS triggered_by TEXT DEFAULT 'manual'")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS score DECIMAL(5,2)")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS deadline TIMESTAMP")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS assigned_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMP")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS completion_date TIMESTAMP")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS scorm_location TEXT")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS scorm_suspend_data TEXT")
+        cur.execute("ALTER TABLE forge_enrollments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_fe_user_course ON forge_enrollments(user_id, course_id)")
+
+        # 28.4) Course Sections
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS course_sections (
+                id SERIAL PRIMARY KEY,
+                course_id INTEGER NOT NULL REFERENCES forge_courses(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                order_index INTEGER DEFAULT 0,
+                content_type TEXT NOT NULL DEFAULT 'article',
+                content_url TEXT,
+                content_markdown TEXT,
+                duration_minutes INTEGER,
+                pass_score DECIMAL(5,2) DEFAULT 50.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_cs_course ON course_sections(course_id, order_index)")
+
+        # 28.5) Section Quizzes
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS section_quizzes (
+                id SERIAL PRIMARY KEY,
+                section_id INTEGER NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
+                question_text TEXT NOT NULL,
+                options JSONB,
+                correct_answer TEXT NOT NULL,
+                explanation TEXT,
+                marks DECIMAL(5,2) DEFAULT 1.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 28.6) Learning Progress
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS learning_progress (
+                id SERIAL PRIMARY KEY,
+                enrollment_id INTEGER NOT NULL REFERENCES forge_enrollments(id) ON DELETE CASCADE,
+                section_id INTEGER NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
+                completed BOOLEAN DEFAULT FALSE,
+                completed_at TIMESTAMP,
+                progress_percent DECIMAL(5,2) DEFAULT 0.0,
+                video_progress_seconds INTEGER DEFAULT 0,
+                quiz_score DECIMAL(5,2),
+                scorm_progress_percent DECIMAL(5,2),
+                scorm_score DECIMAL(5,2),
+                scorm_status TEXT,
+                scorm_location TEXT,
+                scorm_suspend_data TEXT,
+                last_scorm_commit_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(enrollment_id, section_id)
+            )
+        ''')
+
+        # 28.7) Certificates
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS forge_certificates (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                course_id INTEGER NOT NULL REFERENCES forge_courses(id) ON DELETE CASCADE,
+                enrollment_id INTEGER REFERENCES forge_enrollments(id) ON DELETE SET NULL,
+                issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_code TEXT UNIQUE NOT NULL,
+                pdf_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, course_id)
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_fcert_code ON forge_certificates(verification_code)")
+
+        # 28.8) Journeys
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS journeys (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS journey_steps (
+                id SERIAL PRIMARY KEY,
+                journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+                type TEXT NOT NULL CHECK(type IN ('verify', 'forge')),
+                reference_id INTEGER NOT NULL,
+                title TEXT,
+                order_index INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_js_journey ON journey_steps(journey_id, order_index)")
+
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS journey_assignments (
+                id SERIAL PRIMARY KEY,
+                journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                status TEXT DEFAULT 'pending',
+                deadline TIMESTAMP,
+                completed_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ja_user ON journey_assignments(user_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ja_journey ON journey_assignments(journey_id)")
+
+
         # Alter Verify Tables for new features
         cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS shuffle_questions BOOLEAN DEFAULT FALSE")
         cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS show_result_immediately BOOLEAN DEFAULT TRUE")

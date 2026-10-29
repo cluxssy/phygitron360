@@ -1299,6 +1299,26 @@ class CandidateRepository:
         finally:
             conn.close()
 
+    def get_candidate_id_by_file_hash(self, file_hash: str, conn=None, cur=None) -> Optional[int]:
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            should_close = True
+        try:
+            self._set_search_path(cur)
+            cur.execute(
+                """SELECT candidate_id FROM bulk_upload_job_items 
+                   WHERE file_hash = %s AND candidate_id IS NOT NULL 
+                   ORDER BY id DESC LIMIT 1""",
+                (file_hash,)
+            )
+            row = cur.fetchone()
+            return row[0] if row and row[0] else None
+        finally:
+            if should_close:
+                conn.close()
+
     def create_offer(self, candidate_id: int, details: Dict[str, Any], content: Dict[str, Any]) -> int:
         conn = get_db_connection()
         try:
@@ -1698,35 +1718,40 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def add_candidate_tags(self, candidate_ids: List[int], tags: List[str]) -> int:
+    def add_candidate_tags(self, candidate_ids: List[int], tags: List[str], conn=None, cur=None) -> int:
         if not candidate_ids or not tags:
             return 0
         clean_tags = [t.strip() for t in tags if t and t.strip()]
         if not clean_tags:
             return 0
-        conn = get_db_connection()
+        should_close = False
+        if conn is None:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            should_close = True
         try:
-            with conn.cursor() as cur:
-                self._set_search_path(cur)
-                cur.execute('''
-                    UPDATE candidates
-                    SET tags = ARRAY(
-                        SELECT DISTINCT elem
-                        FROM unnest(COALESCE(tags, '{}'::text[]) || %s::text[]) AS elem
-                        WHERE elem IS NOT NULL AND TRIM(elem) <> ''
-                    ), updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ANY(%s)
-                ''', (clean_tags, candidate_ids))
-                updated = cur.rowcount
+            self._set_search_path(cur)
+            cur.execute('''
+                UPDATE candidates
+                SET tags = ARRAY(
+                    SELECT DISTINCT elem
+                    FROM unnest(COALESCE(tags, '{}'::text[]) || %s::text[]) AS elem
+                    WHERE elem IS NOT NULL AND TRIM(elem) <> ''
+                ), updated_at = CURRENT_TIMESTAMP
+                WHERE id = ANY(%s)
+            ''', (clean_tags, candidate_ids))
+            updated = cur.rowcount
+            if should_close:
                 conn.commit()
-                for cid in candidate_ids:
-                    try:
-                        self.log_activity(cid, 'User', 'tags_added', f"Added tags: {', '.join(clean_tags)}")
-                    except Exception:
-                        pass
-                return updated
+            for cid in candidate_ids:
+                try:
+                    self.log_activity(cid, 'User', 'tags_added', f"Added tags: {', '.join(clean_tags)}", conn=conn, cur=cur)
+                except Exception:
+                    pass
+            return updated
         finally:
-            conn.close()
+            if should_close:
+                conn.close()
 
     def remove_candidate_tags(self, candidate_ids: List[int], tags: List[str]) -> int:
         if not candidate_ids or not tags:

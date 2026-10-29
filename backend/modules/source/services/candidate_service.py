@@ -336,8 +336,17 @@ class CandidateService:
         if existing:
             # Update existing candidate with freshly parsed data instead of failing
             candidate_id = existing["id"]
+            existing_tags = existing.get("tags") or []
+            new_tags = tags or []
+            seen_lower = set()
+            merged_tags = []
+            for t in existing_tags + new_tags:
+                if t and t.strip() and t.strip().lower() not in seen_lower:
+                    seen_lower.add(t.strip().lower())
+                    merged_tags.append(t.strip())
+            candidate_data["tags"] = merged_tags
             self.repo.update_candidate(candidate_id, candidate_data)
-            self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via bulk resume re-upload')
+            self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via resume re-upload')
         else:
             candidate_id = self.repo.create_candidate(candidate_data)
             self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI')
@@ -1346,9 +1355,19 @@ class CandidateService:
                                         continue
 
                                     # 1. Duplicate hash check (only for brand-new uploads, skip for reprocessing)
-                                    if not item.get("candidate_id") and item.get("file_hash") and self.repo.check_file_hash_exists(item["file_hash"]):
+                                    existing_cand_id = None
+                                    if not item.get("candidate_id") and item.get("file_hash"):
+                                        existing_cand_id = self.repo.get_candidate_id_by_file_hash(item["file_hash"], conn=conn, cur=cur)
+
+                                    if existing_cand_id:
+                                        # Merge tags onto existing candidate if upload specified any
+                                        upload_tags = item.get("tags") or []
+                                        if upload_tags:
+                                            self.repo.add_candidate_tags([existing_cand_id], upload_tags, conn=conn, cur=cur)
+                                            print(f"[Worker-{worker_id}][{self.tenant_id}] Item {item['id']} ({item['filename']}) duplicate file hash → added tags {upload_tags} to candidate #{existing_cand_id}", flush=True)
+
                                         self.repo.update_bulk_upload_job_item(
-                                            item["id"], status="duplicate", error_message="Exact file already uploaded before.", conn=conn, cur=cur
+                                            item["id"], status="duplicate", candidate_id=existing_cand_id, error_message="Exact file already uploaded before (tags merged).", conn=conn, cur=cur
                                         )
                                         conn.commit()
                                         print(f"[Worker-{worker_id}][{self.tenant_id}] SKIPPED item {item['id']} ({item['filename']}): Duplicate file hash.", flush=True)
@@ -1794,10 +1813,16 @@ class CandidateService:
             candidate_id = existing["id"]
             if folder_id is None and existing.get("folder_id"):
                 candidate_data["folder_id"] = existing["folder_id"]
-            # Preserve existing tags — only update tags if caller explicitly passed new ones.
-            # Passing [] (empty list) is not NULL, so COALESCE would wipe them. Use None to skip.
-            if not tags:
-                candidate_data["tags"] = None
+            # Merge existing tags with newly passed tags (case-preserving, no duplicates)
+            existing_tags = existing.get("tags") or []
+            new_tags = tags or []
+            seen_lower = set()
+            merged_tags = []
+            for t in existing_tags + new_tags:
+                if t and t.strip() and t.strip().lower() not in seen_lower:
+                    seen_lower.add(t.strip().lower())
+                    merged_tags.append(t.strip())
+            candidate_data["tags"] = merged_tags
             # Preserve existing status — don't reset to "New" on re-extract
             candidate_data["status"] = existing.get("status") or "New"
             self.repo.update_candidate(candidate_id, candidate_data, conn=conn, cur=cur)
