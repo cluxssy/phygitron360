@@ -8,6 +8,7 @@ from backend.modules.source.repositories.job_role_repo import JobRoleRepository
 from backend.modules.source.repositories.candidate_repo import CandidateRepository
 from backend.modules.source.repositories.ai_score_repo import AIScoreRepository
 from backend.modules.source.services.ats_engine import normalise_required_skills, calculate_role_fit, compute_resume_ats_score
+from backend.modules.source.services.candidate_service import invalidate_candidate_caches
 from backend.common.services.ai.agents import AIAgents
 from backend.core.email_service_extended import send_invite_email
 
@@ -110,10 +111,14 @@ class JobService:
         return result
 
     def delete_job_role(self, role_id: int) -> bool:
-        return self.repo.delete_job_role(role_id)
+        deleted = self.repo.delete_job_role(role_id)
+        if deleted:
+            invalidate_candidate_caches(self.tenant_id)
+        return deleted
 
     def delete_all_job_roles(self):
         self.repo.delete_all_job_roles()
+        invalidate_candidate_caches(self.tenant_id)
 
     def get_candidate_rankings(self, role_id: int) -> List[Dict[str, Any]]:
         return self.repo.get_candidate_rankings(role_id)

@@ -218,16 +218,19 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
   const [stagedFiles, setStagedFiles] = useState([]);
   const [uploadSelectedTags, setUploadSelectedTags] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadCustomTagInput, setUploadCustomTagInput] = useState('');
 
   // Bulk tag management state
   const [bulkTagAction, setBulkTagAction] = useState('add'); // 'add' | 'remove'
   const [bulkSelectedTags, setBulkSelectedTags] = useState([]);
   const [isSubmittingBulkTags, setIsSubmittingBulkTags] = useState(false);
+  const [bulkCustomTagInput, setBulkCustomTagInput] = useState('');
 
   // Single candidate tag edit state
   const [editingCandidate, setEditingCandidate] = useState(null);
   const [singleCandidateTags, setSingleCandidateTags] = useState([]);
   const [isSavingSingleTags, setIsSavingSingleTags] = useState(false);
+  const [singleCustomTagInput, setSingleCustomTagInput] = useState('');
 
   // Move form state
   const [targetMoveMonth, setTargetMoveMonth] = useState('');
@@ -464,6 +467,48 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
       label: title
     }));
   }, [jobRoles]);
+
+  const jobRoleTitlesSet = useMemo(() => {
+    const s = new Set();
+    if (Array.isArray(jobRoles)) {
+      jobRoles.forEach(r => {
+        if (r.title) s.add(r.title.trim().toLowerCase());
+      });
+    }
+    return s;
+  }, [jobRoles]);
+
+  const isJobTag = useCallback((tagName) => {
+    if (!tagName) return false;
+    return jobRoleTitlesSet.has(tagName.trim().toLowerCase());
+  }, [jobRoleTitlesSet]);
+
+  const handleAddUploadCustomTag = () => {
+    const tag = uploadCustomTagInput.trim();
+    if (!tag) return;
+    if (!uploadSelectedTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+      setUploadSelectedTags(prev => [...prev, tag]);
+    }
+    setUploadCustomTagInput('');
+  };
+
+  const handleAddBulkCustomTag = () => {
+    const tag = bulkCustomTagInput.trim();
+    if (!tag) return;
+    if (!bulkSelectedTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+      setBulkSelectedTags(prev => [...prev, tag]);
+    }
+    setBulkCustomTagInput('');
+  };
+
+  const handleAddSingleCustomTag = () => {
+    const tag = singleCustomTagInput.trim();
+    if (!tag) return;
+    if (!singleCandidateTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+      setSingleCandidateTags(prev => [...prev, tag]);
+    }
+    setSingleCustomTagInput('');
+  };
 
   const singleCandidateTagOptions = useMemo(() => {
     const existingValues = new Set(jobRoleTagOptions.map(o => o.value.toLowerCase()));
@@ -1410,19 +1455,26 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
                           {/* TAGS BADGES */}
                           <div className={`flex items-center gap-1.5 flex-wrap ${viewMode === 'list' ? 'max-w-[340px]' : 'mt-2'}`}>
                             {cTags.length > 0 ? (
-                              cTags.map(tag => (
-                                <span 
-                                  key={tag} 
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200"
-                                  onClick={(e) => handleOpenSingleTagModal(c, e)}
-                                  title="Click to edit tags"
-                                >
-                                  🏷️ {tag}
-                                </span>
-                              ))
+                              cTags.map(tag => {
+                                const isJob = isJobTag(tag);
+                                return (
+                                  <span 
+                                    key={tag} 
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border cursor-pointer transition-colors ${
+                                      isJob 
+                                        ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' 
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                    }`}
+                                    onClick={(e) => handleOpenSingleTagModal(c, e)}
+                                    title={`Click to edit tags (${isJob ? 'Job Role Tag' : 'Manual Tag'})`}
+                                  >
+                                    {isJob ? '💼' : '🏷️'} {tag}
+                                  </span>
+                                );
+                              })
                             ) : (
                               <span 
-                                className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500"
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 cursor-pointer transition-colors"
                                 onClick={(e) => handleOpenSingleTagModal(c, e)}
                                 title="Click to add tags"
                               >
@@ -1596,14 +1648,14 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
             <div className="flex flex-col gap-3 mb-4">
               <div>
                 <label className="block text-xs font-bold text-gray-800 mb-1">
-                  Assign Job Role Tag(s)
+                  Assign Tags (Job Roles & Manual Tags)
                 </label>
                 <p className="text-[11px] text-gray-500 mb-2">
-                  Select job roles to categorize these resumes. Resumes can be filtered by these tags.
+                  Select job roles or add custom manual tags to categorize these resumes.
                 </p>
 
                 {/* Multi-Select Dropdown with Search */}
-                <div className="mb-2.5">
+                <div className="mb-2">
                   <MultiSelectDropdown
                     options={jobRoleTagOptions}
                     selected={uploadSelectedTags}
@@ -1616,28 +1668,62 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
                   />
                 </div>
 
+                {/* Custom Manual Tag Input */}
+                <div className="flex items-center gap-2 mb-2.5">
+                  <input
+                    type="text"
+                    placeholder="Or type custom manual tag (e.g. Referral, Urgent, Ex-FAANG)..."
+                    value={uploadCustomTagInput}
+                    onChange={e => setUploadCustomTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddUploadCustomTag();
+                      }
+                    }}
+                    className="form-input text-xs flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddUploadCustomTag}
+                    disabled={!uploadCustomTagInput.trim()}
+                    className="px-3.5 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-1 transition-colors disabled:opacity-40 cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    <Plus size={13} /> Add Tag
+                  </button>
+                </div>
+
                 {/* Selected Tags Display */}
-                <div className="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-purple-50/50 border border-purple-100 rounded-xl items-center">
+                <div className="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-gray-50/80 border border-gray-200 rounded-xl items-center">
                   {uploadSelectedTags.length === 0 ? (
-                    <span className="text-xs text-purple-400 italic flex items-center gap-1">
-                      No job roles selected → Will be stored in <strong>General Pool (Untagged)</strong>
+                    <span className="text-xs text-gray-400 italic flex items-center gap-1">
+                      No tags selected → Will be stored in <strong>General Pool (Untagged)</strong>
                     </span>
                   ) : (
-                    uploadSelectedTags.map(tag => (
-                      <span 
-                        key={tag} 
-                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-600 text-white shadow-2xs"
-                      >
-                        💼 {tag}
-                        <button 
-                          type="button" 
-                          onClick={() => handleRemoveUploadTag(tag)}
-                          className="hover:text-red-200 ml-0.5 cursor-pointer"
+                    uploadSelectedTags.map(tag => {
+                      const isJob = isJobTag(tag);
+                      return (
+                        <span 
+                          key={tag} 
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs border ${
+                            isJob 
+                              ? 'bg-purple-100 text-purple-800 border-purple-200' 
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          }`}
                         >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))
+                          {isJob ? <Briefcase size={12} className="text-purple-700" /> : <Tag size={12} className="text-emerald-700" />}
+                          <span>{tag}</span>
+                          <span className="text-[10px] font-normal opacity-70">({isJob ? 'Job Role' : 'Manual'})</span>
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveUploadTag(tag)}
+                            className="hover:text-red-500 ml-1 cursor-pointer transition-colors"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -1727,14 +1813,14 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
               {/* Tags Selector */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Job Role Tag(s) to {bulkTagAction === 'add' ? 'Add' : 'Remove'}
+                  Tag(s) to {bulkTagAction === 'add' ? 'Add' : 'Remove'}
                 </label>
                 <p className="text-[11px] text-gray-500 mb-2">
-                  Select active job roles to {bulkTagAction === 'add' ? 'assign to' : 'remove from'} the {selected.size} selected candidate(s).
+                  Select active job roles or type custom manual tags to {bulkTagAction === 'add' ? 'assign to' : 'remove from'} the {selected.size} selected candidate(s).
                 </p>
 
                 {/* Multi-Select Dropdown with Search */}
-                <div className="mb-2.5">
+                <div className="mb-2">
                   <MultiSelectDropdown
                     options={jobRoleTagOptions}
                     selected={bulkSelectedTags}
@@ -1747,28 +1833,62 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
                   />
                 </div>
 
+                {/* Custom Manual Tag Input */}
+                <div className="flex items-center gap-2 mb-2.5">
+                  <input
+                    type="text"
+                    placeholder="Or type custom manual tag..."
+                    value={bulkCustomTagInput}
+                    onChange={e => setBulkCustomTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddBulkCustomTag();
+                      }
+                    }}
+                    className="form-input text-xs flex-1 bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddBulkCustomTag}
+                    disabled={!bulkCustomTagInput.trim()}
+                    className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-1 transition-colors disabled:opacity-40 cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    <Plus size={13} /> Add Tag
+                  </button>
+                </div>
+
                 {/* Active selected tags */}
                 <div className="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-gray-50 border border-gray-200 rounded-xl mb-2 items-center">
                   {bulkSelectedTags.length === 0 ? (
-                    <span className="text-xs text-gray-400 italic">No job roles chosen yet</span>
+                    <span className="text-xs text-gray-400 italic">No tags chosen yet</span>
                   ) : (
-                    bulkSelectedTags.map(tag => (
-                      <span 
-                        key={tag} 
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          bulkTagAction === 'add' ? 'bg-purple-600 text-white' : 'bg-red-600 text-white'
-                        }`}
-                      >
-                        💼 {tag}
-                        <button 
-                          type="button" 
-                          onClick={() => handleRemoveBulkTag(tag)}
-                          className="hover:text-red-200 ml-0.5 cursor-pointer"
+                    bulkSelectedTags.map(tag => {
+                      const isJob = isJobTag(tag);
+                      return (
+                        <span 
+                          key={tag} 
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs border ${
+                            bulkTagAction === 'remove'
+                              ? 'bg-red-100 text-red-800 border-red-200'
+                              : isJob 
+                                ? 'bg-purple-100 text-purple-800 border-purple-200' 
+                                : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          }`}
                         >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))
+                          {isJob ? <Briefcase size={12} className="text-purple-700" /> : <Tag size={12} className="text-emerald-700" />}
+                          <span>{tag}</span>
+                          <span className="text-[10px] font-normal opacity-70">({isJob ? 'Job Role' : 'Manual'})</span>
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveBulkTag(tag)}
+                            className="hover:text-red-500 ml-0.5 cursor-pointer transition-colors"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -1825,14 +1945,14 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
             <form onSubmit={handleSaveSingleTags} className="flex flex-col gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Assign Job Role Tag(s)
+                  Assign Tags (Job Roles & Manual Tags)
                 </label>
                 <p className="text-[11px] text-gray-500 mb-2">
-                  Select job roles to categorize this candidate. Tags are strictly based on active jobs.
+                  Select active job roles or add custom manual tags to categorize this candidate.
                 </p>
 
                 {/* Multi-Select Dropdown with Search */}
-                <div className="mb-2.5">
+                <div className="mb-2">
                   <MultiSelectDropdown
                     options={singleCandidateTagOptions}
                     selected={singleCandidateTags}
@@ -1845,28 +1965,62 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
                   />
                 </div>
 
+                {/* Custom Manual Tag Input */}
+                <div className="flex items-center gap-2 mb-2.5">
+                  <input
+                    type="text"
+                    placeholder="Or type custom manual tag..."
+                    value={singleCustomTagInput}
+                    onChange={e => setSingleCustomTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddSingleCustomTag();
+                      }
+                    }}
+                    className="form-input text-xs flex-1 bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSingleCustomTag}
+                    disabled={!singleCustomTagInput.trim()}
+                    className="px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-1 transition-colors disabled:opacity-40 cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    <Plus size={13} /> Add Tag
+                  </button>
+                </div>
+
                 {/* Current tags display */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Current Assigned Tags</label>
-                  <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-purple-50/50 border border-purple-100 rounded-xl items-center">
+                  <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-gray-50/80 border border-gray-200 rounded-xl items-center">
                     {singleCandidateTags.length === 0 ? (
                       <span className="text-xs text-gray-400 italic">No tags (General Pool)</span>
                     ) : (
-                      singleCandidateTags.map(tag => (
-                        <span 
-                          key={tag} 
-                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-600 text-white shadow-2xs"
-                        >
-                          💼 {tag}
-                          <button 
-                            type="button" 
-                            onClick={() => handleRemoveSingleTag(tag)}
-                            className="hover:text-red-200 ml-0.5 cursor-pointer"
+                      singleCandidateTags.map(tag => {
+                        const isJob = isJobTag(tag);
+                        return (
+                          <span 
+                            key={tag} 
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs border ${
+                              isJob 
+                                ? 'bg-purple-100 text-purple-800 border-purple-200' 
+                                : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                            }`}
                           >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))
+                            {isJob ? <Briefcase size={12} className="text-purple-700" /> : <Tag size={12} className="text-emerald-700" />}
+                            <span>{tag}</span>
+                            <span className="text-[10px] font-normal opacity-70">({isJob ? 'Job Role' : 'Manual'})</span>
+                            <button 
+                              type="button" 
+                              onClick={() => handleRemoveSingleTag(tag)}
+                              className="hover:text-red-500 ml-0.5 cursor-pointer transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        );
+                      })
                     )}
                   </div>
                 </div>

@@ -118,17 +118,22 @@ function LayoutContent({ children }) {
 
   const [deployView, setDeployView] = useState('employee');
 
-  // ✅ Detect admin dashboard (LIGHT MODE)
+  // ✅ Detect light-theme enterprise dashboards (LIGHT MODE)
   const isAdminDashboard =
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/deploy') ||
     location.pathname.startsWith('/source') ||
     location.pathname.startsWith('/verify') ||
     location.pathname.startsWith('/lexai') ||
+    location.pathname.startsWith('/forge') ||
+    location.pathname.startsWith('/journey') ||
     location.pathname.startsWith('/superadmin');
 
-  // ✅ Check if we're on the Forge page - hide sidebar for Learning Central
-  const isForgePage = location.pathname.startsWith('/forge');
+  // ✅ Check if we're on a Learning Central / Journey page - hide sidebar for Learning Central
+  const isForgePage =
+    location.pathname.startsWith('/forge') ||
+    location.pathname.startsWith('/journey') ||
+    location.pathname.startsWith('/admin/journeys');
 
   // Dynamically determine if user should see the admin/management view for Deploy
   // based on whether they have ANY management-level permissions from the classification registry.
@@ -267,7 +272,7 @@ function LayoutContent({ children }) {
 
   return (
     <div
-      className={`flex h-screen w-full ${isAdminDashboard ? 'bg-white text-black' : 'bg-[#040812] text-white'
+      className={`flex h-screen w-full ${isAdminDashboard || isForgePage ? 'bg-white text-black' : 'bg-[#040812] text-white'
         }`}
     >
       {/* ================= DARK SIDEBARS ================= */}
@@ -326,7 +331,7 @@ function LayoutContent({ children }) {
       <NotificationDropdown />
 
       {/* ================= BACKGROUND GLOW ================= */}
-      {!isAdminDashboard && (
+      {!isAdminDashboard && !isForgePage && (
         <div className="fixed inset-0 pointer-events-none">
           <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-purple-500/10 blur-3xl rounded-full" />
         </div>

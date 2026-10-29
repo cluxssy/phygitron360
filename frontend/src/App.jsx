@@ -22,6 +22,14 @@ import SourceDashboard from './modules/source/pages/SourceDashboard';
 import DeployDashboard from './modules/deploy/pages/DeployDashboard';
 import VerifyDashboard from './modules/verify/pages/VerifyDashboard';
 import ForgeDashboard from './modules/forge/pages/ForgeDashboard';
+import CourseLibrary from './modules/forge/pages/CourseLibrary';
+import CoursePlayer from './modules/forge/pages/CoursePlayer';
+import MyCourses from './modules/forge/pages/MyCourses';
+import Transcript from './modules/forge/pages/Transcript';
+import TeamAnalytics from './modules/forge/pages/TeamAnalytics';
+import VerifyCertificate from './modules/forge/pages/VerifyCertificate';
+import AdminJourneys from './modules/forge/pages/AdminJourneys';
+import UserJourney from './modules/forge/pages/UserJourney';
 import TraineeDashboard from './modules/trainee/pages/TraineeDashboard';
 import LexAIDashboard from './modules/lexai/pages/LexAIDashboard';
 
@@ -153,11 +161,94 @@ export default function App() {
             } 
           />
 
+          {/* ── Forge (Learning Central) ────────────────────────── */}
           <Route 
             path="/forge" 
             element={
               <ProtectedRoute requiredModule="forge">
                 <Layout><ForgeDashboard /></Layout>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forge/library" 
+            element={
+              <ProtectedRoute requiredModule="forge">
+                <Layout><ForgeDashboard initialTab="library" /></Layout>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forge/course/:id" 
+            element={
+              <ProtectedRoute requiredModule="forge">
+                <CoursePlayer />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forge/player/:id" 
+            element={
+              <ProtectedRoute requiredModule="forge">
+                <CoursePlayer />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forge/my-courses" 
+            element={
+              <ProtectedRoute requiredPermission={P.FORGE_COURSES_MANAGE} requiredModule="forge">
+                <Layout><ForgeDashboard initialTab="my-courses" initialView="management" /></Layout>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forge/transcript" 
+            element={
+              <ProtectedRoute requiredModule="forge">
+                <Layout><ForgeDashboard initialTab="transcript" initialView="personal" /></Layout>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forge/team" 
+            element={
+              <ProtectedRoute requiredPermission={P.FORGE_COURSES_MANAGE} requiredModule="forge">
+                <Layout><ForgeDashboard initialTab="analytics" initialView="management" /></Layout>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forge/verify-cert/:code" 
+            element={<VerifyCertificate />} 
+          />
+          <Route 
+            path="/verify-certificate/:code" 
+            element={<VerifyCertificate />} 
+          />
+
+          {/* ── Journeys ────────────────────────────────────────── */}
+          <Route 
+            path="/admin/journeys" 
+            element={
+              <ProtectedRoute requiredPermission={P.FORGE_COURSES_MANAGE} requiredModule="forge">
+                <Layout><ForgeDashboard initialTab="journeys" initialView="management" /></Layout>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forge/journeys" 
+            element={
+              <ProtectedRoute requiredPermission={P.FORGE_COURSES_MANAGE} requiredModule="forge">
+                <Layout><ForgeDashboard initialTab="journeys" initialView="management" /></Layout>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/journey/my-path" 
+            element={
+              <ProtectedRoute requiredModule="forge">
+                <Layout><ForgeDashboard initialTab="journey" initialView="personal" /></Layout>
               </ProtectedRoute>
             } 
           />

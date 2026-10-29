@@ -40,6 +40,21 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   const { hasPermission } = useAuth();
   useEscapeClose(onClose, !!candidate);
 
+  const jobRoleTitlesSet = useMemo(() => {
+    const s = new Set();
+    if (Array.isArray(jobRoles)) {
+      jobRoles.forEach(r => {
+        if (r.title) s.add(r.title.trim().toLowerCase());
+      });
+    }
+    return s;
+  }, [jobRoles]);
+
+  const isJobTag = (tagName) => {
+    if (!tagName) return false;
+    return jobRoleTitlesSet.has(tagName.trim().toLowerCase());
+  };
+
   // Edit Mode states
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
@@ -772,16 +787,28 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   </section>
                 )}
 
-                {/* Job Role Tags */}
+                {/* Candidate Tags (Job Roles & Manual) */}
                 <section>
-                  <SectionLabel icon={<Tag size={13} />} label="Job Role Tags" />
+                  <SectionLabel icon={<Tag size={13} />} label="Candidate Tags" />
                   {data?.tags && data.tags.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {data.tags.map((t, i) => (
-                        <div key={i} className="flex items-center px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                          <span className="text-[11px] font-bold text-purple-300">🏷️ {t}</span>
-                        </div>
-                      ))}
+                      {data.tags.map((t, i) => {
+                        const isJob = isJobTag(t);
+                        return (
+                          <div 
+                            key={i} 
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
+                              isJob 
+                                ? 'bg-purple-500/10 border-purple-500/20 text-purple-300' 
+                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                            }`}
+                          >
+                            {isJob ? <Briefcase size={12} className="text-purple-400" /> : <Tag size={12} className="text-emerald-400" />}
+                            <span className="text-[11px] font-bold">{t}</span>
+                            <span className="text-[9px] opacity-60 font-normal">({isJob ? 'Job Role' : 'Manual'})</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="glass-panel p-3 text-xs text-white/40 italic">General Pool (Untagged)</div>

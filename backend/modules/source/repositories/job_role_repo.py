@@ -166,11 +166,29 @@ class JobRoleRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
+                # Fetch role title before deletion so we can remove its tag from all resumes
+                cur.execute("SELECT title FROM job_roles WHERE id = %s", (role_id,))
+                row = cur.fetchone()
+                role_title = row[0].strip() if row and row[0] else None
+
                 # Delete dependent records (candidate_applications cascades automatically, but these don't)
                 cur.execute("DELETE FROM ai_scores WHERE job_role_id = %s", (role_id,))
                 cur.execute("DELETE FROM candidate_invites WHERE job_role_id = %s", (role_id,))
                 cur.execute("DELETE FROM job_roles WHERE id = %s", (role_id,))
                 deleted = cur.rowcount > 0
+
+                # Clean up this job tag from all candidates in this tenant
+                if role_title:
+                    cur.execute("""
+                        UPDATE candidates
+                        SET tags = ARRAY(
+                            SELECT elem
+                            FROM unnest(COALESCE(tags, '{}'::text[])) AS elem
+                            WHERE LOWER(TRIM(elem)) <> LOWER(TRIM(%s))
+                        ), updated_at = CURRENT_TIMESTAMP
+                        WHERE tags IS NOT NULL AND %s = ANY(tags) OR LOWER(%s) = ANY(ARRAY(SELECT LOWER(t) FROM unnest(COALESCE(tags, '{}'::text[])) t))
+                    """, (role_title, role_title, role_title))
+
                 conn.commit()
                 return deleted
         finally:
@@ -181,9 +199,26 @@ class JobRoleRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
+                # Fetch all role titles before deletion
+                cur.execute("SELECT title FROM job_roles")
+                roles = [r[0].strip() for r in cur.fetchall() if r and r[0]]
+
                 cur.execute("DELETE FROM candidate_invites")
                 cur.execute("DELETE FROM ai_scores WHERE job_role_id IS NOT NULL")
                 cur.execute("DELETE FROM job_roles")
+
+                # Clean up all job role tags from all candidates
+                if roles:
+                    cur.execute("""
+                        UPDATE candidates
+                        SET tags = ARRAY(
+                            SELECT elem
+                            FROM unnest(COALESCE(tags, '{}'::text[])) AS elem
+                            WHERE LOWER(TRIM(elem)) NOT IN (SELECT LOWER(TRIM(x)) FROM unnest(%s::text[]) x)
+                        ), updated_at = CURRENT_TIMESTAMP
+                        WHERE tags && %s::text[]
+                    """, (roles, roles))
+
                 conn.commit()
         finally:
             conn.close()
