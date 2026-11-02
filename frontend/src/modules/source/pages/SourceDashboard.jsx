@@ -187,7 +187,11 @@ const MultiSelectDropdown = ({
           {selected.length === 0 
             ? <span className="text-gray-400">{placeholder}</span> 
             : selected.length === 1 
-              ? (options.find(o => o.value === selected[0])?.label || selected[0]) 
+              ? (options.find(o => 
+                  o.value === selected[0] || 
+                  (o.value.startsWith('job:') && selected[0] === o.value.slice(4)) ||
+                  (o.value.startsWith('manual:') && selected[0] === o.value.slice(7))
+                )?.label || selected[0]) 
               : `${selected.length} Selected`}
         </span>
         <ChevronDown size={14} className="text-gray-400 shrink-0" />
@@ -225,22 +229,30 @@ const MultiSelectDropdown = ({
               {searchTerm ? `No matches for "${searchTerm}"` : emptyText}
             </div>
           ) : (
-            filteredOptions.map(opt => (
-              <label key={opt.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded transition-colors">
-                <input 
-                  type="checkbox" 
-                  className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                  checked={selected.includes(opt.value)}
-                  onChange={(e) => {
-                    const newSelected = e.target.checked 
-                      ? [...selected, opt.value]
-                      : selected.filter(v => v !== opt.value);
-                    onChange(newSelected);
-                  }}
-                />
-                <span className="text-sm text-gray-700 select-none truncate">{opt.label}</span>
-              </label>
-            ))
+            filteredOptions.map(opt => {
+              const isChecked = selected.some(v => 
+                v === opt.value || 
+                (opt.value.startsWith('job:') && v === opt.value.slice(4)) ||
+                (opt.value.startsWith('manual:') && v === opt.value.slice(7))
+              );
+              return (
+                <label key={opt.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded transition-colors">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                    checked={isChecked}
+                    onChange={(e) => {
+                      const rawVal = opt.value.startsWith('job:') ? opt.value.slice(4) : (opt.value.startsWith('manual:') ? opt.value.slice(7) : '');
+                      const newSelected = e.target.checked 
+                        ? [...selected, opt.value]
+                        : selected.filter(v => v !== opt.value && (!rawVal || v !== rawVal));
+                      onChange(newSelected);
+                    }}
+                  />
+                  <span className="text-sm text-gray-700 select-none truncate">{opt.label}</span>
+                </label>
+              );
+            })
           )}
 
           {selected.length > 0 && (
@@ -462,32 +474,9 @@ export default function SourceDashboard() {
   const [pendingArchives, setPendingArchives] = useState([]);
   const [processingArchive, setProcessingArchive] = useState(false);
   const [newRole, setNewRole] = useState({ title: '', description: '', min_experience: 0, required_skills: [] });
+  const [selectedJobRoleIds, setSelectedJobRoleIds] = useState(new Set());
+  const [isDeletingJobRoles, setIsDeletingJobRoles] = useState(false);
   const [availableTags, setAvailableTags] = useState([]);
-  const tagOptions = useMemo(() => [
-    { value: '__untagged__', label: 'General Pool (Untagged)' },
-    ...(Array.isArray(availableTags) ? availableTags.map(t => {
-      const tagLabel = t?.name || t?.tag || (typeof t === 'string' ? t : '');
-      if (!tagLabel || tagLabel === '__untagged__' || tagLabel.toLowerCase() === 'general pool') return null;
-      return {
-        value: tagLabel,
-        label: `🏷️ ${tagLabel} (${t?.count ?? 0} CVs)`
-      };
-    }).filter(Boolean) : [])
-  ], [availableTags]);
-  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
-  const [bulkTagAction, setBulkTagAction] = useState('add');
-  const [bulkTagInput, setBulkTagInput] = useState('');
-  const [bulkSelectedTags, setBulkSelectedTags] = useState([]);
-  const [bulkTagging, setBulkTagging] = useState(false);
-
-  // ── Upload with Tag Prompt states (Upload tab & Quick Upload) ──
-  const quickUploadFileRef = useRef(null);
-  const [stagedUploadFiles, setStagedUploadFiles] = useState([]);
-  const [showUploadTagModal, setShowUploadTagModal] = useState(false);
-  const [uploadSelectedTags, setUploadSelectedTags] = useState([]);
-  const [uploadTargetMonth, setUploadTargetMonth] = useState('');
-  const [uploadCustomTagInput, setUploadCustomTagInput] = useState('');
-  const [bulkCustomTagInput, setBulkCustomTagInput] = useState('');
 
   // Job Role titles set for fast distinguishing between job role tags & manual tags
   const jobRoleTitlesSet = useMemo(() => {
@@ -518,32 +507,59 @@ export default function SourceDashboard() {
     }));
   }, [jobRoles]);
 
+  const tagOptions = useMemo(() => [
+    { value: '__untagged__', label: 'General Pool (Untagged)' },
+    ...(Array.isArray(availableTags) ? availableTags.map(t => {
+      const tagLabel = t?.name || t?.tag || (typeof t === 'string' ? t : '');
+      if (!tagLabel || tagLabel === '__untagged__' || tagLabel.toLowerCase() === 'general pool') return null;
+      const isJob = t?.type === 'job' || (!t?.type && isJobTag(tagLabel));
+      return {
+        value: (isJob ? 'job:' : 'manual:') + tagLabel,
+        label: isJob ? `💼 [Role] ${tagLabel} (${t?.count ?? 0} CVs)` : `🏷️ [Tag] ${tagLabel} (${t?.count ?? 0} CVs)`
+      };
+    }).filter(Boolean) : [])
+  ], [availableTags, isJobTag]);
+
+  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
+  const [bulkTagAction, setBulkTagAction] = useState('add');
+  const [bulkTagInput, setBulkTagInput] = useState('');
+  const [bulkSelectedTags, setBulkSelectedTags] = useState([]);
+  const [bulkTagging, setBulkTagging] = useState(false);
+
+  // ── Upload with Tag Prompt states (Upload tab & Quick Upload) ──
+  const quickUploadFileRef = useRef(null);
+  const [stagedUploadFiles, setStagedUploadFiles] = useState([]);
+  const [showUploadTagModal, setShowUploadTagModal] = useState(false);
+  const [uploadSelectedJobTags, setUploadSelectedJobTags] = useState([]);
+  const [uploadSelectedManualTags, setUploadSelectedManualTags] = useState([]);
+  const [uploadTargetMonth, setUploadTargetMonth] = useState('');
+  const [uploadCustomTagInput, setUploadCustomTagInput] = useState('');
+  const [bulkCustomTagInput, setBulkCustomTagInput] = useState('');
+  const [uploadTagFromFolders, setUploadTagFromFolders] = useState(true);
+  const [uploadFolderTagMode, setUploadFolderTagMode] = useState('manual'); // 'manual' | 'job'
+
   const handleAddUploadCustomTag = () => {
     const tag = uploadCustomTagInput.trim();
     if (!tag) return;
-    if (!uploadSelectedTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
-      setUploadSelectedTags(prev => [...prev, tag]);
+    if (!uploadSelectedManualTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+      setUploadSelectedManualTags(prev => [...prev, tag]);
     }
     setUploadCustomTagInput('');
   };
 
-  const handleAddBulkCustomTag = () => {
-    const tag = bulkCustomTagInput.trim();
-    if (!tag) return;
-    if (!bulkSelectedTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
-      setBulkSelectedTags(prev => [...prev, tag]);
-    }
-    setBulkCustomTagInput('');
+  const handleRemoveUploadJobTag = (tagToRemove) => {
+    setUploadSelectedJobTags(prev => prev.filter(t => t.toLowerCase() !== tagToRemove.toLowerCase()));
   };
 
-  const handleRemoveUploadTag = (tagToRemove) => {
-    setUploadSelectedTags(prev => prev.filter(t => t.toLowerCase() !== tagToRemove.toLowerCase()));
+  const handleRemoveUploadManualTag = (tagToRemove) => {
+    setUploadSelectedManualTags(prev => prev.filter(t => t.toLowerCase() !== tagToRemove.toLowerCase()));
   };
 
   const handleCancelUploadTagModal = () => {
     setShowUploadTagModal(false);
     setStagedUploadFiles([]);
-    setUploadSelectedTags([]);
+    setUploadSelectedJobTags([]);
+    setUploadSelectedManualTags([]);
     setUploadTargetMonth('');
     setUploadCustomTagInput('');
   };
@@ -913,6 +929,7 @@ export default function SourceDashboard() {
           ...(Array.isArray(c.primary_skills) ? c.primary_skills : []),
           ...(Array.isArray(c.secondary_skills) ? c.secondary_skills : []),
           ...(Array.isArray(c.tags) ? c.tags : []),
+          ...(Array.isArray(c.manual_tags) ? c.manual_tags : []),
           ...(Array.isArray(c.structured_skills) ? c.structured_skills.map(s => s.skill_name || s.name) : [])
         ];
         const skillMatch = skillStrings.some(s => (s || '').toLowerCase().includes(token));
@@ -990,15 +1007,28 @@ export default function SourceDashboard() {
 
   // ── Upload ─────────────────────────────────────────────────────────────────
   
-  const handleBulkUploadDirect = async (filesArray, overrideDate = null, tagsOrLegacy = null, maybeTags = null) => {
+  const handleBulkUploadDirect = async (filesArray, overrideDate = null, tagsOrLegacy = null, maybeTags = null, options = {}) => {
     if (!filesArray || filesArray.length === 0) return;
 
     let tags = null;
+    let uploadOptions = {};
+
     if (Array.isArray(maybeTags) || (typeof maybeTags === 'string' && maybeTags)) {
       tags = maybeTags;
-    } else if (Array.isArray(tagsOrLegacy) || (typeof tagsOrLegacy === 'string' && tagsOrLegacy)) {
+    } else if (maybeTags && typeof maybeTags === 'object') {
+      uploadOptions = maybeTags;
+    }
+
+    if (!tags && (Array.isArray(tagsOrLegacy) || typeof tagsOrLegacy === 'string')) {
       tags = tagsOrLegacy;
     }
+
+    if (options && typeof options === 'object') {
+      uploadOptions = { ...uploadOptions, ...options };
+    }
+
+    const tagFromFolders = uploadOptions.tagFromFolders ?? uploadTagFromFolders;
+    const folderTagMode = uploadOptions.folderTagMode ?? uploadFolderTagMode;
 
     setUploading(true);
     setUploadProgress(0);
@@ -1034,6 +1064,8 @@ export default function SourceDashboard() {
     }
 
     const parsedTags = Array.isArray(tags) ? tags : (tags ? [tags] : []);
+    const manualTags = uploadOptions.manualTags || uploadOptions.manual_tags || [];
+    const parsedManualTags = Array.isArray(manualTags) ? manualTags : (manualTags ? [manualTags] : []);
 
     try {
       // Separate archives / large files (which stream directly to S3 to bypass proxy limits) from standard files
@@ -1054,7 +1086,10 @@ export default function SourceDashboard() {
             filename: largeFile.name,
             filesize: largeFile.size,
             override_date: overrideDate,
-            tags: parsedTags
+            tags: parsedTags,
+            manual_tags: parsedManualTags,
+            tag_from_folders: tagFromFolders,
+            folder_tag_mode: folderTagMode
           });
 
           if (presignedRes.data?.data?.direct_upload && presignedRes.data.data.upload_url) {
@@ -1150,6 +1185,11 @@ export default function SourceDashboard() {
           if (b === 0) {
             if (overrideDate) fd.append('override_date', overrideDate);
             if (parsedTags.length > 0) fd.append('tags', JSON.stringify(parsedTags));
+            if (parsedManualTags.length > 0) fd.append('manual_tags', JSON.stringify(parsedManualTags));
+            if (tagFromFolders) {
+              fd.append('tag_from_folders', 'true');
+              fd.append('folder_tag_mode', folderTagMode || 'manual');
+            }
           } else if (activeJobId) {
             fd.append('job_id', activeJobId);
           }
@@ -1236,15 +1276,23 @@ export default function SourceDashboard() {
   const handleConfirmUploadWithTags = async () => {
     if (!stagedUploadFiles || stagedUploadFiles.length === 0) return;
     const filesToUpload = [...stagedUploadFiles];
-    const tagsToAssign = [...uploadSelectedTags];
+    const jobTagsToAssign = [...uploadSelectedJobTags];
+    const manualTagsToAssign = [...uploadSelectedManualTags];
     const targetMonth = uploadTargetMonth || null;
+    const tagFromFolders = uploadTagFromFolders;
+    const folderTagMode = uploadFolderTagMode;
 
     setShowUploadTagModal(false);
     setStagedUploadFiles([]);
-    setUploadSelectedTags([]);
+    setUploadSelectedJobTags([]);
+    setUploadSelectedManualTags([]);
     setUploadTargetMonth('');
 
-    await handleBulkUploadDirect(filesToUpload, targetMonth, tagsToAssign);
+    await handleBulkUploadDirect(filesToUpload, targetMonth, jobTagsToAssign, null, {
+      manualTags: manualTagsToAssign,
+      tagFromFolders,
+      folderTagMode
+    });
   };
 
   const handleUpload = (e) => {
@@ -1253,7 +1301,8 @@ export default function SourceDashboard() {
     if (!files || files.length === 0) return;
 
     setStagedUploadFiles(Array.from(files));
-    setUploadSelectedTags([]);
+    setUploadSelectedJobTags([]);
+    setUploadSelectedManualTags([]);
     setUploadTargetMonth('');
     setShowUpload(false);
     setShowUploadTagModal(true);
@@ -1483,7 +1532,7 @@ export default function SourceDashboard() {
   };
 
   const deleteJobRole = async (roleId) => {
-    if (!window.confirm("Are you sure you want to delete this job role? All AI scores and applications tied to this role will also be deleted. This cannot be undone.")) return;
+    if (!window.confirm("Are you sure you want to delete this job role? All AI scores and applications tied to this role will also be deleted, and its tag will be removed from all candidates. This cannot be undone.")) return;
     try {
       const res = await fetch(`/api/source/job-roles/${roleId}`, {
         method: 'DELETE',
@@ -1492,7 +1541,13 @@ export default function SourceDashboard() {
       });
       if (res.ok) {
         toast.success('Job role deleted successfully');
+        setSelectedJobRoleIds(prev => {
+          const next = new Set(prev);
+          next.delete(roleId);
+          return next;
+        });
         fetchJobRoles();
+        fetchAvailableTags();
       } else {
         toast.error('Failed to delete job role');
       }
@@ -1500,6 +1555,55 @@ export default function SourceDashboard() {
       toast.error('Could not delete job role');
       console.error(e);
     }
+  };
+
+  const deleteSelectedJobRoles = async () => {
+    if (selectedJobRoleIds.size === 0) return;
+    const count = selectedJobRoleIds.size;
+    if (!window.confirm(`Are you sure you want to delete ${count} selected job role(s)? All AI scores and applications tied to these roles will also be deleted, and their tags will be removed from all candidates. This cannot be undone.`)) {
+      return;
+    }
+    setIsDeletingJobRoles(true);
+    try {
+      const res = await fetch('/api/source/job-roles/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ role_ids: Array.from(selectedJobRoleIds) })
+      });
+      if (res.ok) {
+        toast.success(`${count} job role(s) deleted successfully`);
+        setSelectedJobRoleIds(new Set());
+        fetchJobRoles();
+        fetchAvailableTags();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData.detail || 'Failed to delete selected job roles');
+      }
+    } catch (e) {
+      toast.error('Could not delete selected job roles');
+      console.error(e);
+    } finally {
+      setIsDeletingJobRoles(false);
+    }
+  };
+
+  const toggleSelectAllJobRoles = () => {
+    if (selectedJobRoleIds.size === jobRoles.length) {
+      setSelectedJobRoleIds(new Set());
+    } else {
+      setSelectedJobRoleIds(new Set(jobRoles.map(r => r.id)));
+    }
+  };
+
+  const toggleSelectJobRole = (id, e) => {
+    if (e) e.stopPropagation();
+    setSelectedJobRoleIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const addSkillToRole = () => {
@@ -2266,25 +2370,80 @@ export default function SourceDashboard() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 pb-4 mt-4">
-              {jobRoles.slice().sort((a, b) => new Date(a.created_at || a.updated_at || 0) - new Date(b.created_at || b.updated_at || 0)).map((r, index) => {
-                const colors = TAG_COLORS[index % TAG_COLORS.length];
-                const candidateCount = getJobRoleCandidateCount(r);
-                
-                return (
-                  <div 
-                    key={r.id} 
-                    onClick={() => setViewingRole(r)}
-                    className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-lg transition-all hover:scale-[1.01] hover:z-10 flex flex-col cursor-pointer group"
-                    title="Click to view full job role description & skills"
-                  >
-                    <div className="flex w-full items-start justify-between mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center ${colors.text} shrink-0`}>
-                          <Briefcase size={16} />
+            <>
+              {/* Job Roles Bulk Action Toolbar */}
+              <div className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-200 shadow-2xs mt-4 mb-1 flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-gray-700 hover:text-gray-900">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                      checked={jobRoles.length > 0 && selectedJobRoleIds.size === jobRoles.length}
+                      onChange={toggleSelectAllJobRoles}
+                    />
+                    <span>Select All ({jobRoles.length})</span>
+                  </label>
+                  {selectedJobRoleIds.size > 0 && (
+                    <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
+                      {selectedJobRoleIds.size} role{selectedJobRoleIds.size > 1 ? 's' : ''} selected
+                    </span>
+                  )}
+                </div>
+
+                {selectedJobRoleIds.size > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJobRoleIds(new Set())}
+                      className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
+                    >
+                      Deselect All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteSelectedJobRoles}
+                      disabled={isDeletingJobRoles}
+                      className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {isDeletingJobRoles ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                      <span>Delete Selected ({selectedJobRoleIds.size})</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 pb-4 mt-2">
+                {jobRoles.slice().sort((a, b) => new Date(a.created_at || a.updated_at || 0) - new Date(b.created_at || b.updated_at || 0)).map((r, index) => {
+                  const colors = TAG_COLORS[index % TAG_COLORS.length];
+                  const candidateCount = getJobRoleCandidateCount(r);
+                  const isSelected = selectedJobRoleIds.has(r.id);
+                  
+                  return (
+                    <div 
+                      key={r.id} 
+                      onClick={() => setViewingRole(r)}
+                      className={`bg-white rounded-2xl p-6 border transition-all hover:scale-[1.01] hover:z-10 flex flex-col cursor-pointer group ${
+                        isSelected 
+                          ? 'border-purple-400 ring-2 ring-purple-300 shadow-md bg-purple-50/10' 
+                          : 'border-gray-200 shadow-sm hover:shadow-lg'
+                      }`}
+                      title="Click to view full job role description & skills"
+                    >
+                      <div className="flex w-full items-start justify-between mb-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => toggleSelectJobRole(r.id, e)}
+                            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer shrink-0"
+                            title="Select role for bulk actions"
+                          />
+                          <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center ${colors.text} shrink-0`}>
+                            <Briefcase size={16} />
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-800 truncate group-hover:text-purple-700 transition-colors">{r.title}</h3>
                         </div>
-                        <h3 className="text-lg font-semibold text-gray-800 truncate group-hover:text-purple-700 transition-colors">{r.title}</h3>
-                      </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button 
                           onClick={(e) => { e.stopPropagation(); openEditRole(r); }} 
@@ -2386,7 +2545,8 @@ export default function SourceDashboard() {
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </>
           )}
         </div>
       ) : currentTab === 'upload' ? (
@@ -2682,7 +2842,7 @@ export default function SourceDashboard() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-gray-500">Job Role Tags</label>
+                <label className="text-xs font-medium text-gray-500">Tags</label>
                 <MultiSelectDropdown
                   options={tagOptions}
                   selected={filters.tags || []}
@@ -2919,30 +3079,34 @@ export default function SourceDashboard() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-gray-800 text-sm truncate m-0">{c.full_name || '—'}</p>
-                        {c.tags && Array.isArray(c.tags) && c.tags.length > 0 ? (
-                          c.tags.slice(0, 3).map((t, idx) => {
-                            const isJob = isJobTag(t);
-                            return (
+                        {(c.tags && c.tags.length > 0) || (c.manual_tags && c.manual_tags.length > 0) ? (
+                          <>
+                            {(c.tags || []).slice(0, 3).map((t, idx) => (
                               <span 
-                                key={idx} 
-                                className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                                  isJob 
-                                    ? 'text-purple-700 bg-purple-50 border border-purple-200' 
-                                    : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                                }`}
-                                title={isJob ? `Job Role Tag: ${t}` : `Manual Tag: ${t}`}
+                                key={`job-${idx}`} 
+                                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium text-purple-700 bg-purple-50 border border-purple-200"
+                                title={`Job Role Tag: ${t}`}
                               >
-                                {isJob ? <Briefcase size={10} className="text-purple-600" /> : <Tag size={10} className="text-emerald-600" />} {t}
+                                <Briefcase size={10} className="text-purple-600" /> {t}
                               </span>
-                            );
-                          })
+                            ))}
+                            {(c.manual_tags || []).slice(0, 3).map((t, idx) => (
+                              <span 
+                                key={`man-${idx}`} 
+                                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium text-emerald-700 bg-emerald-50 border border-emerald-200"
+                                title={`Manual Tag: ${t}`}
+                              >
+                                <Tag size={10} className="text-emerald-600" /> {t}
+                              </span>
+                            ))}
+                            {((c.tags?.length || 0) + (c.manual_tags?.length || 0)) > 6 && (
+                              <span className="text-[10px] text-gray-400 font-medium">+{((c.tags?.length || 0) + (c.manual_tags?.length || 0)) - 6}</span>
+                            )}
+                          </>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded font-medium">
                             General Pool
                           </span>
-                        )}
-                        {c.tags && c.tags.length > 3 && (
-                          <span className="text-[10px] text-gray-400 font-medium">+{c.tags.length - 3}</span>
                         )}
                       </div>
                       <InlineEmailEditor candidate={c} fetchCandidates={fetchCandidates} />
@@ -3276,33 +3440,73 @@ export default function SourceDashboard() {
 
             {/* TAG ASSIGNMENT SECTION */}
             <div className="flex flex-col gap-3">
-              <div>
-                <label className="block text-xs font-bold text-gray-800 mb-1">
-                  Assign Tags (Job Roles & Manual Tags)
-                </label>
-                <p className="text-[11px] text-gray-500 mb-2">
-                  Select active job roles or type custom manual tags to categorize these resumes.
+              {/* 1. Job Role Tags */}
+              <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                    <Briefcase size={13} className="text-purple-600" />
+                    Job Role Tags
+                  </label>
+                  <span className="text-[10px] text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded-full font-semibold">
+                    ATS & Match Scoring
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 m-0">
+                  Select job roles to evaluate ATS fit and skill matching for these resumes.
                 </p>
 
-                {/* Multi-Select Dropdown for Job Roles */}
-                <div className="mb-2">
-                  <MultiSelectDropdown
-                    options={jobRoleTagOptions}
-                    selected={uploadSelectedTags}
-                    onChange={setUploadSelectedTags}
-                    placeholder="Select Job Role(s)..."
-                    emptyText={jobRoleTagOptions.length === 0 ? "No active job roles found. Create job roles in Roles tab." : "No matching job roles"}
-                    widthClass="w-full"
-                    searchable={true}
-                    searchPlaceholder="Search job roles..."
-                  />
-                </div>
+                <MultiSelectDropdown
+                  options={jobRoleTagOptions}
+                  selected={uploadSelectedJobTags}
+                  onChange={setUploadSelectedJobTags}
+                  placeholder="Select Job Role(s)..."
+                  emptyText={jobRoleTagOptions.length === 0 ? "No active job roles found. Create job roles in Roles tab." : "No matching job roles"}
+                  widthClass="w-full"
+                  searchable={true}
+                  searchPlaceholder="Search job roles..."
+                />
 
-                {/* Custom Manual Tag Input */}
-                <div className="flex items-center gap-2 mb-2.5">
+                {uploadSelectedJobTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {uploadSelectedJobTags.map(tag => (
+                      <span 
+                        key={tag} 
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs"
+                      >
+                        <Briefcase size={11} className="text-purple-700" />
+                        <span>{tag}</span>
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveUploadJobTag(tag)}
+                          className="hover:text-red-500 ml-0.5 cursor-pointer transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Manual Tags */}
+              <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Tag size={13} className="text-emerald-600" />
+                    Manual Tags
+                  </label>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full font-semibold">
+                    Custom Repository Filtering
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 m-0">
+                  Add custom tags (e.g. Referral, Immediate Joiner, Campus) without creating job roles.
+                </p>
+
+                <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder="Or type custom manual tag (e.g. Referral, Immediate Joiner, Campus)..."
+                    placeholder="Type custom manual tag and press Enter..."
                     value={uploadCustomTagInput}
                     onChange={e => setUploadCustomTagInput(e.target.value)}
                     onKeyDown={e => {
@@ -3311,7 +3515,7 @@ export default function SourceDashboard() {
                         handleAddUploadCustomTag();
                       }
                     }}
-                    className="form-input text-xs flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-gray-700 outline-none focus:border-purple-400 transition-colors"
+                    className="form-input text-xs flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-gray-700 outline-none focus:border-emerald-400 transition-colors"
                   />
                   <button
                     type="button"
@@ -3323,46 +3527,119 @@ export default function SourceDashboard() {
                   </button>
                 </div>
 
-                {/* Selected Tags Display */}
-                <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-gray-50/80 border border-gray-200 rounded-xl items-center">
-                  {uploadSelectedTags.length === 0 ? (
-                    <span className="text-xs text-gray-400 italic flex items-center gap-1">
-                      No tags selected → Will be stored in <strong>General Pool (Untagged)</strong>
-                    </span>
-                  ) : (
-                    uploadSelectedTags.map(tag => {
-                      const isJob = isJobTag(tag);
-                      return (
-                        <span 
-                          key={tag} 
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs border ${
-                            isJob 
-                              ? 'bg-purple-100 text-purple-800 border-purple-200' 
-                              : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                          }`}
+                {uploadSelectedManualTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {uploadSelectedManualTags.map(tag => (
+                      <span 
+                        key={tag} 
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs"
+                      >
+                        <Tag size={11} className="text-emerald-700" />
+                        <span>{tag}</span>
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveUploadManualTag(tag)}
+                          className="hover:text-red-500 ml-0.5 cursor-pointer transition-colors"
                         >
-                          {isJob ? <Briefcase size={12} className="text-purple-700" /> : <Tag size={12} className="text-emerald-700" />}
-                          <span>{tag}</span>
-                          <span className="text-[10px] font-normal opacity-70">({isJob ? 'Job Role' : 'Manual'})</span>
-                          <button 
-                            type="button" 
-                            onClick={() => handleRemoveUploadTag(tag)}
-                            className="hover:text-red-500 ml-1 transition-colors cursor-pointer"
-                          >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      );
-                    })
-                  )}
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {uploadSelectedJobTags.length === 0 && uploadSelectedManualTags.length === 0 && (
+                <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[11px] text-gray-500 italic flex items-center gap-1.5">
+                  No tags selected → Resumes will enter the <strong>General Pool (Untagged)</strong>
                 </div>
+              )}
+            </div>
+
+              {/* ── Auto-Tag from ZIP Folder Structure Toggle & Mode ── */}
+              <div className="bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-emerald-50/50 border border-purple-200/90 rounded-2xl p-3.5 flex flex-col gap-3 shadow-2xs">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                      <Folder size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-gray-900">Auto-Tag by ZIP Folder Names</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold border border-purple-200">
+                          Drive / Folder Structure
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-600 m-0 mt-0.5 leading-tight">
+                        Files inside subfolders (e.g. <code>Frontend Developer/John.pdf</code>) automatically inherit their folder name as a tag.
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input 
+                      type="checkbox" 
+                      checked={uploadTagFromFolders} 
+                      onChange={e => setUploadTagFromFolders(e.target.checked)} 
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5.5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                  </label>
+                </div>
+
+                {uploadTagFromFolders && (
+                  <div className="pt-2.5 border-t border-purple-200/70 flex flex-col gap-2">
+                    <span className="text-[11px] font-semibold text-gray-700">Assign folder names as:</span>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setUploadFolderTagMode('manual')}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          uploadFolderTagMode === 'manual'
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-semibold shadow-2xs ring-1 ring-emerald-400'
+                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Tag size={15} className={`mt-0.5 shrink-0 ${uploadFolderTagMode === 'manual' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold m-0 flex items-center gap-1.5">
+                            Manual Tags
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          </p>
+                          <p className="text-[10px] text-gray-500 m-0 mt-0.5 font-normal leading-tight">
+                            Emerald tags for candidate filtering. Does not alter your Job Roles list.
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setUploadFolderTagMode('job')}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          uploadFolderTagMode === 'job'
+                            ? 'bg-purple-100/80 border-purple-300 text-purple-950 font-semibold shadow-2xs ring-1 ring-purple-400'
+                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Briefcase size={15} className={`mt-0.5 shrink-0 ${uploadFolderTagMode === 'job' ? 'text-purple-600' : 'text-gray-400'}`} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold m-0 flex items-center gap-1.5">
+                            Job Role Tags
+                            <span className="w-2 h-2 rounded-full bg-purple-600"></span>
+                          </p>
+                          <p className="text-[10px] text-gray-500 m-0 mt-0.5 font-normal leading-tight">
+                            Purple tags. Automatically creates matching Job Roles for ATS scoring.
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* General Pool Notice */}
               <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-800 leading-snug">
                 💡 <strong>Tip:</strong> Job role tagging is optional. Resumes without tags land in the <strong>General Pool</strong> and can be tagged, re-tagged, or filtered at any time.
               </div>
-            </div>
 
             {/* Modal Actions */}
             <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100 mt-1">
@@ -3381,8 +3658,8 @@ export default function SourceDashboard() {
                 className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-xl text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50 shadow-sm"
               >
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                {uploadSelectedTags.length > 0 
-                  ? `Upload ${stagedUploadFiles.length} File(s) with ${uploadSelectedTags.length} Tag(s)` 
+                {((uploadSelectedJobTags.length + uploadSelectedManualTags.length) > 0)
+                  ? `Upload ${stagedUploadFiles.length} File(s) with ${uploadSelectedJobTags.length + uploadSelectedManualTags.length} Tag(s)` 
                   : `Upload ${stagedUploadFiles.length} File(s) to General Pool`}
               </button>
             </div>

@@ -86,23 +86,32 @@ class CandidateService:
         invalidate_candidate_caches(self.tenant_id)
         return result
 
-    def bulk_tag_candidates(self, candidate_ids: List[int], tags: List[str], action: str = "add") -> int:
+    def bulk_tag_candidates(self, candidate_ids: List[int], tags: Optional[List[str]] = None, action: str = "add", manual_tags: Optional[List[str]] = None) -> int:
         invalidate_candidate_caches(self.tenant_id)
-        if action == "add":
-            return self.repo.add_candidate_tags(candidate_ids, tags)
-        elif action == "remove":
-            return self.repo.remove_candidate_tags(candidate_ids, tags)
-        elif action == "set":
-            total = 0
-            for cid in candidate_ids:
-                self.repo.set_candidate_tags(cid, tags)
-                total += 1
-            return total
-        return 0
+        count = 0
+        if tags is not None and len(tags) > 0:
+            if action == "add":
+                count = max(count, self.repo.add_candidate_tags(candidate_ids, tags, tag_column='tags'))
+            elif action == "remove":
+                count = max(count, self.repo.remove_candidate_tags(candidate_ids, tags, tag_column='tags'))
+            elif action == "set":
+                for cid in candidate_ids:
+                    self.repo.set_candidate_tags(cid, tags=tags)
+                    count += 1
+        if manual_tags is not None and len(manual_tags) > 0:
+            if action == "add":
+                count = max(count, self.repo.add_candidate_tags(candidate_ids, manual_tags, tag_column='manual_tags'))
+            elif action == "remove":
+                count = max(count, self.repo.remove_candidate_tags(candidate_ids, manual_tags, tag_column='manual_tags'))
+            elif action == "set":
+                for cid in candidate_ids:
+                    self.repo.set_candidate_tags(cid, manual_tags=manual_tags)
+                    count += 1
+        return count
 
-    def update_candidate_tags(self, candidate_id: int, tags: List[str]) -> List[str]:
+    def update_candidate_tags(self, candidate_id: int, tags: Optional[List[str]] = None, manual_tags: Optional[List[str]] = None) -> Dict[str, Any]:
         invalidate_candidate_caches(self.tenant_id)
-        return self.repo.set_candidate_tags(candidate_id, tags)
+        return self.repo.set_candidate_tags(candidate_id, tags=tags, manual_tags=manual_tags)
 
     def get_all_tags(self) -> Dict[str, Any]:
         now = time.time()
@@ -166,7 +175,7 @@ class CandidateService:
 
         return final_skills
 
-    async def process_and_save_resume(self, file_content: bytes, filename: str, override_date: Optional[str] = None, folder_id: Optional[int] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def process_and_save_resume(self, file_content: bytes, filename: str, override_date: Optional[str] = None, folder_id: Optional[int] = None, tags: Optional[List[str]] = None, manual_tags: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Orchestrates resume upload, text extraction, AI parsing, and database saving.
         """
@@ -321,6 +330,7 @@ class CandidateService:
             "primary_skills": primary_skills,
             "secondary_skills": secondary_skills,
             "tags": tags or [],
+            "manual_tags": manual_tags or [],
             "experience": experience,
             "education": education,
             "folder_id": folder_id,
@@ -345,6 +355,16 @@ class CandidateService:
                     seen_lower.add(t.strip().lower())
                     merged_tags.append(t.strip())
             candidate_data["tags"] = merged_tags
+
+            existing_man = existing.get("manual_tags") or []
+            new_man = manual_tags or []
+            seen_m_lower = set()
+            merged_man = []
+            for t in existing_man + new_man:
+                if t and t.strip() and t.strip().lower() not in seen_m_lower:
+                    seen_m_lower.add(t.strip().lower())
+                    merged_man.append(t.strip())
+            candidate_data["manual_tags"] = merged_man
             self.repo.update_candidate(candidate_id, candidate_data)
             self.repo.log_activity(candidate_id, 'System', 'profile_updated', 'Profile updated via resume re-upload')
         else:
@@ -700,6 +720,8 @@ class CandidateService:
         folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None,
         tag: Optional[str] = None,
         tags: Optional[List[str]] = None,
+        manual_tag: Optional[str] = None,
+        manual_tags: Optional[List[str]] = None,
         limit: int = 20,
         offset: int = 0
     ) -> tuple[List[Dict[str, Any]], int]:
@@ -711,7 +733,7 @@ class CandidateService:
         candidates, total_count = self.repo.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
             search=search, sort_by=sort_by, limit=limit, offset=offset, role_id=role_id, upload_time=upload_time,
-            folder_id=folder_id, tag=tag, tags=tags, parsed_query=parsed_query
+            folder_id=folder_id, tag=tag, tags=tags, manual_tag=manual_tag, manual_tags=manual_tags, parsed_query=parsed_query
         )
 
         req_skills = []
@@ -895,6 +917,53 @@ class CandidateService:
         self.repo.log_activity(candidate_id, actor_name, 'profile_updated', 'Profile details manually updated')
         return True
 
+    @staticmethod
+    def _extract_folder_tags_from_path(path_str: str, common_root: Optional[str] = None) -> List[str]:
+        parts = [p.strip() for p in path_str.replace("\\", "/").split("/") if p.strip()]
+        if len(parts) <= 1:
+            return []
+        folder_parts = parts[:-1]
+        if common_root and folder_parts and folder_parts[0] == common_root and len(folder_parts) > 1:
+            folder_parts = folder_parts[1:]
+
+        GENERIC_NAMES = {"resume", "resumes", "cv", "cvs", "candidate", "candidates", "files", "documents", "archive", "drive", "my drive", "export"}
+        tags = []
+        for f in folder_parts:
+            clean = re.sub(r'[_]+', ' ', f).strip()
+            if not clean:
+                continue
+            if clean.lower() in GENERIC_NAMES and len(folder_parts) > 1:
+                continue
+            if len(clean) > 80:
+                clean = clean[:80].strip()
+            if clean and clean.lower() not in {t.lower() for t in tags}:
+                tags.append(clean)
+        return tags
+
+    def _ensure_job_roles_exist(self, tag_names: set):
+        if not tag_names:
+            return
+        try:
+            from backend.modules.source.repositories.job_role_repo import JobRoleRepository
+            job_repo = JobRoleRepository(tenant_id=self.tenant_id)
+            existing_roles = job_repo.get_all_job_roles()
+            existing_titles_lower = {r["title"].strip().lower() for r in existing_roles if r.get("title")}
+
+            created_any = False
+            for tag_name in tag_names:
+                if tag_name.lower() not in existing_titles_lower:
+                    job_repo.create_job_role({
+                        "title": tag_name,
+                        "description": f"Role auto-created from folder '{tag_name}' during resume upload."
+                    })
+                    existing_titles_lower.add(tag_name.lower())
+                    created_any = True
+                    logger.info(f"[BulkUpload] Auto-created Job Role '{tag_name}' for tenant {self.tenant_id}")
+            if created_any:
+                invalidate_candidate_caches(self.tenant_id)
+        except Exception as e:
+            logger.error(f"[BulkUpload] Failed to auto-create job roles from folder tags: {e}")
+
     def _sync_process_files(self, job_id: int, files_data: List[tuple], job_dir: str, temp_dir: str = None):
         """Heavy I/O and CPU bound file extraction and hashing runs synchronously in a background thread."""
         allowed_exts = (".pdf", ".docx", ".doc", ".txt")
@@ -907,6 +976,24 @@ class CandidateService:
         logger = logging.getLogger(__name__)
 
         self.repo.update_bulk_upload_job(job_id, 0, "[]", "extracting")
+
+        # Check if job was configured for tag_from_folders
+        tag_from_folders = False
+        folder_tag_mode = "manual"
+        from backend.core.database import get_db_connection
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self.repo._set_search_path(cur)
+                cur.execute("SELECT tag_from_folders, folder_tag_mode FROM bulk_upload_jobs WHERE id = %s", (job_id,))
+                job_cfg = cur.fetchone()
+                if job_cfg:
+                    tag_from_folders = bool(job_cfg[0])
+                    folder_tag_mode = (job_cfg[1] or "manual").lower()
+        except Exception as e:
+            logger.warning(f"[BulkUpload] Failed to read job folder tag settings: {e}")
+        finally:
+            conn.close()
 
         queue_items = []
         total_files = 0
@@ -950,12 +1037,34 @@ class CandidateService:
             if fn.lower().endswith(".zip"):
                 try:
                     with zipfile.ZipFile(file_path_source) as z:
+                        valid_entries = []
                         for name in z.namelist():
                             if name.endswith("/") or name.split("/")[-1].startswith(".") or "__MACOSX" in name:
                                 continue
                             if not name.lower().endswith(allowed_exts):
                                 continue
+                            valid_entries.append(name)
 
+                        # Determine if all valid entries share a common root directory
+                        common_root = None
+                        if len(valid_entries) > 1:
+                            all_splits = [n.replace("\\", "/").split("/") for n in valid_entries]
+                            first_root = all_splits[0][0]
+                            if all(len(p) > 1 and p[0] == first_root for p in all_splits):
+                                if any(len(p) > 2 for p in all_splits):
+                                    common_root = first_root
+
+                        if tag_from_folders:
+                            all_discovered_tags = set()
+                            for name in valid_entries:
+                                f_tags = self._extract_folder_tags_from_path(name, common_root=common_root)
+                                for t in f_tags:
+                                    all_discovered_tags.add(t)
+
+                            if folder_tag_mode == 'job' and all_discovered_tags:
+                                self._ensure_job_roles_exist(all_discovered_tags)
+
+                        for name in valid_entries:
                             clean_fn = name.split("/")[-1]
                             file_path = os.path.join(job_dir, f"{uuid.uuid4()}_{clean_fn}")
                             
@@ -970,11 +1079,15 @@ class CandidateService:
                                     hasher.update(chunk)
                             file_hash = hasher.hexdigest()
 
+                            item_folder_tags = self._extract_folder_tags_from_path(name, common_root=common_root) if tag_from_folders else None
+
                             queue_items.append({
                                 "filename": clean_fn,
                                 "file_path": file_path,
                                 "file_hash": file_hash,
                                 "extracted_text": "", # Deferred to parallel workers
+                                "tags": item_folder_tags if folder_tag_mode == 'job' else None,
+                                "manual_tags": item_folder_tags if folder_tag_mode == 'manual' else None
                             })
                             total_files += 1
 
@@ -1006,6 +1119,8 @@ class CandidateService:
                     "file_path": file_path,
                     "file_hash": file_hash,
                     "extracted_text": "", # Deferred to parallel workers
+                    "tags": None,
+                    "manual_tags": None
                 })
                 total_files += 1
 
@@ -1040,6 +1155,9 @@ class CandidateService:
         override_date: Optional[str] = None,
         folder_id: Optional[int] = None,
         tags: Optional[List[str]] = None,
+        manual_tags: Optional[List[str]] = None,
+        tag_from_folders: bool = False,
+        folder_tag_mode: str = "manual",
         job_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """files is a list of tuples: (filename, file_path_source).
@@ -1049,7 +1167,12 @@ class CandidateService:
         from concurrent.futures import ThreadPoolExecutor
 
         if not job_id:
-            job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date, folder_id, tags)
+            job_id = self.repo.create_bulk_upload_job(
+                user_id, 0, override_date, folder_id, tags,
+                manual_tags=manual_tags,
+                tag_from_folders=tag_from_folders,
+                folder_tag_mode=folder_tag_mode
+            )
         
         job_dir = os.path.join(self.UPLOAD_DIR, f"job_{job_id}")
         os.makedirs(job_dir, exist_ok=True)
@@ -1080,7 +1203,10 @@ class CandidateService:
         filesize: int,
         override_date: Optional[str] = None,
         folder_id: Optional[int] = None,
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
+        manual_tags: Optional[List[str]] = None,
+        tag_from_folders: bool = False,
+        folder_tag_mode: str = "manual"
     ) -> Dict[str, Any]:
         """Generate a presigned PUT URL directly to DO Spaces/S3 to bypass 100MB proxy limits."""
         import re
@@ -1093,7 +1219,12 @@ class CandidateService:
             raise ValueError("Another bulk upload is currently in progress. Please wait for it to finish or cancel it before starting a new one.")
 
         # Create job
-        job_id = self.repo.create_bulk_upload_job(user_id, 0, override_date, folder_id, tags)
+        job_id = self.repo.create_bulk_upload_job(
+            user_id, 0, override_date, folder_id, tags,
+            manual_tags=manual_tags,
+            tag_from_folders=tag_from_folders,
+            folder_tag_mode=folder_tag_mode
+        )
         
         # Clean filename
         clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
@@ -1362,9 +1493,12 @@ class CandidateService:
                                     if existing_cand_id:
                                         # Merge tags onto existing candidate if upload specified any
                                         upload_tags = item.get("tags") or []
+                                        upload_manual_tags = item.get("manual_tags") or []
                                         if upload_tags:
-                                            self.repo.add_candidate_tags([existing_cand_id], upload_tags, conn=conn, cur=cur)
-                                            print(f"[Worker-{worker_id}][{self.tenant_id}] Item {item['id']} ({item['filename']}) duplicate file hash → added tags {upload_tags} to candidate #{existing_cand_id}", flush=True)
+                                            self.repo.add_candidate_tags([existing_cand_id], upload_tags, tag_column='tags', conn=conn, cur=cur)
+                                        if upload_manual_tags:
+                                            self.repo.add_candidate_tags([existing_cand_id], upload_manual_tags, tag_column='manual_tags', conn=conn, cur=cur)
+                                        print(f"[Worker-{worker_id}][{self.tenant_id}] Item {item['id']} ({item['filename']}) duplicate file hash → merged tags {upload_tags} / manual {upload_manual_tags} to candidate #{existing_cand_id}", flush=True)
 
                                         self.repo.update_bulk_upload_job_item(
                                             item["id"], status="duplicate", candidate_id=existing_cand_id, error_message="Exact file already uploaded before (tags merged).", conn=conn, cur=cur
@@ -1591,6 +1725,7 @@ class CandidateService:
                                             override_date=item.get("override_date"),
                                             folder_id=item.get("folder_id"),
                                             tags=item.get("tags"),
+                                            manual_tags=item.get("manual_tags"),
                                             pre=pre,
                                             candidate_id_to_update=item.get("candidate_id")
                                         )
@@ -1662,6 +1797,7 @@ class CandidateService:
         override_date: Optional[str] = None,
         folder_id: Optional[int] = None,
         tags: Optional[List[str]] = None,
+        manual_tags: Optional[List[str]] = None,
         pre: Optional[Dict[str, Any]] = None,
         candidate_id_to_update: Optional[int] = None
     ) -> Dict[str, Any]:
@@ -1803,6 +1939,7 @@ class CandidateService:
             "primary_skills": primary_skills,
             "secondary_skills": secondary_skills,
             "tags": tags or [],
+            "manual_tags": manual_tags or [],
             "experience": experience,
             "education": education,
             "folder_id": folder_id,
@@ -1823,6 +1960,17 @@ class CandidateService:
                     seen_lower.add(t.strip().lower())
                     merged_tags.append(t.strip())
             candidate_data["tags"] = merged_tags
+
+            # Merge manual tags
+            existing_manual = existing.get("manual_tags") or []
+            new_manual = manual_tags or []
+            seen_m_lower = set()
+            merged_manual = []
+            for t in existing_manual + new_manual:
+                if t and t.strip() and t.strip().lower() not in seen_m_lower:
+                    seen_m_lower.add(t.strip().lower())
+                    merged_manual.append(t.strip())
+            candidate_data["manual_tags"] = merged_manual
             # Preserve existing status — don't reset to "New" on re-extract
             candidate_data["status"] = existing.get("status") or "New"
             self.repo.update_candidate(candidate_id, candidate_data, conn=conn, cur=cur)

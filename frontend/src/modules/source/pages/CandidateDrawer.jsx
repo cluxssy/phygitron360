@@ -333,6 +333,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       primary_skills: Array.isArray(data.primary_skills) ? data.primary_skills.join(', ') : '',
       secondary_skills: Array.isArray(data.secondary_skills) ? data.secondary_skills.join(', ') : '',
       tags: Array.isArray(data.tags) ? data.tags.join(', ') : '',
+      manual_tags: Array.isArray(data.manual_tags) ? data.manual_tags.join(', ') : '',
       certifications: Array.isArray(data.certifications) ? data.certifications : [],
       experience: Array.isArray(data.experience) ? data.experience : [],
       education: Array.isArray(data.education) ? data.education : [],
@@ -355,6 +356,7 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       primary_skills: editForm.primary_skills.split(',').map(s => s.trim()).filter(Boolean),
       secondary_skills: editForm.secondary_skills.split(',').map(s => s.trim()).filter(Boolean),
       tags: editForm.tags ? editForm.tags.split(',').map(s => s.trim()).filter(Boolean) : [],
+      manual_tags: editForm.manual_tags ? editForm.manual_tags.split(',').map(s => s.trim()).filter(Boolean) : [],
     };
     
     try {
@@ -660,6 +662,17 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-primary/40"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Manual Tags (comma separated)</label>
+                      <input
+                        type="text"
+                        value={editForm.manual_tags}
+                        onChange={e => setEditForm({ ...editForm, manual_tags: e.target.value })}
+                        placeholder="e.g. Referral, Urgent, Ex-FAANG, Campus"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-400/40"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -787,28 +800,31 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   </section>
                 )}
 
-                {/* Candidate Tags (Job Roles & Manual) */}
+                {/* Candidate Tags (Job Roles & Manual Tags) */}
                 <section>
                   <SectionLabel icon={<Tag size={13} />} label="Candidate Tags" />
-                  {data?.tags && data.tags.length > 0 ? (
+                  {(data?.tags && data.tags.length > 0) || (data?.manual_tags && data.manual_tags.length > 0) ? (
                     <div className="flex flex-wrap gap-2">
-                      {data.tags.map((t, i) => {
-                        const isJob = isJobTag(t);
-                        return (
-                          <div 
-                            key={i} 
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
-                              isJob 
-                                ? 'bg-purple-500/10 border-purple-500/20 text-purple-300' 
-                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                            }`}
-                          >
-                            {isJob ? <Briefcase size={12} className="text-purple-400" /> : <Tag size={12} className="text-emerald-400" />}
-                            <span className="text-[11px] font-bold">{t}</span>
-                            <span className="text-[9px] opacity-60 font-normal">({isJob ? 'Job Role' : 'Manual'})</span>
-                          </div>
-                        );
-                      })}
+                      {(data.tags || []).map((t, i) => (
+                        <div 
+                          key={`job-${i}`} 
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-purple-500/10 border-purple-500/20 text-purple-300"
+                        >
+                          <Briefcase size={12} className="text-purple-400" />
+                          <span className="text-[11px] font-bold">{t}</span>
+                          <span className="text-[9px] opacity-60 font-normal">(Job Role)</span>
+                        </div>
+                      ))}
+                      {(data.manual_tags || []).map((t, i) => (
+                        <div 
+                          key={`manual-${i}`} 
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                        >
+                          <Tag size={12} className="text-emerald-400" />
+                          <span className="text-[11px] font-bold">{t}</span>
+                          <span className="text-[9px] opacity-60 font-normal">(Manual Tag)</span>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="glass-panel p-3 text-xs text-white/40 italic">General Pool (Untagged)</div>

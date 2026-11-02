@@ -194,6 +194,40 @@ class JobRoleRepository:
         finally:
             conn.close()
 
+    def delete_job_roles_bulk(self, role_ids: List[int]) -> int:
+        if not role_ids:
+            return 0
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                self._set_search_path(cur)
+                # Fetch role titles before deletion so we can remove their tags from all candidates
+                cur.execute("SELECT title FROM job_roles WHERE id = ANY(%s)", (role_ids,))
+                roles = [r[0].strip() for r in cur.fetchall() if r and r[0]]
+
+                # Delete dependent records (ai_scores, candidate_invites, job_roles)
+                cur.execute("DELETE FROM ai_scores WHERE job_role_id = ANY(%s)", (role_ids,))
+                cur.execute("DELETE FROM candidate_invites WHERE job_role_id = ANY(%s)", (role_ids,))
+                cur.execute("DELETE FROM job_roles WHERE id = ANY(%s)", (role_ids,))
+                deleted_count = cur.rowcount
+
+                # Clean up these job tags from candidates in this tenant
+                if roles:
+                    cur.execute("""
+                        UPDATE candidates
+                        SET tags = ARRAY(
+                            SELECT elem
+                            FROM unnest(COALESCE(tags, '{}'::text[])) AS elem
+                            WHERE LOWER(TRIM(elem)) NOT IN (SELECT LOWER(TRIM(x)) FROM unnest(%s::text[]) x)
+                        ), updated_at = CURRENT_TIMESTAMP
+                        WHERE tags && %s::text[]
+                    """, (roles, roles))
+
+                conn.commit()
+                return deleted_count
+        finally:
+            conn.close()
+
     def delete_all_job_roles(self):
         conn = get_db_connection()
         try:

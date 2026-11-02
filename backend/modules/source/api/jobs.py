@@ -65,6 +65,10 @@ class CancelInviteRequest(BaseModel):
     candidate_ids: List[int]
 
 
+class JobRolesBulkDeleteRequest(BaseModel):
+    role_ids: List[int]
+
+
 # ---------------------------------------------------------------------------
 # Job Roles
 # ---------------------------------------------------------------------------
@@ -141,6 +145,17 @@ def delete_job_role(
     if not deleted:
         raise HTTPException(status_code=404, detail="Job role not found")
     return {"success": True, "message": "Job role deleted"}
+
+
+@router.post("/job-roles/bulk-delete")
+def delete_job_roles_bulk(
+    body: JobRolesBulkDeleteRequest,
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
+    service: JobService = Depends(get_job_service)
+):
+    """Delete multiple job roles by ID and cascade delete their invites, ai_scores, and tags from candidates."""
+    deleted_count = service.delete_job_roles_bulk(body.role_ids)
+    return {"success": True, "message": f"{deleted_count} job role(s) deleted", "deleted_count": deleted_count}
 
 
 @router.delete("/job-roles")

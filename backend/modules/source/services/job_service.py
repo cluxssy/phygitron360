@@ -116,6 +116,12 @@ class JobService:
             invalidate_candidate_caches(self.tenant_id)
         return deleted
 
+    def delete_job_roles_bulk(self, role_ids: List[int]) -> int:
+        count = self.repo.delete_job_roles_bulk(role_ids)
+        if count > 0:
+            invalidate_candidate_caches(self.tenant_id)
+        return count
+
     def delete_all_job_roles(self):
         self.repo.delete_all_job_roles()
         invalidate_candidate_caches(self.tenant_id)
