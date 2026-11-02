@@ -26,8 +26,8 @@ class CandidateRepository:
             cur.execute('''
                 INSERT INTO candidates
                 (full_name, first_name, middle_name, last_name, email, phone, location, total_experience_years,
-                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills, folder_id, created_at, tags)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP), %s)
+                 current_designation, resume_path, resume_url, status, source, user_id, ai_summary, linkedin_url, portfolio_url, certifications, primary_skills, secondary_skills, folder_id, created_at, tags, manual_tags)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP), %s, %s)
                 RETURNING id
             ''', (
                 data.get("full_name"),
@@ -52,7 +52,8 @@ class CandidateRepository:
                 data.get("secondary_skills", []),
                 data.get("folder_id"),
                 data.get("created_at"),
-                data.get("tags") or []
+                data.get("tags") or [],
+                data.get("manual_tags") or []
             ))
             candidate_id = cur.fetchone()[0]
 
@@ -138,6 +139,7 @@ class CandidateRepository:
                     ai_summary = %s, linkedin_url = %s, portfolio_url = %s,
                     certifications = %s, primary_skills = %s, secondary_skills = %s,
                     tags = COALESCE(%s, tags),
+                    manual_tags = COALESCE(%s, manual_tags),
                     resume_path = COALESCE(%s, resume_path),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
@@ -157,6 +159,7 @@ class CandidateRepository:
                 data.get("primary_skills", []),
                 data.get("secondary_skills", []),
                 data.get("tags"),
+                data.get("manual_tags"),
                 data.get("resume_path"),
                 candidate_id
             ))
@@ -393,7 +396,7 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, offset: int = 0, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None, tag: Optional[str] = None, tags: Optional[List[str]] = None, parsed_query: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], int]:
+    def search_candidates(self, pool: Optional[str] = None, location: Optional[str] = None, min_exp: Optional[float] = None, exp_range: Optional[str] = None, search: Optional[str] = None, sort_by: str = "newest", limit: int = 20, offset: int = 0, role_id: Optional[int] = None, upload_time: Optional[Union[str, List[str]]] = None, folder_id: Optional[Union[int, str, List[Union[int, str]]]] = None, tag: Optional[str] = None, tags: Optional[List[str]] = None, manual_tag: Optional[str] = None, manual_tags: Optional[List[str]] = None, parsed_query: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], int]:
         conn = get_db_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -438,27 +441,47 @@ class CandidateRepository:
                         conditions.append("TO_CHAR(c.created_at, 'YYYY-MM') = ANY(%s)")
                         params.append(valid_times)
 
+                all_tag_filters = []
                 if tag:
-                    tag_clean = tag.strip().lower()
-                    if tag_clean in ("untagged", "general_pool", "general pool", "unassigned", "null", "none", "__untagged__"):
-                        conditions.append("(c.tags IS NULL OR c.tags = '{}'::text[])")
-                    else:
-                        conditions.append("EXISTS (SELECT 1 FROM unnest(c.tags) _t WHERE LOWER(_t) = LOWER(%s))")
-                        params.append(tag.strip())
-
+                    all_tag_filters.append(tag)
                 if tags:
+                    all_tag_filters.extend([t for t in tags if t])
+
+                if all_tag_filters:
                     tag_conds = []
-                    for t in tags:
-                        if not t:
+                    for t in all_tag_filters:
+                        if not t or not t.strip():
                             continue
-                        t_clean = t.strip().lower()
-                        if t_clean in ("untagged", "general_pool", "general pool", "unassigned", "null", "none", "__untagged__"):
-                            tag_conds.append("(c.tags IS NULL OR c.tags = '{}'::text[])")
+                        t_clean = t.strip()
+                        t_lower = t_clean.lower()
+                        if t_lower in ("untagged", "general_pool", "general pool", "unassigned", "null", "none", "__untagged__"):
+                            tag_conds.append("((c.tags IS NULL OR c.tags = '{}'::text[]) AND (c.manual_tags IS NULL OR c.manual_tags = '{}'::text[]))")
+                        elif t_lower.startswith("job:"):
+                            tag_conds.append("EXISTS (SELECT 1 FROM unnest(COALESCE(c.tags, '{}'::text[])) _t WHERE LOWER(_t) = LOWER(%s))")
+                            params.append(t_clean[4:].strip())
+                        elif t_lower.startswith("manual:"):
+                            tag_conds.append("EXISTS (SELECT 1 FROM unnest(COALESCE(c.manual_tags, '{}'::text[])) _t WHERE LOWER(_t) = LOWER(%s))")
+                            params.append(t_clean[7:].strip())
                         else:
-                            tag_conds.append("EXISTS (SELECT 1 FROM unnest(c.tags) _t WHERE LOWER(_t) = LOWER(%s))")
-                            params.append(t.strip())
+                            tag_conds.append("EXISTS (SELECT 1 FROM unnest(COALESCE(c.tags, '{}'::text[]) || COALESCE(c.manual_tags, '{}'::text[])) _t WHERE LOWER(_t) = LOWER(%s))")
+                            params.append(t_clean)
                     if tag_conds:
                         conditions.append("(" + " OR ".join(tag_conds) + ")")
+
+                all_manual_filters = []
+                if manual_tag:
+                    all_manual_filters.append(manual_tag)
+                if manual_tags:
+                    all_manual_filters.extend([mt for mt in manual_tags if mt])
+
+                if all_manual_filters:
+                    m_conds = []
+                    for mt in all_manual_filters:
+                        mt_clean = mt.strip()
+                        m_conds.append("EXISTS (SELECT 1 FROM unnest(COALESCE(c.manual_tags, '{}'::text[])) _t WHERE LOWER(_t) = LOWER(%s))")
+                        params.append(mt_clean)
+                    if m_conds:
+                        conditions.append("(" + " OR ".join(m_conds) + ")")
 
                 if folder_id is not None:
                     if isinstance(folder_id, (int, str)):
@@ -785,15 +808,25 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def create_bulk_upload_job(self, user_id: int, total_files: int, override_date: Optional[str] = None, folder_id: Optional[int] = None, tags: Optional[List[str]] = None) -> int:
+    def create_bulk_upload_job(
+        self,
+        user_id: int,
+        total_files: int,
+        override_date: Optional[str] = None,
+        folder_id: Optional[int] = None,
+        tags: Optional[List[str]] = None,
+        manual_tags: Optional[List[str]] = None,
+        tag_from_folders: bool = False,
+        folder_tag_mode: str = 'manual'
+    ) -> int:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status, override_date, folder_id, tags)
-                       VALUES (%s, %s, 'extracting', %s, %s, %s) RETURNING id""",
-                    (user_id, total_files, override_date, folder_id, tags or [])
+                    """INSERT INTO bulk_upload_jobs (created_by, total_files, status, override_date, folder_id, tags, manual_tags, tag_from_folders, folder_tag_mode)
+                       VALUES (%s, %s, 'extracting', %s, %s, %s, %s, %s, %s) RETURNING id""",
+                    (user_id, total_files, override_date, folder_id, tags or [], manual_tags or [], tag_from_folders, folder_tag_mode)
                 )
                 job_id = cur.fetchone()[0]
                 conn.commit()
@@ -824,11 +857,11 @@ class CandidateRepository:
                 self._set_search_path(cur)
                 from psycopg2.extras import execute_values
                 query = """
-                    INSERT INTO bulk_upload_job_items (job_id, filename, file_path, file_hash, extracted_text, candidate_id)
+                    INSERT INTO bulk_upload_job_items (job_id, filename, file_path, file_hash, extracted_text, candidate_id, tags, manual_tags)
                     VALUES %s
                 """
                 values = [
-                    (job_id, i["filename"], i["file_path"], i.get("file_hash"), i.get("extracted_text"), i.get("candidate_id"))
+                    (job_id, i["filename"], i["file_path"], i.get("file_hash"), i.get("extracted_text"), i.get("candidate_id"), i.get("tags"), i.get("manual_tags"))
                     for i in items
                 ]
                 execute_values(cur, query, values)
@@ -952,7 +985,19 @@ class CandidateRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute(
-                    """SELECT i.*, j.override_date, j.folder_id, j.tags, j.created_by FROM bulk_upload_job_items i
+                    """SELECT i.*, j.override_date, j.folder_id,
+                              ARRAY(
+                                  SELECT DISTINCT elem
+                                  FROM unnest(COALESCE(i.tags, '{}'::text[]) || COALESCE(j.tags, '{}'::text[])) AS elem
+                                  WHERE elem IS NOT NULL AND TRIM(elem) <> ''
+                              ) AS tags,
+                              ARRAY(
+                                  SELECT DISTINCT elem
+                                  FROM unnest(COALESCE(i.manual_tags, '{}'::text[]) || COALESCE(j.manual_tags, '{}'::text[])) AS elem
+                                  WHERE elem IS NOT NULL AND TRIM(elem) <> ''
+                              ) AS manual_tags,
+                              j.created_by, j.tag_from_folders, j.folder_tag_mode
+                       FROM bulk_upload_job_items i
                        JOIN bulk_upload_jobs j ON i.job_id = j.id
                        WHERE i.status = 'pending' AND j.status IN ('processing', 'pending', 'extracting')
                        ORDER BY i.created_at ASC
@@ -1468,7 +1513,7 @@ class CandidateRepository:
                 SELECT 
                     TO_CHAR(created_at, 'YYYY-MM') AS ym,
                     COUNT(id) AS total_count,
-                    COUNT(id) FILTER (WHERE tags IS NULL OR tags = '{}'::text[]) AS untagged_count
+                    COUNT(id) FILTER (WHERE (tags IS NULL OR tags = '{}'::text[]) AND (manual_tags IS NULL OR manual_tags = '{}'::text[])) AS untagged_count
                 FROM candidates
                 WHERE created_at IS NOT NULL AND TO_CHAR(created_at, 'YYYY-MM') ~ '^\d{4}-\d{2}$'
                 GROUP BY TO_CHAR(created_at, 'YYYY-MM')
@@ -1477,27 +1522,48 @@ class CandidateRepository:
             cand_count_rows = cur.fetchall()
             month_counts = {r['ym']: {"total": r['total_count'], "untagged": r['untagged_count']} for r in cand_count_rows}
 
-            # 2. Aggregated tags per month
+            # 2. Aggregated tags per month (both Job tags and Manual tags)
             cur.execute('''
                 SELECT 
                     TO_CHAR(c.created_at, 'YYYY-MM') AS ym,
+                    'job' AS tag_type,
                     t AS tag_name,
                     COUNT(*) AS tag_count
-                FROM candidates c, unnest(c.tags) AS t
+                FROM candidates c, unnest(COALESCE(c.tags, '{}'::text[])) AS t
                 WHERE c.created_at IS NOT NULL AND t IS NOT NULL AND TRIM(t) <> ''
                 GROUP BY TO_CHAR(c.created_at, 'YYYY-MM'), t
-                ORDER BY ym DESC, tag_count DESC, tag_name ASC
+                UNION ALL
+                SELECT 
+                    TO_CHAR(c.created_at, 'YYYY-MM') AS ym,
+                    'manual' AS tag_type,
+                    t AS tag_name,
+                    COUNT(*) AS tag_count
+                FROM candidates c, unnest(COALESCE(c.manual_tags, '{}'::text[])) AS t
+                WHERE c.created_at IS NOT NULL AND t IS NOT NULL AND TRIM(t) <> ''
+                GROUP BY TO_CHAR(c.created_at, 'YYYY-MM'), t
+                ORDER BY ym DESC, tag_type ASC, tag_count DESC, tag_name ASC
             ''')
             tag_rows = cur.fetchall()
             tags_by_month = {}
+            job_tags_by_month = {}
+            manual_tags_by_month = {}
             for tr in tag_rows:
                 ym = tr['ym']
+                ttype = tr['tag_type']
+                tag_obj = {
+                    "name": tr['tag_name'],
+                    "count": tr['tag_count'],
+                    "type": ttype
+                }
                 if ym not in tags_by_month:
                     tags_by_month[ym] = []
-                tags_by_month[ym].append({
-                    "name": tr['tag_name'],
-                    "count": tr['tag_count']
-                })
+                    job_tags_by_month[ym] = []
+                    manual_tags_by_month[ym] = []
+                tags_by_month[ym].append(tag_obj)
+                if ttype == 'job':
+                    job_tags_by_month[ym].append(tag_obj)
+                else:
+                    manual_tags_by_month[ym].append(tag_obj)
             
             import calendar
             folders = []
@@ -1522,6 +1588,8 @@ class CandidateRepository:
                     "count": counts["total"],
                     "untagged_count": counts["untagged"],
                     "tags": month_tags,
+                    "job_tags": job_tags_by_month.get(ym, []),
+                    "manual_tags": manual_tags_by_month.get(ym, []),
                     "subfolders": []
                 })
                 
@@ -1718,7 +1786,7 @@ class CandidateRepository:
         finally:
             conn.close()
 
-    def add_candidate_tags(self, candidate_ids: List[int], tags: List[str], conn=None, cur=None) -> int:
+    def add_candidate_tags(self, candidate_ids: List[int], tags: List[str], tag_column: str = 'tags', conn=None, cur=None) -> int:
         if not candidate_ids or not tags:
             return 0
         clean_tags = [t.strip() for t in tags if t and t.strip()]
@@ -1731,11 +1799,12 @@ class CandidateRepository:
             should_close = True
         try:
             self._set_search_path(cur)
-            cur.execute('''
+            col = 'manual_tags' if tag_column == 'manual_tags' else 'tags'
+            cur.execute(f'''
                 UPDATE candidates
-                SET tags = ARRAY(
+                SET {col} = ARRAY(
                     SELECT DISTINCT elem
-                    FROM unnest(COALESCE(tags, '{}'::text[]) || %s::text[]) AS elem
+                    FROM unnest(COALESCE({col}, '{{}}'::text[]) || %s::text[]) AS elem
                     WHERE elem IS NOT NULL AND TRIM(elem) <> ''
                 ), updated_at = CURRENT_TIMESTAMP
                 WHERE id = ANY(%s)
@@ -1745,7 +1814,7 @@ class CandidateRepository:
                 conn.commit()
             for cid in candidate_ids:
                 try:
-                    self.log_activity(cid, 'User', 'tags_added', f"Added tags: {', '.join(clean_tags)}", conn=conn, cur=cur)
+                    self.log_activity(cid, 'User', f'{col}_added', f"Added {col.replace('_', ' ')}: {', '.join(clean_tags)}", conn=conn, cur=cur)
                 except Exception:
                     pass
             return updated
@@ -1753,7 +1822,7 @@ class CandidateRepository:
             if should_close:
                 conn.close()
 
-    def remove_candidate_tags(self, candidate_ids: List[int], tags: List[str]) -> int:
+    def remove_candidate_tags(self, candidate_ids: List[int], tags: List[str], tag_column: str = 'tags') -> int:
         if not candidate_ids or not tags:
             return 0
         clean_tags = [t.strip() for t in tags if t and t.strip()]
@@ -1763,11 +1832,12 @@ class CandidateRepository:
         try:
             with conn.cursor() as cur:
                 self._set_search_path(cur)
-                cur.execute('''
+                col = 'manual_tags' if tag_column == 'manual_tags' else 'tags'
+                cur.execute(f'''
                     UPDATE candidates
-                    SET tags = ARRAY(
+                    SET {col} = ARRAY(
                         SELECT elem
-                        FROM unnest(COALESCE(tags, '{}'::text[])) AS elem
+                        FROM unnest(COALESCE({col}, '{{}}'::text[])) AS elem
                         WHERE LOWER(TRIM(elem)) <> ALL(ARRAY(SELECT LOWER(TRIM(x)) FROM unnest(%s::text[]) x))
                     ), updated_at = CURRENT_TIMESTAMP
                     WHERE id = ANY(%s)
@@ -1776,39 +1846,62 @@ class CandidateRepository:
                 conn.commit()
                 for cid in candidate_ids:
                     try:
-                        self.log_activity(cid, 'User', 'tags_removed', f"Removed tags: {', '.join(clean_tags)}")
+                        self.log_activity(cid, 'User', f'{col}_removed', f"Removed {col.replace('_', ' ')}: {', '.join(clean_tags)}")
                     except Exception:
                         pass
                 return updated
         finally:
             conn.close()
 
-    def set_candidate_tags(self, candidate_id: int, tags: List[str]) -> List[str]:
-        clean_tags = []
-        seen = set()
-        for t in tags:
-            if t and t.strip():
-                val = t.strip()
-                if val.lower() not in seen:
-                    seen.add(val.lower())
-                    clean_tags.append(val)
+    def set_candidate_tags(self, candidate_id: int, tags: Optional[List[str]] = None, manual_tags: Optional[List[str]] = None) -> Dict[str, Any]:
+        def _clean(raw):
+            if raw is None:
+                return None
+            res, seen = [], set()
+            for t in raw:
+                if t and t.strip():
+                    v = t.strip()
+                    if v.lower() not in seen:
+                        seen.add(v.lower())
+                        res.append(v)
+            return res
+
+        clean_job = _clean(tags)
+        clean_man = _clean(manual_tags)
+
         conn = get_db_connection()
         try:
-            with conn.cursor() as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
-                cur.execute('''
+                sets = []
+                params = []
+                if clean_job is not None:
+                    sets.append("tags = %s")
+                    params.append(clean_job)
+                if clean_man is not None:
+                    sets.append("manual_tags = %s")
+                    params.append(clean_man)
+
+                if not sets:
+                    cur.execute("SELECT tags, manual_tags FROM candidates WHERE id = %s", (candidate_id,))
+                    row = cur.fetchone()
+                    return dict(row) if row else {"tags": [], "manual_tags": []}
+
+                sets.append("updated_at = CURRENT_TIMESTAMP")
+                params.append(candidate_id)
+                cur.execute(f'''
                     UPDATE candidates
-                    SET tags = %s, updated_at = CURRENT_TIMESTAMP
+                    SET {", ".join(sets)}
                     WHERE id = %s
-                    RETURNING tags
-                ''', (clean_tags, candidate_id))
+                    RETURNING tags, manual_tags
+                ''', tuple(params))
                 row = cur.fetchone()
                 conn.commit()
                 try:
-                    self.log_activity(candidate_id, 'User', 'tags_updated', f"Updated tags: {', '.join(clean_tags) if clean_tags else 'None'}")
+                    self.log_activity(candidate_id, 'User', 'tags_updated', "Updated candidate tags")
                 except Exception:
                     pass
-                return row[0] if row and row[0] else []
+                return dict(row) if row else {"tags": [], "manual_tags": []}
         finally:
             conn.close()
 
@@ -1818,24 +1911,33 @@ class CandidateRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_search_path(cur)
                 cur.execute('''
-                    SELECT t AS name, t AS tag, COUNT(DISTINCT c.id) AS count
-                    FROM candidates c, unnest(c.tags) AS t
+                    SELECT 'job' AS type, t AS name, t AS tag, COUNT(DISTINCT c.id) AS count
+                    FROM candidates c, unnest(COALESCE(c.tags, '{}'::text[])) AS t
                     WHERE t IS NOT NULL AND TRIM(t) <> ''
                     GROUP BY t
-                    ORDER BY count DESC, name ASC
+                    UNION ALL
+                    SELECT 'manual' AS type, t AS name, t AS tag, COUNT(DISTINCT c.id) AS count
+                    FROM candidates c, unnest(COALESCE(c.manual_tags, '{}'::text[])) AS t
+                    WHERE t IS NOT NULL AND TRIM(t) <> ''
+                    GROUP BY t
+                    ORDER BY type ASC, count DESC, name ASC
                 ''')
-                tag_rows = [dict(r) for r in cur.fetchall()]
-                
+                all_tag_rows = [dict(r) for r in cur.fetchall()]
+                job_tags = [r for r in all_tag_rows if r['type'] == 'job']
+                manual_tags = [r for r in all_tag_rows if r['type'] == 'manual']
+
                 cur.execute('''
                     SELECT 
                         COUNT(id) AS total_count,
-                        COUNT(id) FILTER (WHERE tags IS NULL OR tags = '{}'::text[]) AS untagged_count
+                        COUNT(id) FILTER (WHERE (tags IS NULL OR tags = '{}'::text[]) AND (manual_tags IS NULL OR manual_tags = '{}'::text[])) AS untagged_count
                     FROM candidates
                 ''')
                 counts = cur.fetchone() or {'total_count': 0, 'untagged_count': 0}
                 
                 return {
-                    "tags": tag_rows,
+                    "tags": all_tag_rows,
+                    "job_tags": job_tags,
+                    "manual_tags": manual_tags,
                     "untagged_count": counts['untagged_count'],
                     "total_count": counts['total_count']
                 }

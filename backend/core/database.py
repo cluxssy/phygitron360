@@ -346,6 +346,8 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS secondary_skills TEXT[] DEFAULT '{}'::text[]")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'::text[]")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_tags ON candidates USING GIN(tags)")
+        cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS manual_tags TEXT[] DEFAULT '{}'::text[]")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_manual_tags ON candidates USING GIN(manual_tags)")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS current_designation TEXT")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS first_name TEXT")
         cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS middle_name TEXT")
@@ -1514,6 +1516,11 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS override_date TEXT")
         cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES resume_folders(id) ON DELETE SET NULL")
         cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'::text[]")
+        cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS manual_tags TEXT[] DEFAULT '{}'::text[]")
+        cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS tag_from_folders BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE bulk_upload_jobs ADD COLUMN IF NOT EXISTS folder_tag_mode TEXT DEFAULT 'manual'")
+        cur.execute("ALTER TABLE bulk_upload_job_items ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT NULL")
+        cur.execute("ALTER TABLE bulk_upload_job_items ADD COLUMN IF NOT EXISTS manual_tags TEXT[] DEFAULT NULL")
 
         # --- LexAI Module Tables ---
         cur.execute('''

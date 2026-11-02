@@ -44,6 +44,8 @@ class ManualCandidateCreate(BaseModel):
     portfolio_url: Optional[str] = None
     primary_skills: Optional[List[str]] = []
     secondary_skills: Optional[List[str]] = []
+    tags: Optional[List[str]] = []
+    manual_tags: Optional[List[str]] = []
 
 
 class CandidateUpdate(BaseModel):
@@ -64,6 +66,7 @@ class CandidateUpdate(BaseModel):
     primary_skills: Optional[List[str]] = None
     secondary_skills: Optional[List[str]] = None
     tags: Optional[List[str]] = None
+    manual_tags: Optional[List[str]] = None
 
 
 class StatusUpdate(BaseModel):
@@ -110,12 +113,14 @@ class NotificationRequest(BaseModel):
 
 class BulkTagRequest(BaseModel):
     candidate_ids: List[int]
-    tags: List[str]
+    tags: Optional[List[str]] = None
+    manual_tags: Optional[List[str]] = None
     action: str = "add"  # "add", "remove", or "set"
 
 
 class CandidateTagsUpdate(BaseModel):
-    tags: List[str]
+    tags: Optional[List[str]] = None
+    manual_tags: Optional[List[str]] = None
 
 
 class CandidateReportExportRequest(BaseModel):
@@ -131,6 +136,9 @@ class RequestPresignedUploadRequest(BaseModel):
     override_date: Optional[str] = None
     folder_id: Optional[int] = None
     tags: Optional[List[str]] = None
+    manual_tags: Optional[List[str]] = None
+    tag_from_folders: Optional[bool] = False
+    folder_tag_mode: Optional[str] = "manual"
 
 
 class ConfirmArchiveUploadRequest(BaseModel):
@@ -161,6 +169,7 @@ async def upload_and_parse_resume(
     override_date: Optional[str] = Form(None),
     folder_id: Optional[int] = Form(None),
     tags: Optional[str] = Form(None),
+    manual_tags: Optional[str] = Form(None),
     current_user: dict = Depends(require_permission("source.candidates.manage")),
     service: CandidateService = Depends(get_candidate_service)
 ):
@@ -169,20 +178,28 @@ async def upload_and_parse_resume(
     if not file.filename.lower().endswith(allowed_exts):
         raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(allowed_exts)}")
 
-    parsed_tags = []
-    if tags:
+    def _parse_tag_str(raw):
+        if not raw:
+            return []
         try:
-            loaded = json.loads(tags)
+            loaded = json.loads(raw)
             if isinstance(loaded, list):
-                parsed_tags = [str(t).strip() for t in loaded if str(t).strip()]
+                return [str(t).strip() for t in loaded if str(t).strip()]
             elif isinstance(loaded, str):
-                parsed_tags = [t.strip() for t in loaded.split(",") if t.strip()]
+                return [t.strip() for t in loaded.split(",") if t.strip()]
         except Exception:
-            parsed_tags = [t.strip() for t in tags.split(",") if t.strip()]
+            return [t.strip() for t in raw.split(",") if t.strip()]
+        return []
+
+    parsed_tags = _parse_tag_str(tags)
+    parsed_manual_tags = _parse_tag_str(manual_tags)
 
     try:
         content = await file.read()
-        result = await service.process_and_save_resume(content, file.filename, override_date=override_date, folder_id=folder_id, tags=parsed_tags)
+        result = await service.process_and_save_resume(
+            content, file.filename, override_date=override_date, folder_id=folder_id,
+            tags=parsed_tags, manual_tags=parsed_manual_tags
+        )
         return {
             "success": True,
             "message": "Resume uploaded and parsed successfully",
@@ -277,6 +294,9 @@ async def bulk_upload_resumes(
     override_date: Optional[str] = Form(None),
     folder_id: Optional[int] = Form(None),
     tags: Optional[str] = Form(None),
+    manual_tags: Optional[str] = Form(None),
+    tag_from_folders: Optional[bool] = Form(False),
+    folder_tag_mode: Optional[str] = Form("manual"),
     job_id: Optional[int] = Form(None),
     user: dict = Depends(get_current_user),
     service: CandidateService = Depends(get_candidate_service)
@@ -297,16 +317,21 @@ async def bulk_upload_resumes(
     import shutil
     import os
     
-    parsed_tags = []
-    if tags:
+    def _parse_tag_str(raw):
+        if not raw:
+            return []
         try:
-            loaded = json.loads(tags)
+            loaded = json.loads(raw)
             if isinstance(loaded, list):
-                parsed_tags = [str(t).strip() for t in loaded if str(t).strip()]
+                return [str(t).strip() for t in loaded if str(t).strip()]
             elif isinstance(loaded, str):
-                parsed_tags = [t.strip() for t in loaded.split(",") if t.strip()]
+                return [t.strip() for t in loaded.split(",") if t.strip()]
         except Exception:
-            parsed_tags = [t.strip() for t in tags.split(",") if t.strip()]
+            return [t.strip() for t in raw.split(",") if t.strip()]
+        return []
+
+    parsed_tags = _parse_tag_str(tags)
+    parsed_manual_tags = _parse_tag_str(manual_tags)
 
     files_data = []
     temp_dir = tempfile.mkdtemp(prefix="bulk_upload_")
@@ -325,6 +350,9 @@ async def bulk_upload_resumes(
             override_date=override_date,
             folder_id=folder_id,
             tags=parsed_tags,
+            manual_tags=parsed_manual_tags,
+            tag_from_folders=bool(tag_from_folders),
+            folder_tag_mode=str(folder_tag_mode or "manual"),
             job_id=job_id
         )
         return {
@@ -354,7 +382,10 @@ async def request_presigned_upload(
             filesize=payload.filesize,
             override_date=payload.override_date,
             folder_id=payload.folder_id,
-            tags=payload.tags
+            tags=payload.tags,
+            manual_tags=payload.manual_tags,
+            tag_from_folders=bool(payload.tag_from_folders),
+            folder_tag_mode=str(payload.folder_tag_mode or "manual")
         )
         return {"success": True, "data": data}
     except ValueError as ve:
@@ -604,6 +635,8 @@ def search_candidates(
     folder_id: Optional[List[str]] = Query(None),     # Sub-folder ID(s) or 'unassigned'
     tag: Optional[str] = Query(None),                 # Tag name or 'untagged'
     tags: Optional[List[str]] = Query(None),          # Multiple tags
+    manual_tag: Optional[str] = Query(None),
+    manual_tags: Optional[List[str]] = Query(None),
     limit: int = Query(50, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user),
@@ -614,7 +647,8 @@ def search_candidates(
         search_res = service.search_candidates(
             pool=pool, location=location, min_exp=min_exp, exp_range=exp_range,
             search=search, sort_by=sort_by, role_id=role_id, upload_time=upload_time,
-            folder_id=folder_id, tag=tag, tags=tags, limit=limit, offset=offset
+            folder_id=folder_id, tag=tag, tags=tags, manual_tag=manual_tag, manual_tags=manual_tags,
+            limit=limit, offset=offset
         )
         results = search_res[0]
         total_count = search_res[1]
@@ -649,7 +683,9 @@ def bulk_tag_candidates(
 ):
     """Bulk add, remove, or set tags on candidates."""
     try:
-        updated = service.bulk_tag_candidates(body.candidate_ids, body.tags, action=body.action)
+        updated = service.bulk_tag_candidates(
+            body.candidate_ids, tags=body.tags, action=body.action, manual_tags=body.manual_tags
+        )
         return {"success": True, "message": f"Updated tags for {updated} candidate(s).", "count": updated}
     except Exception as exc:
         logger.exception(f"Failed to bulk tag candidates: {exc}")
@@ -664,7 +700,7 @@ def update_candidate_tags(
 ):
     """Update tags for a single candidate."""
     try:
-        tags = service.update_candidate_tags(candidate_id, body.tags)
+        tags = service.update_candidate_tags(candidate_id, tags=body.tags, manual_tags=body.manual_tags)
         return {"success": True, "data": tags, "message": "Tags updated successfully."}
     except Exception as exc:
         logger.exception(f"Failed to update candidate tags: {exc}")
