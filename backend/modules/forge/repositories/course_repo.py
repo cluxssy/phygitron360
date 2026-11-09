@@ -91,7 +91,8 @@ class CourseRepository:
     # ── Courses ───────────────────────────────────────────────────────────────
 
     def list_courses(self, user_id: int, q: str = None, domain_id: int = None,
-                     difficulty: str = None, page: int = 1, limit: int = 18) -> Dict:
+                     difficulty: str = None, enrolled_only: bool = False,
+                     page: int = 1, limit: int = 18) -> Dict:
         """Library view — includes enrollment status for current user."""
         conn = get_db_connection()
         try:
@@ -99,7 +100,10 @@ class CourseRepository:
                 self._set_path(cur)
                 where = ["c.status = 'published'"]
                 params: List[Any] = [user_id]
-                count_params: List[Any] = []
+                count_params: List[Any] = [user_id]
+
+                if enrolled_only:
+                    where.append("e.id IS NOT NULL")
 
                 if q and q.strip():
                     term = f"%{q.strip()}%"
@@ -122,6 +126,7 @@ class CourseRepository:
                     SELECT COUNT(*) AS total
                     FROM forge_courses c
                     LEFT JOIN course_domains d ON d.id = c.domain_id
+                    LEFT JOIN forge_enrollments e ON e.course_id = c.id AND e.user_id = %s
                     WHERE {where_sql}
                 """, count_params)
                 count_row = cur.fetchone()

@@ -104,17 +104,19 @@ def get_library(
     q: Optional[str] = None,
     domain_id: Optional[int] = None,
     difficulty: Optional[str] = None,
+    enrolled_only: Optional[bool] = Query(False),
     page: int = Query(1, ge=1),
     limit: int = Query(18, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
     repo: CourseRepository = Depends(get_course_repo)
 ):
-    """Course catalog with search, domain chips, and difficulty filter."""
+    """Course catalog with search, domain chips, difficulty filter, and enrolled_only filter."""
     result = repo.list_courses(
         user_id=current_user["id"],
         q=q,
         domain_id=domain_id,
         difficulty=difficulty,
+        enrolled_only=enrolled_only or False,
         page=page,
         limit=limit
     )
