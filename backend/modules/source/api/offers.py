@@ -49,7 +49,7 @@ def get_offer_service(user=Depends(get_current_user)):
 @router.get("")
 async def list_offers(
     status: Optional[str] = None,
-    current_user: dict = Depends(require_permission("source.offers.view")),
+    current_user: dict = Depends(require_permission(["source.offers.view", "source.candidates.view", "source.jobs.view"])),
     service: OfferService = Depends(get_offer_service),
 ):
     """List all offer letters for the tenant. Optionally filter by status."""
@@ -60,7 +60,7 @@ async def list_offers(
 @router.get("/{offer_id}")
 async def get_offer(
     offer_id: int,
-    current_user: dict = Depends(require_permission("source.offers.view")),
+    current_user: dict = Depends(require_permission(["source.offers.view", "source.candidates.view", "source.jobs.view"])),
     service: OfferService = Depends(get_offer_service),
 ):
     offer = service.get_offer_by_id(offer_id)
@@ -197,7 +197,7 @@ async def send_offer(
 @router.get("/{offer_id}/preview")
 async def preview_offer(
     offer_id: int,
-    current_user: dict = Depends(require_permission("source.offers.view")),
+    current_user: dict = Depends(require_permission(["source.offers.view", "source.candidates.view", "source.jobs.view"])),
     service: OfferService = Depends(get_offer_service),
 ):
     """Generate a PDF preview of the offer letter."""

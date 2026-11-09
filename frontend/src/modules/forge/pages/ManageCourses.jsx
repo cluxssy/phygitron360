@@ -425,10 +425,10 @@ export default function ManageCourses({ embedded = false }) {
                         <td style={{ textAlign: 'right' }}>
                           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
                             <button
-                              onClick={() => nav(`/forge/course/${course.id}`)}
+                              onClick={() => nav(`/forge/course/${course.id}?preview=true`)}
                               className="btn btn-secondary btn-sm"
                               style={{ padding: '6px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}
-                              title="Preview course"
+                              title="Preview course as Administrator"
                             >
                               <PlayCircle size={13} /> Preview
                             </button>

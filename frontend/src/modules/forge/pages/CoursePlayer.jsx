@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { forgeApi } from '../../../core/api/forgeApi';
 import { useAuth } from '../../../core/auth/AuthContext';
 import {
   ChevronLeft, Award, PlayCircle, CheckCircle, Clock, Maximize2,
   Minimize2, RefreshCw, Sparkles, X, Shield, Download,
-  ExternalLink, Layers, BookOpen, ArrowLeft, ArrowRight, HelpCircle, Check, Radio
+  ExternalLink, Layers, BookOpen, ArrowLeft, ArrowRight, HelpCircle, Check, Radio,
+  Eye, RotateCcw
 } from 'lucide-react';
 import '../styles/forge.css';
 import toast from 'react-hot-toast';
@@ -23,7 +24,6 @@ const resolveAssetUrl = (url, course) => {
   if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
   return url;
 };
-
 
 const calculateLearnerProgress = (runtimeData, eventProgress) => {
   const status = String(
@@ -121,6 +121,9 @@ const extractBookmark = (runtimeData) => {
 export default function CoursePlayer() {
   const { id } = useParams();
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get('preview') === 'true' || searchParams.get('mode') === 'preview';
+
   const { user } = useAuth();
 
   const [course, setCourse] = useState(null);
@@ -139,18 +142,30 @@ export default function CoursePlayer() {
   const iframeRef = useRef(null);
   const scormDataRef = useRef({});
   const saveTimerRef = useRef(null);
-  // Refs to always have the latest course/user values inside the postMessage
+  // Refs to always have the latest course/user/preview values inside the postMessage
   // handler without re-registering the listener on every state change.
   const courseRef = useRef(null);
   const userRef = useRef(null);
+  const isPreviewRef = useRef(isPreview);
+
+  useEffect(() => {
+    isPreviewRef.current = isPreview;
+  }, [isPreview]);
 
   // Load course details
   const loadCourse = useCallback(async () => {
     try {
-      const res = await forgeApi.getCourse(id);
+      const res = await forgeApi.getCourse(id, isPreview ? { preview: true } : {});
       const data = res.data.data;
 
-      if (data.enrollment) {
+      // In preview mode, explicitly discard any learner enrollment so personal progress
+      // is neither shown nor tracked.
+      if (isPreview) {
+        data.enrollment = null;
+        scormDataRef.current = {};
+        setCompletedSections(new Set());
+        setNativeSectionIdx(0);
+      } else if (data.enrollment) {
         let initProg = parseFloat(data.enrollment.progress_percent || 0);
         let initLoc = data.enrollment.scorm_location;
 
@@ -197,11 +212,15 @@ export default function CoursePlayer() {
       courseRef.current = data;
     } catch (err) {
       toast.error('Failed to load course details');
-      nav('/forge/library');
+      if (isPreview) {
+        nav('/forge?tab=my-courses&view=management');
+      } else {
+        nav('/forge/library');
+      }
     } finally {
       setLoading(false);
     }
-  }, [id, nav]);
+  }, [id, isPreview, nav]);
 
   // Keep courseRef in sync with state so the postMessage handler always has
   // the latest enrollment data without needing to re-register the listener.
@@ -219,6 +238,12 @@ export default function CoursePlayer() {
 
   // Debounced backend progress sync
   const scheduleSync = useCallback((syncPayload) => {
+    // In preview mode: NEVER sync to backend, never touch personal database enrollment!
+    if (isPreviewRef.current) {
+      setIsSyncing(false);
+      return;
+    }
+
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
     }
@@ -266,6 +291,16 @@ export default function CoursePlayer() {
     const totalSec = course?.sections?.length || 1;
     const newProg = Math.min(100, Math.round((newCompleted.size / totalSec) * 100));
 
+    // In preview mode, do not sync to backend / personal profile
+    if (isPreview) {
+      if (nextIdx !== undefined && nextIdx < totalSec) {
+        setNativeSectionIdx(nextIdx);
+      } else if (newProg >= 100) {
+        setShowCelebration(true);
+      }
+      return;
+    }
+
     setCourse(prev => ({
       ...prev,
       enrollment: {
@@ -296,34 +331,47 @@ export default function CoursePlayer() {
   };
 
   // PostMessage bridge for SCORM runtime
-  // Registered ONCE — uses refs (courseRef, userRef) to read the latest state
-  // without re-registering on every enrollment/user change (which caused the
-  // initData to be sent with stale empty values during the first render).
   useEffect(() => {
     const sendInitData = () => {
       const currentCourse = courseRef.current;
       const currentUser = userRef.current;
-      const enrollment = currentCourse?.enrollment;
-      const initData = {
-        'cmi.core.student_id': String(currentUser?.id || 'employee'),
-        'cmi.core.student_name': currentUser?.full_name || 'Learner',
-        'cmi.learner_id': String(currentUser?.id || 'employee'),
-        'cmi.learner_name': currentUser?.full_name || 'Learner',
-        'cmi.core.lesson_location': enrollment?.scorm_location || '',
-        'cmi.location': enrollment?.scorm_location || '',
-        'cmi.core.suspend_data': enrollment?.scorm_suspend_data || '',
-        'cmi.suspend_data': enrollment?.scorm_suspend_data || '',
-      };
+      const previewActive = isPreviewRef.current;
+      const enrollment = previewActive ? null : currentCourse?.enrollment;
 
-      // Pre-populate our local runtime cache with saved learner data
-      // so calculateLearnerProgress sees the right state immediately.
-      if (enrollment?.scorm_suspend_data) {
-        scormDataRef.current['cmi.suspend_data'] = enrollment.scorm_suspend_data;
-        scormDataRef.current['cmi.core.suspend_data'] = enrollment.scorm_suspend_data;
-      }
-      if (enrollment?.scorm_location) {
-        scormDataRef.current['cmi.location'] = enrollment.scorm_location;
-        scormDataRef.current['cmi.core.lesson_location'] = enrollment.scorm_location;
+      const initData = previewActive
+        ? {
+            'cmi.core.student_id': 'preview_admin',
+            'cmi.core.student_name': 'Administrator (Preview Mode)',
+            'cmi.learner_id': 'preview_admin',
+            'cmi.learner_name': 'Administrator (Preview Mode)',
+            'cmi.core.lesson_location': '',
+            'cmi.location': '',
+            'cmi.core.suspend_data': '',
+            'cmi.suspend_data': '',
+          }
+        : {
+            'cmi.core.student_id': String(currentUser?.id || 'employee'),
+            'cmi.core.student_name': currentUser?.full_name || 'Learner',
+            'cmi.learner_id': String(currentUser?.id || 'employee'),
+            'cmi.learner_name': currentUser?.full_name || 'Learner',
+            'cmi.core.lesson_location': enrollment?.scorm_location || '',
+            'cmi.location': enrollment?.scorm_location || '',
+            'cmi.core.suspend_data': enrollment?.scorm_suspend_data || '',
+            'cmi.suspend_data': enrollment?.scorm_suspend_data || '',
+          };
+
+      // Pre-populate runtime cache only for real learner sessions
+      if (!previewActive) {
+        if (enrollment?.scorm_suspend_data) {
+          scormDataRef.current['cmi.suspend_data'] = enrollment.scorm_suspend_data;
+          scormDataRef.current['cmi.core.suspend_data'] = enrollment.scorm_suspend_data;
+        }
+        if (enrollment?.scorm_location) {
+          scormDataRef.current['cmi.location'] = enrollment.scorm_location;
+          scormDataRef.current['cmi.core.lesson_location'] = enrollment.scorm_location;
+        }
+      } else {
+        scormDataRef.current = {};
       }
 
       if (iframeRef.current?.contentWindow) {
@@ -337,27 +385,24 @@ export default function CoursePlayer() {
     const handleMessage = (event) => {
       const msg = event?.data;
       if (!msg || typeof msg !== 'object') return;
+      const previewActive = isPreviewRef.current;
 
       // ── Phase 1: Shim requests learner data ─────────────────────────────────
-      // The new shim fires phygitron:scorm-needs-init instead of immediately
-      // firing scorm-ready. We respond with init-data (saved location /
-      // suspend_data). The shim then fires scorm-ready AFTER populating its
-      // data store, which is when we update the progress bar.
       if (msg.type === 'phygitron:scorm-needs-init') {
         sendInitData();
         return;
       }
 
-      // ── Phase 2: Shim confirms it received init-data and is truly ready ─────
-      // scorm-ready fires AFTER the shim has populated its internal data from
-      // our init-data response. msg.progressPercent is the resumed progress
-      // derived from the saved suspend_data inside the shim.
+      // ── Phase 2: Shim confirms ready ────────────────────────────────────────
       if (msg.type === 'phygitron:scorm-ready') {
+        if (previewActive) {
+          // Preview mode: fresh start, do not restore previous learner progress
+          return;
+        }
+
         const currentCourse = courseRef.current;
         const enrollment = currentCourse?.enrollment;
 
-        // Use the progress reported by the shim (calculated from saved data)
-        // or fall back to what we computed from the enrollment.
         const savedProgress = enrollment?.progress_percent || 0;
         const shimProgress = (msg.progressPercent !== undefined && msg.progressPercent !== null)
           ? Math.round(parseFloat(msg.progressPercent))
@@ -391,12 +436,19 @@ export default function CoursePlayer() {
       if (msg.type === 'phygitron:scorm-set' || msg.type === 'phygitron:scorm-commit' || msg.type === 'phygitron:scorm-finish') {
         if (msg.type === 'phygitron:scorm-set' && msg.key) {
           scormDataRef.current[msg.key] = msg.value;
-          // Also merge allData if provided (keeps aliases in sync)
           if (msg.allData) {
             scormDataRef.current = { ...scormDataRef.current, ...msg.allData };
           }
         } else if (msg.data) {
           scormDataRef.current = { ...scormDataRef.current, ...msg.data };
+        }
+
+        // In preview mode: do NOT advance or sync personal database enrollment
+        if (previewActive) {
+          if (msg.type === 'phygitron:scorm-finish') {
+            setShowCelebration(true);
+          }
+          return;
         }
 
         const currentRuntime = scormDataRef.current;
@@ -405,11 +457,9 @@ export default function CoursePlayer() {
         const rawScore = currentRuntime['cmi.score.raw'] || currentRuntime['cmi.core.score.raw'] || null;
         const status = currentRuntime['cmi.completion_status'] || currentRuntime['cmi.core.lesson_status'] || currentRuntime['cmi.success_status'] || null;
 
-        // Progress calculation — prefer the shim's pre-computed value
         const computedProgress = calculateLearnerProgress(currentRuntime, msg.progressPercent);
         const bookmark = (msg.location) || extractBookmark(currentRuntime) || location;
 
-        // Real-time local state update so the progress bar updates with zero lag
         if (computedProgress !== null) {
           setCourse(prev => {
             if (!prev) return prev;
@@ -443,8 +493,7 @@ export default function CoursePlayer() {
       window.removeEventListener('message', handleMessage);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduleSync]); // Only re-register when scheduleSync identity changes (memoized)
+  }, [scheduleSync]);
 
   const toggleFullscreen = () => {
     const elem = document.getElementById('scorm-player-container');
@@ -458,9 +507,21 @@ export default function CoursePlayer() {
   };
 
   const reloadPlayer = () => {
+    if (isPreview) {
+      scormDataRef.current = {};
+      setShowCelebration(false);
+    }
     if (iframeRef.current) {
       iframeRef.current.src = iframeRef.current.src;
-      toast.success('Module reloaded');
+      toast.success(isPreview ? 'Preview restarted from beginning' : 'Module reloaded');
+    }
+  };
+
+  const handleBackNavigation = () => {
+    if (isPreview) {
+      nav('/forge?tab=my-courses&view=management');
+    } else {
+      nav('/forge');
     }
   };
 
@@ -476,9 +537,9 @@ export default function CoursePlayer() {
   if (!course) return null;
 
   const launchUrl = resolveAssetUrl(course.scorm_entry_url || (course.sections?.[0]?.content_url), course);
-  const enrollment = course.enrollment;
+  const enrollment = isPreview ? null : course.enrollment;
   const progressPct = Math.round(enrollment?.progress_percent || 0);
-  const isCompleted = enrollment?.status === 'completed' || progressPct >= 100;
+  const isCompleted = !isPreview && (enrollment?.status === 'completed' || progressPct >= 100);
 
   return (
     <div
@@ -510,7 +571,7 @@ export default function CoursePlayer() {
         {/* Left: Back & Course Info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button
-            onClick={() => nav('/forge')}
+            onClick={handleBackNavigation}
             className="btn-icon"
             style={{
               width: 36,
@@ -522,8 +583,9 @@ export default function CoursePlayer() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              cursor: 'pointer',
             }}
-            title="Return to Forge Dashboard"
+            title={isPreview ? "Return to Manage Courses" : "Return to Learning Central"}
           >
             <ChevronLeft size={20} />
           </button>
@@ -554,69 +616,139 @@ export default function CoursePlayer() {
           </div>
         </div>
 
-        {/* Center: Progress */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <div style={{ width: 190 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: '#6B7280', marginBottom: 4 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>Progress</span>
-                {isSyncing ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.65rem', color: '#D97706' }}>
-                    <Clock size={10} /> saving...
-                  </span>
-                ) : (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.65rem', color: '#059669' }}>
-                    <CheckCircle size={10} /> saved
-                  </span>
-                )}
-              </div>
-              <span style={{ fontWeight: 800, color: isCompleted ? '#059669' : '#7C3AED' }}>
-                {progressPct}%
-              </span>
+        {/* Center: Admin Preview Badge OR Learner Progress Bar */}
+        {isPreview ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 999,
+                background: 'rgba(124, 58, 237, 0.08)',
+                border: '1px solid rgba(124, 58, 237, 0.25)',
+                color: '#7C3AED',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              <Eye size={14} />
+              <span>Admin Preview Mode</span>
             </div>
-            <div style={{ height: 6, background: '#E5E7EB', borderRadius: 999, overflow: 'hidden' }}>
-              <div
-                style={{
-                  height: '100%',
-                  width: `${progressPct}%`,
-                  background: isCompleted ? '#10B981' : 'linear-gradient(90deg, #7C3AED, #A78BFA)',
-                  borderRadius: 999,
-                  transition: 'width 0.4s ease',
-                }}
-              />
+            <span style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>
+              Personal learning progress is not tracked or saved
+            </span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div style={{ width: 190 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: '#6B7280', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>Progress</span>
+                  {isSyncing ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.65rem', color: '#D97706' }}>
+                      <Clock size={10} /> saving...
+                    </span>
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.65rem', color: '#059669' }}>
+                      <CheckCircle size={10} /> saved
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontWeight: 800, color: isCompleted ? '#059669' : '#7C3AED' }}>
+                  {progressPct}%
+                </span>
+              </div>
+              <div style={{ height: 6, background: '#E5E7EB', borderRadius: 999, overflow: 'hidden' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${progressPct}%`,
+                    background: isCompleted ? '#10B981' : 'linear-gradient(90deg, #7C3AED, #A78BFA)',
+                    borderRadius: 999,
+                    transition: 'width 0.4s ease',
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Right: Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {isCompleted && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '5px 12px',
-                background: '#ECFDF5',
-                color: '#059669',
-                borderRadius: 8,
-                fontSize: '0.75rem',
-                fontWeight: 800,
-                border: '1px solid #A7F3D0',
-              }}
-            >
-              <CheckCircle size={14} /> Completed
-            </div>
-          )}
+          {isPreview ? (
+            <>
+              <button
+                onClick={reloadPlayer}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 12px',
+                  borderRadius: 10,
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+                title="Restart preview from slide 1"
+              >
+                <RotateCcw size={13} /> Restart Preview
+              </button>
 
-          <button
-            onClick={reloadPlayer}
-            className="btn-icon"
-            style={{ width: 34, height: 34, borderRadius: 8, background: '#F3F4F6', border: '1px solid #E5E7EB', color: '#4B5563' }}
-            title="Reload Module"
-          >
-            <RefreshCw size={15} />
-          </button>
+              <button
+                onClick={handleBackNavigation}
+                className="btn btn-primary btn-sm"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 14px',
+                  borderRadius: 10,
+                  fontSize: '0.75rem',
+                  fontWeight: 800,
+                  background: '#111827',
+                  color: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                Exit Preview
+              </button>
+            </>
+          ) : (
+            <>
+              {isCompleted && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '5px 12px',
+                    background: '#ECFDF5',
+                    color: '#059669',
+                    borderRadius: 8,
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    border: '1px solid #A7F3D0',
+                  }}
+                >
+                  <CheckCircle size={14} /> Completed
+                </div>
+              )}
+
+              <button
+                onClick={reloadPlayer}
+                className="btn-icon"
+                style={{ width: 34, height: 34, borderRadius: 8, background: '#F3F4F6', border: '1px solid #E5E7EB', color: '#4B5563' }}
+                title="Reload Module"
+              >
+                <RefreshCw size={15} />
+              </button>
+            </>
+          )}
 
           <button
             onClick={toggleFullscreen}
@@ -831,7 +963,7 @@ export default function CoursePlayer() {
                             borderRadius: 12, fontWeight: 800, background: 'linear-gradient(135deg, #7C3AED, #6D28D9)'
                           }}
                         >
-                          Complete & Next Lesson <ArrowRight size={16} />
+                          {isPreview ? 'Next Lesson' : 'Complete & Next Lesson'} <ArrowRight size={16} />
                         </button>
                       ) : (
                         <button
@@ -844,7 +976,7 @@ export default function CoursePlayer() {
                             boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
                           }}
                         >
-                          <CheckCircle size={18} /> Complete Course & Claim Certificate
+                          <CheckCircle size={18} /> {isPreview ? 'Finish Preview' : 'Complete Course & Claim Certificate'}
                         </button>
                       )}
                     </div>
@@ -883,16 +1015,27 @@ export default function CoursePlayer() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ fontSize: '3.6rem', marginBottom: 12 }}>🏆</div>
+              <div style={{ fontSize: '3.6rem', marginBottom: 12 }}>
+                {isPreview ? '👀' : '🏆'}
+              </div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '1.6rem', fontWeight: 900, color: '#111827' }}>
-                Course Completed!
+                {isPreview ? 'Course Preview Finished' : 'Course Completed!'}
               </h2>
               <p style={{ margin: '0 0 20px 0', color: '#6B7280', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                Congratulations, you have successfully finished <strong>{course.title}</strong>!
-                Your learning record has been updated and a certificate has been generated.
+                {isPreview ? (
+                  <>
+                    You have reviewed <strong>{course.title}</strong> in Administrator Preview Mode.
+                    No progress or completion record has been added to your personal profile.
+                  </>
+                ) : (
+                  <>
+                    Congratulations, you have successfully finished <strong>{course.title}</strong>!
+                    Your learning record has been updated and a certificate has been generated.
+                  </>
+                )}
               </p>
 
-              {enrollment?.score !== undefined && enrollment?.score !== null && (
+              {!isPreview && enrollment?.score !== undefined && enrollment?.score !== null && (
                 <div
                   style={{
                     display: 'inline-block',
@@ -911,25 +1054,52 @@ export default function CoursePlayer() {
               )}
 
               <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                <button
-                  onClick={() => setShowCelebration(false)}
-                  className="btn btn-ghost"
-                  style={{ padding: '10px 20px', borderRadius: 12, color: '#6B7280' }}
-                >
-                  Continue Reviewing
-                </button>
-                <button
-                  onClick={() => nav('/forge/transcript')}
-                  className="btn btn-primary"
-                  style={{
-                    padding: '10px 22px',
-                    borderRadius: 12,
-                    fontWeight: 800,
-                    background: 'linear-gradient(135deg, #10B981, #059669)',
-                  }}
-                >
-                  View Certificate →
-                </button>
+                {isPreview ? (
+                  <>
+                    <button
+                      onClick={reloadPlayer}
+                      className="btn btn-secondary"
+                      style={{ padding: '10px 20px', borderRadius: 12, fontWeight: 700 }}
+                    >
+                      Restart Preview
+                    </button>
+                    <button
+                      onClick={handleBackNavigation}
+                      className="btn btn-primary"
+                      style={{
+                        padding: '10px 22px',
+                        borderRadius: 12,
+                        fontWeight: 800,
+                        background: '#111827',
+                        color: 'white',
+                      }}
+                    >
+                      Back to Manage Courses →
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowCelebration(false)}
+                      className="btn btn-ghost"
+                      style={{ padding: '10px 20px', borderRadius: 12, color: '#6B7280' }}
+                    >
+                      Continue Reviewing
+                    </button>
+                    <button
+                      onClick={() => nav('/forge/transcript')}
+                      className="btn btn-primary"
+                      style={{
+                        padding: '10px 22px',
+                        borderRadius: 12,
+                        fontWeight: 800,
+                        background: 'linear-gradient(135deg, #10B981, #059669)',
+                      }}
+                    >
+                      View Certificate →
+                    </button>
+                  </>
+                )}
               </div>
             </motion.div>
           </div>

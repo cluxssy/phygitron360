@@ -57,7 +57,8 @@ def _resolve_permissions(user_id: int, roles: list, tenant_id: str, cur=None) ->
                 (role,)
             )
             for row in cur.fetchall():
-                all_perms.add(row["permission"])
+                perm = row["permission"] if isinstance(row, dict) else row[0]
+                all_perms.add(perm)
 
         # 2. User-specific overrides (add or revoke)
         cur.execute(
@@ -65,13 +66,16 @@ def _resolve_permissions(user_id: int, roles: list, tenant_id: str, cur=None) ->
             (user_id,)
         )
         for row in cur.fetchall():
-            if row["is_allowed"]:
-                all_perms.add(row["permission"])
+            perm = row["permission"] if isinstance(row, dict) else row[0]
+            allowed = row["is_allowed"] if isinstance(row, dict) else row[1]
+            if allowed:
+                all_perms.add(perm)
             else:
-                all_perms.discard(row["permission"])
+                all_perms.discard(perm)
 
         return {p: True for p in all_perms}
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"Error resolving permissions for user {user_id} in tenant {tenant_id}: {exc}")
         return {}
     finally:
         if own_conn:

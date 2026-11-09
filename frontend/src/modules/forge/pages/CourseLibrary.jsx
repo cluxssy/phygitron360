@@ -195,9 +195,10 @@ export default function CourseLibrary({ embedded = false }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 24 }}>
             {courses.map((course) => {
               const diff = DIFF_CONFIG[course.difficulty] || DIFF_CONFIG.beginner;
-              const isEnrolled = !!course.enrolled;
-              const progressPct = course.enrollment?.progress_percent || 0;
-              const isCompleted = course.enrollment?.status === 'completed' || progressPct >= 100;
+              const progressPct = Math.round(Number(course.progress_percent ?? course.enrollment?.progress_percent ?? 0));
+              const enrollmentStatus = course.enrollment_status || course.enrollment?.status || (course.enrolled ? 'in_progress' : 'not_enrolled');
+              const isEnrolled = !!course.enrolled || progressPct > 0 || enrollmentStatus !== 'not_enrolled';
+              const isCompleted = enrollmentStatus === 'completed' || progressPct >= 100;
 
               return (
                 <BorderGlow
@@ -234,18 +235,26 @@ export default function CourseLibrary({ embedded = false }) {
                       {/* Enrollment Status */}
                       {isEnrolled && (
                         <div style={{ position: 'absolute', bottom: 12, left: 14, background: isCompleted ? 'rgba(16,185,129,0.9)' : 'rgba(124,58,237,0.9)', color: 'white', borderRadius: 6, padding: '3px 8px', fontSize: '0.68rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <CheckCircle size={11} /> {isCompleted ? 'COMPLETED' : `${Math.round(progressPct)}% COMPLETE`}
+                          <CheckCircle size={11} /> {isCompleted ? 'COMPLETED' : `${progressPct}% COMPLETE`}
                         </div>
                       )}
                     </div>
 
                     {/* Body */}
                     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', flex: 1 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <span className={`badge ${diff.badge}`} style={{ fontSize: '0.7rem' }}>{diff.label}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span className={`badge ${diff.badge}`} style={{ fontSize: '0.7rem' }}>{diff.label}</span>
+                          <span style={{
+                            fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 6,
+                            background: '#EDE9FE', color: '#7C3AED', border: '1px solid #DDD6FE'
+                          }}>
+                            SCORM {course.scorm_version || '1.2'}
+                          </span>
+                        </div>
                         {course.estimated_hours && (
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Clock size={12} /> {course.estimated_hours} hrs
+                            <Clock size={12} /> {course.estimated_hours} {Number(course.estimated_hours) === 1 ? 'hr' : 'hrs'}
                           </span>
                         )}
                       </div>
@@ -263,7 +272,7 @@ export default function CourseLibrary({ embedded = false }) {
                         <div style={{ marginBottom: 16 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 4 }}>
                             <span>Progress</span>
-                            <span style={{ fontWeight: 700, color: 'var(--forge-accent)' }}>{Math.round(progressPct)}%</span>
+                            <span style={{ fontWeight: 700, color: 'var(--forge-accent)' }}>{progressPct}%</span>
                           </div>
                           <div className="progress-bar" style={{ height: 4, background: 'rgba(255,255,255,0.08)' }}>
                             <div className="progress-fill" style={{ width: `${progressPct}%`, background: isCompleted ? '#10B981' : 'var(--forge-accent)' }} />

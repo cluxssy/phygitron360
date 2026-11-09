@@ -1548,8 +1548,10 @@ export default function SourceDashboard() {
         });
         fetchJobRoles();
         fetchAvailableTags();
+        fetchCandidates();
       } else {
-        toast.error('Failed to delete job role');
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData.detail || 'Failed to delete job role');
       }
     } catch (e) {
       toast.error('Could not delete job role');
@@ -1576,6 +1578,7 @@ export default function SourceDashboard() {
         setSelectedJobRoleIds(new Set());
         fetchJobRoles();
         fetchAvailableTags();
+        fetchCandidates();
       } else {
         const errData = await res.json().catch(() => ({}));
         toast.error(errData.detail || 'Failed to delete selected job roles');

@@ -17,7 +17,7 @@ export const forgeApi = {
   // Course library & Management
   library: (params) => api.get('/forge/library', { params }),
   listCourses: () => api.get('/forge/courses'),
-  getCourse: (id) => api.get(`/forge/courses/${id}`),
+  getCourse: (id, params = {}) => api.get(`/forge/courses/${id}`, { params }),
   updateCourse: (id, data) => api.put(`/forge/courses/${id}`, data),
   deleteCourse: (id) => api.delete(`/forge/courses/${id}`),
   publishCourse: (id) => api.post(`/forge/courses/${id}/publish`),

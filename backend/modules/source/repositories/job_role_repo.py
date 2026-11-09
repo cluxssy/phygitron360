@@ -171,7 +171,11 @@ class JobRoleRepository:
                 row = cur.fetchone()
                 role_title = row[0].strip() if row and row[0] else None
 
-                # Delete dependent records (candidate_applications cascades automatically, but these don't)
+                # Unlink folders referencing this role
+                cur.execute("UPDATE resume_folders SET job_role_id = NULL WHERE job_role_id = %s", (role_id,))
+
+                # Delete dependent records
+                cur.execute("DELETE FROM candidate_applications WHERE job_role_id = %s", (role_id,))
                 cur.execute("DELETE FROM ai_scores WHERE job_role_id = %s", (role_id,))
                 cur.execute("DELETE FROM candidate_invites WHERE job_role_id = %s", (role_id,))
                 cur.execute("DELETE FROM job_roles WHERE id = %s", (role_id,))
@@ -186,7 +190,10 @@ class JobRoleRepository:
                             FROM unnest(COALESCE(tags, '{}'::text[])) AS elem
                             WHERE LOWER(TRIM(elem)) <> LOWER(TRIM(%s))
                         ), updated_at = CURRENT_TIMESTAMP
-                        WHERE tags IS NOT NULL AND %s = ANY(tags) OR LOWER(%s) = ANY(ARRAY(SELECT LOWER(t) FROM unnest(COALESCE(tags, '{}'::text[])) t))
+                        WHERE tags IS NOT NULL AND (
+                            %s = ANY(tags) 
+                            OR LOWER(TRIM(%s)) = ANY(ARRAY(SELECT LOWER(TRIM(t)) FROM unnest(COALESCE(tags, '{}'::text[])) t))
+                        )
                     """, (role_title, role_title, role_title))
 
                 conn.commit()
@@ -205,7 +212,11 @@ class JobRoleRepository:
                 cur.execute("SELECT title FROM job_roles WHERE id = ANY(%s)", (role_ids,))
                 roles = [r[0].strip() for r in cur.fetchall() if r and r[0]]
 
-                # Delete dependent records (ai_scores, candidate_invites, job_roles)
+                # Unlink folders referencing these roles
+                cur.execute("UPDATE resume_folders SET job_role_id = NULL WHERE job_role_id = ANY(%s)", (role_ids,))
+
+                # Delete dependent records
+                cur.execute("DELETE FROM candidate_applications WHERE job_role_id = ANY(%s)", (role_ids,))
                 cur.execute("DELETE FROM ai_scores WHERE job_role_id = ANY(%s)", (role_ids,))
                 cur.execute("DELETE FROM candidate_invites WHERE job_role_id = ANY(%s)", (role_ids,))
                 cur.execute("DELETE FROM job_roles WHERE id = ANY(%s)", (role_ids,))
@@ -220,8 +231,14 @@ class JobRoleRepository:
                             FROM unnest(COALESCE(tags, '{}'::text[])) AS elem
                             WHERE LOWER(TRIM(elem)) NOT IN (SELECT LOWER(TRIM(x)) FROM unnest(%s::text[]) x)
                         ), updated_at = CURRENT_TIMESTAMP
-                        WHERE tags && %s::text[]
-                    """, (roles, roles))
+                        WHERE tags IS NOT NULL AND (
+                            tags && %s::text[]
+                            OR EXISTS (
+                                SELECT 1 FROM unnest(COALESCE(tags, '{}'::text[])) t
+                                WHERE LOWER(TRIM(t)) IN (SELECT LOWER(TRIM(x)) FROM unnest(%s::text[]) x)
+                            )
+                        )
+                    """, (roles, roles, roles))
 
                 conn.commit()
                 return deleted_count
@@ -237,6 +254,8 @@ class JobRoleRepository:
                 cur.execute("SELECT title FROM job_roles")
                 roles = [r[0].strip() for r in cur.fetchall() if r and r[0]]
 
+                cur.execute("UPDATE resume_folders SET job_role_id = NULL WHERE job_role_id IS NOT NULL")
+                cur.execute("DELETE FROM candidate_applications WHERE job_role_id IS NOT NULL")
                 cur.execute("DELETE FROM candidate_invites")
                 cur.execute("DELETE FROM ai_scores WHERE job_role_id IS NOT NULL")
                 cur.execute("DELETE FROM job_roles")
@@ -250,8 +269,14 @@ class JobRoleRepository:
                             FROM unnest(COALESCE(tags, '{}'::text[])) AS elem
                             WHERE LOWER(TRIM(elem)) NOT IN (SELECT LOWER(TRIM(x)) FROM unnest(%s::text[]) x)
                         ), updated_at = CURRENT_TIMESTAMP
-                        WHERE tags && %s::text[]
-                    """, (roles, roles))
+                        WHERE tags IS NOT NULL AND (
+                            tags && %s::text[]
+                            OR EXISTS (
+                                SELECT 1 FROM unnest(COALESCE(tags, '{}'::text[])) t
+                                WHERE LOWER(TRIM(t)) IN (SELECT LOWER(TRIM(x)) FROM unnest(%s::text[]) x)
+                            )
+                        )
+                    """, (roles, roles, roles))
 
                 conn.commit()
         finally:
