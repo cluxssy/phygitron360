@@ -170,6 +170,17 @@ def delete_job_roles_bulk(
         raise HTTPException(status_code=500, detail=f"Failed to delete job roles: {str(exc)}")
 
 
+@router.post("/job-roles/bulk-delete")
+def delete_job_roles_bulk(
+    body: JobRolesBulkDeleteRequest,
+    current_user: dict = Depends(require_permission("source.jobs.manage")),
+    service: JobService = Depends(get_job_service)
+):
+    """Delete multiple job roles by ID and cascade delete their invites, ai_scores, and tags from candidates."""
+    deleted_count = service.delete_job_roles_bulk(body.role_ids)
+    return {"success": True, "message": f"{deleted_count} job role(s) deleted", "deleted_count": deleted_count}
+
+
 @router.delete("/job-roles")
 def delete_all_job_roles(
     current_user: dict = Depends(require_permission(["source.jobs.manage", "source.candidates.manage"])),
