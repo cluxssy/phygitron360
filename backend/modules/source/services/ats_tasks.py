@@ -73,6 +73,12 @@ def _run_score_all_candidates_for_role(role_id: int, tenant_id: str):
             offset = 0
 
             while True:
+                # Check if role still exists (in case it was deleted while background scoring was running)
+                cur.execute("SELECT 1 FROM job_roles WHERE id = %s", (role_id,))
+                if not cur.fetchone():
+                    logger.info(f"[ATS] Role {role_id} was deleted during scoring. Aborting scoring task.")
+                    return {"status": "cancelled", "message": "Role was deleted"}
+
                 cur.execute("""
                     SELECT id, primary_skills, secondary_skills, total_experience_years, location, resume_path, resume_url
                     FROM candidates

@@ -456,7 +456,7 @@ def create_tables(schema_name='public'):
             CREATE TABLE IF NOT EXISTS candidate_invites (
                 id SERIAL PRIMARY KEY,
                 candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-                job_role_id INTEGER NOT NULL REFERENCES job_roles(id),
+                job_role_id INTEGER NOT NULL REFERENCES job_roles(id) ON DELETE CASCADE,
                 hr_user_id INTEGER REFERENCES users(id),
                 temp_password_hash TEXT,
                 email_sent_at TIMESTAMP,
@@ -474,7 +474,7 @@ def create_tables(schema_name='public'):
                 id SERIAL PRIMARY KEY,
                 entity_type TEXT NOT NULL, -- candidate, employee
                 entity_id INTEGER NOT NULL,
-                job_role_id INTEGER REFERENCES job_roles(id),
+                job_role_id INTEGER REFERENCES job_roles(id) ON DELETE CASCADE,
                 score_type TEXT NOT NULL,
                 score DECIMAL(6, 2),
                 reasoning TEXT,
@@ -1415,6 +1415,27 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent'")
         cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS opened_at TIMESTAMP")
         cur.execute("ALTER TABLE candidate_invites ADD COLUMN IF NOT EXISTS logged_in_at TIMESTAMP")
+
+        # Ensure CASCADE constraints on ai_scores and candidate_invites for job_role_id
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints 
+                    WHERE constraint_name = 'ai_scores_job_role_id_fkey' AND table_schema = current_schema()
+                ) THEN
+                    ALTER TABLE ai_scores DROP CONSTRAINT ai_scores_job_role_id_fkey;
+                    ALTER TABLE ai_scores ADD CONSTRAINT ai_scores_job_role_id_fkey FOREIGN KEY (job_role_id) REFERENCES job_roles(id) ON DELETE CASCADE;
+                END IF;
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints 
+                    WHERE constraint_name = 'candidate_invites_job_role_id_fkey' AND table_schema = current_schema()
+                ) THEN
+                    ALTER TABLE candidate_invites DROP CONSTRAINT candidate_invites_job_role_id_fkey;
+                    ALTER TABLE candidate_invites ADD CONSTRAINT candidate_invites_job_role_id_fkey FOREIGN KEY (job_role_id) REFERENCES job_roles(id) ON DELETE CASCADE;
+                END IF;
+            END $$;
+        """)
 
         # Employee table schema updates (added for onboarding/verification)
         cur.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS pf_included TEXT")

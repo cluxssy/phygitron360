@@ -137,14 +137,37 @@ async def update_job_role(
 @router.delete("/job-roles/{role_id}")
 def delete_job_role(
     role_id: int,
-    current_user: dict = Depends(require_permission("source.jobs.manage")),
+    current_user: dict = Depends(require_permission(["source.jobs.manage", "source.candidates.manage"])),
     service: JobService = Depends(get_job_service)
 ):
     """Delete a single job role with cascade on invites and ai_scores."""
-    deleted = service.delete_job_role(role_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Job role not found")
-    return {"success": True, "message": "Job role deleted"}
+    try:
+        deleted = service.delete_job_role(role_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Job role not found")
+        return {"success": True, "message": "Job role deleted"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to delete job role %s: %s", role_id, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to delete job role: {str(exc)}")
+
+
+@router.post("/job-roles/bulk-delete")
+def delete_job_roles_bulk(
+    body: JobRolesBulkDeleteRequest,
+    current_user: dict = Depends(require_permission(["source.jobs.manage", "source.candidates.manage"])),
+    service: JobService = Depends(get_job_service)
+):
+    """Delete multiple job roles by ID and cascade delete their invites, ai_scores, and tags from candidates."""
+    try:
+        deleted_count = service.delete_job_roles_bulk(body.role_ids)
+        return {"success": True, "message": f"{deleted_count} job role(s) deleted", "deleted_count": deleted_count}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to bulk delete job roles: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Failed to delete job roles: {str(exc)}")
 
 
 @router.post("/job-roles/bulk-delete")
@@ -160,12 +183,18 @@ def delete_job_roles_bulk(
 
 @router.delete("/job-roles")
 def delete_all_job_roles(
-    current_user: dict = Depends(require_permission("source.jobs.manage")),
+    current_user: dict = Depends(require_permission(["source.jobs.manage", "source.candidates.manage"])),
     service: JobService = Depends(get_job_service)
 ):
     """Delete ALL job roles for this tenant (with cascade)."""
-    service.delete_all_job_roles()
-    return {"success": True, "message": "All job roles deleted"}
+    try:
+        service.delete_all_job_roles()
+        return {"success": True, "message": "All job roles deleted"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to delete all job roles: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Failed to delete all job roles: {str(exc)}")
 
 
 @router.get("/job-roles/{role_id}/rankings")

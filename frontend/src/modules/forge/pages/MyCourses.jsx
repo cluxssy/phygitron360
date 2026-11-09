@@ -247,7 +247,7 @@ export default function MyCourses({ embedded = false }) {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                      <button className="btn btn-secondary btn-sm" onClick={() => nav(`/forge/course/${course.id}`)}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => nav(`/forge/course/${course.id}?preview=true`)}>
                         <Eye size={13} /> Preview
                       </button>
                       {course.status === 'draft' && (

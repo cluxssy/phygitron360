@@ -134,11 +134,13 @@ def list_courses(
 @router.get("/courses/{course_id}")
 def get_course(
     course_id: int,
+    preview: bool = Query(False),
     current_user: dict = Depends(get_current_user),
     repo: CourseRepository = Depends(get_course_repo)
 ):
-    """Course detail with sections, inline quizzes, and current user's enrollment."""
-    course = repo.get_course_by_id(course_id, user_id=current_user["id"])
+    """Course detail with sections, inline quizzes, and current user's enrollment (omitted in preview mode)."""
+    effective_user_id = None if preview else current_user["id"]
+    course = repo.get_course_by_id(course_id, user_id=effective_user_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return {"data": course, "message": "Course details retrieved successfully"}
@@ -208,6 +210,7 @@ def get_my_courses(
 def sync_progress(
     course_id: int,
     body: ProgressSyncIn,
+    preview: bool = Query(False),
     current_user: dict = Depends(get_current_user),
     repo: CourseRepository = Depends(get_course_repo)
 ):
@@ -215,6 +218,17 @@ def sync_progress(
     Real-time progress synchronization called by CoursePlayer postMessage bridge.
     Debounced auto-save for SCORM suspend_data, location, score, and completion.
     """
+    if preview:
+        return {
+            "data": {
+                "progress_percent": body.progress_percent or 0,
+                "status": "preview",
+                "scorm_location": body.scorm_location,
+                "preview": True
+            },
+            "message": "Preview mode: progress not saved to database"
+        }
+
     enrollment = repo.get_or_create_enrollment(
         user_id=current_user["id"],
         course_id=course_id,
