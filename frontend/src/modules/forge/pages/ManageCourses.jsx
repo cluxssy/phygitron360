@@ -6,7 +6,7 @@ import { P } from '../../../core/permissions';
 import {
   Search, BookOpen, Clock, Upload, Plus, FolderPlus, Users, Calendar,
   AlertCircle, Check, Shield, FileArchive, Trash2, X, PlayCircle,
-  CheckCircle, Settings, Filter,
+  CheckCircle, Settings, Filter, Pencil,
 } from 'lucide-react';
 import '../styles/forge.css';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -235,6 +235,55 @@ export default function ManageCourses({ embedded = false }) {
     }
   };
 
+  // ── Edit Course ────────────────────────────────────────────────────────────
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [courseToEdit, setCourseToEdit] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editDomainId, setEditDomainId] = useState('');
+  const [editDifficulty, setEditDifficulty] = useState('beginner');
+  const [editEstHours, setEditEstHours] = useState('1.0');
+  const [editMasteryScore, setEditMasteryScore] = useState('70');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEditModal = (course) => {
+    setCourseToEdit(course);
+    setEditTitle(course.title || '');
+    setEditDesc(course.description || '');
+    setEditDomainId(course.domain_id ? String(course.domain_id) : '');
+    setEditDifficulty(course.difficulty || 'beginner');
+    setEditEstHours(course.estimated_hours ? String(course.estimated_hours) : '1.0');
+    setEditMasteryScore(course.scorm_mastery_score ? String(course.scorm_mastery_score) : '70');
+    setEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!courseToEdit) return;
+    if (!editTitle.trim()) { toast.error('Course title is required'); return; }
+    setSavingEdit(true);
+    try {
+      const payload = {
+        title: editTitle.trim(),
+        description: editDesc.trim() || null,
+        domain_id: editDomainId ? parseInt(editDomainId, 10) : null,
+        difficulty: editDifficulty,
+        estimated_hours: editEstHours ? parseFloat(editEstHours) : 1.0,
+        scorm_mastery_score: editMasteryScore ? parseFloat(editMasteryScore) : 70.0,
+      };
+      await forgeApi.updateCourse(courseToEdit.id, payload);
+      toast.success(`"${editTitle.trim()}" updated successfully!`);
+      setEditModalOpen(false);
+      setCourseToEdit(null);
+      loadCourses(page);
+      loadDomains();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update course');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // ── Assign helpers ─────────────────────────────────────────────────────────
   const filteredEmployees = assignableEmployees.filter((emp) => {
     const matchesSearch =
@@ -441,6 +490,14 @@ export default function ManageCourses({ embedded = false }) {
                               <Users size={13} /> Assign
                             </button>
                             <button
+                              onClick={() => openEditModal(course)}
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: '6px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}
+                              title={`Edit "${course.title}"`}
+                            >
+                              <Pencil size={13} /> Edit
+                            </button>
+                            <button
                               onClick={() => openDeleteModal(course)}
                               className="btn btn-sm"
                               style={{
@@ -578,6 +635,8 @@ export default function ManageCourses({ embedded = false }) {
           )}
         </AnimatePresence>
 
+
+
         {/* ══════════════════════════════════════════════════════════════════
             MODAL 2 — Manage Domains
         ══════════════════════════════════════════════════════════════════ */}
@@ -644,6 +703,8 @@ export default function ManageCourses({ embedded = false }) {
             </div>
           )}
         </AnimatePresence>
+
+
 
         {/* ══════════════════════════════════════════════════════════════════
             MODAL 3 — Bulk Employee Assignment
@@ -759,6 +820,8 @@ export default function ManageCourses({ embedded = false }) {
           )}
         </AnimatePresence>
 
+
+
         {/* ══════════════════════════════════════════════════════════════════
             MODAL 4 — Delete Course Confirmation
         ══════════════════════════════════════════════════════════════════ */}
@@ -811,6 +874,156 @@ export default function ManageCourses({ embedded = false }) {
                     </button>
                   </div>
                 </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ══════════════════════════════════════════════════════════════════
+            MODAL 5 — Edit Course Details
+        ══════════════════════════════════════════════════════════════════ */}
+        <AnimatePresence>
+          {editModalOpen && courseToEdit && (
+            <div className="modal-backdrop" onClick={() => !savingEdit && setEditModalOpen(false)}>
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="modal-box"
+                style={{ maxWidth: 580, width: '100%', background: 'var(--bg-card)', borderRadius: 20, overflow: 'hidden' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(124,58,237,0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Pencil size={18} />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Edit Course</h3>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                        Package: SCORM {courseToEdit.scorm_version || '1.2'} · ID #{courseToEdit.id}
+                      </div>
+                    </div>
+                  </div>
+                  <button className="btn-icon" disabled={savingEdit} onClick={() => setEditModalOpen(false)}><X size={18} /></button>
+                </div>
+
+                <form onSubmit={handleEditSubmit} style={{ padding: 24 }}>
+                  <div className="form-group" style={{ marginBottom: 14 }}>
+                    <label className="form-label" style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: 6, display: 'block' }}>
+                      Course Title <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="e.g. Introduction to Artificial Intelligence"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: 6, display: 'block' }}>
+                        Domain / Category
+                      </label>
+                      <select
+                        className="form-control"
+                        value={editDomainId}
+                        onChange={(e) => setEditDomainId(e.target.value)}
+                      >
+                        <option value="">General / None</option>
+                        {domains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: 6, display: 'block' }}>
+                        Difficulty Level
+                      </label>
+                      <select
+                        className="form-control"
+                        value={editDifficulty}
+                        onChange={(e) => setEditDifficulty(e.target.value)}
+                      >
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: 6, display: 'block' }}>
+                        Estimated Duration (Hours)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        max="999"
+                        className="form-control"
+                        placeholder="e.g. 1.0"
+                        value={editEstHours}
+                        onChange={(e) => setEditEstHours(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: 6, display: 'block' }}>
+                        Mastery / Passing Score (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="100"
+                        className="form-control"
+                        placeholder="e.g. 70"
+                        value={editMasteryScore}
+                        onChange={(e) => setEditMasteryScore(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 20 }}>
+                    <label className="form-label" style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: 6, display: 'block' }}>
+                      Description
+                    </label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      placeholder="Brief overview of course content and learning goals..."
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={savingEdit}
+                      onClick={() => setEditModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={savingEdit || !editTitle.trim()}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', borderRadius: 12 }}
+                    >
+                      {savingEdit ? (
+                        <><div className="spinner" style={{ width: 14, height: 14 }} /> Saving...</>
+                      ) : (
+                        <><Check size={16} /> Save Changes</>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </motion.div>
             </div>
           )}

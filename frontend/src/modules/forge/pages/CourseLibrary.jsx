@@ -36,6 +36,7 @@ export default function CourseLibrary({ embedded = false }) {
   const [searchInput, setSearchInput] = useState('');
   const [selectedDomain, setSelectedDomain] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
+  const [enrolledFilter, setEnrolledFilter] = useState('all'); // 'all' | 'assigned'
 
   // ── Loaders ────────────────────────────────────────────────────────────────
   const loadDomains = useCallback(async () => {
@@ -54,6 +55,7 @@ export default function CourseLibrary({ embedded = false }) {
         q: search || undefined,
         domain_id: selectedDomain || undefined,
         difficulty: selectedDifficulty || undefined,
+        enrolled_only: enrolledFilter === 'assigned' ? true : undefined,
         page: pg,
         limit: 18,
       });
@@ -67,7 +69,7 @@ export default function CourseLibrary({ embedded = false }) {
     } finally {
       setLoading(false);
     }
-  }, [search, selectedDomain, selectedDifficulty]);
+  }, [search, selectedDomain, selectedDifficulty, enrolledFilter]);
 
   useEffect(() => { loadDomains(); }, [loadDomains]);
   useEffect(() => { loadCourses(1); }, [loadCourses]);
@@ -109,6 +111,32 @@ export default function CourseLibrary({ embedded = false }) {
             </div>
           }
         />
+
+        {/* ── View Toggle: All Courses vs Assigned to Me ────────────────── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+          <div className="flex bg-[#f3f0ff] p-1 rounded-2xl border border-[#ebe4ff]" style={{ width: 'fit-content' }}>
+            <button
+              onClick={() => setEnrolledFilter('all')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                enrolledFilter === 'all'
+                  ? '!bg-black !text-white shadow-sm'
+                  : 'text-black/60 hover:bg-white'
+              }`}
+            >
+              All Catalog Courses
+            </button>
+            <button
+              onClick={() => setEnrolledFilter('assigned')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                enrolledFilter === 'assigned'
+                  ? '!bg-black !text-white shadow-sm'
+                  : 'text-black/60 hover:bg-white'
+              }`}
+            >
+              <CheckCircle size={13} /> Assigned to Me
+            </button>
+          </div>
+        </div>
 
         {/* ── Domain Category Chips ───────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 16, marginBottom: 20 }}>
@@ -184,12 +212,25 @@ export default function CourseLibrary({ embedded = false }) {
         ) : courses.length === 0 ? (
           <div className="card" style={{ padding: 60, textAlign: 'center', borderRadius: 20, background: 'var(--forge-card-bg)', border: '1px solid var(--forge-border)' }}>
             <FileArchive size={48} style={{ color: 'var(--forge-accent)', margin: '0 auto 16px', opacity: 0.6 }} />
-            <h3 style={{ margin: '0 0 8px 0', fontWeight: 800 }}>No Courses Found</h3>
+            <h3 style={{ margin: '0 0 8px 0', fontWeight: 800 }}>
+              {enrolledFilter === 'assigned' ? 'No Assigned Courses Found' : 'No Courses Found'}
+            </h3>
             <p style={{ color: 'var(--text-muted)', maxWidth: 460, margin: '0 auto', fontSize: '0.9rem' }}>
-              {search || selectedDomain || selectedDifficulty
+              {enrolledFilter === 'assigned'
+                ? 'You have not been assigned any courses yet. Switch to "All Catalog Courses" to explore available training modules.'
+                : (search || selectedDomain || selectedDifficulty)
                 ? 'Try adjusting your search criteria or domain filter.'
-                : 'Courses assigned by your manager or administrator will appear here.'}
+                : 'Courses will appear here once published.'}
             </p>
+            {enrolledFilter === 'assigned' && (
+              <button
+                onClick={() => setEnrolledFilter('all')}
+                className="btn btn-primary btn-sm"
+                style={{ marginTop: 16, padding: '8px 20px', borderRadius: 12, fontWeight: 700 }}
+              >
+                Browse All Catalog Courses
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 24 }}>
