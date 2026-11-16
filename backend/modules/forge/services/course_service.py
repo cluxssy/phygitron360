@@ -7,11 +7,13 @@ import os
 import re
 import shutil
 import zipfile
+import tempfile
 import logging
 import xml.etree.ElementTree as ET
 from typing import Optional, Dict, Any
 from pathlib import Path
 from backend.core.database import DATA_DIR
+from backend.common.services.storage_service import _USE_S3, _S3_BUCKET, _S3_REGION, _S3_ENDPOINT, _get_s3
 
 logger = logging.getLogger(__name__)
 
@@ -310,20 +312,48 @@ def detect_storyline_slide_count(package_dir: str) -> Optional[int]:
     return None
 
 
+def extract_s3_key(url_or_key: str) -> Optional[str]:
+    """Extract object key from a full S3 or DigitalOcean Spaces URL or relative key."""
+    if not url_or_key:
+        return None
+    s = str(url_or_key).strip()
+    if not s.startswith("http://") and not s.startswith("https://"):
+        return s
+    if _S3_BUCKET and f"/{_S3_BUCKET}/" in s:
+        return s.split(f"/{_S3_BUCKET}/", 1)[-1]
+    if ".amazonaws.com/" in s:
+        return s.split(".amazonaws.com/", 1)[-1]
+    if ".digitaloceanspaces.com/" in s:
+        parts = s.split(".digitaloceanspaces.com/", 1)[-1]
+        if _S3_BUCKET and parts.startswith(f"{_S3_BUCKET}/"):
+            return parts[len(_S3_BUCKET) + 1:]
+        return parts.lstrip("/")
+    return None
+
+
 class CourseService:
     def __init__(self, tenant_id: str = "public"):
         self.tenant_id = tenant_id
 
+    @property
+    def clean_tenant(self) -> str:
+        t = str(self.tenant_id or "public").strip()
+        return t if t.startswith("tenant_") else f"tenant_{t}"
+
     def get_course_storage_dir(self, course_id: int) -> str:
-        d = os.path.join(DATA_DIR, f"tenant_{self.tenant_id}", "forge", "courses", str(course_id), "scorm")
-        os.makedirs(d, exist_ok=True)
-        return d
+        clean_d = os.path.join(DATA_DIR, self.clean_tenant, "forge", "courses", str(course_id), "scorm")
+        legacy_d = os.path.join(DATA_DIR, f"tenant_{self.tenant_id}", "forge", "courses", str(course_id), "scorm")
+        if os.path.exists(legacy_d) and any(os.scandir(legacy_d)):
+            return legacy_d
+        os.makedirs(clean_d, exist_ok=True)
+        return clean_d
 
     def extract_and_parse_scorm(self, zip_path: str, course_id: int) -> Dict[str, Any]:
         """
         Unzips a SCORM package into the tenant's course directory,
         parses imsmanifest.xml, extracts launch URL, version, title,
-        and injects runtime shim into all HTML files.
+        injects runtime shim into all HTML files, and persists the
+        distribution package to S3/DigitalOcean Spaces if configured.
         """
         dest_dir = self.get_course_storage_dir(course_id)
 
@@ -448,11 +478,145 @@ class CourseService:
                 if file.lower().endswith((".html", ".htm")):
                     inject_scorm_shim(os.path.join(r_dir, file), total_slides=slide_count)
 
+        # Persist prepared package to S3 / DigitalOcean Spaces if configured
+        s3_dist_key = f"{self.clean_tenant}/forge/courses/{course_id}/scorm_dist.zip"
+        s3_package_url = None
+
+        if _USE_S3:
+            dist_zip_path = os.path.join(tempfile.gettempdir(), f"scorm_dist_{self.clean_tenant}_{course_id}.zip")
+            try:
+                with zipfile.ZipFile(dist_zip_path, "w", zipfile.ZIP_DEFLATED) as z_out:
+                    for root_f, _, files_f in os.walk(dest_dir):
+                        for f in files_f:
+                            full_f = os.path.join(root_f, f)
+                            rel_f = os.path.relpath(full_f, dest_dir)
+                            z_out.write(full_f, rel_f)
+
+                s3 = _get_s3()
+                with open(dist_zip_path, "rb") as f_in:
+                    s3.upload_fileobj(
+                        f_in,
+                        _S3_BUCKET,
+                        s3_dist_key,
+                        ExtraArgs={"ContentType": "application/zip"}
+                    )
+                if _S3_ENDPOINT:
+                    s3_package_url = f"{_S3_ENDPOINT}/{_S3_BUCKET}/{s3_dist_key}"
+                else:
+                    s3_package_url = f"https://{_S3_BUCKET}.s3.{_S3_REGION}.amazonaws.com/{s3_dist_key}"
+                logger.info(f"[Forge/SCORM] Successfully uploaded SCORM dist package to S3: {s3_package_url}")
+            except Exception as s3_err:
+                logger.error(f"[Forge/SCORM] Failed to upload SCORM dist package to S3: {s3_err}")
+            finally:
+                if os.path.exists(dist_zip_path):
+                    try:
+                        os.remove(dist_zip_path)
+                    except Exception:
+                        pass
+
         return {
             "title": title or "Untitled SCORM Course",
             "scorm_version": version,
             "scorm_entry_url": entry_url,
             "scorm_mastery_score": mastery_score,
             "estimated_hours": estimated_hours or 1.0,
-            "package_path": dest_dir
+            "package_path": s3_package_url or dest_dir,
+            "s3_package_url": s3_package_url,
+            "s3_dist_key": s3_dist_key if _USE_S3 else None
         }
+
+    def ensure_course_assets_local(self, course_id: int, repo: Any = None) -> bool:
+        """
+        Ensures SCORM course assets exist on the local container disk.
+        If missing (e.g. after container redeploy in DO App Platform/production),
+        downloads and extracts the course archive from S3 / DigitalOcean Spaces.
+        """
+        dest_dir = self.get_course_storage_dir(course_id)
+        if os.path.exists(dest_dir) and any(os.scandir(dest_dir)):
+            return True
+
+        if not _USE_S3:
+            logger.warning(f"[Forge/SCORM] Assets missing locally for course {course_id} and S3 is not configured")
+            return False
+
+        s3 = _get_s3()
+        s3_keys_to_try = [
+            f"{self.clean_tenant}/forge/courses/{course_id}/scorm_dist.zip",
+            f"{self.clean_tenant}/forge/courses/{course_id}/original_package.zip",
+            f"tenant_{self.tenant_id}/forge/courses/{course_id}/scorm_dist.zip",
+            f"tenant_{self.tenant_id}/forge/courses/{course_id}/original_package.zip",
+        ]
+
+        if repo:
+            try:
+                course = repo.get_course_by_id(course_id)
+                if course and course.get("scorm_package_path"):
+                    pkg = str(course["scorm_package_path"]).strip()
+                    extracted_key = extract_s3_key(pkg)
+                    if extracted_key and extracted_key not in s3_keys_to_try:
+                        s3_keys_to_try.insert(0, extracted_key)
+            except Exception as e:
+                logger.warning(f"[Forge/SCORM] Could not inspect repo for course {course_id}: {e}")
+
+        tmp_zip = os.path.join(tempfile.gettempdir(), f"restore_scorm_{course_id}_{os.getpid()}.zip")
+        downloaded = False
+        used_key = None
+
+        for key in s3_keys_to_try:
+            try:
+                logger.info(f"[Forge/SCORM] Checking S3 for course {course_id}: {key}")
+                s3.download_file(_S3_BUCKET, key, tmp_zip)
+                if os.path.exists(tmp_zip) and os.path.getsize(tmp_zip) > 0:
+                    downloaded = True
+                    used_key = key
+                    logger.info(f"[Forge/SCORM] Downloaded {key} from S3 ({os.path.getsize(tmp_zip)} bytes)")
+                    break
+            except Exception as dl_err:
+                logger.debug(f"[Forge/SCORM] S3 key {key} not found: {dl_err}")
+
+        if not downloaded:
+            logger.error(f"[Forge/SCORM] SCORM package not found in S3 for course {course_id} across keys: {s3_keys_to_try}")
+            return False
+
+        try:
+            os.makedirs(dest_dir, exist_ok=True)
+            with zipfile.ZipFile(tmp_zip, "r") as z:
+                z.extractall(dest_dir)
+
+            # Ensure shims are injected in any HTML files
+            slide_count = detect_storyline_slide_count(dest_dir)
+            for r_dir, _, files in os.walk(dest_dir):
+                for file in files:
+                    if file.lower().endswith((".html", ".htm")):
+                        inject_scorm_shim(os.path.join(r_dir, file), total_slides=slide_count)
+
+            logger.info(f"[Forge/SCORM] Successfully restored course {course_id} assets locally from S3 ({used_key}) to {dest_dir}")
+            return True
+        except Exception as ext_err:
+            logger.error(f"[Forge/SCORM] Failed to extract restored zip for course {course_id}: {ext_err}")
+            return False
+        finally:
+            if os.path.exists(tmp_zip):
+                try:
+                    os.remove(tmp_zip)
+                except Exception:
+                    pass
+
+    def delete_course_storage(self, course_id: int):
+        """Cleans up course files from both local disk and S3."""
+        dest_dir = self.get_course_storage_dir(course_id)
+        if os.path.exists(dest_dir):
+            shutil.rmtree(dest_dir, ignore_errors=True)
+
+        if _USE_S3:
+            try:
+                s3 = _get_s3()
+                prefix = f"{self.clean_tenant}/forge/courses/{course_id}/"
+                paginator = s3.get_paginator("list_objects_v2")
+                for page in paginator.paginate(Bucket=_S3_BUCKET, Prefix=prefix):
+                    if "Contents" in page:
+                        objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
+                        s3.delete_objects(Bucket=_S3_BUCKET, Delete={"Objects": objects})
+                logger.info(f"[Forge/SCORM] Deleted S3 objects under {prefix}")
+            except Exception as e:
+                logger.error(f"[Forge/SCORM] Failed to delete S3 objects for course {course_id}: {e}")

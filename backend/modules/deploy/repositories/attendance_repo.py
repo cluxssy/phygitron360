@@ -181,6 +181,21 @@ class AttendanceRepository:
         finally:
             conn.close()
 
+    def revert_leave_balance(self, employee_code: str, used_delta: float, extended_delta: float, tenant_id: str = 'public'):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            self._set_path(cur, tenant_id)
+            cur.execute('''
+                UPDATE leave_balances 
+                SET used_leaves = GREATEST(0, used_leaves - %s),
+                    extended_leaves = GREATEST(0, extended_leaves - %s)
+                WHERE employee_code = %s
+            ''', (used_delta, extended_delta, employee_code))
+            conn.commit()
+        finally:
+            conn.close()
+
     def create_leave_request(self, employee_code: str, start: str, end: str, duration_days: float, start_day_type: str, end_day_type: str, l_type: str, reason: str, status: str = 'Pending', tenant_id: str = 'public'):
         conn = get_db_connection()
         try:
@@ -732,7 +747,7 @@ class AttendanceRepository:
             self._set_path(cur, tenant_id)
             cur.execute('''
                 SELECT id FROM leaves
-                WHERE employee_code = %s AND status != 'Rejected'
+                WHERE employee_code = %s AND status NOT IN ('Rejected', 'Cancelled')
                   AND NOT (end_date < %s OR start_date > %s)
             ''', (employee_code, start_date, end_date))
             row = cur.fetchone()

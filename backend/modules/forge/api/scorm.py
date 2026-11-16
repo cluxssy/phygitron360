@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 
 from backend.core.dependencies import get_current_user, require_permission
 from backend.core.permissions import P
+from backend.common.services.storage_service import _USE_S3, _S3_BUCKET, _get_s3
 from backend.modules.forge.repositories.course_repo import CourseRepository
 from backend.modules.forge.services.course_service import CourseService
 
@@ -71,11 +72,28 @@ async def upload_scorm(
         # 3. Extract, parse, and inject SCORM runtime shim
         meta = service.extract_and_parse_scorm(tmp_zip_path, course_id)
 
-        # 4. Update course with manifest metadata
+        # 4. Also backup original zip to S3 if configured
+        if _USE_S3:
+            try:
+                original_s3_key = f"{service.clean_tenant}/forge/courses/{course_id}/original_package.zip"
+                with open(tmp_zip_path, "rb") as f_orig:
+                    _get_s3().upload_fileobj(
+                        f_orig,
+                        _S3_BUCKET,
+                        original_s3_key,
+                        ExtraArgs={"ContentType": "application/zip"}
+                    )
+                logger.info(f"[Forge/SCORM] Backed up original zip to S3: {original_s3_key}")
+            except Exception as orig_err:
+                logger.warning(f"[Forge/SCORM] Failed to backup original zip: {orig_err}")
+
+        # 5. Update course with manifest metadata and persistent package path
         final_title = title if (title and title.strip()) else meta.get("title", initial_title)
+        package_path = meta.get("s3_package_url") or meta.get("package_path") or str(service.get_course_storage_dir(course_id))
+
         updated_course = repo.update_course(course_id, {
             "title": final_title,
-            "scorm_package_path": meta["package_path"],
+            "scorm_package_path": package_path,
             "scorm_entry_url": meta["scorm_entry_url"],
             "scorm_version": meta["scorm_version"],
             "scorm_mastery_score": meta["scorm_mastery_score"],
@@ -98,10 +116,12 @@ async def serve_scorm_file(
     course_id: int,
     file_path: str,
     current_user: dict = Depends(get_current_user),
+    repo: CourseRepository = Depends(get_course_repo),
     service: CourseService = Depends(get_course_service)
 ):
     """
     Serve extracted SCORM package assets (HTML, JS, CSS, media) with path traversal security.
+    Automatically restores assets from S3/DigitalOcean Spaces if running in an ephemeral cloud container.
     """
     base_dir = Path(service.get_course_storage_dir(course_id)).resolve()
     target_path = (base_dir / file_path).resolve()
@@ -110,7 +130,15 @@ async def serve_scorm_file(
     if not str(target_path).startswith(str(base_dir)):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # If the target file doesn't exist locally, check/restore from S3
     if not target_path.exists() or not target_path.is_file():
+        restored = service.ensure_course_assets_local(course_id, repo=repo)
+        if restored:
+            base_dir = Path(service.get_course_storage_dir(course_id)).resolve()
+            target_path = (base_dir / file_path).resolve()
+
+    if not target_path.exists() or not target_path.is_file():
+        logger.warning(f"[Forge/SCORM] Resource not found: {target_path} (course {course_id}, file {file_path})")
         raise HTTPException(status_code=404, detail="SCORM resource not found")
 
     return FileResponse(

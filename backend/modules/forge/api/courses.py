@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from backend.core.dependencies import get_current_user, require_permission
 from backend.core.permissions import P
 from backend.modules.forge.repositories.course_repo import CourseRepository
+from backend.modules.forge.services.course_service import CourseService
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,10 @@ router = APIRouter(prefix="/api/forge", tags=["Forge - Courses"])
 
 def get_course_repo(current_user: dict = Depends(get_current_user)) -> CourseRepository:
     return CourseRepository(tenant_id=current_user.get("tenant_id", "public"))
+
+
+def get_course_service(current_user: dict = Depends(get_current_user)) -> CourseService:
+    return CourseService(tenant_id=current_user.get("tenant_id", "public"))
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -177,9 +182,14 @@ def update_course(
 @router.delete("/courses/{course_id}", dependencies=[Depends(require_permission(P.FORGE_COURSES_MANAGE))])
 def delete_course(
     course_id: int,
-    repo: CourseRepository = Depends(get_course_repo)
+    repo: CourseRepository = Depends(get_course_repo),
+    service: CourseService = Depends(get_course_service)
 ):
-    """Delete a course."""
+    """Delete a course and its storage."""
+    try:
+        service.delete_course_storage(course_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete storage for course {course_id}: {e}")
     success = repo.delete_course(course_id)
     return {"data": {"deleted": success}, "message": "Course deleted successfully"}
 
