@@ -2,6 +2,9 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+# Ensure python modules in /app (such as backend.*) are always resolvable
+ENV PYTHONPATH="/app"
+
 # Install system dependencies
 # gcc and libpq-dev are often required for building psycopg2 and other native extensions
 RUN apt-get update && apt-get install -y \

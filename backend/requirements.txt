@@ -22,7 +22,7 @@ apscheduler==3.10.4
 pytz==2024.1
 beautifulsoup4==4.12.3
 celery==5.3.6
-redis==5.0.1
+redis>=6.1.0
 python-pptx>=1.0.2
 youtube-transcript-api>=1.2.4
 json-repair>=0.63.4
