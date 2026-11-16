@@ -305,13 +305,13 @@ resource "digitalocean_app" "phygitron" {
 
       github {
         repo           = var.github_repo
-        branch         = "dev"
+        branch         = "main"
         deploy_on_push = true
       }
 
       dockerfile_path = "backend/Dockerfile"
       source_dir      = "backend"
-      run_command     = "celery -A backend.core.celery_app worker --loglevel=info --concurrency=4"
+      run_command     = "celery -A backend.core.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=50 --broker-connection-retry-on-startup"
 
       # The worker needs the same environment variables as the backend
       # (DB connection, Redis, AI keys, and Spaces for file access)
@@ -353,6 +353,27 @@ resource "digitalocean_app" "phygitron" {
       env {
         key   = "REDIS_URL"
         value = "rediss://${digitalocean_database_cluster.redis.user}:${digitalocean_database_cluster.redis.password}@${digitalocean_database_cluster.redis.host}:${digitalocean_database_cluster.redis.port}/0?ssl_cert_reqs=none"
+        scope = "RUN_TIME"
+        type  = "SECRET"
+      }
+
+      # ---- App Security ----
+      env {
+        key   = "SECRET_KEY"
+        value = var.secret_key
+        scope = "RUN_TIME"
+        type  = "SECRET"
+      }
+
+      # ---- Superadmin Seed ----
+      env {
+        key   = "SUPERADMIN_EMAIL"
+        value = var.superadmin_email
+        scope = "RUN_TIME"
+      }
+      env {
+        key   = "SUPERADMIN_PASSWORD"
+        value = var.superadmin_password
         scope = "RUN_TIME"
         type  = "SECRET"
       }
@@ -466,6 +487,36 @@ resource "digitalocean_app" "phygitron" {
       env {
         key   = "AWS_DEFAULT_REGION"
         value = "fra1"
+        scope = "RUN_TIME"
+      }
+
+      # ---- SMTP Email ----
+      env {
+        key   = "SMTP_HOST"
+        value = var.smtp_host
+        scope = "RUN_TIME"
+      }
+      env {
+        key   = "SMTP_PORT"
+        value = var.smtp_port
+        scope = "RUN_TIME"
+      }
+      env {
+        key   = "SMTP_USER"
+        value = var.smtp_user
+        scope = "RUN_TIME"
+      }
+      env {
+        key   = "SMTP_PASS"
+        value = var.smtp_pass
+        scope = "RUN_TIME"
+        type  = "SECRET"
+      }
+
+      # ---- App URL ----
+      env {
+        key   = "APP_BASE_URL"
+        value = "https://phygitron.com"
         scope = "RUN_TIME"
       }
     }
