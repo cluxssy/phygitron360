@@ -126,6 +126,15 @@ class AttendanceService:
         existing = self.repo.get_todays_attendance(employee_code, today, self.tenant_id)
         if existing:
             raise ValueError("Already clocked in for today")
+
+        # Disallow clocking in on declared full company holidays, unless it is a restricted holiday
+        holidays = self.holiday_repo.get_holidays_in_range(today, today, self.tenant_id)
+        if holidays:
+            h = holidays[0]
+            is_restricted = h.get('holiday_type') in ('restricted_holiday', 'optional_holiday')
+            is_half = bool(h.get('is_half_day'))
+            if not is_restricted and not is_half:
+                raise ValueError(f"Attendance logging is disabled for {today} as it is a declared Company Holiday ({h['name']}).")
             
         self.repo.clock_in(employee_code, today, now, ip_address, self.tenant_id)
         return {"success": True, "message": "Clocked in successfully", "time": now}
@@ -346,7 +355,7 @@ class AttendanceService:
             raise ValueError("Leave request not found")
 
         # 1. Prevent Self-Approval
-        if admin_code and leave['employee_code'] == admin_code:
+        if action == 'Approved' and admin_code and leave['employee_code'] == admin_code:
             raise ValueError("You cannot approve your own leave request.")
 
         # 2. Hierarchy Check
@@ -357,6 +366,17 @@ class AttendanceService:
         
         if not is_direct_manager and applicant_role in ['org_admin', 'manager'] and admin_role not in ['org_admin', 'super_admin']:
              raise ValueError("Administrative leave requests can only be approved by an Organization Admin.")
+
+        # Revert balance if an already Approved leave is being Cancelled
+        if action == 'Cancelled' and leave.get('status') == 'Approved':
+            days = float(leave.get('duration_days') or 0.0)
+            balance = self.get_leave_balance(leave['employee_code'])
+            extended_leaves = float(balance.get('extended_leaves') or 0.0)
+            used_leaves = float(balance.get('used_leaves') or 0.0)
+
+            ext_to_revert = min(days, extended_leaves)
+            used_to_revert = min(max(0.0, days - ext_to_revert), used_leaves)
+            self.repo.revert_leave_balance(leave['employee_code'], used_to_revert, ext_to_revert, self.tenant_id)
 
         self.repo.update_leave_status(leave_id, action, reason, self.tenant_id)
         
@@ -398,15 +418,99 @@ class AttendanceService:
         notif_service.mark_relevant_as_read("New Leave Request", leave['employee_code'])
 
         # Notify user about the decision
-        add_notification(
-            title=f"Leave {action}",
-            message=f"Your {leave['leave_type']} leave request for {leave['start_date']} to {leave['end_date']} has been {action.lower()}.",
-            employee_code=leave['employee_code'],
-            n_type="Success" if action == 'Approved' else "Alert",
-            tenant_id=self.tenant_id
-        )
+        if action == 'Cancelled':
+            add_notification(
+                title="Leave Cancelled",
+                message=f"Your {leave['leave_type']} leave request for {leave['start_date']} to {leave['end_date']} has been cancelled.",
+                employee_code=leave['employee_code'],
+                n_type="Alert",
+                tenant_id=self.tenant_id
+            )
+        else:
+            add_notification(
+                title=f"Leave {action}",
+                message=f"Your {leave['leave_type']} leave request for {leave['start_date']} to {leave['end_date']} has been {action.lower()}.",
+                employee_code=leave['employee_code'],
+                n_type="Success" if action == 'Approved' else "Alert",
+                tenant_id=self.tenant_id
+            )
 
         return {"success": True, "message": f"Leave has been {action}"}
+
+    def cancel_leave(self, leave_id: int, user: Dict[str, Any], reason: Optional[str] = None) -> Dict[str, Any]:
+        leave = self.repo.get_leave_by_id(leave_id, self.tenant_id)
+        if not leave:
+            raise ValueError("Leave request not found.")
+
+        current_status = leave.get('status')
+        if current_status in ['Rejected', 'Cancelled']:
+            raise ValueError(f"Leave request is already {current_status.lower()}.")
+
+        user_emp_code = user.get('employee_code')
+        user_role = user.get('role', 'Employee')
+        perms = user.get('permissions', {})
+        
+        is_owner = bool(user_emp_code and leave['employee_code'] == user_emp_code)
+        is_direct_manager = bool(user_emp_code and self.repo.get_manager_code(leave['employee_code'], self.tenant_id) == user_emp_code)
+        is_admin = (
+            user_role in ['org_admin', 'super_admin'] or
+            bool(perms.get('deploy.leaves.approve')) or
+            bool(perms.get('deploy.attendance.view_all'))
+        )
+
+        if not (is_owner or is_direct_manager or is_admin):
+            raise ValueError("You are not authorized to cancel this leave request.")
+
+        # Employee side rule: can only cancel if NOT yet approved (i.e. Pending)
+        if is_owner and not (is_direct_manager or is_admin):
+            if current_status != 'Pending':
+                raise ValueError("Employees can only cancel leave requests that have not yet been approved. Please contact management to cancel an approved leave.")
+
+        # If leave was Approved, management can cancel it, and we restore quota balance!
+        if current_status == 'Approved':
+            days = float(leave.get('duration_days') or 0.0)
+            balance = self.get_leave_balance(leave['employee_code'])
+            extended_leaves = float(balance.get('extended_leaves') or 0.0)
+            used_leaves = float(balance.get('used_leaves') or 0.0)
+
+            ext_to_revert = min(days, extended_leaves)
+            used_to_revert = min(max(0.0, days - ext_to_revert), used_leaves)
+            self.repo.revert_leave_balance(leave['employee_code'], used_to_revert, ext_to_revert, self.tenant_id)
+
+        cancellation_note = reason or ("Cancelled by employee" if is_owner and not (is_direct_manager or is_admin) else "Cancelled by management")
+        self.repo.update_leave_status(leave_id, 'Cancelled', cancellation_note, self.tenant_id)
+
+        # Notify
+        if is_owner and not (is_direct_manager or is_admin):
+            add_notification(
+                title="Leave Request Cancelled",
+                message=f"Your {leave['leave_type']} leave request for {leave['start_date']} to {leave['end_date']} has been cancelled.",
+                employee_code=leave['employee_code'],
+                n_type="Info",
+                tenant_id=self.tenant_id
+            )
+            mgr = self.repo.get_manager_code(leave['employee_code'], self.tenant_id)
+            if mgr:
+                add_notification(
+                    title="Leave Request Withdrawn",
+                    message=f"Employee {leave['employee_code']} has withdrawn their pending {leave['leave_type']} leave request ({leave['start_date']} to {leave['end_date']}).",
+                    employee_code=mgr,
+                    n_type="Info",
+                    tenant_id=self.tenant_id
+                )
+        else:
+            add_notification(
+                title="Leave Cancelled by Management",
+                message=f"Your {leave['leave_type']} leave from {leave['start_date']} to {leave['end_date']} has been cancelled by management." + (" Quota balance has been restored." if current_status == 'Approved' else ""),
+                employee_code=leave['employee_code'],
+                n_type="Alert",
+                tenant_id=self.tenant_id
+            )
+
+        return {
+            "success": True,
+            "message": "Leave request cancelled successfully" + (" and quota balance restored." if current_status == 'Approved' else ".")
+        }
 
     def get_monthly_summary(self, year: int, month: int, manager_code: Optional[str] = None):
         employees = self.repo.get_all_active_employees_basic(self.tenant_id, manager_code)
@@ -920,10 +1024,14 @@ class AttendanceService:
                 "Please submit a correction request for manager approval instead."
             )
 
-        # Disallow logging attendance on declared company holidays
+        # Disallow logging attendance on declared company holidays, unless restricted holiday or half day
         holidays = self.holiday_repo.get_holidays_in_range(date_str, date_str, self.tenant_id)
-        if holidays and not holidays[0].get('is_half_day'):
-            raise ValueError(f"Attendance logging is disabled for {date_str} as it is a declared Company Holiday ({holidays[0]['name']}).")
+        if holidays:
+            h = holidays[0]
+            is_restricted = h.get('holiday_type') in ('restricted_holiday', 'optional_holiday')
+            is_half = bool(h.get('is_half_day'))
+            if not is_restricted and not is_half:
+                raise ValueError(f"Attendance logging is disabled for {date_str} as it is a declared Company Holiday ({h['name']}).")
 
         # Determine clock_out_date and validate duration
         clock_out_date = date_str
@@ -998,10 +1106,14 @@ class AttendanceService:
         if target_date > today:
             raise ValueError("Cannot request correction for a future date.")
 
-        # Disallow logging attendance on declared company holidays
+        # Disallow logging attendance on declared company holidays, unless restricted holiday or half day
         holidays = self.holiday_repo.get_holidays_in_range(date_str, date_str, self.tenant_id)
-        if holidays and not holidays[0].get('is_half_day'):
-            raise ValueError(f"Attendance logging is disabled for {date_str} as it is a declared Company Holiday ({holidays[0]['name']}).")
+        if holidays:
+            h = holidays[0]
+            is_restricted = h.get('holiday_type') in ('restricted_holiday', 'optional_holiday')
+            is_half = bool(h.get('is_half_day'))
+            if not is_restricted and not is_half:
+                raise ValueError(f"Attendance logging is disabled for {date_str} as it is a declared Company Holiday ({h['name']}).")
 
         if self._is_self_service_date(target_date, today):
             raise ValueError(

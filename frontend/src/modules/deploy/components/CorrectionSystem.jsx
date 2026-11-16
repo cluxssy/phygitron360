@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { Edit2, CheckCircle, XCircle, Clock, Calendar, Search, AlertCircle, RefreshCcw, ChevronRight, Moon } from 'lucide-react';
+import { Edit2, CheckCircle, XCircle, Clock, Calendar, Search, AlertCircle, RefreshCcw, ChevronRight, Moon, Sparkles } from 'lucide-react';
 import useEscapeClose from '../../../core/hooks/useEscapeClose';
 
 export default function CorrectionSystem({ isManager }) {
@@ -47,7 +47,8 @@ export default function CorrectionSystem({ isManager }) {
 
     const openDrawer = (day) => {
         if (day.track === 'future' || day.track === 'before_join') return;
-        if (day.is_holiday || day.status === 'Holiday') {
+        const isRestrictedHoliday = day.holiday_type === 'restricted_holiday' || day.holiday_type === 'optional_holiday';
+        if ((day.is_holiday || day.status === 'Holiday') && !isRestrictedHoliday) {
             toast(`${day.holiday_name ? `"${day.holiday_name}" is a` : 'This is a'} declared Company Holiday. Attendance logging is not required.`);
             return;
         }
@@ -158,14 +159,16 @@ export default function CorrectionSystem({ isManager }) {
                     {days.map(d => {
                         if (d.track === 'before_join') return <div key={d.date} className="p-3"></div>;
                         const isToday = d.date === windowData.today;
+                        const isRestrictedHoliday = d.holiday_type === 'restricted_holiday' || d.holiday_type === 'optional_holiday';
+                        const isMandatoryHoliday = (d.is_holiday || d.status === 'Holiday') && !isRestrictedHoliday;
                         const isHoliday = d.is_holiday || d.status === 'Holiday';
                         const isLeave = d.is_leave || d.status === 'Leave';
-                        const isClickable = d.track !== 'future' && d.track !== 'before_join' && !d.pending_correction && !isHoliday && !isLeave;
+                        const isClickable = d.track !== 'future' && d.track !== 'before_join' && !d.pending_correction && !isMandatoryHoliday && !isLeave;
                         return (
                         <div 
                             key={d.date} 
                             onClick={() => {
-                                if (isHoliday) {
+                                if (isMandatoryHoliday) {
                                     toast(`${d.holiday_name ? `"${d.holiday_name}" is a` : 'This is a'} declared Company Holiday. Attendance logging is not required.`);
                                     return;
                                 }
@@ -178,8 +181,10 @@ export default function CorrectionSystem({ isManager }) {
                             className={`p-3 rounded-2xl border transition-all relative group ${getStatusColor(d.status, d.track, !!d.pending_correction, isToday, isHoliday, isLeave)} ${isClickable ? 'cursor-pointer hover:shadow-md hover:scale-105' : 'cursor-not-allowed'} ${isToday ? 'ring-2 ring-[#8b5cf6] shadow-md' : ''}`}
                         >
                             {isHoliday && (
-                                <div className="absolute -top-2 -right-2 bg-purple-600 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-md z-10">
-                                    Holiday
+                                <div className={`absolute -top-2 -right-2 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-md z-10 ${
+                                    isRestrictedHoliday ? 'bg-purple-500' : 'bg-purple-600'
+                                }`} title={isRestrictedHoliday ? `Restricted Holiday (${d.holiday_name || 'Optional'}) - Click to log attendance` : `Company Holiday: ${d.holiday_name || ''}`}>
+                                    {isRestrictedHoliday ? 'Restricted' : 'Holiday'}
                                 </div>
                             )}
                             {isLeave && !isHoliday && (
@@ -187,12 +192,12 @@ export default function CorrectionSystem({ isManager }) {
                                     Leave
                                 </div>
                             )}
-                            {d.track === 'self_service' && !d.pending_correction && !isHoliday && !isLeave && (
+                            {d.track === 'self_service' && !d.pending_correction && !isMandatoryHoliday && !isLeave && (
                                 <div className="absolute -top-2 -right-2 bg-[#8b5cf6] text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
                                     <Edit2 size={10} />
                                 </div>
                             )}
-                            {d.track === 'requested' && !d.pending_correction && !isHoliday && !isLeave && (
+                            {d.track === 'requested' && !d.pending_correction && !isMandatoryHoliday && !isLeave && (
                                 <div className="absolute -top-2 -right-2 bg-gray-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
                                     <AlertCircle size={10} />
                                 </div>
@@ -408,6 +413,18 @@ export default function CorrectionSystem({ isManager }) {
                                         {selectedDay.track === 'self_service' 
                                             ? "You are within the self-service period (Current & Previous Week). Your attendance will be logged immediately without manager approval." 
                                             : "This date is outside the self-service window. Your correction will be routed to your manager for approval."}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedDay?.is_holiday && (selectedDay.holiday_type === 'restricted_holiday' || selectedDay.holiday_type === 'optional_holiday') && (
+                            <div className="p-4 rounded-xl mb-6 border bg-purple-50/80 border-purple-200 text-purple-900 flex items-start gap-3">
+                                <Sparkles size={16} className="mt-0.5 text-purple-600 shrink-0" />
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest mb-1 text-purple-700">Restricted Holiday {selectedDay.holiday_name ? `• ${selectedDay.holiday_name}` : ''}</p>
+                                    <p className="text-xs text-purple-800/90 leading-relaxed">
+                                        This is a declared Restricted Holiday. You are eligible to log attendance for hours worked on this day.
                                     </p>
                                 </div>
                             </div>

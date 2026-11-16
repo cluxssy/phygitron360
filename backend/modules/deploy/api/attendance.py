@@ -112,7 +112,7 @@ def approve_reject_leave(
     user=Depends(get_current_user),
     service: AttendanceService = Depends(get_service)
 ):
-    if action not in ['Approved', 'Rejected']:
+    if action not in ['Approved', 'Rejected', 'Cancelled']:
          raise HTTPException(status_code=400, detail="Invalid action")
 
     try:
@@ -122,13 +122,49 @@ def approve_reject_leave(
         msg = str(e)
         if "not found" in msg:
              raise HTTPException(status_code=404, detail=msg)
-        elif "cannot approve" in msg or "only be approved" in msg:
+        elif "cannot approve" in msg or "only be approved" in msg or "only be managed" in msg:
              raise HTTPException(status_code=403, detail=msg)
         else:
              raise HTTPException(status_code=400, detail=msg)
     except Exception as e:
         logger.exception("Failed to approve/reject leave %s: %s", leave_id, e)
         raise HTTPException(status_code=500, detail="Something went wrong while processing this leave request. Please try again.")
+
+@router.post("/leave/{leave_id}/cancel")
+async def cancel_leave(
+    leave_id: int, 
+    request: Request,
+    user=Depends(get_current_user),
+    service: AttendanceService = Depends(get_service)
+):
+    reason = None
+    ct = request.headers.get("content-type", "")
+    if "application/json" in ct:
+        try:
+            body = await request.json()
+            reason = body.get("reason")
+        except Exception:
+            pass
+    elif "multipart/form-data" in ct or "application/x-www-form-urlencoded" in ct:
+        try:
+            form = await request.form()
+            reason = form.get("reason")
+        except Exception:
+            pass
+
+    try:
+        return service.cancel_leave(leave_id, user, reason)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        elif "not authorized" in msg.lower():
+            raise HTTPException(status_code=403, detail=msg)
+        else:
+            raise HTTPException(status_code=400, detail=msg)
+    except Exception as e:
+        logger.exception("Failed to cancel leave %s: %s", leave_id, e)
+        raise HTTPException(status_code=500, detail="Something went wrong while cancelling this leave request. Please try again.")
 
 @router.get("/admin/summary")
 def get_monthly_attendance_summary(year: int, month: int, user=Depends(require_permission(["deploy.attendance.view_all", "deploy.attendance.view_team"])), service: AttendanceService = Depends(get_service)):

@@ -76,6 +76,10 @@ export default function AttendancePanel({ mode }) {
   useEscapeClose(() => setEditingRecord(null), !!editingRecord);
   useEscapeClose(() => setSelectedLog(null), !!selectedLog);
   useEscapeClose(() => !isDownloading && setShowDownloadModal(false), showDownloadModal);
+  const [confirmCancelModal, setConfirmCancelModal] = useState({ open: false, leave: null, isManagement: false });
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+  useEscapeClose(() => !isCancelling && setConfirmCancelModal({ open: false, leave: null, isManagement: false }), confirmCancelModal.open);
   const handleTabKeyNav = useTabListKeyNav();
   const [searchedEmployeeLeaves, setSearchedEmployeeLeaves] = useState([]);
   const [searchedEmployeeBalance, setSearchedEmployeeBalance] = useState(null);
@@ -275,9 +279,45 @@ export default function AttendancePanel({ mode }) {
         const data = await res.json();
         throw new Error(data.detail || 'Action failed');
       }
-      toast.success(action === 'Approved' ? "Clearance Granted" : "Application Rejected");
+      toast.success(action === 'Approved' ? "Clearance Granted" : (action === 'Cancelled' ? "Leave Cancelled" : "Application Rejected"));
       loadData();
+      if (selectedEmployee) {
+        searchEmployeeRecords(selectedEmployee.employee_code);
+      }
     } catch (e) { toast.error(e.message); }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!confirmCancelModal.leave) return;
+    setIsCancelling(true);
+    try {
+      const id = confirmCancelModal.leave.id;
+      const fd = new FormData();
+      if (cancelReason.trim()) {
+        fd.append('reason', cancelReason.trim());
+      }
+      const res = await fetch(`/api/attendance/leave/${id}/cancel`, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to cancel leave');
+      toast.success(data.message || 'Leave cancelled successfully');
+      setConfirmCancelModal({ open: false, leave: null, isManagement: false });
+      setCancelReason('');
+      if (selectedLog && selectedLog.id === id) {
+        setSelectedLog(null);
+      }
+      loadData();
+      if (selectedEmployee) {
+        searchEmployeeRecords(selectedEmployee.employee_code);
+      }
+    } catch (e) {
+      toast.error(e.message || 'Failed to cancel leave');
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const saveAttendanceEdit = async () => {
@@ -962,12 +1002,19 @@ export default function AttendancePanel({ mode }) {
                         {canAppLeave && (
                           <div className="flex gap-2">
                             <button onClick={() => leaveAction(l.id, 'Approved')}
-                              className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all">
+                              title="Grant Approval"
+                              className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all cursor-pointer">
                               <CheckCircle size={14} />
                             </button>
                             <button onClick={() => leaveAction(l.id, 'Rejected')}
-                              className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all">
+                              title="Reject Application"
+                              className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-black transition-all cursor-pointer">
                               <XCircle size={14} />
+                            </button>
+                            <button onClick={() => setConfirmCancelModal({ open: true, leave: l, isManagement: true })}
+                              title="Cancel Application"
+                              className="p-2 rounded-xl bg-gray-500/10 text-gray-400 hover:bg-gray-500 hover:text-white transition-all cursor-pointer">
+                              <X size={14} />
                             </button>
                           </div>
                         )}
@@ -1524,6 +1571,7 @@ export default function AttendancePanel({ mode }) {
                           { id: 'Approved', label: 'Approved' },
                           { id: 'Pending', label: 'Pending' },
                           { id: 'Rejected', label: 'Rejected' },
+                          { id: 'Cancelled', label: 'Cancelled' },
                         ].map(f => (
                           <button
                             key={f.id}
@@ -1769,11 +1817,13 @@ export default function AttendancePanel({ mode }) {
                                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1 border ${
                                             l.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                             l.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                                            l.status === 'Cancelled' ? 'bg-gray-100 text-gray-700 border-gray-300' :
                                             'bg-amber-50 text-amber-700 border-amber-200'
                                           }`}>
                                             <span className={`w-1.5 h-1.5 rounded-full ${
                                               l.status === 'Approved' ? 'bg-emerald-500' :
                                               l.status === 'Rejected' ? 'bg-red-500' :
+                                              l.status === 'Cancelled' ? 'bg-gray-400' :
                                               'bg-amber-500 animate-pulse'
                                             }`} />
                                             {l.status || 'Pending'}
@@ -1787,14 +1837,34 @@ export default function AttendancePanel({ mode }) {
                                           )}
                                         </td>
                                         <td className="px-6 py-3.5 text-right whitespace-nowrap">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setSelectedLog({ type: 'leave', ...l }); }}
-                                            className="text-xs text-purple-600 hover:text-purple-800 font-bold group-hover:underline inline-flex items-center gap-1"
-                                          >
-                                            <span>Details</span>
-                                            <ChevronRight size={13} />
-                                          </button>
+                                          <div className="flex items-center justify-end gap-2">
+                                            {canAppLeave && (l.status === 'Approved' || (l.status || 'Pending') === 'Pending') && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setConfirmCancelModal({
+                                                    open: true,
+                                                    leave: l,
+                                                    isManagement: true
+                                                  });
+                                                }}
+                                                className="px-2 py-1 rounded-lg text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                                title={l.status === 'Approved' ? 'Cancel Approved Leave & Restore Quota' : 'Cancel Leave Request'}
+                                              >
+                                                <X size={12} />
+                                                <span>Cancel</span>
+                                              </button>
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); setSelectedLog({ type: 'leave', ...l }); }}
+                                              className="text-xs text-purple-600 hover:text-purple-800 font-bold group-hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                            >
+                                              <span>Details</span>
+                                              <ChevronRight size={13} />
+                                            </button>
+                                          </div>
                                         </td>
                                       </tr>
                                     );
@@ -2012,10 +2082,33 @@ export default function AttendancePanel({ mode }) {
                             <p className="text-xs font-black text-black italic">{l.leave_type} Request {l.duration_days ? `(${l.duration_days} Day${l.duration_days !== 1 ? 's' : ''})` : ''}</p>
                             <p className="text-[9px] text-[#8b8ba3] font-mono uppercase">{l.start_date} {l.start_day_type && l.start_day_type !== 'Full Day' ? `(${l.start_day_type})` : ''} to {l.end_date} {l.end_day_type && l.end_day_type !== 'Full Day' ? `(${l.end_day_type})` : ''}</p>
                           </div>
-                          <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
-                            l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-600' :
-                            l.status === 'Rejected' ? 'bg-red-500/10 text-red-600' : 'bg-amber-500/10 text-amber-600'
-                          }`}>{l.status || 'Pending'}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase italic ${
+                              l.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-600' :
+                              l.status === 'Rejected' ? 'bg-red-500/10 text-red-600' :
+                              l.status === 'Cancelled' ? 'bg-gray-500/10 text-gray-500' :
+                              'bg-amber-500/10 text-amber-600'
+                            }`}>{l.status || 'Pending'}</span>
+
+                            {(l.status || 'Pending') === 'Pending' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmCancelModal({
+                                    open: true,
+                                    leave: l,
+                                    isManagement: false
+                                  });
+                                }}
+                                className="px-2.5 py-1 rounded-lg text-[9px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-all inline-flex items-center gap-1 cursor-pointer"
+                                title="Cancel this leave request"
+                              >
+                                <X size={11} />
+                                <span>Cancel</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -2304,9 +2397,159 @@ export default function AttendancePanel({ mode }) {
                               </p>
                           </div>
                       )}
+                      {selectedLog.type === 'leave' && (
+                        <div className="mt-6 pt-4 border-t border-[#ece2ff] flex flex-col gap-2">
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="font-bold text-gray-500 uppercase text-[10px] tracking-wider">Leave Status</span>
+                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                              selectedLog.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
+                              selectedLog.status === 'Rejected' ? 'bg-rose-100 text-rose-800' :
+                              selectedLog.status === 'Cancelled' ? 'bg-gray-100 text-gray-700' :
+                              'bg-amber-100 text-amber-800'
+                            }`}>{selectedLog.status || 'Pending'}</span>
+                          </div>
+
+                          {/* Employee can cancel if pending */}
+                          {(selectedLog.status || 'Pending') === 'Pending' && (!isAdmin || selectedLog.employee_code === user?.employee_code) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const targetLeave = selectedLog;
+                                setSelectedLog(null);
+                                setConfirmCancelModal({
+                                  open: true,
+                                  leave: targetLeave,
+                                  isManagement: false
+                                });
+                              }}
+                              className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                            >
+                              <X size={14} />
+                              <span>Cancel Leave Request</span>
+                            </button>
+                          )}
+
+                          {/* Management can cancel if approved or pending */}
+                          {(isAdmin || canAppLeave) && selectedLog.status === 'Approved' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const targetLeave = selectedLog;
+                                setSelectedLog(null);
+                                setConfirmCancelModal({
+                                  open: true,
+                                  leave: targetLeave,
+                                  isManagement: true
+                                });
+                              }}
+                              className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                            >
+                              <X size={14} />
+                              <span>Cancel Approved Leave & Restore Quota</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                   </div>
               </div>
           </div>
+      )}
+
+      {/* ── CONFIRM CANCEL LEAVE MODAL ── */}
+      {confirmCancelModal.open && confirmCancelModal.leave && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#060b19]/80 backdrop-blur-sm" onClick={() => !isCancelling && setConfirmCancelModal({ open: false, leave: null, isManagement: false })} />
+          <div className="bg-white border border-[#ebe4ff] rounded-[2rem] shadow-[0_20px_60px_rgba(180,140,255,0.2)] w-full max-w-md relative z-10 animate-fade-in-up overflow-hidden">
+            <div className="p-6 border-b border-[#ece2ff] bg-[#faf7ff] flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-[0.15em] text-black">
+                  {confirmCancelModal.isManagement && confirmCancelModal.leave.status === 'Approved'
+                    ? 'Cancel Approved Leave'
+                    : 'Cancel Leave Request'}
+                </h3>
+                <p className="text-[10px] text-[#8b8ba3] uppercase font-bold mt-0.5">
+                  {confirmCancelModal.leave.start_date} to {confirmCancelModal.leave.end_date} ({confirmCancelModal.leave.leave_type})
+                </p>
+              </div>
+              <button 
+                disabled={isCancelling}
+                onClick={() => setConfirmCancelModal({ open: false, leave: null, isManagement: false })} 
+                className="p-2 text-[#8b8ba3] hover:text-black transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
+                {confirmCancelModal.isManagement && confirmCancelModal.leave.status === 'Approved' ? (
+                  <>
+                    <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                      <AlertCircle size={15} className="shrink-0" />
+                      Restoring Quota to Employee
+                    </p>
+                    <p className="text-amber-700/90 leading-relaxed text-[11px]">
+                      Cancelling this approved leave will change its status to <strong>Cancelled</strong> and automatically restore <strong>{confirmCancelModal.leave.duration_days || 1} day(s)</strong> back to the employee's available leave balance.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                      <AlertCircle size={15} className="shrink-0" />
+                      Withdraw Leave Application
+                    </p>
+                    <p className="text-amber-700/90 leading-relaxed text-[11px]">
+                      Are you sure you want to cancel this pending leave request? This action will withdraw your application.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-[#8b5cf6] mb-1.5 block">
+                  Cancellation Reason (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  disabled={isCancelling}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Optional notes or reason for cancellation..."
+                  className="w-full bg-[#faf7ff] border border-[#ebe4ff] text-black text-xs p-3 rounded-xl focus:outline-none focus:border-[#c084fc] resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isCancelling}
+                  onClick={() => setConfirmCancelModal({ open: false, leave: null, isManagement: false })}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  Keep Leave
+                </button>
+                <button
+                  type="button"
+                  disabled={isCancelling}
+                  onClick={handleConfirmCancel}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-all flex items-center gap-1.5 shadow-md shadow-rose-600/20 cursor-pointer disabled:opacity-50"
+                >
+                  {isCancelling ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Cancelling...</span>
+                    </>
+                  ) : (
+                    <>
+                      <X size={14} />
+                      <span>Confirm Cancellation</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── DOWNLOAD ATTENDANCE REPORT MODAL ── */}
