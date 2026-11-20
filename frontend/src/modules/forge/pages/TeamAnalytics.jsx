@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { forgeApi } from '../../../core/api/forgeApi';
 import { useAuth } from '../../../core/auth/AuthContext';
 import ForgeReportModal from './ForgeReportModal';
@@ -941,7 +942,8 @@ export default function TeamAnalytics({ embedded = false }) {
         )}
 
         {/* ── MODAL: Course-by-Course Roster Drilldown ───────────────────────── */}
-        <AnimatePresence>
+        {typeof document !== 'undefined' && createPortal(
+          <AnimatePresence>
           {selectedCourseId && (
             <div className="modal-backdrop" onClick={() => setSelectedCourseId(null)}>
               <motion.div
@@ -1077,7 +1079,9 @@ export default function TeamAnalytics({ embedded = false }) {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
         {/* ── MODAL: Publication-Grade Executive Report Generator ── */}
         <ForgeReportModal

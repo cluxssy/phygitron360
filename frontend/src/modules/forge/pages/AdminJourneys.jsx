@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { journeyApi, forgeApi } from '../../../core/api/forgeApi';
 import { verifyApi } from '../../../core/api/verifyApi';
 import {
@@ -930,7 +931,8 @@ export default function AdminJourneys({ embedded = false }) {
         )}
 
         {/* ── Delete Journey Confirmation Modal ────────────────────────────── */}
-        <AnimatePresence>
+        {typeof document !== 'undefined' && createPortal(
+          <AnimatePresence>
           {showDeleteModal && journeyToDelete && (
             <div className="modal-backdrop" onClick={() => !deleting && setShowDeleteModal(false)}>
               <motion.div
@@ -1028,7 +1030,9 @@ export default function AdminJourneys({ embedded = false }) {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
       </div>
     </div>
   );

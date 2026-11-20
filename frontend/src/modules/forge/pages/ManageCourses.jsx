@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { forgeApi } from '../../../core/api/forgeApi';
 import { useAuth } from '../../../core/auth/AuthContext';
@@ -6,7 +7,7 @@ import { P } from '../../../core/permissions';
 import {
   Search, BookOpen, Clock, Upload, Plus, FolderPlus, Users, Calendar,
   AlertCircle, Check, Shield, FileArchive, Trash2, X, PlayCircle,
-  CheckCircle, Settings, Filter, Pencil,
+  CheckCircle, Settings, Filter, Pencil, UserMinus, UserPlus, ChevronDown,
 } from 'lucide-react';
 import '../styles/forge.css';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -73,6 +74,10 @@ export default function ManageCourses({ embedded = false }) {
   const [assignSearch, setAssignSearch] = useState('');
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  // Unenroll state
+  const [assignTab, setAssignTab] = useState('assign'); // 'assign' | 'unenroll'
+  const [selectedUnenrollIds, setSelectedUnenrollIds] = useState([]);
+  const [unenrolling, setUnenrolling] = useState(false);
 
   // ── Loaders ────────────────────────────────────────────────────────────────
   const loadDomains = useCallback(async () => {
@@ -118,7 +123,9 @@ export default function ManageCourses({ embedded = false }) {
   const openAssignModal = async (course) => {
     setSelectedCourseForAssign(course);
     setAssignModalOpen(true);
+    setAssignTab('assign');
     setSelectedEmpIds([]);
+    setSelectedUnenrollIds([]);
     setAssignDeadline('');
     setAssignSearch('');
     setAssignDeptFilter('');
@@ -149,6 +156,24 @@ export default function ManageCourses({ embedded = false }) {
       toast.error(err.response?.data?.detail || 'Assignment failed');
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const handleUnenrollSubmit = async () => {
+    if (selectedUnenrollIds.length === 0) { toast.error('Select at least one employee to unenroll.'); return; }
+    setUnenrolling(true);
+    try {
+      const res = await forgeApi.unenrollCourse(selectedCourseForAssign.id, selectedUnenrollIds);
+      toast.success(res.data.message || `Unenrolled ${selectedUnenrollIds.length} learner(s)`);
+      // Refresh employee list
+      const refreshed = await forgeApi.assignableEmployees({ course_id: selectedCourseForAssign.id });
+      setAssignableEmployees(refreshed.data.data || []);
+      setSelectedUnenrollIds([]);
+      loadCourses(page);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Unenrollment failed');
+    } finally {
+      setUnenrolling(false);
     }
   };
 
@@ -322,6 +347,12 @@ export default function ManageCourses({ embedded = false }) {
           subtitle="Upload, assign, and manage SCORM training packages across your organization."
           rightContent={
             <div className="flex gap-3 items-center flex-wrap">
+              <button
+                onClick={() => nav('/forge?tab=requests&view=management')}
+                className="px-5 py-3.5 rounded-2xl bg-[#f3f4f6] text-black text-[10px] font-black uppercase tracking-[0.2em] border border-[#e5e7eb] hover:bg-[#e5e7eb] transition-all flex items-center gap-2"
+              >
+                <Clock size={14} /> Course Requests
+              </button>
               <button
                 onClick={() => setDomainModalOpen(true)}
                 className="px-5 py-3.5 rounded-2xl bg-[#f3f4f6] text-black text-[10px] font-black uppercase tracking-[0.2em] border border-[#e5e7eb] hover:bg-[#e5e7eb] transition-all flex items-center gap-2"
@@ -546,6 +577,10 @@ export default function ManageCourses({ embedded = false }) {
           </div>
         )}
 
+
+    {/* ── Portalled Modals (escape overflow:auto stacking context) ── */}
+    {typeof document !== 'undefined' && createPortal(
+      <>
         {/* ══════════════════════════════════════════════════════════════════
             MODAL 1 — Upload SCORM Package
         ══════════════════════════════════════════════════════════════════ */}
@@ -707,113 +742,328 @@ export default function ManageCourses({ embedded = false }) {
 
 
         {/* ══════════════════════════════════════════════════════════════════
-            MODAL 3 — Bulk Employee Assignment
+            MODAL 3 — Bulk Employee Assignment & Unenroll
         ══════════════════════════════════════════════════════════════════ */}
         <AnimatePresence>
           {assignModalOpen && selectedCourseForAssign && (
-            <div className="modal-backdrop" onClick={() => !assigning && setAssignModalOpen(false)}>
+            <div className="modal-backdrop" onClick={() => !assigning && !unenrolling && setAssignModalOpen(false)}>
               <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
+                initial={{ scale: 0.96, opacity: 0, y: 12 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.96, opacity: 0, y: 8 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 28 }}
                 className="modal-box"
-                style={{ maxWidth: 740, width: '100%', background: 'var(--bg-card)', borderRadius: 20 }}
+                style={{ maxWidth: 680, width: '100%', background: 'var(--bg-card)', borderRadius: 24, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase' }}>
-                      <Shield size={14} /> Employee Course Assignment
+                {/* Header */}
+                <div style={{ padding: '22px 28px 0', borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(124,58,237,0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Users size={16} />
+                        </div>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--primary)' }}>
+                          Manage Enrollment
+                        </span>
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, maxWidth: 480, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedCourseForAssign.title}
+                      </h3>
                     </div>
-                    <h3 style={{ margin: '4px 0 0 0', fontSize: '1.25rem', fontWeight: 800 }}>{selectedCourseForAssign.title}</h3>
+                    <button
+                      className="btn-icon"
+                      onClick={() => !assigning && !unenrolling && setAssignModalOpen(false)}
+                      style={{ marginTop: 4 }}
+                    >
+                      <X size={18} />
+                    </button>
                   </div>
-                  <button className="btn-icon" onClick={() => !assigning && setAssignModalOpen(false)}><X size={18} /></button>
+
+                  {/* Tab bar */}
+                  <div style={{ display: 'flex', gap: 2 }}>
+                    {[
+                      { id: 'assign', label: 'Assign', icon: UserPlus, count: assignableEmployees.filter(e => !e.is_enrolled).length },
+                      { id: 'unenroll', label: 'Unenroll', icon: UserMinus, count: assignableEmployees.filter(e => e.is_enrolled).length },
+                    ].map(tab => {
+                      const Icon = tab.icon;
+                      const active = assignTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => { setAssignTab(tab.id); setAssignSearch(''); setAssignDeptFilter(''); }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 7,
+                            padding: '10px 18px',
+                            background: 'none', border: 'none',
+                            borderBottom: active ? '2px solid var(--primary)' : '2px solid transparent',
+                            color: active ? 'var(--primary)' : 'var(--text-muted)',
+                            fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer',
+                            borderRadius: '8px 8px 0 0',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          <Icon size={15} />
+                          {tab.label}
+                          <span style={{
+                            fontSize: '0.68rem', fontWeight: 800,
+                            background: active ? 'rgba(124,58,237,0.12)' : 'var(--border)',
+                            color: active ? 'var(--primary)' : 'var(--text-muted)',
+                            padding: '1px 7px', borderRadius: 20,
+                          }}>
+                            {tab.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div style={{ padding: 24 }}>
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                {/* Body */}
+                <div style={{ padding: '20px 28px 24px' }}>
+
+                  {/* Search + Dept filter row */}
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
                     <div style={{ flex: 1, position: 'relative' }}>
-                      <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                      <input type="text" className="form-control" placeholder="Search by name, code or email..." value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} style={{ paddingLeft: 38, height: 42, borderRadius: 10, fontSize: '0.85rem' }} />
+                      <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Search by name, code or email..."
+                        value={assignSearch}
+                        onChange={(e) => setAssignSearch(e.target.value)}
+                        style={{ paddingLeft: 36, height: 40, borderRadius: 10, fontSize: '0.84rem' }}
+                      />
                     </div>
-                    <select className="form-control" value={assignDeptFilter} onChange={(e) => setAssignDeptFilter(e.target.value)} style={{ width: 180, height: 42, borderRadius: 10, fontSize: '0.85rem' }}>
+                    <select
+                      className="form-control"
+                      value={assignDeptFilter}
+                      onChange={(e) => setAssignDeptFilter(e.target.value)}
+                      style={{ width: 170, height: 40, borderRadius: 10, fontSize: '0.84rem' }}
+                    >
                       <option value="">All Departments</option>
                       {departmentsList.map(dept => <option key={dept} value={dept}>{dept}</option>)}
                     </select>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-main)', borderRadius: 12, marginBottom: 16 }}>
-                    <Calendar size={18} style={{ color: 'var(--primary)' }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>Target Completion Deadline</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Employees receive automated email alerts before this date</div>
-                    </div>
-                    <input type="date" className="form-control" value={assignDeadline} onChange={(e) => setAssignDeadline(e.target.value)} style={{ width: 170, height: 38, borderRadius: 8, fontSize: '0.85rem' }} />
-                  </div>
+                  {/* ── ASSIGN TAB ── */}
+                  {assignTab === 'assign' && (
+                    <>
+                      {/* Deadline row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', background: 'rgba(124,58,237,0.04)', border: '1px solid rgba(124,58,237,0.15)', borderRadius: 12, marginBottom: 14 }}>
+                        <Calendar size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.8rem' }}>Completion Deadline</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Automated reminders sent before this date</div>
+                        </div>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={assignDeadline}
+                          onChange={(e) => setAssignDeadline(e.target.value)}
+                          style={{ width: 160, height: 36, borderRadius: 8, fontSize: '0.84rem' }}
+                        />
+                      </div>
 
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', marginBottom: 20 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem' }}>
-                        <input type="checkbox" checked={isAllSelected} onChange={toggleSelectAll} />
-                        Select All Eligible ({allEligibleIds.length})
-                      </label>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Selected: <strong>{selectedEmpIds.length}</strong>
-                      </span>
-                    </div>
+                      {/* Employee list */}
+                      <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', marginBottom: 18 }}>
+                        {/* Select-all header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', background: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>
+                            <input type="checkbox" checked={isAllSelected} onChange={toggleSelectAll} />
+                            Select All Eligible ({allEligibleIds.length})
+                          </label>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            Selected: <strong style={{ color: 'var(--primary)' }}>{selectedEmpIds.length}</strong>
+                          </span>
+                        </div>
 
-                    <div style={{ maxHeight: 250, overflowY: 'auto' }}>
-                      {loadingEmployees ? (
-                        <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}><div className="spinner" /></div>
-                      ) : filteredEmployees.length === 0 ? (
-                        <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No employees found.</div>
-                      ) : (
-                        filteredEmployees.map((emp) => {
-                          const isEnrolled = emp.is_enrolled;
-                          const isSelected = selectedEmpIds.includes(emp.employee_id);
-                          return (
-                            <div
-                              key={emp.employee_id}
-                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid var(--border)', opacity: isEnrolled ? 0.6 : 1, background: isSelected ? 'rgba(124,58,237,0.04)' : 'transparent' }}
-                            >
-                              <label style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, cursor: isEnrolled ? 'not-allowed' : 'pointer' }}>
-                                <input
-                                  type="checkbox"
-                                  disabled={isEnrolled}
-                                  checked={isSelected}
-                                  onChange={() => {
-                                    if (isEnrolled) return;
-                                    setSelectedEmpIds(prev => prev.includes(emp.employee_id) ? prev.filter(id => id !== emp.employee_id) : [...prev, emp.employee_id]);
+                        <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                          {loadingEmployees ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', padding: 28 }}><div className="spinner" /></div>
+                          ) : filteredEmployees.length === 0 ? (
+                            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No employees found.</div>
+                          ) : (
+                            filteredEmployees.map((emp) => {
+                              const isEnrolled = emp.is_enrolled;
+                              const isSelected = selectedEmpIds.includes(emp.employee_id);
+                              return (
+                                <div
+                                  key={emp.employee_id}
+                                  onClick={() => { if (!isEnrolled) setSelectedEmpIds(prev => prev.includes(emp.employee_id) ? prev.filter(id => id !== emp.employee_id) : [...prev, emp.employee_id]); }}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 12,
+                                    padding: '10px 14px', borderBottom: '1px solid var(--border)',
+                                    cursor: isEnrolled ? 'default' : 'pointer',
+                                    background: isSelected ? 'rgba(124,58,237,0.05)' : 'transparent',
+                                    opacity: isEnrolled ? 0.55 : 1,
+                                    transition: 'background 0.12s',
                                   }}
-                                />
-                                <div>
-                                  <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>{emp.name} <span style={{ marginLeft: 8, fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>({emp.employee_code})</span></div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.email} · {emp.department} · {emp.designation}</div>
+                                >
+                                  <input
+                                    type="checkbox"
+                                    disabled={isEnrolled}
+                                    checked={isSelected}
+                                    onChange={() => {}}
+                                    style={{ flexShrink: 0 }}
+                                  />
+                                  {/* Avatar */}
+                                  <div style={{ width: 34, height: 34, borderRadius: 10, background: `linear-gradient(135deg,${isEnrolled ? '#6b7280' : '#8B5CF6'},${isEnrolled ? '#9ca3af' : '#6D28D9'})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>
+                                    {(emp.name || '?')[0].toUpperCase()}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      {emp.name}
+                                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>({emp.employee_code})</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {emp.email} · {emp.department}{emp.designation ? ` · ${emp.designation}` : ''}
+                                    </div>
+                                  </div>
+                                  {isEnrolled && (
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '3px 9px', borderRadius: 20, background: 'rgba(16,185,129,0.1)', color: '#10B981', flexShrink: 0 }}>
+                                      Enrolled
+                                    </span>
+                                  )}
                                 </div>
-                              </label>
-                              {isEnrolled && <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>Already Enrolled</span>}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Transactional emails sent immediately upon assignment.</div>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <button type="button" className="btn btn-ghost" disabled={assigning} onClick={() => setAssignModalOpen(false)}>Cancel</button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={assigning || selectedEmpIds.length === 0}
-                        onClick={handleAssignSubmit}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', borderRadius: 12 }}
-                      >
-                        {assigning ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Assigning...</> : <><Check size={16} /> Confirm Assignment ({selectedEmpIds.length})</>}
-                      </button>
-                    </div>
-                  </div>
+                      {/* Footer */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Confirmation emails sent on assignment.</div>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <button type="button" className="btn btn-ghost" disabled={assigning} onClick={() => setAssignModalOpen(false)}>Cancel</button>
+                          <button
+                            type="button"
+                            onClick={handleAssignSubmit}
+                            disabled={assigning || selectedEmpIds.length === 0}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 12,
+                              background: selectedEmpIds.length === 0 ? 'var(--border)' : 'var(--primary)',
+                              color: 'white', border: 'none', fontWeight: 800, fontSize: '0.84rem', cursor: selectedEmpIds.length === 0 ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {assigning ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Assigning...</> : <><Check size={15} /> Assign {selectedEmpIds.length > 0 ? `(${selectedEmpIds.length})` : ''}</>}
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── UNENROLL TAB ── */}
+                  {assignTab === 'unenroll' && (() => {
+                    const enrolled = assignableEmployees.filter(e => e.is_enrolled);
+                    const filteredEnrolled = enrolled.filter(emp => {
+                      const matchSearch = !assignSearch || emp.name.toLowerCase().includes(assignSearch.toLowerCase()) || emp.employee_code.toLowerCase().includes(assignSearch.toLowerCase()) || emp.email.toLowerCase().includes(assignSearch.toLowerCase());
+                      const matchDept = !assignDeptFilter || emp.department === assignDeptFilter;
+                      return matchSearch && matchDept;
+                    });
+                    const allUnenrollIds = filteredEnrolled.map(e => e.employee_id);
+                    const isAllUnenrollSelected = allUnenrollIds.length > 0 && allUnenrollIds.every(id => selectedUnenrollIds.includes(id));
+
+                    return (
+                      <>
+                        {/* Warning notice */}
+                        <div style={{ display: 'flex', gap: 10, padding: '10px 14px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, marginBottom: 14 }}>
+                          <AlertCircle size={15} style={{ color: '#EF4444', flexShrink: 0, marginTop: 1 }} />
+                          <span style={{ fontSize: '0.76rem', color: '#EF4444', fontWeight: 600 }}>
+                            Unenrolling removes the learner's progress and access. This cannot be undone.
+                          </span>
+                        </div>
+
+                        {/* Employee list */}
+                        <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', marginBottom: 18 }}>
+                          {/* Select-all header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', background: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>
+                              <input
+                                type="checkbox"
+                                checked={isAllUnenrollSelected}
+                                onChange={() => {
+                                  if (isAllUnenrollSelected) setSelectedUnenrollIds(prev => prev.filter(id => !allUnenrollIds.includes(id)));
+                                  else setSelectedUnenrollIds(prev => Array.from(new Set([...prev, ...allUnenrollIds])));
+                                }}
+                              />
+                              Select All Enrolled ({filteredEnrolled.length})
+                            </label>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                              Selected: <strong style={{ color: '#EF4444' }}>{selectedUnenrollIds.length}</strong>
+                            </span>
+                          </div>
+
+                          <div style={{ maxHeight: 272, overflowY: 'auto' }}>
+                            {loadingEmployees ? (
+                              <div style={{ display: 'flex', justifyContent: 'center', padding: 28 }}><div className="spinner" /></div>
+                            ) : filteredEnrolled.length === 0 ? (
+                              <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                {enrolled.length === 0 ? 'No employees are enrolled in this course.' : 'No employees match your filter.'}
+                              </div>
+                            ) : (
+                              filteredEnrolled.map((emp) => {
+                                const isSelected = selectedUnenrollIds.includes(emp.employee_id);
+                                return (
+                                  <div
+                                    key={emp.employee_id}
+                                    onClick={() => setSelectedUnenrollIds(prev => prev.includes(emp.employee_id) ? prev.filter(id => id !== emp.employee_id) : [...prev, emp.employee_id])}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 12,
+                                      padding: '10px 14px', borderBottom: '1px solid var(--border)',
+                                      cursor: 'pointer',
+                                      background: isSelected ? 'rgba(239,68,68,0.05)' : 'transparent',
+                                      transition: 'background 0.12s',
+                                    }}
+                                  >
+                                    <input type="checkbox" checked={isSelected} onChange={() => {}} style={{ flexShrink: 0 }} />
+                                    <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>
+                                      {(emp.name || '?')[0].toUpperCase()}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontWeight: 700, fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        {emp.name}
+                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>({emp.employee_code})</span>
+                                      </div>
+                                      <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {emp.email} · {emp.department}{emp.designation ? ` · ${emp.designation}` : ''}
+                                      </div>
+                                    </div>
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '3px 9px', borderRadius: 20, background: 'rgba(16,185,129,0.1)', color: '#10B981', flexShrink: 0 }}>
+                                      Enrolled
+                                    </span>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                          <button type="button" className="btn btn-ghost" disabled={unenrolling} onClick={() => setAssignModalOpen(false)}>Cancel</button>
+                          <button
+                            type="button"
+                            onClick={handleUnenrollSubmit}
+                            disabled={unenrolling || selectedUnenrollIds.length === 0}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 12,
+                              background: selectedUnenrollIds.length === 0 ? 'var(--border)' : '#EF4444',
+                              color: 'white', border: 'none', fontWeight: 800, fontSize: '0.84rem',
+                              cursor: selectedUnenrollIds.length === 0 ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {unenrolling ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Unenrolling...</> : <><UserMinus size={15} /> Unenroll {selectedUnenrollIds.length > 0 ? `(${selectedUnenrollIds.length})` : ''}</>}
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+
                 </div>
               </motion.div>
             </div>
@@ -1028,6 +1278,9 @@ export default function ManageCourses({ embedded = false }) {
             </div>
           )}
         </AnimatePresence>
+      </>,
+      document.body
+    )}
 
       </div>
     </div>

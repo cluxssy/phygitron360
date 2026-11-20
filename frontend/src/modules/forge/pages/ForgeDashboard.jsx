@@ -5,6 +5,7 @@ import { useNotifications } from '../../../core/context/NotificationContext';
 import { P } from '../../../core/permissions';
 import { getHubTabs } from '../../../core/navigation/hubTabs';
 import { getInitials } from '../../../core/utils/nameHelpers';
+import { forgeApi } from '../../../core/api/forgeApi';
 
 import LearnerOverviewPanel from '../components/LearnerOverviewPanel';
 import CourseLibrary from './CourseLibrary';
@@ -14,6 +15,7 @@ import Transcript from './Transcript';
 import MyCourses from './MyCourses';
 import AdminJourneys from './AdminJourneys';
 import UserJourney from './UserJourney';
+import CourseRequests from './CourseRequests';
 
 import "../styles/forge.css";
 import logo from "../../../assets/phy360.png";
@@ -21,9 +23,9 @@ import ewandzLogo from "../../../assets/EWANDZ.png";
 import bellIcon from "../../../assets/bell.png";
 import logoutIcon from "../../../assets/exit.png";
 
-const STRICT_MANAGEMENT_TABS = ['analytics', 'my-courses', 'journeys'];
+const STRICT_MANAGEMENT_TABS = ['analytics', 'my-courses', 'journeys', 'requests'];
 const STRICT_PERSONAL_TABS = ['dashboard', 'journey', 'transcript'];
-const MANAGEMENT_TABS = ['analytics', 'my-courses', 'journeys'];
+const MANAGEMENT_TABS = ['analytics', 'my-courses', 'journeys', 'requests'];
 const PERSONAL_TABS = ['dashboard', 'library', 'journey', 'transcript'];
 const LEARNER_TABS = PERSONAL_TABS;
 
@@ -91,6 +93,22 @@ export default function ForgeDashboard({ initialTab, initialView }) {
     return 'Learning Portal';
   };
 
+  // Pending course requests counter for manager/admin badge
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  useEffect(() => {
+    if (!hasManagementClearance) return;
+    let mounted = true;
+    forgeApi.pendingRequestsCount()
+      .then(res => {
+        if (mounted) {
+          setPendingRequestsCount(res.data?.data?.pending_count || 0);
+        }
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [hasManagementClearance, currentTab]);
+
   // Keep view aligned if external navigation / deep link occurs
   useEffect(() => {
     const urlView = normalizeView(params.get('view'));
@@ -123,6 +141,8 @@ export default function ForgeDashboard({ initialTab, initialView }) {
           return <ManageCourses embedded={true} />;
         case 'journeys':
           return <AdminJourneys embedded={true} />;
+        case 'requests':
+          return <CourseRequests embedded={true} onPendingCountChange={setPendingRequestsCount} />;
         default:
           return <TeamAnalytics embedded={true} />;
       }
@@ -276,6 +296,27 @@ export default function ForgeDashboard({ initialTab, initialView }) {
                 onClick={() => setTab('journeys')}
               >
                 Journeys
+              </button>
+              <button
+                className={`flex items-center justify-between ${currentTab === 'requests' ? 'active' : ''}`}
+                onClick={() => setTab('requests')}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <span>Course Requests</span>
+                {pendingRequestsCount > 0 && (
+                  <span
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      backgroundColor: currentTab === 'requests' ? '#F59E0B' : '#D97706',
+                      color: '#FFFFFF',
+                    }}
+                  >
+                    {pendingRequestsCount}
+                  </span>
+                )}
               </button>
             </>
           ) : (

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Download, Printer, FileText, X, Check, Award, AlertTriangle, BookOpen, Clock, Users, ShieldCheck, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { forgeApi } from '../../../core/api/forgeApi';
@@ -698,7 +699,7 @@ export default function ForgeReportModal({
     }
   };
 
-  return (
+  const modalElement = (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 600 }}>
       <div 
         className="modal animate-scale-in" 
@@ -994,4 +995,6 @@ export default function ForgeReportModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalElement, document.body) : modalElement;
 }

@@ -795,6 +795,25 @@ def create_tables(schema_name='public'):
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ja_user ON journey_assignments(user_id)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ja_journey ON journey_assignments(journey_id)")
 
+        # 28.9) Forge Course Requests (Employee Personal Course Request & Manager/Admin Approval)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS forge_course_requests (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                course_id INTEGER NOT NULL REFERENCES forge_courses(id) ON DELETE CASCADE,
+                status TEXT DEFAULT 'pending',
+                reason TEXT,
+                requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                reviewed_at TIMESTAMP,
+                review_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_fcr_user_course ON forge_course_requests(user_id, course_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_fcr_status ON forge_course_requests(status)")
+
 
         # Alter Verify Tables for new features
         cur.execute("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS shuffle_questions BOOLEAN DEFAULT FALSE")
