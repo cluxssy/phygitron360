@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { journeyApi, forgeApi } from '../../../core/api/forgeApi';
 import {
   Calendar, ChevronRight, Layers, X, Search, Check,
@@ -168,7 +169,7 @@ export default function AssignJourneyModal({
 
   if (!isOpen) return null;
 
-  return (
+  const modalNode = (
     <AnimatePresence>
       <div className="modal-backdrop" onClick={() => !assigning && onClose()}>
         <motion.div
@@ -665,4 +666,6 @@ export default function AssignJourneyModal({
       </div>
     </AnimatePresence>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
 }

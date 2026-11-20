@@ -337,7 +337,8 @@
 }
 
 /* ── Forge Modal System (Fixed Overlays & Centered Dialogs) ──── */
-.modal-backdrop {
+.modal-backdrop,
+.modal-overlay {
   position: fixed !important;
   inset: 0 !important;
   z-index: 10000 !important;

@@ -110,18 +110,20 @@ def get_library(
     domain_id: Optional[int] = None,
     difficulty: Optional[str] = None,
     enrolled_only: Optional[bool] = Query(False),
+    req_status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(18, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
     repo: CourseRepository = Depends(get_course_repo)
 ):
-    """Course catalog with search, domain chips, difficulty filter, and enrolled_only filter."""
+    """Course catalog with search, domain chips, difficulty filter, enrolled_only, and req_status filter."""
     result = repo.list_courses(
         user_id=current_user["id"],
         q=q,
         domain_id=domain_id,
         difficulty=difficulty,
         enrolled_only=enrolled_only or False,
+        req_status=req_status,
         page=page,
         limit=limit
     )
@@ -241,11 +243,18 @@ def sync_progress(
             "message": "Preview mode: progress not saved to database"
         }
 
-    enrollment = repo.get_or_create_enrollment(
-        user_id=current_user["id"],
-        course_id=course_id,
-        triggered_by="manual"
-    )
+    enrollment = repo.get_enrollment_by_user_course(current_user["id"], course_id)
+    if not enrollment:
+        perms = current_user.get("permissions", {}) or {}
+        role = current_user.get("role", "")
+        if perms.get(P.FORGE_COURSES_MANAGE) or role in ("org_admin", "super_admin"):
+            enrollment = repo.get_or_create_enrollment(
+                user_id=current_user["id"],
+                course_id=course_id,
+                triggered_by="manual"
+            )
+        else:
+            raise HTTPException(status_code=403, detail="Course enrollment required. Please request access from the course catalog.")
 
     update_data: Dict[str, Any] = {}
     current_progress = float(enrollment.get("progress_percent", 0) or 0)
@@ -360,12 +369,30 @@ def enroll_self(
     repo: CourseRepository = Depends(get_course_repo)
 ):
     """Self-enroll into a course from the library."""
-    enrollment = repo.get_or_create_enrollment(
-        user_id=current_user["id"],
-        course_id=course_id,
-        triggered_by="manual"
-    )
+    enrollment = repo.get_enrollment_by_user_course(current_user["id"], course_id)
+    if not enrollment:
+        perms = current_user.get("permissions", {}) or {}
+        role = current_user.get("role", "")
+        if perms.get(P.FORGE_COURSES_MANAGE) or role in ("org_admin", "super_admin"):
+            enrollment = repo.get_or_create_enrollment(
+                user_id=current_user["id"],
+                course_id=course_id,
+                triggered_by="manual"
+            )
+        else:
+            raise HTTPException(status_code=403, detail="Course enrollment required. Please request access from the course catalog.")
     return {"data": enrollment, "message": "Enrolled successfully"}
+
+
+@router.delete("/courses/{course_id}/unenroll", dependencies=[Depends(require_permission(P.FORGE_COURSES_MANAGE))])
+def unenroll_employees(
+    course_id: int,
+    employee_ids: List[int] = Body(..., embed=True),
+    repo: CourseRepository = Depends(get_course_repo)
+):
+    """Remove selected employees from a course (admin only)."""
+    removed = repo.unenroll(course_id=course_id, employee_ids=employee_ids)
+    return {"data": {"removed": removed}, "message": f"Unenrolled {removed} learner(s) from course"}
 
 
 @router.get("/courses/{course_id}/enrollments")
@@ -386,3 +413,138 @@ def get_employee_courses(
     """Course list for employee profile view."""
     courses = repo.get_employee_courses(employee_id)
     return {"data": courses, "message": "Employee courses retrieved successfully"}
+
+
+# ── Course Access Requests & Approvals ────────────────────────────────────────
+
+class CourseRequestIn(BaseModel):
+    reason: Optional[str] = None
+
+
+class CourseRequestReviewIn(BaseModel):
+    review_notes: Optional[str] = None
+
+
+@router.post("/courses/{course_id}/request")
+def request_course_access(
+    course_id: int,
+    payload: Optional[CourseRequestIn] = Body(None),
+    current_user: dict = Depends(get_current_user),
+    repo: CourseRepository = Depends(get_course_repo)
+):
+    """Learner submits an enrollment request for manager or org admin approval."""
+    reason = payload.reason if payload else None
+    result = repo.request_course(
+        user_id=current_user["id"],
+        course_id=course_id,
+        reason=reason
+    )
+    return {"data": result, "message": result.get("message", "Request submitted successfully")}
+
+
+@router.get("/my-requests")
+def get_my_course_requests(
+    current_user: dict = Depends(get_current_user),
+    repo: CourseRepository = Depends(get_course_repo)
+):
+    """Retrieve all course requests submitted by the logged-in learner."""
+    requests = repo.get_my_course_requests(current_user["id"])
+    return {"data": requests, "message": "Course requests retrieved successfully"}
+
+
+@router.get("/requests")
+def list_course_requests(
+    status: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
+    repo: CourseRepository = Depends(get_course_repo)
+):
+    """Manager & Admin list of employee course access requests."""
+    role = current_user.get("role", "")
+    perms = current_user.get("permissions", {}) or {}
+    has_clearance = (
+        role in ("org_admin", "super_admin", "manager", "instructor", "hr") or
+        perms.get(P.FORGE_COURSES_MANAGE)
+    )
+    if not has_clearance:
+        raise HTTPException(status_code=403, detail="Permission denied to review course requests")
+
+    data = repo.list_course_requests(
+        current_user=current_user,
+        status=status,
+        q=q,
+        page=page,
+        limit=limit
+    )
+    return {"data": data, "message": "Course requests retrieved successfully"}
+
+
+@router.get("/requests/pending-count")
+def get_pending_requests_count(
+    current_user: dict = Depends(get_current_user),
+    repo: CourseRepository = Depends(get_course_repo)
+):
+    """Count of pending course requests awaiting manager/admin review."""
+    count = repo.get_pending_requests_count(current_user)
+    return {"data": {"pending_count": count}, "message": "Pending count retrieved successfully"}
+
+
+@router.post("/requests/{request_id}/approve")
+def approve_course_request(
+    request_id: int,
+    payload: Optional[CourseRequestReviewIn] = Body(None),
+    current_user: dict = Depends(get_current_user),
+    repo: CourseRepository = Depends(get_course_repo)
+):
+    """Approve a course request and enroll the learner."""
+    role = current_user.get("role", "")
+    perms = current_user.get("permissions", {}) or {}
+    has_clearance = (
+        role in ("org_admin", "super_admin", "manager", "instructor", "hr") or
+        perms.get(P.FORGE_COURSES_MANAGE)
+    )
+    if not has_clearance:
+        raise HTTPException(status_code=403, detail="Permission denied to approve course requests")
+
+    notes = payload.review_notes if payload else None
+    try:
+        updated = repo.approve_course_request(
+            request_id=request_id,
+            reviewer_id=current_user["id"],
+            review_notes=notes
+        )
+        return {"data": updated, "message": "Course request approved! Learner enrolled successfully."}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/requests/{request_id}/reject")
+def reject_course_request(
+    request_id: int,
+    payload: Optional[CourseRequestReviewIn] = Body(None),
+    current_user: dict = Depends(get_current_user),
+    repo: CourseRepository = Depends(get_course_repo)
+):
+    """Decline a course access request."""
+    role = current_user.get("role", "")
+    perms = current_user.get("permissions", {}) or {}
+    has_clearance = (
+        role in ("org_admin", "super_admin", "manager", "instructor", "hr") or
+        perms.get(P.FORGE_COURSES_MANAGE)
+    )
+    if not has_clearance:
+        raise HTTPException(status_code=403, detail="Permission denied to decline course requests")
+
+    notes = payload.review_notes if payload else None
+    try:
+        updated = repo.reject_course_request(
+            request_id=request_id,
+            reviewer_id=current_user["id"],
+            review_notes=notes
+        )
+        return {"data": updated, "message": "Course request declined."}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+

@@ -36,8 +36,17 @@ export const forgeApi = {
   // Assignment & Enrollment
   assignableEmployees: (params) => api.get('/forge/assignable-employees', { params }),
   assignCourse: (courseId, data) => api.post(`/forge/courses/${courseId}/assign`, data),
+  unenrollCourse: (courseId, employeeIds) => api.delete(`/forge/courses/${courseId}/unenroll`, { data: { employee_ids: employeeIds } }),
   bulkEnroll: (data) => api.post('/forge/bulk-enroll', data),
   enroll: (courseId) => api.post('/forge/enroll', null, { params: { course_id: courseId } }),
+
+  // Personal Course Requests & Approval Workflow
+  requestCourse: (courseId, data = {}) => api.post(`/forge/courses/${courseId}/request`, data),
+  myCourseRequests: () => api.get('/forge/my-requests'),
+  courseRequests: (params) => api.get('/forge/requests', { params }),
+  pendingRequestsCount: () => api.get('/forge/requests/pending-count'),
+  approveCourseRequest: (requestId, data = {}) => api.post(`/forge/requests/${requestId}/approve`, data),
+  rejectCourseRequest: (requestId, data = {}) => api.post(`/forge/requests/${requestId}/reject`, data),
 
   // Executive Analytics
   analyticsOverview: () => api.get('/forge/analytics/overview'),

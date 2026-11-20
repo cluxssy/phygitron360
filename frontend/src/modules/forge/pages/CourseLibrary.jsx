@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { forgeApi } from '../../../core/api/forgeApi';
 import { useAuth } from '../../../core/auth/AuthContext';
 import {
   Search, BookOpen, Clock, CheckCircle, PlayCircle,
-  FileArchive, Award, Layers,
+  FileArchive, Award, Layers, Send, AlertCircle, X,
 } from 'lucide-react';
 import '../styles/forge.css';
 import toast from 'react-hot-toast';
@@ -19,8 +20,8 @@ const DIFF_CONFIG = {
 };
 
 /**
- * CourseLibrary — Learner-facing course discovery & self-enroll page.
- * Admin course management lives in ManageCourses.jsx.
+ * CourseLibrary — Learner-facing course discovery & request page.
+ * Courses for personal learners require approval from reporting managers / org admins.
  */
 export default function CourseLibrary({ embedded = false }) {
   const nav = useNavigate();
@@ -36,7 +37,13 @@ export default function CourseLibrary({ embedded = false }) {
   const [searchInput, setSearchInput] = useState('');
   const [selectedDomain, setSelectedDomain] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
-  const [enrolledFilter, setEnrolledFilter] = useState('all'); // 'all' | 'assigned'
+  const [enrolledFilter, setEnrolledFilter] = useState('all'); // 'all' | 'assigned' | 'requested'
+
+  // Request Modal State
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [selectedCourseForRequest, setSelectedCourseForRequest] = useState(null);
+  const [requestReason, setRequestReason] = useState('');
+  const [submittingRequest, setSubmittingRequest] = useState(false);
 
   // ── Loaders ────────────────────────────────────────────────────────────────
   const loadDomains = useCallback(async () => {
@@ -56,6 +63,7 @@ export default function CourseLibrary({ embedded = false }) {
         domain_id: selectedDomain || undefined,
         difficulty: selectedDifficulty || undefined,
         enrolled_only: enrolledFilter === 'assigned' ? true : undefined,
+        req_status: enrolledFilter === 'requested' ? 'requested' : undefined,
         page: pg,
         limit: 18,
       });
@@ -77,6 +85,32 @@ export default function CourseLibrary({ embedded = false }) {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     setSearch(searchInput);
+  };
+
+  const openRequestModal = (course) => {
+    setSelectedCourseForRequest(course);
+    setRequestReason('');
+    setRequestModalOpen(true);
+  };
+
+  const handleRequestSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedCourseForRequest) return;
+    setSubmittingRequest(true);
+    try {
+      const res = await forgeApi.requestCourse(selectedCourseForRequest.id, {
+        reason: requestReason.trim() || undefined,
+      });
+      toast.success(res.data?.message || 'Course request submitted for manager approval!');
+      setRequestModalOpen(false);
+      setSelectedCourseForRequest(null);
+      setRequestReason('');
+      loadCourses(page);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to submit course request');
+    } finally {
+      setSubmittingRequest(false);
+    }
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -112,7 +146,7 @@ export default function CourseLibrary({ embedded = false }) {
           }
         />
 
-        {/* ── View Toggle: All Courses vs Assigned to Me ────────────────── */}
+        {/* ── View Toggle: All Courses vs Assigned vs My Requests ───────── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <div className="flex bg-[#f3f0ff] p-1 rounded-2xl border border-[#ebe4ff]" style={{ width: 'fit-content' }}>
             <button
@@ -134,6 +168,16 @@ export default function CourseLibrary({ embedded = false }) {
               }`}
             >
               <CheckCircle size={13} /> Assigned to Me
+            </button>
+            <button
+              onClick={() => setEnrolledFilter('requested')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                enrolledFilter === 'requested'
+                  ? '!bg-black !text-white shadow-sm'
+                  : 'text-black/60 hover:bg-white'
+              }`}
+            >
+              <Clock size={13} /> My Requests
             </button>
           </div>
         </div>
@@ -207,22 +251,28 @@ export default function CourseLibrary({ embedded = false }) {
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 320, flexDirection: 'column', gap: 16 }}>
             <div className="spinner spinner-lg" />
-            <p style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Loading SCORM packages...</p>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Loading training modules...</p>
           </div>
         ) : courses.length === 0 ? (
           <div className="card" style={{ padding: 60, textAlign: 'center', borderRadius: 20, background: 'var(--forge-card-bg)', border: '1px solid var(--forge-border)' }}>
             <FileArchive size={48} style={{ color: 'var(--forge-accent)', margin: '0 auto 16px', opacity: 0.6 }} />
             <h3 style={{ margin: '0 0 8px 0', fontWeight: 800 }}>
-              {enrolledFilter === 'assigned' ? 'No Assigned Courses Found' : 'No Courses Found'}
+              {enrolledFilter === 'assigned'
+                ? 'No Assigned Courses Found'
+                : enrolledFilter === 'requested'
+                ? 'No Course Requests Found'
+                : 'No Courses Found'}
             </h3>
             <p style={{ color: 'var(--text-muted)', maxWidth: 460, margin: '0 auto', fontSize: '0.9rem' }}>
               {enrolledFilter === 'assigned'
                 ? 'You have not been assigned any courses yet. Switch to "All Catalog Courses" to explore available training modules.'
+                : enrolledFilter === 'requested'
+                ? 'You have not submitted any course requests yet. Browse the catalog to request access to courses.'
                 : (search || selectedDomain || selectedDifficulty)
                 ? 'Try adjusting your search criteria or domain filter.'
                 : 'Courses will appear here once published.'}
             </p>
-            {enrolledFilter === 'assigned' && (
+            {enrolledFilter !== 'all' && (
               <button
                 onClick={() => setEnrolledFilter('all')}
                 className="btn btn-primary btn-sm"
@@ -238,8 +288,10 @@ export default function CourseLibrary({ embedded = false }) {
               const diff = DIFF_CONFIG[course.difficulty] || DIFF_CONFIG.beginner;
               const progressPct = Math.round(Number(course.progress_percent ?? course.enrollment?.progress_percent ?? 0));
               const enrollmentStatus = course.enrollment_status || course.enrollment?.status || (course.enrolled ? 'in_progress' : 'not_enrolled');
-              const isEnrolled = !!course.enrolled || progressPct > 0 || enrollmentStatus !== 'not_enrolled';
+              const isEnrolled = !!course.enrolled || progressPct > 0 || (enrollmentStatus !== 'not_enrolled' && enrollmentStatus !== 'requested');
               const isCompleted = enrollmentStatus === 'completed' || progressPct >= 100;
+              const isPending = !isEnrolled && course.request_status === 'pending';
+              const isRejected = !isEnrolled && course.request_status === 'rejected';
 
               return (
                 <BorderGlow
@@ -273,12 +325,20 @@ export default function CourseLibrary({ embedded = false }) {
                         SCORM {course.scorm_version || '1.2'}
                       </span>
 
-                      {/* Enrollment Status */}
-                      {isEnrolled && (
+                      {/* Status Badges on thumbnail */}
+                      {isEnrolled ? (
                         <div style={{ position: 'absolute', bottom: 12, left: 14, background: isCompleted ? 'rgba(16,185,129,0.9)' : 'rgba(124,58,237,0.9)', color: 'white', borderRadius: 6, padding: '3px 8px', fontSize: '0.68rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4 }}>
                           <CheckCircle size={11} /> {isCompleted ? 'COMPLETED' : `${progressPct}% COMPLETE`}
                         </div>
-                      )}
+                      ) : isPending ? (
+                        <div style={{ position: 'absolute', bottom: 12, left: 14, background: 'rgba(217, 119, 6, 0.95)', color: 'white', borderRadius: 6, padding: '3px 8px', fontSize: '0.68rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Clock size={11} /> AWAITING APPROVAL
+                        </div>
+                      ) : isRejected ? (
+                        <div style={{ position: 'absolute', bottom: 12, left: 14, background: 'rgba(220, 38, 38, 0.95)', color: 'white', borderRadius: 6, padding: '3px 8px', fontSize: '0.68rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <AlertCircle size={11} /> REQUEST DECLINED
+                        </div>
+                      ) : null}
                     </div>
 
                     {/* Body */}
@@ -308,6 +368,13 @@ export default function CourseLibrary({ embedded = false }) {
                         {course.description || 'Interactive SCORM training module.'}
                       </p>
 
+                      {/* Review note if declined */}
+                      {isRejected && course.review_notes && (
+                        <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FEE2E2', fontSize: '0.75rem', color: '#B91C1C' }}>
+                          <span style={{ fontWeight: 800 }}>Feedback: </span>{course.review_notes}
+                        </div>
+                      )}
+
                       {/* Progress Bar */}
                       {isEnrolled && (
                         <div style={{ marginBottom: 16 }}>
@@ -321,21 +388,64 @@ export default function CourseLibrary({ embedded = false }) {
                         </div>
                       )}
 
-                      {/* CTA */}
+                      {/* CTA Action */}
                       <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--forge-border)' }}>
-                        <button
-                          onClick={() => nav(`/forge/course/${course.id}`)}
-                          className="btn btn-sm"
-                          style={{
-                            width: '100%', padding: '10px 16px', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer',
-                            background: isCompleted ? '#10B981' : isEnrolled ? 'var(--forge-accent)' : '#111827',
-                            color: 'white', border: 'none',
-                          }}
-                        >
-                          <PlayCircle size={14} />
-                          {isCompleted ? 'REVIEW COURSE' : isEnrolled ? 'RESUME COURSE' : 'START COURSE'}
-                        </button>
+                        {isEnrolled ? (
+                          <button
+                            onClick={() => nav(`/forge/course/${course.id}`)}
+                            className="btn btn-sm"
+                            style={{
+                              width: '100%', padding: '10px 16px', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer',
+                              background: isCompleted ? '#10B981' : 'var(--forge-accent)',
+                              color: 'white', border: 'none',
+                            }}
+                          >
+                            <PlayCircle size={14} />
+                            {isCompleted ? 'REVIEW COURSE' : progressPct > 0 ? 'RESUME COURSE' : 'START COURSE'}
+                          </button>
+                        ) : isPending ? (
+                          <button
+                            disabled
+                            className="btn btn-sm"
+                            style={{
+                              width: '100%', padding: '10px 16px', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                              background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A',
+                              cursor: 'not-allowed', opacity: 0.95,
+                            }}
+                            title="Access request is awaiting approval from your manager or organization administrator."
+                          >
+                            <Clock size={14} />
+                            AWAITING APPROVAL
+                          </button>
+                        ) : isRejected ? (
+                          <button
+                            onClick={() => openRequestModal(course)}
+                            className="btn btn-sm"
+                            style={{
+                              width: '100%', padding: '10px 16px', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer',
+                              background: '#111827', color: 'white', border: 'none',
+                            }}
+                          >
+                            <Send size={14} />
+                            REQUEST AGAIN
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openRequestModal(course)}
+                            className="btn btn-sm"
+                            style={{
+                              width: '100%', padding: '10px 16px', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer',
+                              background: '#111827', color: 'white', border: 'none',
+                            }}
+                          >
+                            <Send size={14} />
+                            REQUEST COURSE
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -355,6 +465,188 @@ export default function CourseLibrary({ embedded = false }) {
         )}
 
       </div>
+
+      {/* ── Portalled Request Course Modal ───────────────────────────────── */}
+      {requestModalOpen && selectedCourseForRequest && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: '20px',
+            boxSizing: 'border-box',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !submittingRequest) {
+              setRequestModalOpen(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '540px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)',
+              border: '1px solid rgba(0, 0, 0, 0.08)',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ padding: '24px 28px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#7C3AED' }}>
+                  Course Access Request
+                </span>
+                <h3 style={{ margin: '4px 0 0', fontSize: '1.25rem', fontWeight: 800, color: '#111827' }}>
+                  {selectedCourseForRequest.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !submittingRequest && setRequestModalOpen(false)}
+                style={{
+                  background: '#f3f4f6',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleRequestSubmit} style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Notice Banner */}
+              <div style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '16px', border: '1px solid #E2E8F0', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <BookOpen size={20} style={{ color: '#7C3AED', flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5 }}>
+                  <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#1E293B' }}>
+                    Manager Approval Required
+                  </p>
+                  To start this course for personal learning, submit a request. Your team manager or organization administrator will review it. Upon approval, you will be enrolled automatically.
+                </div>
+              </div>
+
+              {/* Course snapshot info */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ padding: '12px', borderRadius: '12px', background: '#F9FAFB', border: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '10px', color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700 }}>Domain</span>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#111827', marginTop: '2px' }}>
+                    {selectedCourseForRequest.domain_name || 'General'}
+                  </div>
+                </div>
+                <div style={{ padding: '12px', borderRadius: '12px', background: '#F9FAFB', border: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '10px', color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700 }}>Difficulty</span>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#111827', marginTop: '2px', textTransform: 'capitalize' }}>
+                    {selectedCourseForRequest.difficulty || 'Beginner'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Reason Input */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                  Reason / Learning Goals <span style={{ fontWeight: 400, color: '#9CA3AF' }}>(Optional)</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={requestReason}
+                  onChange={(e) => setRequestReason(e.target.value)}
+                  placeholder="Explain why you wish to take this course or how it aligns with your professional development..."
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '0.85rem',
+                    color: '#111827',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <p style={{ margin: '6px 0 0', fontSize: '0.74rem', color: '#9CA3AF' }}>
+                  Your manager will see this note when evaluating your request.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '12px', borderTop: '1px solid #F3F4F6' }}>
+                <button
+                  type="button"
+                  disabled={submittingRequest}
+                  onClick={() => setRequestModalOpen(false)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '12px',
+                    background: '#F3F4F6',
+                    border: '1px solid #E5E7EB',
+                    fontSize: '0.84rem',
+                    fontWeight: 700,
+                    color: '#4B5563',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingRequest}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '12px',
+                    background: '#111827',
+                    border: 'none',
+                    fontSize: '0.84rem',
+                    fontWeight: 800,
+                    color: '#FFFFFF',
+                    cursor: submittingRequest ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    opacity: submittingRequest ? 0.7 : 1,
+                  }}
+                >
+                  {submittingRequest ? (
+                    'Submitting...'
+                  ) : (
+                    <>
+                      <Send size={14} /> Submit Request
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { forgeApi } from '../../../core/api/forgeApi';
 import { useAuth } from '../../../core/auth/AuthContext';
@@ -536,6 +537,36 @@ export default function CoursePlayer() {
 
   if (!course) return null;
 
+  if (!isPreview && !course.enrollment) {
+    const requestStatus = course.request?.status;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#F8F9FA', padding: 24 }}>
+        <div style={{ maxWidth: 520, width: '100%', background: 'white', borderRadius: 24, padding: 36, textAlign: 'center', border: '1px solid #EBE4FF', boxShadow: '0 20px 60px rgba(0,0,0,0.08)' }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: requestStatus === 'pending' ? 'rgba(245,158,11,0.12)' : 'rgba(124,58,237,0.1)', color: requestStatus === 'pending' ? '#F59E0B' : '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            {requestStatus === 'pending' ? <Clock size={28} /> : <BookOpen size={28} />}
+          </div>
+          <h2 style={{ fontSize: '1.35rem', fontWeight: 900, margin: '0 0 8px', color: '#111827' }}>
+            {requestStatus === 'pending' ? 'Access Request Pending' : 'Enrollment Required'}
+          </h2>
+          <p style={{ color: '#6B7280', fontSize: '0.88rem', lineHeight: 1.6, margin: '0 0 24px' }}>
+            {requestStatus === 'pending'
+              ? `Your request for "${course.title}" has been submitted and is awaiting approval from your team manager or organization administrator.`
+              : `To access "${course.title}", you must submit a personal course request for approval by your team manager or organization administrator.`}
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button
+              onClick={() => nav('/forge?tab=library&view=personal')}
+              className="btn btn-primary"
+              style={{ padding: '10px 24px', borderRadius: 12, fontWeight: 800 }}
+            >
+              Back to Course Library
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const launchUrl = resolveAssetUrl(course.scorm_entry_url || (course.sections?.[0]?.content_url), course);
   const enrollment = isPreview ? null : course.enrollment;
   const progressPct = Math.round(enrollment?.progress_percent || 0);
@@ -995,9 +1026,10 @@ export default function CoursePlayer() {
       </div>
 
       {/* ── Completion Celebration Modal ─────────────────────────────────── */}
-      <AnimatePresence>
-        {showCelebration && (
-          <div className="modal-backdrop" onClick={() => setShowCelebration(false)}>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showCelebration && (
+            <div className="modal-backdrop" onClick={() => setShowCelebration(false)}>
             <motion.div
               initial={{ scale: 0.85, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -1104,7 +1136,9 @@ export default function CoursePlayer() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
     </div>
   );
 }
