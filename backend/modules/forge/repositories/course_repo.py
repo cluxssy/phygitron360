@@ -5,10 +5,15 @@ PostgreSQL / psycopg2 data access with per-tenant isolation.
 import json
 import uuid
 import os
+import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from psycopg2.extras import RealDictCursor
 from backend.core.database import get_db_connection
+
+logger = logging.getLogger(__name__)
+
+_table_ensured_schemas = set()
 
 
 class CourseRepository:
@@ -18,24 +23,41 @@ class CourseRepository:
     def _set_path(self, cur):
         cur.execute(f'SET search_path TO "{self.tenant_id}", public')
 
-    def _ensure_requests_table(self, cur):
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS forge_course_requests (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                course_id INTEGER NOT NULL REFERENCES forge_courses(id) ON DELETE CASCADE,
-                status TEXT DEFAULT 'pending',
-                reason TEXT,
-                requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                reviewed_at TIMESTAMP,
-                review_notes TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE INDEX IF NOT EXISTS idx_fcr_user_course ON forge_course_requests(user_id, course_id);
-            CREATE INDEX IF NOT EXISTS idx_fcr_status ON forge_course_requests(status);
-        """)
+    def _ensure_requests_table(self, cur, conn=None):
+        if self.tenant_id in _table_ensured_schemas:
+            return
+        try:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS forge_course_requests (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    course_id INTEGER NOT NULL REFERENCES forge_courses(id) ON DELETE CASCADE,
+                    status TEXT DEFAULT 'pending',
+                    reason TEXT,
+                    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    reviewed_at TIMESTAMP,
+                    review_notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_fcr_user_course ON forge_course_requests(user_id, course_id);
+                CREATE INDEX IF NOT EXISTS idx_fcr_status ON forge_course_requests(status);
+            """)
+            if conn:
+                try:
+                    conn.commit()
+                except Exception:
+                    pass
+            _table_ensured_schemas.add(self.tenant_id)
+        except Exception as e:
+            logger.warning(f"Failed or skipped _ensure_requests_table for {self.tenant_id}: {e}")
+            if conn:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            _table_ensured_schemas.add(self.tenant_id)
 
     # ── Domains ──────────────────────────────────────────────────────────────
 
@@ -118,7 +140,7 @@ class CourseRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur)
-                self._ensure_requests_table(cur)
+                self._ensure_requests_table(cur, conn=conn)
 
                 where = ["c.status = 'published'"]
                 params: List[Any] = [user_id, user_id]
@@ -275,7 +297,7 @@ class CourseRepository:
                     if enr:
                         course["enrollment"] = dict(enr)
 
-                    self._ensure_requests_table(cur)
+                    self._ensure_requests_table(cur, conn=conn)
                     cur.execute("""
                         SELECT * FROM forge_course_requests
                         WHERE course_id = %s AND user_id = %s
@@ -806,7 +828,7 @@ class CourseRepository:
                         u.id AS user_id,
                         COALESCE(emp.employee_code, u.employee_code) AS employee_code,
                         COALESCE(emp.name, u.username)               AS name,
-                        u.email,
+                        emp.email_id                                 AS email,
                         emp.team        AS department,
                         emp.designation AS designation,
                         e.status,
@@ -851,7 +873,7 @@ class CourseRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur)
-                self._ensure_requests_table(cur)
+                self._ensure_requests_table(cur, conn=conn)
 
                 # Check if course exists and is published
                 cur.execute("SELECT id, title FROM forge_courses WHERE id = %s AND status != 'deleted'", (course_id,))
@@ -894,7 +916,7 @@ class CourseRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur)
-                self._ensure_requests_table(cur)
+                self._ensure_requests_table(cur, conn=conn)
 
                 role = current_user.get("role", "")
                 user_id = current_user.get("id")
@@ -961,7 +983,7 @@ class CourseRepository:
                         d.name AS domain_name,
                         d.color AS domain_color,
                         u.username,
-                        u.email AS user_email,
+                        emp.email_id AS user_email,
                         COALESCE(emp.name, u.username) AS employee_name,
                         emp.employee_code,
                         emp.team AS department,
@@ -1026,7 +1048,7 @@ class CourseRepository:
         try:
             with conn.cursor() as cur:
                 self._set_path(cur)
-                self._ensure_requests_table(cur)
+                self._ensure_requests_table(cur, conn=conn)
 
                 role = current_user.get("role", "")
                 user_id = current_user.get("id")
@@ -1047,9 +1069,9 @@ class CourseRepository:
                         JOIN users u ON u.id = fcr.user_id
                         LEFT JOIN employees emp ON emp.employee_code = u.employee_code
                         WHERE fcr.status = 'pending' AND (
-                            emp.reporting_manager = %s OR emp.reporting_manager = %s OR fcr.user_id = %s
+                            emp.reporting_manager = %s OR emp.reporting_manager = %s
                         )
-                    """, (emp_code or "", current_user.get("username", ""), user_id))
+                    """, (emp_code or "", current_user.get("username", "")))
                 row = cur.fetchone()
                 return int(row[0]) if row else 0
         finally:
@@ -1061,7 +1083,7 @@ class CourseRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur)
-                self._ensure_requests_table(cur)
+                self._ensure_requests_table(cur, conn=conn)
 
                 cur.execute("SELECT * FROM forge_course_requests WHERE id = %s", (request_id,))
                 req = cur.fetchone()
@@ -1123,7 +1145,7 @@ class CourseRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur)
-                self._ensure_requests_table(cur)
+                self._ensure_requests_table(cur, conn=conn)
 
                 cur.execute("SELECT * FROM forge_course_requests WHERE id = %s", (request_id,))
                 req = cur.fetchone()
@@ -1153,7 +1175,7 @@ class CourseRepository:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 self._set_path(cur)
-                self._ensure_requests_table(cur)
+                self._ensure_requests_table(cur, conn=conn)
 
                 cur.execute("""
                     SELECT

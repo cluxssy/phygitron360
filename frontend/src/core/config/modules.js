@@ -5,16 +5,16 @@ export const MODULE_CONFIG = {
     permission: "module.source.access",
   },
 
-  forge: {
-    label: "Learning Central",
-    route: "/forge",
-    permission: "module.forge.access",
-  },
-
   verify: {
     label: "Assessment Central",
     route: "/verify",
     permission: "module.verify.access",
+  },
+
+  forge: {
+    label: "Learning Central",
+    route: "/forge",
+    permission: "module.forge.access",
   },
 
   deploy: {

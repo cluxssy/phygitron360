@@ -38,7 +38,15 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const { hasPermission } = useAuth();
-  useEscapeClose(onClose, !!candidate);
+  useEscapeClose(() => {
+    if (resumeViewerUrl) {
+      closeResumeViewer();
+    } else if (showOfferForm) {
+      setShowOfferForm(false);
+    } else {
+      onClose();
+    }
+  }, !!candidate);
 
   const jobRoleTitlesSet = useMemo(() => {
     const s = new Set();
@@ -117,6 +125,10 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
     };
     fetchDepartments();
   }, []);
+
+  // Resume viewer state
+  const [resumeViewerUrl, setResumeViewerUrl] = useState(null);
+  const [loadingResume, setLoadingResume] = useState(false);
 
   // Assessments state
   const [assessmentResults, setAssessmentResults] = useState([]);
@@ -236,6 +248,44 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
       toast.error('Failed to download resume');
     }
   };
+
+  const viewResume = async () => {
+    setLoadingResume(true);
+    try {
+      const response = await fetch(`/api/source/candidates/${data.id}/resume`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error();
+      const blob = await response.blob();
+      const raw = data.resume_path?.toLowerCase() || '';
+      let mimeType = response.headers.get('content-type') || 'application/pdf';
+      if (raw.endsWith('.pdf')) {
+        mimeType = 'application/pdf';
+      }
+      const pdfBlob = new Blob([blob], { type: mimeType });
+      if (resumeViewerUrl) {
+        URL.revokeObjectURL(resumeViewerUrl);
+      }
+      const objectUrl = URL.createObjectURL(pdfBlob);
+      setResumeViewerUrl(objectUrl);
+    } catch {
+      toast.error('Failed to load resume');
+    } finally {
+      setLoadingResume(false);
+    }
+  };
+
+  const closeResumeViewer = () => {
+    if (resumeViewerUrl) URL.revokeObjectURL(resumeViewerUrl);
+    setResumeViewerUrl(null);
+  };
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (resumeViewerUrl) URL.revokeObjectURL(resumeViewerUrl);
+    };
+  }, [resumeViewerUrl]);
 
   // ── Send invite ──────────────────────────────────────────────────────────
   const handleInvite = async (e) => {
@@ -1130,14 +1180,14 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                 {/* Resume link */}
                 {data?.resume_path && (
                   <div className="flex items-center gap-3">
-                    <a
-                      href={`/api/source/candidates/${data.id}/resume`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-xs text-white/40 hover:text-primary transition-colors font-bold uppercase tracking-widest"
+                    <button
+                      type="button"
+                      onClick={viewResume}
+                      disabled={loadingResume}
+                      className="flex items-center gap-2 text-xs text-white/40 hover:text-primary transition-colors font-bold uppercase tracking-widest disabled:opacity-50"
                     >
-                      <ExternalLink size={13} /> View Resume
-                    </a>
+                      {loadingResume ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />} View Resume
+                    </button>
                     <button
                       type="button"
                       onClick={downloadResume}
@@ -1387,6 +1437,60 @@ export default function CandidateDrawer({ candidate, jobRoles, roleId, onClose, 
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── RESUME VIEWER MODAL ── */}
+      {(resumeViewerUrl || loadingResume) && (
+        <div
+          className="fixed inset-0 z-[130] flex flex-col bg-black/80 backdrop-blur-sm"
+          onClick={closeResumeViewer}
+        >
+          {/* Header bar */}
+          <div
+            className="shrink-0 flex items-center justify-between px-6 py-4 bg-[#0d0d1a] border-b border-white/10"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <FileText size={16} className="text-primary" />
+              <span className="text-sm font-black uppercase tracking-widest text-white/70">
+                {data?.full_name ? `${data.full_name} — Resume` : 'Resume'}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={downloadResume}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <Download size={13} /> Download
+              </button>
+              <button
+                type="button"
+                onClick={closeResumeViewer}
+                className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Viewer body */}
+          <div className="flex-1 overflow-hidden" onClick={e => e.stopPropagation()}>
+            {loadingResume ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3 text-white/40">
+                <Loader2 size={32} className="animate-spin text-primary" />
+                <span className="text-xs font-bold uppercase tracking-widest">Loading resume…</span>
+              </div>
+            ) : (
+              <iframe
+                src={resumeViewerUrl}
+                title="Resume Viewer"
+                className="w-full h-full border-0"
+                style={{ background: '#fff' }}
+              />
             )}
           </div>
         </div>

@@ -146,8 +146,13 @@ export default function PayrollDirectory() {
                           <div className="w-14 h-14 rounded-2xl overflow-hidden border border-[#e9ddff] bg-[#f5edff] flex items-center justify-center font-black text-[#7c3aed] text-lg">
                             {emp.photo_path ? (
                               <img
-                                src={`/api/employee/${emp.employee_code}/document/pfp`}
+                                src={
+                                  emp.photo_path.startsWith('http://') || emp.photo_path.startsWith('https://')
+                                    ? emp.photo_path
+                                    : `/api/employee/${emp.employee_code}/document/pfp`
+                                }
                                 alt=""
+                                loading="lazy"
                                 className="w-full h-full object-cover"
                               />
                             ) : (

@@ -13,6 +13,9 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# In-memory cache for public profile picture URLs to protect database connection pool
+_PFP_CACHE = {}
+
 router = APIRouter(prefix="/api", tags=["employees"])
 
 def get_service(tenant_id: str = 'public'):
@@ -117,13 +120,27 @@ def get_employee_document(employee_code: str, doc_type: str, download: bool = Fa
         raise HTTPException(status_code=403, detail="You do not have permission to access this document.")
 
     tenant_id = current_user.get('tenant_id', 'public')
-    service = get_service(tenant_id)
-    file_path = service.get_document_path(employee_code, doc_type)
+    file_path = None
+
+    # Check cache for public profile pictures to prevent connection pool starvation
+    if doc_type == 'pfp':
+        cache_key = (tenant_id, employee_code)
+        file_path = _PFP_CACHE.get(cache_key)
+
+    if not file_path:
+        service = get_service(tenant_id)
+        file_path = service.get_document_path(employee_code, doc_type)
+        if file_path and doc_type == 'pfp':
+            _PFP_CACHE[(tenant_id, employee_code)] = file_path
+
     if not file_path:
         raise HTTPException(status_code=404, detail="Document not found")
 
     if file_path.startswith("http://") or file_path.startswith("https://"):
         from fastapi.responses import RedirectResponse
+        # Direct redirect for public S3 / Spaces CDN assets without presigning overhead
+        if doc_type == 'pfp' and ("digitaloceanspaces.com" in file_path or "s3" in file_path):
+            return RedirectResponse(url=file_path)
         from backend.common.services.storage_service import generate_presigned_url
         presigned = generate_presigned_url(file_path, expiry_seconds=900)
         return RedirectResponse(url=presigned)
@@ -337,6 +354,7 @@ async def upload_documents(
     
     if photo_file and photo_file.filename:
         updates['photo_path'] = save_uploaded_file(photo_file, tenant_id, 'deploy', 'pfp', employee_code, 'pfp')
+        _PFP_CACHE.pop((tenant_id, employee_code), None)
     if cv_file and cv_file.filename:
         updates['cv_path'] = save_uploaded_file(cv_file, tenant_id, 'deploy', 'resume', employee_code, 'cv')
     if id_proof_file and id_proof_file.filename:
@@ -375,6 +393,7 @@ async def remove_employee_photo(
     service = get_service(tenant_id)
     try:
         service.repo.update_employee_fields(employee_code, ['photo_path'], [None], tenant_id)
+        _PFP_CACHE.pop((tenant_id, employee_code), None)
         return {"message": "Photo removed"}
     except Exception as e:
         logger.exception("Failed to remove photo for employee %s: %s", employee_code, e)

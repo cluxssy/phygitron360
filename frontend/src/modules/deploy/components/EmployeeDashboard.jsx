@@ -429,7 +429,11 @@ export default function EmployeeDashboard({ mode = 'employee', user }) {
             <div className="relative">
               {emp.photo_path ? (
                 <img
-                  src={`/api/employee/${emp.employee_code}/document/pfp`}
+                  src={
+                    emp.photo_path.startsWith('http://') || emp.photo_path.startsWith('https://')
+                      ? emp.photo_path
+                      : `/api/employee/${emp.employee_code}/document/pfp`
+                  }
                   alt={emp.name}
                   className="w-20 h-20 rounded-[1.8rem] object-cover border-2 border-white shadow-lg shadow-[#7c3aed]/10" 
                   onError={(e) => {
