@@ -6,7 +6,9 @@ import {
   ArrowRight,
   MapPin,
   AlertTriangle,
-  ClipboardList
+  ClipboardList,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
@@ -64,12 +66,19 @@ export default function EmployeeDirectory() {
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterTeam, setFilterTeam] = useState('All');
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   const [showAddModal, setShowAddModal] = useState(false);
 
   const [activeTab, setActiveTab] = useState('employees');
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterStatus, filterTeam]);
 
   useEffect(() => {
     fetchEmployees();
@@ -195,6 +204,9 @@ setEmployees(employeeList);
     return nameA.localeCompare(nameB);
   });
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginatedEmployees = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   const teams = [
     'All',
     ...new Set(
@@ -288,8 +300,13 @@ setEmployees(employeeList);
                         <div className="w-12 h-12 rounded-2xl overflow-hidden border border-[#e9ddff] bg-[#f5edff] flex items-center justify-center font-black text-[#7c3aed] text-base shrink-0">
                           {req.photo_path ? (
                             <img
-                              src={`/api/employee/${req.employee_code}/document/pfp`}
+                              src={
+                                req.photo_path.startsWith('http://') || req.photo_path.startsWith('https://')
+                                  ? req.photo_path
+                                  : `/api/employee/${req.employee_code}/document/pfp`
+                              }
                               alt=""
+                              loading="lazy"
                               className="w-full h-full object-cover"
                             />
                           ) : (
@@ -560,7 +577,7 @@ setEmployees(employeeList);
           </div>
 
         ) : (
-
+          <>
           <table className="w-full min-w-[900px]">
 
             <thead className="bg-[#f7f3ff] border-b border-[#ebe7ff]">
@@ -600,7 +617,7 @@ setEmployees(employeeList);
 
             <tbody>
 
-              {filtered.map((emp, i) => {
+              {paginatedEmployees.map((emp, i) => {
 
                 const employeeName =
                   emp.name ||
@@ -656,8 +673,19 @@ setEmployees(employeeList);
                             {emp.photo_path ? (
 
                               <img
-                                src={`/api/employee/${emp.employee_code}/document/pfp`}
+                                src={
+                                  emp.photo_path.startsWith('http://') || emp.photo_path.startsWith('https://')
+                                    ? emp.photo_path
+                                    : `/api/employee/${emp.employee_code}/document/pfp`
+                                }
                                 alt=""
+                                loading="lazy"
+                                onError={(e) => {
+                                  if (!e.currentTarget.dataset.fallback) {
+                                    e.currentTarget.dataset.fallback = 'true';
+                                    e.currentTarget.src = `/api/employee/${emp.employee_code}/document/pfp`;
+                                  }
+                                }}
                                 className="w-full h-full object-cover"
                               />
 
@@ -782,6 +810,65 @@ setEmployees(employeeList);
 
           </table>
 
+          {/* PAGINATION TOOLBAR */}
+          {filtered.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-8 py-5 border-t border-[#ebe7ff] bg-[#faf8ff] text-sm font-semibold text-black/60">
+              <div className="flex items-center gap-2 text-xs font-bold text-black/50 uppercase tracking-wider">
+                <span>Showing</span>
+                <span className="text-[#7c3aed] font-black">
+                  {Math.min(filtered.length, (currentPage - 1) * pageSize + 1)} - {Math.min(filtered.length, currentPage * pageSize)}
+                </span>
+                <span>of</span>
+                <span className="text-black font-black">{filtered.length}</span>
+                <span>employees</span>
+              </div>
+
+              <div className="flex items-center gap-6">
+                {/* Page Size Selector */}
+                <div className="flex items-center gap-2 text-xs font-bold">
+                  <span className="text-black/40 uppercase tracking-wider">Per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-white border border-[#e9ddff] rounded-xl px-3 py-1.5 text-xs font-black text-[#7c3aed] focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/20 cursor-pointer"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+
+                {/* Page Navigation */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-xl border border-[#e9ddff] bg-white text-[#7c3aed] hover:bg-[#f5efff] disabled:opacity-30 disabled:hover:bg-white disabled:cursor-not-allowed transition-all"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  <span className="text-xs font-black text-black px-2">
+                    Page {currentPage} of {totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-xl border border-[#e9ddff] bg-white text-[#7c3aed] hover:bg-[#f5efff] disabled:opacity-30 disabled:hover:bg-white disabled:cursor-not-allowed transition-all"
+                    title="Next Page"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          </>
         )}
 
       </div>

@@ -7,17 +7,6 @@ const hubs = [
   {
     icon: talentIcon,
     title: "Talent Central",
-    desc: "Create a stronger talent pipeline with engaging, personalized learning.",
-    capabilities: [
-      "Skill Development",
-      "Personalized Learning",
-      "Learning Analytics",
-      "Engagement Tracking",
-    ],
-  },
-  {
-    icon: learningIcon,
-    title: "Learning Central",
     desc: "Make data-driven hiring decisions backed by evidence.",
     capabilities: [
       "AI Talent Sourcing",
@@ -35,6 +24,17 @@ const hubs = [
       "Skill Gap Analysis",
       "Proctoring & Integrity",
       "Actionable Reports",
+    ],
+  },
+  {
+    icon: learningIcon,
+    title: "Learning Central",
+    desc: "Create a stronger talent pipeline with engaging, personalized learning.",
+    capabilities: [
+      "Skill Development",
+      "Personalized Learning",
+      "Learning Analytics",
+      "Engagement Tracking",
     ],
   },
   {

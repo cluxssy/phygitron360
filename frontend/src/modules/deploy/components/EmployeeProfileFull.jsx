@@ -564,7 +564,15 @@ export default function EmployeeProfileFull({ employeeCode: initialCode, onBack 
                     <div className="relative group">
                         <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-primary/15 to-primary/5 border-2 border-primary/30 flex items-center justify-center text-primary font-display font-black text-5xl shrink-0 shadow-2xl shadow-primary/20 overflow-hidden">
                             {details.photo_path ? (
-                                <img src={`/api/employee/${details.employee_code}/document/pfp`} className="w-full h-full object-cover" alt="" />
+                                <img
+                                    src={
+                                        details.photo_path.startsWith('http://') || details.photo_path.startsWith('https://')
+                                            ? details.photo_path
+                                            : `/api/employee/${details.employee_code}/document/pfp`
+                                    }
+                                    className="w-full h-full object-cover"
+                                    alt=""
+                                />
                             ) : (
                                 details.name?.[0]
                             )}

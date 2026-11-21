@@ -172,18 +172,6 @@ function LayoutContent({ children }) {
       ],
     },
     {
-      id: 'forge',
-      name: 'Forge',
-      path: '/forge',
-      icon: Zap,
-      perm: 'module.forge.access',
-      options: [
-        { label: 'Learning Home', icon: Home, search: '?tab=academy', default: true },
-        { label: 'Courses', icon: Layers, search: '?tab=courses' },
-        { label: 'My Learning', icon: Star, search: '?tab=my-learning' },
-      ],
-    },
-    {
       id: 'verify',
       name: 'Verify',
       path: '/verify',
@@ -193,6 +181,18 @@ function LayoutContent({ children }) {
         { label: 'Assessments', icon: Home, search: '?tab=home', default: true },
         { label: 'Create Assessment', icon: Cpu, search: '?tab=builder' },
         { label: 'Results', icon: Activity, search: '?tab=results' },
+      ],
+    },
+    {
+      id: 'forge',
+      name: 'Forge',
+      path: '/forge',
+      icon: Zap,
+      perm: 'module.forge.access',
+      options: [
+        { label: 'Learning Home', icon: Home, search: '?tab=academy', default: true },
+        { label: 'Courses', icon: Layers, search: '?tab=courses' },
+        { label: 'My Learning', icon: Star, search: '?tab=my-learning' },
       ],
     },
     {

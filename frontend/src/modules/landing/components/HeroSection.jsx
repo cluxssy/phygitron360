@@ -21,17 +21,17 @@ const slides = [
   },
   {
     id: 2,
-    image: learningBanner,
-    title: "Accelerating Learning Through AI",
-    description: "Empower employees with AI-driven learning experiences that accelerate skill development, improve performance, and support career growth.",
-    tagline: "Learning Central"
-  },
-  {
-    id: 3,
     image: assessmentBanner,
     title: "Intelligent Assessments. Trusted Outcomes",
     description: "AI-powered evaluations and secure proctoring that provide objective, evidence-based insights into skills and capabilities.",
     tagline: "Assessment Central"
+  },
+  {
+    id: 3,
+    image: learningBanner,
+    title: "Accelerating Learning Through AI",
+    description: "Empower employees with AI-driven learning experiences that accelerate skill development, improve performance, and support career growth.",
+    tagline: "Learning Central"
   },
   {
     id: 4,
