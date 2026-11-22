@@ -350,6 +350,13 @@ class SubmissionRepository:
                     (asm_id,),
                 )
                 row = cur.fetchone()
-                return dict(row) if row else {}
+                if not row:
+                    return {}
+                res = dict(row)
+                res["metrics"] = {
+                    "total_submitted": res.get("total_submissions") or 0,
+                    "total_passed": res.get("passed_count") or 0,
+                }
+                return res
         finally:
             conn.close()
