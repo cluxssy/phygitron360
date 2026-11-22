@@ -352,7 +352,7 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
 
       {/* ── KPI CARDS ── */}
       {canViewKpis && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
         {/*  Employees - Purple */}
         <StatCard
@@ -363,17 +363,6 @@ const hiringTrend = (charts.hiring_trend || []).map(h => ({
           icon={Users}
           sub="Total Employee Profiles"
           onClick={handleEmployeesClick}
-        />
-
-        {/*  Attendance - amber */}
-        <StatCard
-          label="Attendance"
-          value={`${counts.attendance_rate ?? 0}%`}
-          color="#F59E0B"
-          borderColor="border-t-amber-500"
-          icon={Activity}
-          sub="Present Today / Attendance Rate"
-          onClick={handleAttendanceClick}
         />
 
         {/* 📋 Assets - green */}

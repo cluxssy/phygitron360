@@ -92,9 +92,9 @@ class AssignmentRepository:
                         aa.proctoring_config,
                         a.sections,
                         aa.status,
+                        COALESCE(aa.strike_count, 0) AS strike_count,
                         aa.deadline,
                         aa.started_at,
-                        aa.strike_count,
                         aa.resume_count,
                         aa.terminated_by_proctor,
                         aa.created_at      AS assigned_at,
@@ -195,6 +195,7 @@ class AssignmentRepository:
                         e.name,
                         u.username         AS email,
                         aa.status,
+                        COALESCE(aa.strike_count, 0) AS strike_count,
                         aa.deadline,
                         aa.started_at,
                         aa.created_at      AS assigned_at

@@ -79,12 +79,26 @@ export default function AssessmentDashboard() {
 
         // Aggregate stats
         validStats.forEach(({ stats: s }) => {
-          if (s.metrics) {
-            totalSubmissions += s.metrics.total_submitted || 0;
-            totalPassed += s.metrics.total_passed || 0;
-            pendingReview += (s.metrics.total_submitted || 0) - (s.metrics.total_passed || 0);
-          }
+          const submitted = s.metrics?.total_submitted ?? s.total_submissions ?? 0;
+          const passed = s.metrics?.total_passed ?? s.passed_count ?? 0;
+          totalSubmissions += submitted;
+          totalPassed += passed;
         });
+
+        // Try to get pending reviews count from open queries or submissions awaiting evaluation
+        if (canManageAssessments) {
+          try {
+            const queriesRes = await fetch('/api/verify/queries?status=open', { credentials: 'include' });
+            if (queriesRes.ok) {
+              const qData = await queriesRes.json();
+              if (qData.success && Array.isArray(qData.data) && qData.data.length > 0) {
+                pendingReview = qData.data.length;
+              }
+            }
+          } catch {
+            // Fallback
+          }
+        }
 
         // Try to get recent activity from assignments
         if (canManageAssessments) {
