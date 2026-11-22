@@ -334,8 +334,8 @@ export default function TeamAnalytics({ embedded = false }) {
           }
         />
 
-        {/* ── 6 KPI Stat Cards ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        {/* ── 5 KPI Stat Cards ───────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
           <StatCard
             label="Courses"
             value={kpis.total_courses || 0}
@@ -359,14 +359,6 @@ export default function TeamAnalytics({ embedded = false }) {
             borderColor="border-t-emerald-500"
             icon={CheckCircle}
             sub="Finished"
-          />
-          <StatCard
-            label="Completion %"
-            value={`${completionRate}%`}
-            color="#06B6D4"
-            borderColor="border-t-cyan-500"
-            icon={Target}
-            sub="Avg Rate"
           />
           <StatCard
             label="In Progress"
