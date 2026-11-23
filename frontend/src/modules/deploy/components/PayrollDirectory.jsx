@@ -64,6 +64,14 @@ export default function PayrollDirectory() {
     const matchTeam = filterTeam === 'All' || (e.team || 'Unassigned') === filterTeam;
     return matchSearch && matchTeam;
   }).sort((a, b) => {
+    const parseDateMs = (val) => {
+      if (!val) return 0;
+      const t = new Date(val).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+    const dateA = parseDateMs(a.doj);
+    const dateB = parseDateMs(b.doj);
+    if (dateB !== dateA) return dateB - dateA;
     const nameA = a.name || a.full_name || a.username || '';
     const nameB = b.name || b.full_name || b.username || '';
     return nameA.localeCompare(nameB);
