@@ -65,6 +65,10 @@ export default function EmployeeDirectory() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterTeam, setFilterTeam] = useState('All');
+  const [sortBy, setSortBy] = useState('doj_desc');
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -78,7 +82,7 @@ export default function EmployeeDirectory() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filterStatus, filterTeam]);
+  }, [search, filterStatus, filterTeam, sortBy]);
 
   useEffect(() => {
     fetchEmployees();
@@ -199,9 +203,36 @@ setEmployees(employeeList);
       matchTeam
     );
   }).sort((a, b) => {
-    const nameA = a.name || a.full_name || a.username || '';
-    const nameB = b.name || b.full_name || b.username || '';
-    return nameA.localeCompare(nameB);
+    const parseDateMs = (val) => {
+      if (!val) return 0;
+      const t = new Date(val).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+
+    if (sortBy === 'name_asc') {
+      const nameA = a.name || a.full_name || a.username || '';
+      const nameB = b.name || b.full_name || b.username || '';
+      return nameA.localeCompare(nameB);
+    }
+    if (sortBy === 'name_desc') {
+      const nameA = a.name || a.full_name || a.username || '';
+      const nameB = b.name || b.full_name || b.username || '';
+      return nameB.localeCompare(nameA);
+    }
+    if (sortBy === 'doj_asc') {
+      const dateA = parseDateMs(a.doj);
+      const dateB = parseDateMs(b.doj);
+      if (dateA !== dateB) return dateA - dateB;
+      return (a.employee_code || '').localeCompare(b.employee_code || '', undefined, { numeric: true });
+    }
+    if (sortBy === 'code_asc') {
+      return (a.employee_code || '').localeCompare(b.employee_code || '', undefined, { numeric: true });
+    }
+    // Default 'doj_desc': Date Joined (Newest) — naturally scrambles employees across diverse ethnicities and backgrounds
+    const dateA = parseDateMs(a.doj);
+    const dateB = parseDateMs(b.doj);
+    if (dateB !== dateA) return dateB - dateA;
+    return (b.employee_code || '').localeCompare(a.employee_code || '', undefined, { numeric: true });
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -439,6 +470,34 @@ setEmployees(employeeList);
 
             ))}
 
+          </select>
+
+          {/* SORT */}
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="
+              w-auto
+              shrink-0
+              px-5
+              py-4
+              rounded-2xl
+              border
+              border-[#ece6ff]
+              bg-white
+              text-black
+              text-sm
+              font-bold
+              outline-none
+              cursor-pointer
+            "
+          >
+            <option value="doj_desc">Sort: Date Joined (Newest)</option>
+            <option value="doj_asc">Sort: Date Joined (Oldest)</option>
+            <option value="name_asc">Sort: Name (A → Z)</option>
+            <option value="name_desc">Sort: Name (Z → A)</option>
+            <option value="code_asc">Sort: Employee ID</option>
           </select>
 
         </div>
