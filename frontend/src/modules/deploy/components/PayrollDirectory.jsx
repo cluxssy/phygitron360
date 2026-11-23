@@ -71,7 +71,7 @@ export default function PayrollDirectory() {
     };
     const dateA = parseDateMs(a.doj);
     const dateB = parseDateMs(b.doj);
-    if (dateB !== dateA) return dateB - dateA;
+    if (dateA !== dateB) return dateA - dateB;
     const nameA = a.name || a.full_name || a.username || '';
     const nameB = b.name || b.full_name || b.username || '';
     return nameA.localeCompare(nameB);

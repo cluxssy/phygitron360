@@ -65,10 +65,7 @@ export default function EmployeeDirectory() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterTeam, setFilterTeam] = useState('All');
-  const [sortBy, setSortBy] = useState('doj_desc');
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [sortBy, setSortBy] = useState('doj_asc');
 
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -216,20 +213,20 @@ setEmployees(employeeList);
       const nameB = b.name || b.full_name || b.username || '';
       return nameB.localeCompare(nameA);
     }
-    if (sortBy === 'doj_asc') {
+    if (sortBy === 'doj_desc') {
       const dateA = parseDateMs(a.doj);
       const dateB = parseDateMs(b.doj);
-      if (dateA !== dateB) return dateA - dateB;
-      return (a.employee_code || '').localeCompare(b.employee_code || '', undefined, { numeric: true });
+      if (dateB !== dateA) return dateB - dateA;
+      return (b.employee_code || '').localeCompare(a.employee_code || '', undefined, { numeric: true });
     }
     if (sortBy === 'code_asc') {
       return (a.employee_code || '').localeCompare(b.employee_code || '', undefined, { numeric: true });
     }
-    // Default 'doj_desc': Date Joined (Newest) — naturally scrambles employees across diverse ethnicities and backgrounds
+    // Default 'doj_asc': Date Joined (Oldest) — naturally scrambles employees across diverse ethnicities and backgrounds
     const dateA = parseDateMs(a.doj);
     const dateB = parseDateMs(b.doj);
-    if (dateB !== dateA) return dateB - dateA;
-    return (b.employee_code || '').localeCompare(a.employee_code || '', undefined, { numeric: true });
+    if (dateA !== dateB) return dateA - dateB;
+    return (a.employee_code || '').localeCompare(b.employee_code || '', undefined, { numeric: true });
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -490,8 +487,8 @@ setEmployees(employeeList);
               cursor-pointer
             "
           >
-            <option value="doj_desc">Sort: Date Joined (Newest)</option>
             <option value="doj_asc">Sort: Date Joined (Oldest)</option>
+            <option value="doj_desc">Sort: Date Joined (Newest)</option>
             <option value="name_asc">Sort: Name (A → Z)</option>
             <option value="name_desc">Sort: Name (Z → A)</option>
             <option value="code_asc">Sort: Employee ID</option>
