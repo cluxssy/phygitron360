@@ -392,7 +392,7 @@ export default function SourceDashboard() {
   const [jobRoles, setJobRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(initFilters);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [drawerCandidate, setDrawerCandidate] = useState(null);
   
