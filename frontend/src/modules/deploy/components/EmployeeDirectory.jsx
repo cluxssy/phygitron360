@@ -67,6 +67,9 @@ export default function EmployeeDirectory() {
   const [filterTeam, setFilterTeam] = useState('All');
   const [sortBy, setSortBy] = useState('doj_asc');
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   const [showAddModal, setShowAddModal] = useState(false);
 
   const [activeTab, setActiveTab] = useState('employees');
