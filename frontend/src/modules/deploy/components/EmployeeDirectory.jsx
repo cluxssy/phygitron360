@@ -70,9 +70,6 @@ export default function EmployeeDirectory() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-
   const [showAddModal, setShowAddModal] = useState(false);
 
   const [activeTab, setActiveTab] = useState('employees');
