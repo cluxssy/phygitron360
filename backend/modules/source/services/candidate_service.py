@@ -371,6 +371,13 @@ class CandidateService:
             candidate_id = self.repo.create_candidate(candidate_data)
             self.repo.log_activity(candidate_id, 'System', 'profile_created', 'Profile created and parsed via AI')
 
+        # Generate True Semantic Search vector embedding (non-blocking / safe)
+        try:
+            from backend.modules.source.services.candidate_embedding_service import embed_and_save_candidate
+            embed_and_save_candidate(candidate_id, self.tenant_id)
+        except Exception as _emb_err:
+            logger.warning(f"Semantic embedding generation failed for candidate {candidate_id}: {_emb_err}")
+
         # 6. Process Confidence Signals
         confidence_signals = ai_result.get("cs") or ai_result.get("confidence_signals", [])
         if confidence_signals:
@@ -669,6 +676,11 @@ class CandidateService:
         data['full_name'] = join_name_parts(data.get('first_name'), data.get('middle_name'), data.get('last_name'))
         candidate_id = self.repo.create_candidate(data)
         self.repo.log_activity(candidate_id, actor_name, "profile_created", "Manual candidate entry")
+        try:
+            from backend.modules.source.services.candidate_embedding_service import embed_and_save_candidate
+            embed_and_save_candidate(candidate_id, self.tenant_id)
+        except Exception as _emb_err:
+            logger.warning(f"Semantic embedding generation failed for manual candidate {candidate_id}: {_emb_err}")
         invalidate_candidate_caches(self.tenant_id)
         return candidate_id
 
@@ -818,14 +830,18 @@ class CandidateService:
                 cand["required_score"] = None
                 cand["preferred_score"] = None
 
-        if sort_by == "fit_score":
-            candidates.sort(key=lambda c: c.get("fit_score") or 0, reverse=True)
-        elif sort_by == "critical_score":
-            candidates.sort(key=lambda c: c.get("critical_score") or 0, reverse=True)
-        elif sort_by == "required_score":
-            candidates.sort(key=lambda c: c.get("required_score") or 0, reverse=True)
-        elif sort_by == "preferred_score":
-            candidates.sort(key=lambda c: c.get("preferred_score") or 0, reverse=True)
+        # Only re-sort by ATS scores if the user explicitly chose an ATS score sort mode,
+        # and not when performing an active semantic search.
+        is_semantic_active = bool(search and search.strip() and sort_by in ("newest", "semantic", "relevance", None))
+        if not is_semantic_active:
+            if sort_by == "fit_score":
+                candidates.sort(key=lambda c: c.get("fit_score") or 0, reverse=True)
+            elif sort_by == "critical_score":
+                candidates.sort(key=lambda c: c.get("critical_score") or 0, reverse=True)
+            elif sort_by == "required_score":
+                candidates.sort(key=lambda c: c.get("required_score") or 0, reverse=True)
+            elif sort_by == "preferred_score":
+                candidates.sort(key=lambda c: c.get("preferred_score") or 0, reverse=True)
 
         return CandidateSearchResult(candidates, total_count, query_breakdown=parsed_query)
 

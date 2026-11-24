@@ -11,7 +11,7 @@ class CandidateRepository:
         self.tenant_id = tenant_id
 
     def _set_search_path(self, cur):
-        cur.execute(f'SET search_path TO "{self.tenant_id}"')
+        cur.execute(f'SET search_path TO "{self.tenant_id}", public')
 
     def create_candidate(self, data: Dict[str, Any], conn=None, cur=None) -> int:
         should_close = False
@@ -510,6 +510,44 @@ class CandidateRepository:
                     from backend.modules.source.services.candidate_search_parser import parse_search_query_rule_based
                     parsed_query = parse_search_query_rule_based(search.strip())
 
+                # ── True Semantic Search (Vector Embedding) ──
+                query_vec_str = None
+                if search and search.strip():
+                    try:
+                        from backend.modules.source.services.candidate_embedding_service import embed_text
+                        import re as _re
+                        pos_parts = []
+                        if parsed_query:
+                            if parsed_query.get("roles"):
+                                pos_parts.extend(parsed_query["roles"])
+                            if parsed_query.get("degrees"):
+                                pos_parts.extend(parsed_query["degrees"][:2])
+                            if parsed_query.get("general_terms"):
+                                pos_parts.extend(parsed_query["general_terms"])
+                            if parsed_query.get("include_companies"):
+                                pos_parts.extend(parsed_query["include_companies"])
+                        if not pos_parts:
+                            raw_s = search.strip()
+                            clean_s = _re.sub(r'\b(?:not in|not at|without|never worked at|-)\s*[a-zA-Z0-9,\s]+', ' ', raw_s, flags=_re.I).strip()
+                            pos_parts = [clean_s if clean_s else raw_s]
+                        
+                        pos_text = " ".join(pos_parts).strip()
+                        # Avoid calling embedding API for 1-2 character keystrokes or pure single degree queries already 100% covered by SQL
+                        pure_degrees = parsed_query.get("degrees") if parsed_query else []
+                        is_solely_single_degree = (
+                            len(pos_parts) == 1 
+                            and pure_degrees 
+                            and pos_parts[0].lower() in [d.lower() for d in pure_degrees]
+                            and not parsed_query.get("roles")
+                            and not parsed_query.get("general_terms")
+                        )
+                        if pos_text and len(pos_text) >= 3 and not is_solely_single_degree:
+                            q_vec = embed_text(pos_text)
+                            if q_vec and len(q_vec) == 768:
+                                query_vec_str = f"[{','.join(map(str, q_vec))}]"
+                    except Exception as e:
+                        logger.warning(f"Semantic query vector generation failed: {e}")
+
                 if parsed_query:
                     # 1. Excluded Companies (e.g. "not in wipro")
                     for comp in (parsed_query.get("exclude_companies") or []):
@@ -574,14 +612,50 @@ class CandidateRepository:
                         conditions.append("c.total_experience_years <= %s")
                         params.append(parsed_query["max_exp"])
 
-                    # 6. General keywords (search across all fields)
+                    # 6. Roles & Technical Synonyms (e.g. "database developer" -> "sql developer", "data engineer")
+                    roles = parsed_query.get("roles") or []
+                    adjacent_roles = parsed_query.get("adjacent_roles") or []
+                    all_roles = list(dict.fromkeys(roles + adjacent_roles))
+                    if all_roles:
+                        role_patterns = [f"%{r}%" for r in all_roles]
+                        skill_patterns = []
+                        for r in all_roles:
+                            skill_patterns.append(f"%{r}%")
+                            if "database" in r or "sql" in r:
+                                skill_patterns.extend(["%sql%", "%database%", "%mysql%", "%postgresql%", "%oracle%", "%db%"])
+                            elif "frontend" in r:
+                                skill_patterns.extend(["%react%", "%angular%", "%vue%", "%ui%", "%frontend%"])
+                            elif "backend" in r:
+                                skill_patterns.extend(["%backend%", "%node%", "%python%", "%django%", "%java%"])
+                            elif "data engineer" in r:
+                                skill_patterns.extend(["%etl%", "%spark%", "%hadoop%", "%sql%", "%airflow%"])
+                        skill_patterns = list(dict.fromkeys(skill_patterns))
+                        conditions.append("""
+                            (
+                                c.current_designation ILIKE ANY(%s)
+                                OR c.ai_summary ILIKE ANY(%s)
+                                OR EXISTS (
+                                    SELECT 1 FROM candidate_experience cx
+                                    WHERE cx.candidate_id = c.id AND cx.designation ILIKE ANY(%s)
+                                )
+                                OR EXISTS (
+                                    SELECT 1 FROM unnest(COALESCE(c.primary_skills, '{}'::text[]) || COALESCE(c.secondary_skills, '{}'::text[])) _s
+                                    WHERE _s ILIKE ANY(%s)
+                                )
+                            )
+                        """)
+                        params.extend([role_patterns, role_patterns, role_patterns, skill_patterns])
+
+                    # 7. General keywords & Semantic Match
                     terms_to_match = parsed_query.get("general_terms") or []
                     if not terms_to_match and not parsed_query.get("is_complex") and search:
                         terms_to_match = [w.strip() for w in search.split() if w.strip()]
 
+                    kw_clauses = []
+                    kw_params = []
                     for term in terms_to_match:
                         t_like = f"%{term}%"
-                        conditions.append("""
+                        kw_clauses.append("""
                             (
                                 c.full_name ILIKE %s
                                 OR c.email ILIKE %s
@@ -602,10 +676,24 @@ class CandidateRepository:
                                 )
                             )
                         """)
-                        params.extend([t_like] * 12)
+                        kw_params.extend([t_like] * 12)
+
+                    if query_vec_str and kw_clauses:
+                        conditions.append(f"""(
+                            (c.embedding IS NOT NULL AND (1 - (c.embedding <=> %s::vector)) >= 0.48)
+                            OR ({' AND '.join(kw_clauses)})
+                        )""")
+                        params.append(query_vec_str)
+                        params.extend(kw_params)
+                    elif query_vec_str:
+                        conditions.append("(c.embedding IS NOT NULL AND (1 - (c.embedding <=> %s::vector)) >= 0.45)")
+                        params.append(query_vec_str)
+                    elif kw_clauses:
+                        conditions.append("(" + " AND ".join(kw_clauses) + ")")
+                        params.extend(kw_params)
                 elif search:
                     s_like = f"%{search.strip()}%"
-                    conditions.append("""
+                    kw_clause = """
                         (
                             c.full_name ILIKE %s
                             OR c.email ILIKE %s
@@ -625,8 +713,17 @@ class CandidateRepository:
                                 WHERE ce.candidate_id = c.id AND (ce.degree ILIKE %s OR ce.institution ILIKE %s OR ce.field_of_study ILIKE %s)
                             )
                         )
-                    """)
-                    params.extend([s_like] * 12)
+                    """
+                    if query_vec_str:
+                        conditions.append(f"""(
+                            (c.embedding IS NOT NULL AND (1 - (c.embedding <=> %s::vector)) >= 0.48)
+                            OR {kw_clause}
+                        )""")
+                        params.append(query_vec_str)
+                        params.extend([s_like] * 12)
+                    else:
+                        conditions.append(kw_clause)
+                        params.extend([s_like] * 12)
 
                 where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
                 
@@ -644,6 +741,49 @@ class CandidateRepository:
                         c.created_at DESC"""
                 elif sort_by == "fit_score" and role_id:
                     order_clause = "ORDER BY a.score DESC NULLS LAST, c.created_at DESC"
+                elif query_vec_str and (sort_by in ("newest", "semantic", "relevance") or not sort_by):
+                    order_clause = f"""ORDER BY 
+                        CASE WHEN c.embedding IS NOT NULL THEN (1 - (c.embedding <=> '{query_vec_str}'::vector)) ELSE 0.0 END DESC,
+                        c.created_at DESC"""
+                elif parsed_query and parsed_query.get("roles") and (sort_by in ("newest", "semantic", "relevance") or not sort_by):
+                    role_pats = [f"%%{r}%%" for r in parsed_query["roles"]]
+                    safe_pats = ", ".join([f"'{p}'" for p in role_pats])
+
+                    adj_cases = ""
+                    adj_roles = parsed_query.get("adjacent_roles") or []
+                    if adj_roles:
+                        adj_pats = [f"%%{r}%%" for r in adj_roles]
+                        safe_adj = ", ".join([f"'{p}'" for p in adj_pats])
+                        adj_cases = f"""
+                            + CASE 
+                                WHEN c.current_designation ILIKE ANY(ARRAY[{safe_adj}]) THEN 80
+                                WHEN c.ai_summary ILIKE ANY(ARRAY[{safe_adj}]) THEN 40
+                                ELSE 0 
+                              END
+                        """
+
+                    order_clause = f"""ORDER BY 
+                        ((CASE 
+                            WHEN c.current_designation ILIKE ANY(ARRAY[{safe_pats}]) THEN 200
+                            WHEN c.ai_summary ILIKE ANY(ARRAY[{safe_pats}]) THEN 100
+                            WHEN EXISTS (SELECT 1 FROM candidate_experience cx WHERE cx.candidate_id = c.id AND cx.designation ILIKE ANY(ARRAY[{safe_pats}])) THEN 50
+                            ELSE 0 
+                         END)
+                         {adj_cases}
+                         + CASE WHEN EXISTS (SELECT 1 FROM unnest(COALESCE(c.primary_skills, '{{}}'::text[])) _ps WHERE _ps ILIKE ANY(ARRAY['%%sql%%', '%%database%%', '%%mysql%%'])) THEN 30 ELSE 0 END
+                        ) DESC,
+                        c.created_at DESC"""
+                elif search and search.strip() and (sort_by in ("newest", "semantic", "relevance") or not sort_by):
+                    safe_s = search.replace("'", "''").replace("%", "%%").strip()
+                    order_clause = f"""ORDER BY 
+                        (CASE 
+                            WHEN c.current_designation ILIKE '%%{safe_s}%%' THEN 100
+                            WHEN c.ai_summary ILIKE '%%{safe_s}%%' THEN 50
+                            WHEN EXISTS (SELECT 1 FROM unnest(COALESCE(c.primary_skills, '{{}}'::text[])) _ps WHERE _ps ILIKE '%%{safe_s}%%') THEN 30
+                            ELSE 0 
+                         END
+                        ) DESC,
+                        c.created_at DESC"""
                 elif sort_by == "newest":
                     order_clause = "ORDER BY c.created_at DESC"
                 else:
@@ -677,6 +817,11 @@ class CandidateRepository:
                     SELECT array_agg(DISTINCT cx.company)
                     FROM candidate_experience cx WHERE cx.candidate_id = c.id AND cx.company IS NOT NULL AND cx.company != ''
                 ), '{}'::text[]) AS past_companies"""
+
+                if query_vec_str:
+                    extra_fields += f", CASE WHEN c.embedding IS NOT NULL THEN ROUND(((1 - (c.embedding <=> '{query_vec_str}'::vector)) * 100)::numeric, 1) ELSE NULL END AS semantic_score"
+                else:
+                    extra_fields += ", NULL::numeric AS semantic_score"
 
                 if role_id:
                     joins = f"LEFT JOIN candidate_applications ca ON c.id = ca.candidate_id AND ca.job_role_id = %s LEFT JOIN ai_scores a ON c.id = a.entity_id AND a.entity_type = 'candidate' AND a.job_role_id = %s AND a.score_type = 'role_fit'{joins_rf}"
@@ -728,6 +873,7 @@ class CandidateRepository:
                 results = []
                 for r in cur.fetchall():
                     row = dict(r)
+                    row.pop('embedding', None)
                     row['status'] = row.get('job_status') or row['status']
                     row['name'] = row.get('full_name') or ''
                     if isinstance(row.get('education'), str):

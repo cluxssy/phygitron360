@@ -852,102 +852,10 @@ export default function SourceDashboard() {
   }, [bulkJobId, bulkUploadTriggered, fetchCandidates, currentTab]);
 
   // ── Filter candidates client-side ──
+  // Candidates are already filtered, semantically searched, and paginated by the backend API.
   const filteredCandidates = useMemo(() => {
-    if (!searchTerm || !searchTerm.trim()) return candidates;
-
-    const activeSearchTerm = (debouncedSearch || '').trim();
-    if (!activeSearchTerm) {
-      return candidates;
-    }
-
-    const rawTerm = activeSearchTerm.toLowerCase();
-
-    // 1. Extract exclusions (e.g. "not in wipro", "-wipro", "without infosys")
-    const excludePatterns = [
-      /(?:not in|not at|not from|without|never worked at)\s+([a-zA-Z0-9\s,\.&-]+)/g,
-      /-([a-zA-Z0-9]+)/g
-    ];
-    const excludedTerms = [];
-    let positiveText = rawTerm;
-
-    for (const pat of excludePatterns) {
-      let match;
-      while ((match = pat.exec(rawTerm)) !== null) {
-        if (match[1]) {
-          match[1].split(/[,/]|(?:\s+or\s+)|\s+and\s+/).forEach(t => {
-            const clean = t.trim();
-            if (clean) excludedTerms.push(clean);
-          });
-        }
-      }
-      positiveText = positiveText.replace(pat, ' ');
-    }
-
-    // 2. Tokenize positive keywords (split by comma, "and", "or", whitespace)
-    const tokens = positiveText
-      .split(/[,/]|(?:\s+and\s+)|\s+or\s+|\s+/)
-      .map(t => t.trim())
-      .filter(t => t.length > 0 && !['not', 'in', 'at', 'with', 'from', 'who', 'has', 'have'].includes(t));
-
-    const DEGREE_ALIASES = {
-      'btech': ['btech', 'b.tech', 'b tech', 'be', 'b.e', 'bachelor of technology', 'bachelor of engineering'],
-      'be': ['be', 'b.e', 'btech', 'b.tech'],
-      'mtech': ['mtech', 'm.tech', 'me', 'm.e', 'master of technology'],
-      'bca': ['bca', 'bachelor of computer applications'],
-      'mca': ['mca', 'master of computer applications'],
-      'mba': ['mba', 'm.b.a', 'master of business administration'],
-      'bsc': ['bsc', 'b.sc', 'bachelor of science'],
-      'msc': ['msc', 'm.sc', 'master of science']
-    };
-
-    return candidates.filter(c => {
-      // Exclusions check
-      if (excludedTerms.length > 0) {
-        const hasExcluded = excludedTerms.some(ex => {
-          const inComp = (c.past_companies || []).some(comp => (comp || '').toLowerCase().includes(ex));
-          const inExp = (c.experience || []).some(exp => (exp.company || '').toLowerCase().includes(ex));
-          const inDesig = (c.current_designation || '').toLowerCase().includes(ex);
-          return inComp || inExp || inDesig;
-        });
-        if (hasExcluded) return false;
-      }
-
-      if (tokens.length === 0) return true;
-
-      // Every positive token must match at least one candidate property
-      return tokens.every(token => {
-        const tokenAliases = DEGREE_ALIASES[token] || [token];
-
-        const nameMatch = c.full_name?.toLowerCase().includes(token);
-        const emailMatch = c.email?.toLowerCase().includes(token);
-        const desigMatch = c.current_designation?.toLowerCase().includes(token);
-        const locMatch = c.location?.toLowerCase().includes(token);
-        const summaryMatch = c.ai_summary?.toLowerCase().includes(token);
-
-        const skillStrings = [
-          ...(Array.isArray(c.skills) ? c.skills : []),
-          ...(Array.isArray(c.primary_skills) ? c.primary_skills : []),
-          ...(Array.isArray(c.secondary_skills) ? c.secondary_skills : []),
-          ...(Array.isArray(c.tags) ? c.tags : []),
-          ...(Array.isArray(c.manual_tags) ? c.manual_tags : []),
-          ...(Array.isArray(c.structured_skills) ? c.structured_skills.map(s => s.skill_name || s.name) : [])
-        ];
-        const skillMatch = skillStrings.some(s => (s || '').toLowerCase().includes(token));
-
-        const eduMatch = (c.education || []).some(e => {
-          const deg = (e.degree || '').toLowerCase();
-          const inst = (e.institution || '').toLowerCase();
-          const fos = (e.field_of_study || '').toLowerCase();
-          return tokenAliases.some(alias => deg.includes(alias) || fos.includes(alias)) || inst.includes(token);
-        });
-
-        const compMatch = (c.past_companies || []).some(comp => (comp || '').toLowerCase().includes(token)) ||
-                          (c.experience || []).some(exp => (exp.company || '').toLowerCase().includes(token) || (exp.designation || '').toLowerCase().includes(token));
-
-        return nameMatch || emailMatch || desigMatch || locMatch || skillMatch || eduMatch || compMatch || summaryMatch;
-      });
-    });
-  }, [candidates, debouncedSearch]);
+    return candidates;
+  }, [candidates]);
 
   // Reset Directory pagination on search or filter change
   useEffect(() => {
@@ -2526,7 +2434,7 @@ export default function SourceDashboard() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setFilters(f => ({ ...initFilters, role_id: String(r.id), tags: r.title ? [r.title] : [] }));
+                            setFilters(f => ({ ...initFilters, role_id: String(r.id), sort_by: 'critical_score' }));
                             setTab('directory');
                           }}
                           className="text-xs text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
@@ -3115,6 +3023,11 @@ export default function SourceDashboard() {
                       <InlineEmailEditor candidate={c} fetchCandidates={fetchCandidates} />
                       <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-xs text-gray-500">
                         {c.current_designation && <span className="font-medium text-gray-600 truncate max-w-[160px]">{c.current_designation}</span>}
+                        {c.semantic_score != null && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded font-semibold" title="Semantic Match Score">
+                            ⚡ {c.semantic_score}% Match
+                          </span>
+                        )}
                         {c.education && c.education.length > 0 && (c.education[0].degree || c.education[0].institution) && (
                           <span className="inline-flex items-center text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded font-medium">
                             🎓 {c.education[0].degree || c.education[0].institution}
@@ -4131,7 +4044,7 @@ export default function SourceDashboard() {
             setFilters(prev => ({ 
               ...initFilters, 
               role_id: String(targetRole.id),
-              tags: targetRole.title ? [targetRole.title] : []
+              sort_by: 'critical_score'
             }));
             setTab('directory');
           }}

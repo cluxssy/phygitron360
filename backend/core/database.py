@@ -116,10 +116,14 @@ def create_tables(schema_name='public'):
 
         # Set Search Path for Isolation
         cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"')
-        cur.execute(f'SET search_path TO "{schema_name}"')
+        cur.execute(f'SET search_path TO "{schema_name}", public')
 
         # --- Master Registry (Only in Public) ---
         if schema_name == 'public':
+            try:
+                cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            except Exception as e:
+                logger.warning(f"pgvector extension creation notice: {e}")
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS tenants (
                     id TEXT PRIMARY KEY, -- tenant_acme_corp
@@ -365,6 +369,11 @@ def create_tables(schema_name='public'):
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS work_authorization")
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS github_url")
         cur.execute("ALTER TABLE candidates DROP COLUMN IF EXISTS skills")
+        try:
+            cur.execute("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS embedding vector(768)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_candidates_embedding ON candidates USING hnsw (embedding vector_cosine_ops)")
+        except Exception as e:
+            logger.warning(f"Could not create candidate vector column/index: {e}")
 
         # 3.0.1) Skill Taxonomy
         cur.execute('''

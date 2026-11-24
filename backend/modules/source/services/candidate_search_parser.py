@@ -42,6 +42,54 @@ KNOWN_MASS_RECRUITERS_OR_COMPANIES = {
     "ibm", "oracle", "microsoft", "google", "amazon", "meta", "apple", "deloitte", "ey", "pwc", "kpmg"
 }
 
+ROLE_SYNONYMS = [
+    (
+        r"\b(?:database|db)\s+(?:developer|dev|engineer|programmer|specialist)\b",
+        ["database developer", "sql developer", "pl/sql developer", "t-sql developer", "database engineer"],
+        ["etl developer", "data engineer", "data warehouse developer"]
+    ),
+    (
+        r"\b(?:sql|pl/?sql|t-?sql)\s+(?:developer|dev|engineer|programmer)?\b",
+        ["sql developer", "database developer", "pl/sql developer", "t-sql developer", "database engineer"],
+        ["etl developer", "data engineer"]
+    ),
+    (
+        r"\b(?:frontend|front-end|front\s+end)\s+(?:developer|dev|engineer)?\b",
+        ["frontend developer", "ui developer", "react developer", "angular developer", "web developer"],
+        ["fullstack developer", "ui/ux designer"]
+    ),
+    (
+        r"\b(?:backend|back-end|back\s+end)\s+(?:developer|dev|engineer)?\b",
+        ["backend developer", "backend engineer", "api developer", "server side developer"],
+        ["fullstack developer", "data engineer"]
+    ),
+    (
+        r"\b(?:fullstack|full-stack|full\s+stack)\s+(?:developer|dev|engineer)?\b",
+        ["fullstack developer", "full stack developer", "software engineer"],
+        ["frontend developer", "backend developer"]
+    ),
+    (
+        r"\b(?:data\s+engineer|big\s+data\s+engineer|etl\s+developer)\b",
+        ["data engineer", "big data engineer", "etl developer"],
+        ["database developer", "sql developer", "data architect"]
+    ),
+    (
+        r"\b(?:devops|sre|site\s+reliability)\s*(?:engineer)?\b",
+        ["devops engineer", "site reliability engineer", "cloud engineer", "platform engineer"],
+        ["systems engineer", "infrastructure engineer"]
+    ),
+    (
+        r"\b(?:qa|test|testing|automation)\s*(?:engineer|tester|analyst)\b",
+        ["qa engineer", "software test engineer", "qa analyst", "automation tester"],
+        ["sdet", "quality engineer"]
+    ),
+    (
+        r"\b(?:data\s+scientist|ml\s+engineer|machine\s+learning)\b",
+        ["data scientist", "machine learning engineer", "ml engineer", "ai engineer"],
+        ["data analyst", "bi analyst"]
+    ),
+]
+
 def parse_search_query_rule_based(query: str) -> Dict[str, Any]:
     """
     Fast, deterministic rule-based query parser that handles:
@@ -108,17 +156,53 @@ def parse_search_query_rule_based(query: str) -> Dict[str, Any]:
     for span in sorted(matched_spans, key=lambda s: s[0], reverse=True):
         remaining_text = remaining_text[:span[0]] + " " + remaining_text[span[1]:]
     
-    # 2. Extract Experience (e.g. "3+ years", "5 yrs", "2 to 4 years")
-    exp_range_match = re.search(r'\b(\d+)\s*(?:-|to)\s*(\d+)\s*(?:years?|yrs?)\b', remaining_text)
-    if exp_range_match:
-        min_exp = float(exp_range_match.group(1))
-        max_exp = float(exp_range_match.group(2))
-        remaining_text = remaining_text[:exp_range_match.start()] + " " + remaining_text[exp_range_match.end():]
+    # 2. Extract Recognized Roles & Synonyms (Tier 1 Direct + Tier 2 Adjacent)
+    matched_primary_roles = []
+    matched_adjacent_roles = []
+    for item in ROLE_SYNONYMS:
+        pattern = item[0]
+        primary_syns = item[1]
+        adjacent_syns = item[2] if len(item) > 2 else []
+        m = re.search(pattern, remaining_text, re.I)
+        if m:
+            matched_primary_roles.extend(primary_syns)
+            matched_adjacent_roles.extend(adjacent_syns)
+            remaining_text = remaining_text[:m.start()] + " " + remaining_text[m.end():]
+    
+    primary_roles = list(dict.fromkeys(matched_primary_roles))
+    adjacent_roles = list(dict.fromkeys(matched_adjacent_roles))
+    roles = primary_roles
+
+    # 3. Extract Experience (e.g. "exactly 2 years", "3+ years", "2 to 4 years", "under 5 years")
+    # A. Exact Experience: "exactly 2 years", "exact 2 yrs", "2 years exactly", "strictly 3 years"
+    exact_exp_match = re.search(r'\b(?:exactly|exact|strict(?:ly)?)\s+(\d+(?:\.\d+)?)\s*(?:years?|yrs?)(?:\s+(?:of\s+)?exp(?:erience)?)?\b', remaining_text)
+    if not exact_exp_match:
+        exact_exp_match = re.search(r'\b(\d+(?:\.\d+)?)\s*(?:years?|yrs?)(?:\s+(?:of\s+)?exp(?:erience)?)?\s+(?:exactly|exact|strict(?:ly)?)\b', remaining_text)
+
+    if exact_exp_match:
+        val = float(exact_exp_match.group(1))
+        min_exp = val
+        max_exp = round(val + 0.9, 1)  # Allow the full year bracket, e.g. 2.0 to 2.9 years
+        remaining_text = remaining_text[:exact_exp_match.start()] + " " + remaining_text[exact_exp_match.end():]
     else:
-        exp_match = re.search(r'\b(\d+(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)(?:\s+exp(?:erience)?)?\b', remaining_text)
-        if exp_match:
-            min_exp = float(exp_match.group(1))
-            remaining_text = remaining_text[:exp_match.start()] + " " + remaining_text[exp_match.end():]
+        # B. Experience Range: "2 to 4 years", "2-4 yrs", "between 2 and 4 years"
+        exp_range_match = re.search(r'\b(?:between\s+)?(\d+(?:\.\d+)?)\s*(?:-|to|\s+and\s+)\s*(\d+(?:\.\d+)?)\s*(?:years?|yrs?)(?:\s+(?:of\s+)?exp(?:erience)?)?\b', remaining_text)
+        if exp_range_match:
+            min_exp = float(exp_range_match.group(1))
+            max_exp = float(exp_range_match.group(2))
+            remaining_text = remaining_text[:exp_range_match.start()] + " " + remaining_text[exp_range_match.end():]
+        else:
+            # C. Upper Bound: "under 5 years", "less than 5 yrs", "max 5 years", "at most 5 years", "up to 5 years"
+            max_match = re.search(r'\b(?:under|less\s+than|max(?:imum)?|at\s+most|up\s+to|<|<=)\s*(\d+(?:\.\d+)?)\s*(?:years?|yrs?)(?:\s+(?:of\s+)?exp(?:erience)?)?\b', remaining_text)
+            if max_match:
+                max_exp = float(max_match.group(1))
+                remaining_text = remaining_text[:max_match.start()] + " " + remaining_text[max_match.end():]
+            else:
+                # D. Lower Bound: "at least 3 years", "minimum 3 yrs", "3+ years", "3 years of experience"
+                exp_match = re.search(r'\b(?:(?:at\s+least|min(?:imum)?|more\s+than|over|>|>=)\s+)?(\d+(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)(?:\s+(?:of\s+)?exp(?:erience)?)?\b', remaining_text)
+                if exp_match:
+                    min_exp = float(exp_match.group(1))
+                    remaining_text = remaining_text[:exp_match.start()] + " " + remaining_text[exp_match.end():]
 
     # 3. Extract Degrees & Expand Synonyms
     words = re.findall(r'[a-zA-Z0-9\.]+', remaining_text)
@@ -184,8 +268,11 @@ def parse_search_query_rule_based(query: str) -> Dict[str, Any]:
     stop_words = {
         "not", "in", "at", "from", "with", "and", "or", "who", "has", "have", "for",
         "experienced", "experience", "candidate", "candidates", "person", "people",
-        "graduated", "graduate", "graduates", "developer", "engineer", "any", "the", "a", "an",
-        "years", "year", "yrs", "yr", "exp", "worked", "working", "of", "is", "to", "by", "on", "as"
+        "graduated", "graduate", "graduates", "any", "the", "a", "an",
+        "years", "year", "yrs", "yr", "exp", "worked", "working", "of", "is", "to", "by", "on", "as",
+        "exactly", "exact", "strictly", "strict", "around", "about", "approx", "approximately",
+        "looking", "look", "need", "needed", "hire", "hiring", "find", "search",
+        "profile", "profiles", "resume", "resumes", "having", "knows", "knowing", "skilled", "skills"
     }
 
     # Re-tokenize remaining text after phrase replacements
@@ -202,7 +289,7 @@ def parse_search_query_rule_based(query: str) -> Dict[str, Any]:
         else:
             general_terms.append(token)
 
-    is_complex = bool(exclude_companies or include_degrees or include_institutions or min_exp or len(general_terms) > 1)
+    is_complex = bool(exclude_companies or include_degrees or include_institutions or min_exp or roles or len(general_terms) > 1)
 
     return {
         "raw_query": clean_query,
@@ -214,6 +301,7 @@ def parse_search_query_rule_based(query: str) -> Dict[str, Any]:
         "include_skills": list(include_skills),
         "exclude_skills": list(exclude_terms - exclude_companies),
         "roles": list(roles),
+        "adjacent_roles": list(adjacent_roles),
         "min_exp": min_exp,
         "max_exp": max_exp,
         "general_terms": general_terms,

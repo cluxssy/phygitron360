@@ -584,101 +584,20 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
     }
   }, [currentFolder?.id, selectedTagFilter, debouncedSearch]);
 
-  // Derived filtered & sorted candidates
+  // Derived filtered & sorted candidates.
+  // Search and filters are executed directly by the server API.
   const filteredCandidates = useMemo(() => {
-    const rawTerm = (debouncedSearch || '').trim().toLowerCase();
-    let list = candidates;
-
-    if (rawTerm) {
-      const excludePatterns = [
-        /(?:not in|not at|not from|without|never worked at)\s+([a-zA-Z0-9\s,\.&-]+)/g,
-        /-([a-zA-Z0-9]+)/g
-      ];
-      const excludedTerms = [];
-      let positiveText = rawTerm;
-
-      for (const pat of excludePatterns) {
-        let match;
-        while ((match = pat.exec(rawTerm)) !== null) {
-          if (match[1]) {
-            match[1].split(/[,/]|(?:\s+or\s+)|\s+and\s+/).forEach(t => {
-              const clean = t.trim();
-              if (clean) excludedTerms.push(clean);
-            });
-          }
-        }
-        positiveText = positiveText.replace(pat, ' ');
-      }
-
-      const tokens = positiveText
-        .split(/[,/]|(?:\s+and\s+)|\s+or\s+|\s+/)
-        .map(t => t.trim())
-        .filter(t => t.length > 0 && !['not', 'in', 'at', 'with', 'from', 'who', 'has', 'have'].includes(t));
-
-      const DEGREE_ALIASES = {
-        'btech': ['btech', 'b.tech', 'b tech', 'be', 'b.e', 'bachelor of technology', 'bachelor of engineering'],
-        'be': ['be', 'b.e', 'btech', 'b.tech'],
-        'mtech': ['mtech', 'm.tech', 'me', 'm.e', 'master of technology'],
-        'bca': ['bca', 'bachelor of computer applications'],
-        'mca': ['mca', 'master of computer applications'],
-        'mba': ['mba', 'm.b.a', 'master of business administration'],
-        'bsc': ['bsc', 'b.sc', 'bachelor of science'],
-        'msc': ['msc', 'm.sc', 'master of science']
-      };
-
-      list = candidates.filter(c => {
-        if (excludedTerms.length > 0) {
-          const hasExcluded = excludedTerms.some(ex => {
-            const inComp = (c.past_companies || []).some(comp => (comp || '').toLowerCase().includes(ex));
-            const inExp = (c.experience || []).some(exp => (exp.company || '').toLowerCase().includes(ex));
-            const inDesig = (c.current_designation || '').toLowerCase().includes(ex);
-            return inComp || inExp || inDesig;
-          });
-          if (hasExcluded) return false;
-        }
-
-        if (tokens.length === 0) return true;
-
-        return tokens.every(token => {
-          const tokenAliases = DEGREE_ALIASES[token] || [token];
-
-          const name = (c.name || c.full_name || '').toLowerCase();
-          const email = (c.email || '').toLowerCase();
-          const designation = (c.current_designation || '').toLowerCase();
-          const summary = (c.ai_summary || '').toLowerCase();
-          const skillStrings = [
-            ...(Array.isArray(c.skills) ? c.skills : []),
-            ...(Array.isArray(c.primary_skills) ? c.primary_skills : []),
-            ...(Array.isArray(c.secondary_skills) ? c.secondary_skills : []),
-            ...(Array.isArray(c.tags) ? c.tags : []),
-            ...(Array.isArray(c.manual_tags) ? c.manual_tags : [])
-          ];
-          const skillMatch = skillStrings.some(s => (s || '').toLowerCase().includes(token));
-          const eduMatch = (c.education || []).some(e => {
-            const deg = (e.degree || '').toLowerCase();
-            const inst = (e.institution || '').toLowerCase();
-            const fos = (e.field_of_study || '').toLowerCase();
-            return tokenAliases.some(alias => deg.includes(alias) || fos.includes(alias)) || inst.includes(token);
-          });
-          const compMatch = (c.past_companies || []).some(comp => (comp || '').toLowerCase().includes(token)) ||
-                            (c.experience || []).some(exp => (exp.company || '').toLowerCase().includes(token) || (exp.designation || '').toLowerCase().includes(token));
-
-          return name.includes(token) || email.includes(token) || designation.includes(token) || skillMatch || eduMatch || compMatch || summary.includes(token);
-        });
-      });
-    }
-
-    return list
-      .sort((a, b) => {
-        const nameA = a.name || a.full_name || '';
-        const nameB = b.name || b.full_name || '';
-        if (sortBy === 'name_asc') return nameA.localeCompare(nameB);
-        if (sortBy === 'name_desc') return nameB.localeCompare(nameA);
-        if (sortBy === 'date_asc') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-        if (sortBy === 'date_desc') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-        return 0;
-      });
-  }, [candidates, debouncedSearch, sortBy]);
+    let list = [...candidates];
+    return list.sort((a, b) => {
+      const nameA = a.name || a.full_name || '';
+      const nameB = b.name || b.full_name || '';
+      if (sortBy === 'name_asc') return nameA.localeCompare(nameB);
+      if (sortBy === 'name_desc') return nameB.localeCompare(nameA);
+      if (sortBy === 'date_asc') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      if (sortBy === 'date_desc') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      return 0;
+    });
+  }, [candidates, sortBy]);
 
   // Reset ResumeRepo pagination on filter or search change
   useEffect(() => {
@@ -1770,9 +1689,14 @@ export default function ResumeRepo({ onBulkUpload, onViewProfile }) {
                             <div style={{ fontSize: '0.75rem', color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {c.email}
                             </div>
-                            {(c.current_designation || (c.education && c.education.length > 0) || (c.past_companies && c.past_companies.length > 0)) && (
+                            {(c.current_designation || (c.education && c.education.length > 0) || (c.past_companies && c.past_companies.length > 0) || c.semantic_score != null) && (
                               <div className="flex items-center gap-1.5 flex-wrap mt-1 text-[11px] text-gray-500">
                                 {c.current_designation && <span className="font-medium text-gray-600 truncate max-w-[140px]">{c.current_designation}</span>}
+                                {c.semantic_score != null && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded font-semibold" title="Semantic Match Score">
+                                    ⚡ {c.semantic_score}% Match
+                                  </span>
+                                )}
                                 {c.education && c.education.length > 0 && (c.education[0].degree || c.education[0].institution) && (
                                   <span className="inline-flex items-center text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded font-medium">
                                     🎓 {c.education[0].degree || c.education[0].institution}
