@@ -192,12 +192,20 @@ def _run_score_new_candidate_for_all_roles(candidate_id: int, tenant_id: str):
 
             # Fetch candidate
             cur.execute("""
-                SELECT id, primary_skills, secondary_skills, total_experience_years
+                SELECT id, primary_skills, secondary_skills, total_experience_years, embedding
                 FROM candidates WHERE id = %s
             """, (candidate_id,))
             cand = cur.fetchone()
             if not cand:
                 return {"status": "error", "message": "Candidate not found"}
+
+            # Auto-generate semantic embedding if missing
+            if cand.get("embedding") is None:
+                try:
+                    from backend.modules.source.services.candidate_embedding_service import embed_and_save_candidate
+                    embed_and_save_candidate(candidate_id, tenant_id)
+                except Exception as _e:
+                    logger.warning(f"[ATS] Embedding generation failed for candidate {candidate_id}: {_e}")
 
             primary = _parse_skill_list(cand["primary_skills"])
             secondary = _parse_skill_list(cand["secondary_skills"])
