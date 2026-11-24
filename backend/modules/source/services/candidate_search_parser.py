@@ -130,10 +130,10 @@ def parse_search_query_rule_based(query: str) -> Dict[str, Any]:
     max_exp = None
 
     # 1. Detect Negation Patterns
-    # E.g. "not in wipro, tcs", "not at accenture", "never worked at infosys", "without wipro", "-wipro"
+    # E.g. "not in wipro, tcs", "didnt work in american express", "never worked at infosys", "without wipro", "-wipro"
     negation_patterns = [
-        r'\b(?:not\s+in|not\s+at|not\s+from|never\s+worked\s+(?:in|at)?|without|no\s+past\s+in|not|no)\s+([a-zA-Z0-9\s,\.&-]+?)(?=\s+(?:and|with|who|having|has|\+|$)|$)',
-        r'\b(?:exclude|excluding)\s+([a-zA-Z0-9\s,\.&-]+?)(?=\s+(?:and|with|who|having|has|\+|$)|$)',
+        r'\b(?:(?:did\s*n[\'o]?t|did\s+not|never|has\s*n[\'o]?t|has\s+not|do\s*n[\'o]?t|do\s+not)\s+(?:worked|work|working|have|having|want)\s+(?:in|at|for|with)?|never\s+worked\s+(?:in|at|for)?)\s+([a-zA-Z0-9\s,\.&-]+?)(?=\s+(?:and|with|who|having|has|\+|$)|$)',
+        r'\b(?:not\s+(?:in|at|from|for|with)|not\s+working\s+(?:in|at|for)|no\s+past\s+(?:in|at|with)|without|avoid|exclude|excluding|not|no)\s+([a-zA-Z0-9\s,\.&-]+?)(?=\s+(?:and|with|who|having|has|\+|$)|$)',
         r'-([a-zA-Z0-9]+)'
     ]
 

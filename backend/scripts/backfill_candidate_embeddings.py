@@ -10,6 +10,7 @@ import os
 import time
 import argparse
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -21,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("backfill_embeddings")
 
 
-def backfill_tenant(tenant_id: str, limit: int = 100, delay_sec: float = 0.2):
+def backfill_tenant(tenant_id: str, limit: int = 100, delay_sec: float = 0.1, concurrency: int = 3):
     keys = _get_gemini_key_list()
     logger.info(f"Loaded {len(keys)} Gemini API key(s) in pool.")
 
@@ -50,32 +51,36 @@ def backfill_tenant(tenant_id: str, limit: int = 100, delay_sec: float = 0.2):
 
     success_count = 0
     fail_count = 0
-    consecutive_fails = 0
 
-    for idx, cid in enumerate(candidate_ids, 1):
+    def process_candidate(cid):
+        if delay_sec > 0:
+            time.sleep(delay_sec)
         try:
             ok = embed_and_save_candidate(cid, tenant_id=tenant_id)
+            return cid, ok, None
+        except Exception as e:
+            return cid, False, e
+
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = {executor.submit(process_candidate, cid): cid for cid in candidate_ids}
+        completed = 0
+        consecutive_fails = 0
+        for future in as_completed(futures):
+            completed += 1
+            cid, ok, err = future.result()
             if ok:
                 success_count += 1
                 consecutive_fails = 0
-                logger.info(f"[{idx}/{total}] Successfully embedded candidate ID {cid}")
+                logger.info(f"[{completed}/{total}] Successfully embedded candidate ID {cid}")
             else:
                 fail_count += 1
                 consecutive_fails += 1
-                logger.warning(f"[{idx}/{total}] Skipped / failed candidate ID {cid}")
-        except Exception as exc:
-            fail_count += 1
-            consecutive_fails += 1
-            logger.error(f"[{idx}/{total}] Error embedding candidate {cid}: {exc}")
+                msg = f": {err}" if err else ""
+                logger.warning(f"[{completed}/{total}] Skipped / failed candidate ID {cid}{msg}")
 
-        # If all keys in pool are exhausted, break early rather than spamming errors
-        if consecutive_fails >= max(len(keys) * 2, 4):
-            logger.error("Multiple consecutive failures detected — all Gemini API keys in pool have likely reached their quota limit.")
-            logger.info("Tip: You can add more keys to GEMINI_API_KEYS in backend/.env (comma-separated) to continue embedding immediately.")
-            break
-
-        if delay_sec > 0:
-            time.sleep(delay_sec)
+            if consecutive_fails >= max(len(keys) * 3, 6):
+                logger.error("Multiple consecutive failures detected — Gemini API keys in pool may be rate-limited.")
+                break
 
     logger.info(
         f"[{tenant_id}] Backfill complete: {success_count} succeeded, {fail_count} failed out of {total}."
@@ -86,10 +91,11 @@ def main():
     parser = argparse.ArgumentParser(description="Backfill candidate embeddings for semantic search")
     parser.add_argument("--tenant", type=str, default="tenant_dev", help="Tenant schema name (e.g. tenant_dev)")
     parser.add_argument("--limit", type=int, default=20, help="Maximum number of candidates to process in this run")
-    parser.add_argument("--delay", type=float, default=0.2, help="Delay between API calls in seconds")
+    parser.add_argument("--delay", type=float, default=0.1, help="Delay between API calls in seconds")
+    parser.add_argument("--concurrency", type=int, default=3, help="Concurrent workers")
     args = parser.parse_args()
 
-    backfill_tenant(tenant_id=args.tenant, limit=args.limit, delay_sec=args.delay)
+    backfill_tenant(tenant_id=args.tenant, limit=args.limit, delay_sec=args.delay, concurrency=args.concurrency)
 
 
 if __name__ == "__main__":
