@@ -305,13 +305,13 @@ resource "digitalocean_app" "phygitron" {
 
       github {
         repo           = var.github_repo
-        branch         = "main"
+        branch         = "dev"
         deploy_on_push = true
       }
 
       dockerfile_path = "backend/Dockerfile"
       source_dir      = "backend"
-      run_command     = "celery -A backend.core.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=50 --broker-connection-retry-on-startup"
+      run_command     = "celery -A backend.core.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=50"
 
       # The worker needs the same environment variables as the backend
       # (DB connection, Redis, AI keys, and Spaces for file access)
